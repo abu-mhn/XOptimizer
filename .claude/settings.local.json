@@ -7,7 +7,16 @@
       "Bash(node -e ':*)",
       "Bash(git checkout:*)",
       "Bash(start index.html)",
-      "Bash(npx -y http-server -p 8080 -o)"
+      "Bash(npx -y http-server -p 8080 -o)",
+      "Bash(npx -y http-server -p 8081 -o)",
+      "Bash(python -m http.server 8000)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git pull:*)",
+      "Bash(git stash:*)",
+      "Bash(node --check /tmp/data_check.js)",
+      "Bash(node --check /tmp/app_check.js)",
+      "WebFetch(domain:abu-mhn.github.io)"
     ]
   }
 }

@@ -424,7 +424,7 @@ function calcCXExpand(form) {
   const bIdx = form.querySelector('[name="bit"]').value;
   const rbIdx = form.querySelector('[name="ratchetBit"]').value;
 
-  if (lcIdx === "" || mbIdx === "" || abIdx === "") {
+  if (lcIdx === "" || mbIdx === "" || obIdx === "" || abIdx === "") {
     return renderResult({ status: "Failure", message: "Please select all required top components." });
   }
 
@@ -656,9 +656,7 @@ document.querySelectorAll(".btn-lucky").forEach(btn => {
     } else if (mode === "cxExpand") {
       getWrapper(form, "lockChip")._select(randIdx(DATA.lockChips));
       getWrapper(form, "metalBlade")._select(randIdx(DATA.metalBlades));
-      if (DATA.overBlades.length > 0 && Math.random() < 0.5) {
-        getWrapper(form, "overBlade")._select(randIdx(DATA.overBlades));
-      }
+      getWrapper(form, "overBlade")._select(randIdx(DATA.overBlades));
       getWrapper(form, "assistBlade")._select(randIdx(DATA.assistBlades));
       if (Math.random() < 0.5 && DATA.ratchetBits.length > 0) {
         getWrapper(form, "ratchetBit")._select(randIdx(DATA.ratchetBits));
