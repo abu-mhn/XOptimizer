@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Beyblade X Stat Calculator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Beyblade X Stat Calculator</h1>
+
+    <div class="mode-tabs">
+      <button class="tab active" data-mode="standard">Standard</button>
+      <button class="tab" data-mode="cx">CX</button>
+      <button class="tab" data-mode="cxExpand">CX Expand</button>
+    </div>
+
+    <!-- Standard Mode -->
+    <form id="form-standard" class="calc-form">
+      <fieldset>
+        <legend>Top</legend>
+        <label>Blade
+          <select name="blade" required></select>
+        </label>
+      </fieldset>
+      <fieldset>
+        <legend>Bottom</legend>
+        <label>Ratchet
+          <select name="ratchet"></select>
+        </label>
+        <label>Bit
+          <select name="bit"></select>
+        </label>
+        <div class="separator">-- OR Ratchet-Bit --</div>
+        <label>Ratchet-Bit
+          <select name="ratchetBit"></select>
+        </label>
+      </fieldset>
+      <button type="submit" class="btn">Calculate</button>
+    </form>
+
+    <!-- CX Mode -->
+    <form id="form-cx" class="calc-form hidden">
+      <fieldset>
+        <legend>Top</legend>
+        <label>Lock Chip
+          <select name="lockChip" required></select>
+        </label>
+        <label>Main Blade
+          <select name="mainBlade" required></select>
+        </label>
+        <label>Assist Blade
+          <select name="assistBlade" required></select>
+        </label>
+      </fieldset>
+      <fieldset>
+        <legend>Bottom</legend>
+        <label>Ratchet
+          <select name="ratchet"></select>
+        </label>
+        <label>Bit
+          <select name="bit"></select>
+        </label>
+        <div class="separator">-- OR Ratchet-Bit --</div>
+        <label>Ratchet-Bit
+          <select name="ratchetBit"></select>
+        </label>
+      </fieldset>
+      <button type="submit" class="btn">Calculate</button>
+    </form>
+
+    <!-- CX Expand Mode -->
+    <form id="form-cxExpand" class="calc-form hidden">
+      <fieldset>
+        <legend>Top</legend>
+        <label>Lock Chip
+          <select name="lockChip" required></select>
+        </label>
+        <label>Metal Blade
+          <select name="metalBlade" required></select>
+        </label>
+        <label>Over Blade
+          <select name="overBlade"></select>
+        </label>
+        <label>Assist Blade
+          <select name="assistBlade" required></select>
+        </label>
+      </fieldset>
+      <fieldset>
+        <legend>Bottom</legend>
+        <label>Ratchet
+          <select name="ratchet"></select>
+        </label>
+        <label>Bit
+          <select name="bit"></select>
+        </label>
+        <div class="separator">-- OR Ratchet-Bit --</div>
+        <label>Ratchet-Bit
+          <select name="ratchetBit"></select>
+        </label>
+      </fieldset>
+      <button type="submit" class="btn">Calculate</button>
+    </form>
+
+    <div id="result" class="result hidden"></div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

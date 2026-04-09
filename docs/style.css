@@ -1,0 +1,26 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #e6edf3; min-height: 100vh; }
+.container { max-width: 640px; margin: 0 auto; padding: 24px 16px; }
+h1 { text-align: center; margin-bottom: 20px; font-size: 1.6rem; }
+.mode-tabs { display: flex; gap: 4px; margin-bottom: 20px; }
+.tab { flex: 1; padding: 10px; border: 1px solid #30363d; background: #161b22; color: #8b949e; cursor: pointer; border-radius: 6px 6px 0 0; font-size: .9rem; transition: .15s; }
+.tab.active { background: #1f6feb; color: #fff; border-color: #1f6feb; }
+fieldset { border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+legend { padding: 0 8px; font-weight: 600; color: #58a6ff; }
+label { display: block; margin-bottom: 12px; font-size: .85rem; color: #8b949e; }
+select { display: block; width: 100%; margin-top: 4px; padding: 8px 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #e6edf3; font-size: .9rem; }
+select:focus { outline: none; border-color: #1f6feb; }
+.separator { text-align: center; color: #484f58; font-size: .8rem; margin: 8px 0; }
+.btn { display: block; width: 100%; padding: 12px; background: #238636; border: none; border-radius: 6px; color: #fff; font-size: 1rem; font-weight: 600; cursor: pointer; transition: .15s; }
+.btn:hover { background: #2ea043; }
+.hidden { display: none; }
+.result { margin-top: 20px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; }
+.result h2 { font-size: 1.1rem; margin-bottom: 12px; }
+.result .status-success { color: #3fb950; }
+.result .status-failure { color: #f85149; }
+.result table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+.result th, .result td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #21262d; font-size: .85rem; }
+.result th { color: #8b949e; font-weight: 500; }
+.result .section-title { color: #58a6ff; font-weight: 600; font-size: .95rem; margin: 14px 0 6px; }
+.result .combo-name { font-size: 1.1rem; font-weight: 700; color: #f0883e; margin-top: 12px; text-align: center; }
+.result .type-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: .8rem; font-weight: 600; background: #1f6feb; color: #fff; margin-left: 6px; }
