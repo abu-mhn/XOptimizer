@@ -60,6 +60,7 @@ function makeSearchable(sel, items, labelFn) {
     let count = 0;
     items.forEach((item, i) => {
       const label = labelFn(item);
+      if (wrapper._filterFn && !wrapper._filterFn(item)) return;
       if (query && !label.toLowerCase().includes(query)) return;
       const div = document.createElement("div");
       div.className = "dd-item";
@@ -124,7 +125,19 @@ function makeSearchable(sel, items, labelFn) {
   });
 
   // Allow clearing
-  wrapper._clear = () => { sel.value = ""; input.value = ""; };
+  wrapper._clear = () => { sel.value = ""; input.value = ""; wrapper._filterFn = null; };
+
+  // Allow programmatic selection
+  wrapper._select = (idx) => { sel.value = idx; input.value = labelFn(items[idx]); sel.dispatchEvent(new Event("change")); };
+
+  // Allow external filtering
+  wrapper._filterFn = null;
+  wrapper._setFilter = (fn) => {
+    wrapper._filterFn = fn;
+    sel.value = "";
+    input.value = "";
+    sel.dispatchEvent(new Event("change"));
+  };
 }
 
 function initDropdowns() {
@@ -175,6 +188,36 @@ function renderStatTable(label, stats) {
   return `<div class="section-title">${label}</div><table>${rows}</table>`;
 }
 
+function getBarColor(val) {
+  if (val >= 100) return "#3fb950";
+  if (val >= 50) return "#d29922";
+  return "#f85149";
+}
+
+function renderStatBars(grandTotal) {
+  const stats = [
+    { label: "ATK", value: grandTotal.ATK },
+    { label: "DEF", value: grandTotal.DEF },
+    { label: "STA", value: grandTotal.STA },
+  ];
+  let html = '<div class="stat-bars">';
+  for (const s of stats) {
+    const isTBA = s.value === "TBA";
+    const val = isTBA ? 0 : Number(s.value);
+    const color = isTBA ? "#484f58" : getBarColor(val);
+    const pct = isTBA ? 0 : Math.min(val / 150 * 100, 100);
+    html += `<div class="stat-bar-row">
+      <span class="stat-bar-label">${s.label}</span>
+      <div class="stat-bar-track">
+        <div class="stat-bar-fill" style="width:${pct}%;background:${color}"></div>
+      </div>
+      <span class="stat-bar-value" style="color:${color}">${isTBA ? "TBA" : val}</span>
+    </div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
 function renderResult(res) {
   const el = document.getElementById("result");
   el.classList.remove("hidden");
@@ -188,11 +231,7 @@ function renderResult(res) {
     html += `<div class="combo-name">${res.comboName} <span class="type-badge">${res.type}</span></div>`;
   }
 
-  // Top
-  html += renderStatTable("Top", res.top);
-  // Bottom
-  html += renderStatTable("Bottom", res.bottom);
-  // Grand Total
+  html += renderStatBars(res.grandTotal);
   html += renderStatTable("Grand Total", res.grandTotal);
 
   el.innerHTML = html;
@@ -219,8 +258,9 @@ function calcStandard(form) {
 
   const clockMirageMismatch = isClockMirage && (!ratchet || !ratchet.name.endsWith("5")) && !rb;
   const clockMirageInvalidBit = isClockMirage && rb;
+  const bulletGriffonInvalid = isBulletGriffon && (ratchet || rb);
 
-  if (!hasValidBottom || clockMirageMismatch || clockMirageInvalidBit) {
+  if (!hasValidBottom || clockMirageMismatch || clockMirageInvalidBit || bulletGriffonInvalid) {
     return renderResult({ status: "Failure", message: "Combo failed to create" });
   }
 
@@ -290,12 +330,17 @@ function calcStandard(form) {
     comboName += bit.codename;
   }
 
+  const bDash = rb && !isClockMirage ? rb.dash : bit.dash;
+  const bBurstRes = rb && !isClockMirage ? rb.burstRes : bit.burstRes;
+  const bHeight = rb && !isClockMirage ? rb.height : (ratchet ? ratchet.height : null);
+
   renderResult({
     status: "Success", message: "Combo created successfully", comboName,
     type: getType(gAtk, gDef, gSta, isRB),
-    top: topStats, bottom: bottomStats,
     grandTotal: {
       ATK: tbaOrVal(gAtk, gAtkZ), DEF: tbaOrVal(gDef, gDefZ), STA: tbaOrVal(gSta, gStaZ),
+      ...(bHeight != null ? { Height: bHeight } : {}),
+      Dash: bDash, "Burst Res": bBurstRes,
       Weight: weightStr(blade.weight + bWeight, gWeightZ),
       Type: getType(gAtk, gDef, gSta, isRB),
       "Spin Direction": blade.spindirection,
@@ -359,10 +404,13 @@ function calcCX(form) {
   let comboName = lc.codename + mb.codename + ab.codename;
   comboName += rb ? rb.codename : ratchet.name + bit.codename;
 
+  const bDash = rb ? rb.dash : bit.dash;
+  const bBurstRes = rb ? rb.burstRes : bit.burstRes;
+  const bHeight = rb ? rb.height : ratchet.height;
+
   renderResult({
     status: "Success", message: "Combo created successfully", comboName, type: getType(gAtk, gDef, gSta, isRB),
-    top: topStats, bottom: bottomStats,
-    grandTotal: { ATK: tbaOrVal(gAtk, gAtkZ), DEF: tbaOrVal(gDef, gDefZ), STA: tbaOrVal(gSta, gStaZ), Weight: weightStr(topWeight + bWeight, gWeightZ), Type: getType(gAtk, gDef, gSta, isRB), "Spin Direction": mb.spindirection },
+    grandTotal: { ATK: tbaOrVal(gAtk, gAtkZ), DEF: tbaOrVal(gDef, gDefZ), STA: tbaOrVal(gSta, gStaZ), Height: bHeight, Dash: bDash, "Burst Res": bBurstRes, Weight: weightStr(topWeight + bWeight, gWeightZ), Type: getType(gAtk, gDef, gSta, isRB), "Spin Direction": mb.spindirection },
   });
 }
 
@@ -437,10 +485,13 @@ function calcCXExpand(form) {
   comboName += ab.codename;
   comboName += rb ? rb.codename : ratchet.name + bit.codename;
 
+  const bDash = rb ? rb.dash : bit.dash;
+  const bBurstRes = rb ? rb.burstRes : bit.burstRes;
+  const bHeight = rb ? rb.height : ratchet.height;
+
   renderResult({
     status: "Success", message: "Combo expanded successfully", comboName, type: getType(gAtk, gDef, gSta, isRB),
-    top: topStats, bottom: bottomStats,
-    grandTotal: { ATK: tbaOrVal(gAtk, gAtkZ), DEF: tbaOrVal(gDef, gDefZ), STA: tbaOrVal(gSta, gStaZ), Weight: weightStr(topWeight + bWeight, gWeightZ), Type: getType(gAtk, gDef, gSta, isRB), "Spin Direction": metalBlade.spindirection },
+    grandTotal: { ATK: tbaOrVal(gAtk, gAtkZ), DEF: tbaOrVal(gDef, gDefZ), STA: tbaOrVal(gSta, gStaZ), Height: bHeight, Dash: bDash, "Burst Res": bBurstRes, Weight: weightStr(topWeight + bWeight, gWeightZ), Type: getType(gAtk, gDef, gSta, isRB), "Spin Direction": metalBlade.spindirection },
   });
 }
 
@@ -452,3 +503,172 @@ document.getElementById("form-cxExpand").addEventListener("submit", e => { e.pre
 // --- Init ---
 sortData();
 initDropdowns();
+
+// --- Blade-specific restrictions (Standard) ---
+(function() {
+  const stdForm = document.getElementById("form-standard");
+  const bladeSel = stdForm.querySelector('[name="blade"]');
+  const ratchetWrapper = stdForm.querySelector('[name="ratchet"]').nextElementSibling;
+  const ratchetInput = ratchetWrapper.querySelector("input");
+  const rbWrapper = stdForm.querySelector('[name="ratchetBit"]').nextElementSibling;
+  const rbInput = rbWrapper.querySelector("input");
+
+  bladeSel.addEventListener("change", () => {
+    const idx = bladeSel.value;
+    const codename = idx !== "" ? DATA.blades[idx].codename : "";
+
+    if (codename === "CLOCKMIRAGE") {
+      // Clock Mirage: filter ratchet to *5, disable ratchet-bit
+      ratchetWrapper._setFilter(r => r.name.endsWith("5"));
+      ratchetInput.disabled = false;
+      ratchetInput.placeholder = "-- Select --";
+      rbWrapper._clear();
+      rbInput.disabled = true;
+      rbInput.placeholder = "Not available";
+    } else if (codename === "BULLETGRIFFON") {
+      // Bullet Griffon: disable ratchet and ratchet-bit
+      ratchetWrapper._clear();
+      ratchetWrapper._filterFn = null;
+      ratchetInput.disabled = true;
+      ratchetInput.placeholder = "Not available";
+      rbWrapper._clear();
+      rbInput.disabled = true;
+      rbInput.placeholder = "Not available";
+    } else {
+      // Default: enable everything, clear filters
+      ratchetWrapper._setFilter(null);
+      ratchetWrapper._filterFn = null;
+      ratchetInput.disabled = false;
+      ratchetInput.placeholder = "-- Select --";
+      rbInput.disabled = false;
+      rbInput.placeholder = "-- Select --";
+    }
+  });
+})();
+
+// --- Ratchet <-> Ratchet-Bit mutual disable ---
+document.querySelectorAll(".calc-form").forEach(form => {
+  const ratchetSel = form.querySelector('[name="ratchet"]');
+  const bitSel = form.querySelector('[name="bit"]');
+  const rbSel = form.querySelector('[name="ratchetBit"]');
+  if (!ratchetSel || !rbSel || !bitSel) return;
+
+  const ratchetWrapper = ratchetSel.nextElementSibling;
+  const ratchetInput = ratchetWrapper.querySelector("input");
+  const bitWrapper = bitSel.nextElementSibling;
+  const bitInput = bitWrapper.querySelector("input");
+  const rbWrapper = rbSel.nextElementSibling;
+  const rbInput = rbWrapper.querySelector("input");
+
+  ratchetSel.addEventListener("change", () => {
+    // Skip if already disabled by blade logic (Clock Mirage / Bullet Griffon)
+    const bladeSel = form.querySelector('[name="blade"]');
+    if (bladeSel) {
+      const idx = bladeSel.value;
+      if (idx !== "" && (DATA.blades[idx].codename === "CLOCKMIRAGE" || DATA.blades[idx].codename === "BULLETGRIFFON")) return;
+    }
+
+    if (ratchetSel.value !== "") {
+      rbWrapper._clear();
+      rbInput.disabled = true;
+      rbInput.placeholder = "Not available";
+    } else {
+      rbInput.disabled = false;
+      rbInput.placeholder = "-- Select --";
+    }
+  });
+
+  rbSel.addEventListener("change", () => {
+    if (rbSel.value !== "") {
+      ratchetWrapper._clear();
+      ratchetInput.disabled = true;
+      ratchetInput.placeholder = "Not available";
+      bitWrapper._clear();
+      bitInput.disabled = true;
+      bitInput.placeholder = "Not available";
+    } else {
+      ratchetInput.disabled = false;
+      ratchetInput.placeholder = "-- Select --";
+      bitInput.disabled = false;
+      bitInput.placeholder = "-- Select --";
+    }
+  });
+});
+
+// --- Reset handlers ---
+document.querySelectorAll(".btn-reset").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const form = btn.closest("form");
+    form.querySelectorAll(".search-dropdown").forEach(w => w._clear());
+    // Re-enable dropdowns that may have been disabled
+    const rInput = form.querySelector('[name="ratchet"]')?.nextElementSibling?.querySelector("input");
+    if (rInput) { rInput.disabled = false; rInput.placeholder = "-- Select --"; }
+    const bInput = form.querySelector('[name="bit"]')?.nextElementSibling?.querySelector("input");
+    if (bInput) { bInput.disabled = false; bInput.placeholder = "-- Select --"; }
+    const rbInput = form.querySelector('[name="ratchetBit"]')?.nextElementSibling?.querySelector("input");
+    if (rbInput) { rbInput.disabled = false; rbInput.placeholder = "-- Select --"; }
+    document.getElementById("result").classList.add("hidden");
+  });
+});
+
+// --- I'm Feeling Lucky ---
+function randIdx(arr) { return Math.floor(Math.random() * arr.length); }
+
+function getWrapper(form, name) { return form.querySelector(`[name="${name}"]`).nextElementSibling; }
+
+document.querySelectorAll(".btn-lucky").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const form = btn.closest("form");
+    // Reset first
+    form.querySelector(".btn-reset").click();
+
+    const mode = form.id.replace("form-", "");
+
+    if (mode === "standard") {
+      const bladeIdx = randIdx(DATA.blades);
+      getWrapper(form, "blade")._select(bladeIdx);
+      const codename = DATA.blades[bladeIdx].codename;
+
+      if (codename === "BULLETGRIFFON") {
+        getWrapper(form, "bit")._select(randIdx(DATA.bits));
+      } else if (codename === "CLOCKMIRAGE") {
+        const valid = DATA.ratchets.map((r, i) => ({ r, i })).filter(x => x.r.name.endsWith("5"));
+        getWrapper(form, "ratchet")._select(valid[Math.floor(Math.random() * valid.length)].i);
+        getWrapper(form, "bit")._select(randIdx(DATA.bits));
+      } else {
+        if (Math.random() < 0.5 && DATA.ratchetBits.length > 0) {
+          getWrapper(form, "ratchetBit")._select(randIdx(DATA.ratchetBits));
+        } else {
+          getWrapper(form, "ratchet")._select(randIdx(DATA.ratchets));
+          getWrapper(form, "bit")._select(randIdx(DATA.bits));
+        }
+      }
+    } else if (mode === "cx") {
+      getWrapper(form, "lockChip")._select(randIdx(DATA.lockChips));
+      getWrapper(form, "mainBlade")._select(randIdx(DATA.mainBlades));
+      getWrapper(form, "assistBlade")._select(randIdx(DATA.assistBlades));
+      if (Math.random() < 0.5 && DATA.ratchetBits.length > 0) {
+        getWrapper(form, "ratchetBit")._select(randIdx(DATA.ratchetBits));
+      } else {
+        getWrapper(form, "ratchet")._select(randIdx(DATA.ratchets));
+        getWrapper(form, "bit")._select(randIdx(DATA.bits));
+      }
+    } else if (mode === "cxExpand") {
+      getWrapper(form, "lockChip")._select(randIdx(DATA.lockChips));
+      getWrapper(form, "metalBlade")._select(randIdx(DATA.metalBlades));
+      if (DATA.overBlades.length > 0 && Math.random() < 0.5) {
+        getWrapper(form, "overBlade")._select(randIdx(DATA.overBlades));
+      }
+      getWrapper(form, "assistBlade")._select(randIdx(DATA.assistBlades));
+      if (Math.random() < 0.5 && DATA.ratchetBits.length > 0) {
+        getWrapper(form, "ratchetBit")._select(randIdx(DATA.ratchetBits));
+      } else {
+        getWrapper(form, "ratchet")._select(randIdx(DATA.ratchets));
+        getWrapper(form, "bit")._select(randIdx(DATA.bits));
+      }
+    }
+
+    // Auto-calculate
+    form.requestSubmit();
+  });
+});
