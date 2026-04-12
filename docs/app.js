@@ -904,19 +904,23 @@ function initLibrarySearch() {
           filtered = DATA.ratchetBits || [];
           break;
 
-        case "@getallassist":
+        case "@getallassistblades":
           filtered = DATA.assistBlades || [];
           break;
 
-        case "@getallmain":
+        case "@getallmainblades":
           filtered = DATA.mainBlades || [];
           break;
 
-        case "@getallmetal":
+        case "@getallmetalblades":
           filtered = DATA.metalBlades || [];
           break;
 
-        case "@getalllock":
+        case "@getalloverblades":
+          filtered = DATA.overBlades || [];
+          break;
+
+        case "@getalllockchips":
           filtered = DATA.lockChips || [];
           break;
 
@@ -965,3 +969,19 @@ function initLibrarySearch() {
 }
 
 document.addEventListener("DOMContentLoaded", initLibrarySearch);
+
+const help = document.getElementById("library-help");
+
+help.addEventListener("click", () => {
+  alert(`Search Commands:
+
+@getallblades
+@getallbits
+@getallratchets
+@getallratchetbits
+@getallassistblades
+@getallmainblades
+@getallmetalblades
+@getalloverblades
+@getalllockchips`);
+});
