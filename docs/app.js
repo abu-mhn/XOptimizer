@@ -796,4 +796,172 @@ document.querySelectorAll(".btn-lucky").forEach(btn => {
   });
 })();
 
+function initLibrarySearch() {
+  const input = document.getElementById("library-search");
+  const btn = document.getElementById("library-search-btn");
+  const results = document.getElementById("library-results");
 
+  if (!input || !btn || !results) {
+    console.error("Library elements missing");
+    return;
+  }
+
+  // 🔥 FIX: include ALL categories explicitly (including ratchetBits)
+  const ALL_PARTS = [
+    ...(DATA.blades || []),
+    ...(DATA.mainBlades || []),
+    ...(DATA.metalBlades || []),
+    ...(DATA.overBlades || []),
+    ...(DATA.assistBlades || []),
+    ...(DATA.ratchets || []),
+    ...(DATA.bits || []),
+    ...(DATA.lockChips || []),
+    ...(DATA.ratchetBits || []) // ✅ IMPORTANT FIX
+  ].filter(item => item && item.name);
+
+  // 🧠 folder resolver (clean + reliable)
+  function getFolder(item) {
+    if (DATA.blades?.includes(item)) return "blades";
+    if (DATA.lockChips?.includes(item)) return "lockChips";
+    if (DATA.ratchetBits?.includes(item)) return "ratchetBits";
+    if (DATA.bits?.includes(item)) return "bits";
+    if (DATA.ratchets?.includes(item)) return "ratchets";
+    if (DATA.mainBlades?.includes(item)) return "mainBlades";
+    if (DATA.assistBlades?.includes(item)) return "assistBlades";
+    if (DATA.metalBlades?.includes(item)) return "metalBlades";
+    if (DATA.overBlades?.includes(item)) return "overBlades";
+    if (item.height !== undefined && item.spindirection && item.atk !== undefined) return "blades";
+
+    return "misc";
+  }
+
+  // 🖼️ image path
+  function getImagePath(item) {
+    const folder = getFolder(item);
+    const cleanName = item.name.replace(/\s+/g, "");
+    return `assets/${folder}/${cleanName}.webp`;
+  }
+
+  // 🎨 render
+  function formatItem(item) {
+    const imgSrc = getImagePath(item);
+
+    return `
+      <div class="stat-card">
+        <img 
+          src="${imgSrc}" 
+          alt="${item.name}"
+          class="part-img"
+          onerror="this.style.display='none'"
+        />
+
+        <div class="stat-info">
+          <strong>${item.name}</strong><br>
+
+          ${item.atk !== undefined ? `ATK: ${item.atk} ` : ""}
+          ${item.def !== undefined ? `DEF: ${item.def} ` : ""}
+          ${item.sta !== undefined ? `STA: ${item.sta} ` : ""}
+          ${item.dash !== undefined ? `DASH: ${item.dash} ` : ""}
+          ${item.burstRes !== undefined ? `BR: ${item.burstRes}` : ""}
+
+          <br>
+
+          ${item.weight !== undefined ? `Weight: ${item.weight}` : ""}
+          ${item.spindirection ? ` | Spin: ${item.spindirection}` : ""}
+        </div>
+      </div>
+    `;
+  }
+
+  // 🔍 search
+  function runSearch() {
+    const q = input.value.trim().toLowerCase();
+    results.innerHTML = "";
+
+    if (!q) {
+      results.style.maxHeight = "0px";
+      return;
+    }
+
+    let filtered = [];
+
+    // 🧠 COMMAND MODE
+    if (q.startsWith("@")) {
+      switch (q) {
+        case "@getallbits":
+          filtered = DATA.bits || [];
+          break;
+
+        case "@getallratchets":
+          filtered = DATA.ratchets || [];
+          break;
+
+        case "@getallblades":
+          filtered = DATA.blades || [];
+          break;
+
+        case "@getallratchetbits":
+          filtered = DATA.ratchetBits || [];
+          break;
+
+        case "@getallassist":
+          filtered = DATA.assistBlades || [];
+          break;
+
+        case "@getallmain":
+          filtered = DATA.mainBlades || [];
+          break;
+
+        case "@getallmetal":
+          filtered = DATA.metalBlades || [];
+          break;
+
+        case "@getalllock":
+          filtered = DATA.lockChips || [];
+          break;
+
+        default:
+          results.innerHTML = `<div class="search-item">Unknown command</div>`;
+          results.style.maxHeight = "200px";
+          return;
+      }
+    }
+    // 🔍 NORMAL SEARCH
+    else {
+      filtered = ALL_PARTS.filter(p =>
+        p.name.toLowerCase().includes(q)
+      );
+    }
+
+    if (filtered.length === 0) {
+      results.innerHTML = `<div class="search-item">No results found</div>`;
+      results.style.maxHeight = "200px";
+      return;
+    }
+
+    results.style.maxHeight = "400px";
+
+    filtered.slice(0, 100).forEach(item => { // 🔥 allow more items
+      const div = document.createElement("div");
+      div.className = "search-item";
+      div.innerHTML = formatItem(item);
+
+      div.onclick = () => {
+        input.value = item.name;
+      };
+
+      results.appendChild(div);
+    });
+  }
+
+  btn.addEventListener("click", runSearch);
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      runSearch();
+    }
+  });
+}
+
+document.addEventListener("DOMContentLoaded", initLibrarySearch);

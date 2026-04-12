@@ -196,7 +196,7 @@ const DATA = {
     { atk:20, def:40, sta:10, dash:30, burstRes:30, weight:2.0, name:"Gear Needle", codename:"GN" },
     { atk:40, def:10, sta:10, dash:40, burstRes:80, weight:2.6, name:"Accel", codename:"A" },
     { atk:30, def:35, sta:20, dash:15, burstRes:80, weight:2.6, name:"Hexa", codename:"H" },
-    { atk:15, def:20, sta:55, dash:10, burstRes:30, weight:3.2, name:"Disc Ball", codename:"DB" },
+    { atk:15, def:20, sta:55, dash:10, burstRes:30, weight:3.2, name:"Disk Ball", codename:"DB" },
     { atk:55, def:15, sta:5, dash:25, burstRes:80, weight:2.2, name:"Quake", codename:"Q" },
     { atk:8, def:57, sta:30, dash:5, burstRes:30, weight:2.8, name:"Metal Needle", codename:"MN" },
     { atk:25, def:25, sta:30, dash:20, burstRes:80, weight:2.1, name:"Unite", codename:"U" },
