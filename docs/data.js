@@ -62,9 +62,9 @@ const DATA = {
     { atk:75, def:15, sta:35, weight:39.0, spindirection:"L", name:"Meteor Dragoon", codename:"METEORDRAGOON" },
     { atk:30, def:60, sta:20, weight:37.5, spindirection:"R", name:"Mummy Curse", codename:"MUMMYCURSE" },
     { atk:55, def:30, sta:15, weight:25.1, spindirection:"L", name:"Dragoon Storm", codename:"DRAGOONSTORM" },
-    { atk:30, def:40, sta:30, weight:0, spindirection:"R", name:"Storm Spriggan", codename:"STORMSPRIGGAN" },
+    { atk:30, def:40, sta:30, weight:31.0, spindirection:"R", name:"Storm Spriggan", codename:"STORMSPRIGGAN" },
     { atk:45, def:45, sta:40, weight:0, spindirection:"R", name:"Bullet Griffon", codename:"BULLETGRIFFON" },
-    { atk:58, def:25, sta:17, weight:0, spindirection:"R", name:"Dran Strike", codename:"DRANSTRIKE" },
+    { atk:58, def:25, sta:17, weight:41.4, spindirection:"R", name:"Dran Strike", codename:"DRANSTRIKE" },
   ],
 
   lockChips: [
@@ -134,7 +134,7 @@ const DATA = {
     ] },
     { atk:5, def:20, sta:25, weight:5.8, height:60, spindirection:"R", name:"Free", codename:"F" },
     { atk:17, def:17, sta:11, weight:7.8, height:50, spindirection:"R", name:"Heavy", codename:"H" },
-    { atk:0, def:0, sta:0, weight:6.6, height:0, spindirection:"R", name:"Zillion", codename:"Z" },
+    { atk:22, def:15, sta:3, weight:6.6, height:80, spindirection:"R", name:"Zillion", codename:"Z" },
     { atk:10, def:5, sta:25, weight:6.1, height:70, spindirection:"R", name:"Erase", codename:"E" },
     { atk:0, def:0, sta:0, weight:0, height:0, spindirection:"R", name:"Vertical", codename:"V" },
     { atk:30, def:5, sta:5, weight:4.9, height:50, spindirection:"R", name:"Knuckle", codename:"K" },
@@ -175,7 +175,7 @@ const DATA = {
     { atk:3, def:14, sta:13, height:60, weight:6.5, name:"0-60" },
     { atk:6, def:14, sta:10, height:55, weight:5.2, name:"7-55" },
     { atk:8, def:10, sta:12, height:70, weight:0, name:"8-70" },
-    { atk:18, def:9, sta:3, height:50, weight:0, name:"1-50" },
+    { atk:18, def:9, sta:3, height:50, weight:5.7, name:"1-50" },
   ],
 
   bits: [

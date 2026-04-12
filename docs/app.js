@@ -16,6 +16,11 @@ function getType(totalAtk, totalDef, totalSta, isRatchetBit) {
   return "Balance";
 }
 
+function formatWeight(value) {
+  const num = Number(value);
+  return isNaN(num) ? "0.00" : num.toFixed(2);
+}
+
 function tbaOrVal(val, hasZero) { return hasZero ? "TBA" : val; }
 function weightStr(w, hasZero) { return hasZero ? "TBA" : w.toFixed(2) + "g"; }
 
@@ -198,11 +203,20 @@ document.querySelectorAll(".tab").forEach(tab => {
 
     if (form) {
       form.classList.remove("hidden");
+
+      // 🔥 RESET FORM WHEN SWITCHING (BX / CX / CX EXPAND / etc)
+      form.querySelectorAll("select, input").forEach(el => {
+        if (el.tagName === "SELECT") {
+          el.selectedIndex = 0;
+        } else {
+          el.value = "";
+        }
+      });
     }
 
-    // ================= HISTORY FIX =================
+    // ================= HISTORY =================
     if (mode === "history") {
-      renderHistory(); // 🔥 THIS WAS MISSING
+      renderHistory();
     }
 
     document.getElementById("result").classList.add("hidden");
@@ -278,7 +292,10 @@ function calcStandard(form) {
   const rbIdx = form.querySelector('[name="ratchetBit"]').value;
 
   if (bladeIdx === "") {
-    return renderResult({ status: "Failure", message: "Please select a blade." });
+    return renderResult({
+      status: "Failure",
+      message: "Please select a blade."
+    });
   }
 
   const blade = DATA.blades[bladeIdx];
@@ -298,10 +315,13 @@ function calcStandard(form) {
   const bulletGriffonInvalid = isBulletGriffon && (ratchet || rb);
 
   if (!hasValidBottom || clockMirageMismatch || clockMirageInvalidBit || bulletGriffonInvalid) {
-    return renderResult({ status: "Failure", message: "Combo failed to create" });
+    return renderResult({
+      status: "Failure",
+      message: "Combo failed to create"
+    });
   }
 
-  // ================= TOP STATS =================
+  // ================= TOP =================
   const topAtkZ = blade.atk === 0;
   const topDefZ = blade.def === 0;
   const topStaZ = blade.sta === 0;
@@ -316,21 +336,21 @@ function calcStandard(form) {
     "Spin Direction": blade.spindirection,
   };
 
-  // ================= BOTTOM STATS =================
+  // ================= BOTTOM =================
   let bottomStats = {};
   let bAtk, bDef, bSta, bWeight;
   let bAtkZ, bDefZ, bStaZ, bWeightZ;
 
   if (rb && !isClockMirage) {
-    bAtkZ = rb.atk === 0;
-    bDefZ = rb.def === 0;
-    bStaZ = rb.sta === 0;
-    bWeightZ = rb.weight === 0;
-
     bAtk = rb.atk;
     bDef = rb.def;
     bSta = rb.sta;
     bWeight = rb.weight;
+
+    bAtkZ = rb.atk === 0;
+    bDefZ = rb.def === 0;
+    bStaZ = rb.sta === 0;
+    bWeightZ = rb.weight === 0;
 
     bottomStats = {
       "Ratchet-Bit": rb.name,
@@ -359,8 +379,6 @@ function calcStandard(form) {
     bWeight = isBulletGriffon ? bit.weight : rW + bit.weight;
     bWeightZ = isBulletGriffon ? bit.weight === 0 : rW === 0 || bit.weight === 0;
 
-    bottomStats = {};
-
     if (ratchet) bottomStats["Ratchet"] = ratchet.name;
     bottomStats["Bit"] = bit.name;
 
@@ -375,7 +393,7 @@ function calcStandard(form) {
     bottomStats["Weight"] = weightStr(bWeight, bWeightZ);
   }
 
-  // ================= GRAND TOTAL =================
+  // ================= GRAND =================
   const gAtkZ = topAtkZ || bAtkZ;
   const gDefZ = topDefZ || bDefZ;
   const gStaZ = topStaZ || bStaZ;
@@ -387,7 +405,7 @@ function calcStandard(form) {
 
   const isRB = !!rb && !isClockMirage;
 
-  // ================= COMBO NAME =================
+  // ================= NAME =================
   let comboName = blade.codename;
 
   if (rb && !isClockMirage) {
@@ -401,18 +419,28 @@ function calcStandard(form) {
   const bBurstRes = rb && !isClockMirage ? rb.burstRes : bit.burstRes;
   const bHeight = rb && !isClockMirage ? rb.height : (ratchet ? ratchet.height : null);
 
-  // ================= HISTORY SAVE (FIXED) =================
+  // ================= 🔥 FULL HISTORY SAVE =================
   saveHistory("BX", {
     comboName,
-    blade: blade.name,
-    ratchet: ratchet ? ratchet.name : null,
-    bit: bit ? bit.name : null,
-    ratchetBit: rb ? rb.name : null,
+
+    parts: {
+      blade: blade.name,
+      ratchet: ratchet ? ratchet.name : null,
+      bit: bit ? bit.name : null,
+      ratchetBit: rb ? rb.name : null
+    },
+
+    top: topStats,
+    bottom: bottomStats,
+
     grandTotal: {
       ATK: gAtk,
       DEF: gDef,
       STA: gSta,
-      Weight: blade.weight + (bWeight || 0)
+      Weight: formatWeight(blade.weight + (bWeight || 0)) + " g",
+      Dash: bDash,
+      BurstRes: bBurstRes,
+      Height: bHeight
     }
   });
 
@@ -422,6 +450,7 @@ function calcStandard(form) {
     message: "",
     comboName,
     type: getType(gAtk, gDef, gSta, isRB),
+
     grandTotal: {
       ATK: tbaOrVal(gAtk, gAtkZ),
       DEF: tbaOrVal(gDef, gDefZ),
@@ -566,10 +595,7 @@ function calcCX(form) {
 
   // ================= COMBO NAME =================
   let comboName = lc.codename + mb.codename + ab.codename;
-
-  comboName += rb
-    ? rb.codename
-    : ratchet.name + bit.codename;
+  comboName += rb ? rb.codename : ratchet.name + bit.codename;
 
   const bDash = rb ? rb.dash : bit.dash;
   const bBurstRes = rb ? rb.burstRes : bit.burstRes;
@@ -580,20 +606,31 @@ function calcCX(form) {
       ? "TBA"
       : bHeight + ab.height;
 
-  // ================= HISTORY SAVE =================
+  // ================= 🔥 FULL HISTORY SAVE =================
   saveHistory("CX", {
     comboName,
-    lockChip: lc.name,
-    mainBlade: mb.name,
-    assistBlade: ab.name,
-    ratchet: ratchet ? ratchet.name : null,
-    bit: bit ? bit.name : null,
-    ratchetBit: rb ? rb.name : null,
+
+    parts: {
+      lockChip: lc.name,
+      mainBlade: mb.name,
+      assistBlade: ab.name,
+      ratchet: ratchet ? ratchet.name : null,
+      bit: bit ? bit.name : null,
+      ratchetBit: rb ? rb.name : null
+    },
+
+    top: topStats,
+    bottom: bottomStats,
+
     grandTotal: {
       ATK: gAtk,
       DEF: gDef,
       STA: gSta,
-      Weight: topWeight + (bWeight || 0)
+      Weight: formatWeight(topWeight + (bWeight || 0)) + " g",
+      Dash: bDash,
+      BurstRes: bBurstRes,
+      Height: bHeight,
+      TotalHeight: totalHeight
     }
   });
 
@@ -759,9 +796,7 @@ function calcCXExpand(form) {
 
   // ================= COMBO NAME =================
   let comboName = lc.codename + metalBlade.codename;
-
   if (overBlade) comboName += overBlade.codename;
-
   comboName += ab.codename;
   comboName += rb ? rb.codename : ratchet.name + bit.codename;
 
@@ -774,21 +809,39 @@ function calcCXExpand(form) {
       ? "TBA"
       : bHeight + ab.height;
 
-  // ================= HISTORY SAVE =================
+  // ================= 🔥 FULL HISTORY SAVE =================
   saveHistory("CX_EXPAND", {
     comboName,
-    lockChip: lc.name,
-    metalBlade: metalBlade.name,
-    overBlade: overBlade ? overBlade.name : null,
-    assistBlade: ab.name,
-    ratchet: ratchet ? ratchet.name : null,
-    bit: bit ? bit.name : null,
-    ratchetBit: rb ? rb.name : null,
+
+    mode: "CX_EXPAND",
+
+    parts: {
+      lockChip: lc.name,
+      metalBlade: metalBlade.name,
+      overBlade: overBlade ? overBlade.name : null,
+      assistBlade: ab.name,
+      ratchet: ratchet ? ratchet.name : null,
+      bit: bit ? bit.name : null,
+      ratchetBit: rb ? rb.name : null,
+    },
+
+    top: {
+      ...topStats
+    },
+
+    bottom: {
+      ...bottomStats
+    },
+
     grandTotal: {
       ATK: gAtk,
       DEF: gDef,
       STA: gSta,
-      Weight: topWeight + (bWeight || 0)
+      Weight: formatWeight(topWeight + (bWeight || 0)) + " g",
+      Dash: bDash,
+      BurstRes: bBurstRes,
+      Height: bHeight,
+      TotalHeight: totalHeight,
     }
   });
 
@@ -1132,31 +1185,49 @@ function initLibrarySearch() {
   function formatItem(item) {
     const imgSrc = getImagePath(item);
 
+    function renderAllData(obj) {
+      return Object.entries(obj)
+        .filter(([key, val]) =>
+          val !== undefined &&
+          val !== null &&
+          typeof val !== "object" &&
+          key.toLowerCase() !== "name"   // 🔥 remove NAME
+        )
+        .map(([key, val]) => {
+          let displayVal = val;
+
+          // 🔥 special case for weight
+          if (key.toLowerCase() === "weight") {
+            displayVal = `${val} g`;
+          }
+
+          return `<div class="stat-line"><b>${key.toUpperCase()}:</b> ${displayVal}</div>`;
+        })
+        .join("");
+    }
+
     return `
-      <div class="stat-card">
-        <img 
-          src="${imgSrc}" 
-          alt="${item.name}"
-          class="part-img"
-          onerror="this.style.display='none'"
-        />
+    <div class="stat-card">
 
-        <div class="stat-info">
-          <strong>${item.name}</strong><br>
+      <img 
+        src="${imgSrc}" 
+        alt="${item.name}"
+        class="part-img"
+        onerror="this.style.display='none'"
+      />
 
-          ${item.atk !== undefined ? `ATK: ${item.atk} ` : ""}
-          ${item.def !== undefined ? `DEF: ${item.def} ` : ""}
-          ${item.sta !== undefined ? `STA: ${item.sta} ` : ""}
-          ${item.dash !== undefined ? `DASH: ${item.dash} ` : ""}
-          ${item.burstRes !== undefined ? `BR: ${item.burstRes}` : ""}
+      <div class="stat-info">
 
-          <br>
+        <strong>${item.name}</strong><br>
 
-          ${item.weight !== undefined ? `Weight: ${item.weight}` : ""}
-          ${item.spindirection ? ` | Spin: ${item.spindirection}` : ""}
+        <!-- 🔥 FULL RAW DATA -->
+        <div class="full-data">
+          ${renderAllData(item)}
         </div>
+
       </div>
-    `;
+    </div>
+  `;
   }
 
   // 🔍 search
@@ -1300,16 +1371,89 @@ function renderHistory() {
     return;
   }
 
+  function getColor(value) {
+    if (value > 100) return "#2ecc71";
+    if (value >= 50) return "#f1c40f";
+    return "#e74c3c";
+  }
+
+  function createBar(label, value) {
+    const safeVal = typeof value === "number" ? value : 0;
+    const color = getColor(safeVal);
+    const width = Math.min(safeVal, 120);
+
+    return `
+      <div class="stat-row">
+        <span class="stat-label">${label}</span>
+        <div class="stat-bar-bg">
+          <div class="stat-bar-fill" style="width:${width}%; background:${color}"></div>
+        </div>
+        <span class="stat-value">${safeVal}</span>
+      </div>
+    `;
+  }
+
+  function detectType(atk, def, sta) {
+    // Balance rule
+    if (atk < 100 && def < 100 && sta < 100) {
+      return "Balance";
+    }
+
+    const max = Math.max(atk, def, sta);
+
+    if (max === atk && atk > def && atk > sta) return "Attack";
+    if (max === def && def > atk && def > sta) return "Defense";
+    if (max === sta && sta > atk && sta > def) return "Stamina";
+
+    return "Balance";
+  }
+
+  function renderObject(obj) {
+    if (!obj) return "";
+    return Object.entries(obj)
+      .map(([key, val]) => `<div class="stat-line"><b>${key}:</b> ${val ?? "-"}</div>`)
+      .join("");
+  }
+
   history.forEach(item => {
+    const data = item.data || {};
+    const total = data.grandTotal || {};
+    const top = data.top || {};
+
+    const atk = Number(total.ATK || 0);
+    const def = Number(total.DEF || 0);
+    const sta = Number(total.STA || 0);
+
+    const type = detectType(atk, def, sta);
+
+    // spin direction safe read
+    const spinDir = top["Spin Direction"] || top.spinDirection || "R";
+
     const div = document.createElement("div");
     div.className = "history-item";
 
     div.innerHTML = `
-      <strong>${item.data.comboName}</strong><br/>
-      Mode: ${item.mode}<br/>
-      ATK: ${item.data.grandTotal.ATK} |
-      DEF: ${item.data.grandTotal.DEF} |
-      STA: ${item.data.grandTotal.STA}<br/>
+      <!-- HEADER (COMBO + TYPE + SPIN) -->
+      <div class="history-header">
+        <strong class="history-name">
+          ${data.comboName || "Unknown Combo"}
+        </strong>
+
+        <span class="history-icons">
+          ${typeLogo(type)}
+          ${spinLogo(spinDir)}
+        </span>
+      </div>
+
+      <!-- STATS -->
+      <div class="history-section">
+        <b>Grand Total</b>
+        ${createBar("ATK", atk)}
+        ${createBar("DEF", def)}
+        ${createBar("STA", sta)}
+        ${renderObject(total)}
+      </div>
+
       <small>${new Date(item.time).toLocaleString()}</small>
       <hr/>
     `;
