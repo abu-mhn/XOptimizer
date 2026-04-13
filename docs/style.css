@@ -380,11 +380,6 @@ select {
     overflow: hidden;
 }
 
-.stat-bar-fill {
-    height: 100%;
-    border-radius: 7px;
-    transition: width .4s ease;
-}
 
 .stat-bar-value {
     width: 36px;
@@ -613,12 +608,6 @@ select {
   overflow: hidden;
 }
 
-.stat-bar-fill {
-  height: 100%;
-  border-radius: 6px;
-  transition: width 0.3s ease;
-}
-
 .stat-value {
   width: 30px;
   font-size: 12px;
@@ -708,3 +697,35 @@ select {
   border-top: 1px solid rgba(255,255,255,0.1);
   padding-top: 6px;
 }
+
+.tba-bar {
+  width: 100% !important;
+  background: #555 !important;
+  opacity: 0.5;
+}
+
+.stat-bar-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
+/* NORMAL COLORS ONLY HERE */
+.stat-bar-fill.attack {
+  background: #e74c3c;
+}
+
+.stat-bar-fill.defense {
+  background: #3498db;
+}
+
+.stat-bar-fill.stamina {
+  background: #2ecc71;
+}
+
+/* TBA ONLY */
+.stat-bar-fill.tba-bar {
+  background: #95a5a6 !important;
+  opacity: 0.6;
+}
+

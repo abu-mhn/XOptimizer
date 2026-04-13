@@ -15,8 +15,7 @@
     <!-- ================= TAB MENU ================= -->
     <div class="mode-tabs">
       <button class="tab active" data-mode="standard">
-        <img src="assets/line/Basic_Line_Logo.webp">
-        /
+        <img src="assets/line/Basic_Line_Logo.webp"> /
         <img src="assets/line/Unique_Line_Logo.webp">
       </button>
 
@@ -29,14 +28,12 @@
         <img src="assets/line/Expand_Blade_Logo.webp">
       </button>
 
-      <!-- Library Tab -->
       <button class="tab" data-mode="library">
         <span class="icon-square">
           <img src="assets/icons/book.png">
         </span>
       </button>
 
-      <!-- History Tab -->
       <button class="tab" data-mode="history">
         <span class="icon-circle">
           <img src="assets/icons/history.png">
@@ -68,7 +65,9 @@
       </fieldset>
 
       <div class="btn-row">
-        <button type="submit" class="btn">Calculate</button>
+        <button type="submit" class="btn calc-btn" data-mode="standard">
+          Calculate
+        </button>
         <button type="button" class="btn btn-reset">Reset</button>
         <button type="button" class="btn btn-lucky">I'm Feeling Lucky</button>
       </div>
@@ -109,7 +108,9 @@
       </fieldset>
 
       <div class="btn-row">
-        <button type="submit" class="btn">Calculate</button>
+        <button type="submit" class="btn calc-btn hidden" data-mode="cx">
+          Calculate
+        </button>
         <button type="button" class="btn btn-reset">Reset</button>
         <button type="button" class="btn btn-lucky">I'm Feeling Lucky</button>
       </div>
@@ -154,7 +155,9 @@
       </fieldset>
 
       <div class="btn-row">
-        <button type="submit" class="btn">Calculate</button>
+        <button type="submit" class="btn calc-btn hidden" data-mode="cxExpand">
+          Calculate
+        </button>
         <button type="button" class="btn btn-reset">Reset</button>
         <button type="button" class="btn btn-lucky">I'm Feeling Lucky</button>
       </div>
@@ -181,7 +184,7 @@
       </fieldset>
     </form>
 
-    <!-- ================= HISTORY (NEW) ================= -->
+    <!-- ================= HISTORY ================= -->
     <form id="form-history" class="calc-form hidden">
       <fieldset>
         <legend>History (Last 3 Combos)</legend>
