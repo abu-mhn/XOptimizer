@@ -652,40 +652,6 @@ select {
   align-items: center;
 }
 
-.icon-circle {
-  width: 30px;
-  height: 30px;
-  background: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.18);
-}
-
-.icon-circle img {
-  width: 16px;
-  height: 16px;
-  object-fit: contain;
-}
-
-.icon-square {
-  width: 32px;
-  height: 32px;
-  background: white;
-  border-radius: 6px; /* small rounding (or 0 for sharp square) */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.18);
-}
-
-.icon-square img {
-  width: 18px;
-  height: 18px;
-  object-fit: contain;
-}
-
 .full-data {
   margin-top: 8px;
   font-size: 12px;
