@@ -211,7 +211,7 @@ document.querySelectorAll(".tab").forEach(tab => {
     if (form) {
       form.classList.remove("hidden");
 
-      // ================= RESET FORM (ONLY ACTIVE FORM) =================
+      // ================= RESET FORM =================
       form.querySelectorAll("select, input").forEach(el => {
         if (el.tagName === "SELECT") {
           el.selectedIndex = 0;
@@ -260,12 +260,20 @@ document.querySelectorAll(".tab").forEach(tab => {
     // ================= HISTORY =================
     if (mode === "history") {
       renderHistory();
+
+      // 🔽 AUTO SCROLL TO TOP
+      requestAnimationFrame(() => {
+        window.scrollTo({
+          top: 0,
+          behavior: "smooth"
+        });
+      });
     }
 
     // ================= HIDE RESULT =================
     document.getElementById("result")?.classList.add("hidden");
 
-    // ================= 🔥 FIX CALCULATE BUTTON (IMPORTANT) =================
+    // ================= FIX CALCULATE BUTTON =================
     document.querySelectorAll(".calc-btn").forEach(btn => {
       btn.classList.add("hidden");
       btn.style.display = "none";
@@ -507,7 +515,6 @@ function calcStandard(form) {
       DEF: gDef,
       STA: gSta,
 
-      // ✅ FIXED ADDITIONAL STATS
       Height: height(bHeight),
       Dash: isRB ? rbA?.dash : bit?.dash,
       "Burst Res": isRB ? rbA?.burstRes : bit?.burstRes,
@@ -544,22 +551,30 @@ function calcStandard(form) {
 
       ...(bladeModeElExists(bladeModes)
         ? {
-          "Blade Mode": `
+            "Blade Mode": `
               <span class="clickable-mode" data-mode="blade">
                 ${bladeModes[blade._modeIndex].modeName}
               </span>`
-        }
+          }
         : {}),
 
       ...(rbModeElExists(rbModes)
         ? {
-          "Ratchet-Bit Mode": `
+            "Ratchet-Bit Mode": `
               <span class="clickable-mode" data-mode="rb">
                 ${rbModes[rb._modeIndex].modeName}
               </span>`
-        }
+          }
         : {})
     }
+  });
+
+  // ================= AUTO SCROLL (NEW FIX) =================
+  requestAnimationFrame(() => {
+    window.scrollTo({
+      top: document.body.scrollHeight,
+      behavior: "smooth"
+    });
   });
 
   // helpers (safe checks)
@@ -628,7 +643,6 @@ function calcCX(form) {
   const topAtk = (mbA.atk || 0) + (abA.atk || 0);
   const topDef = (mbA.def || 0) + (abA.def || 0);
   const topSta = (mbA.sta || 0) + (abA.sta || 0);
-
   const topWeight = (lc.weight || 0) + (mbA.weight || 0) + (abA.weight || 0);
 
   // ================= BOTTOM =================
@@ -692,10 +706,9 @@ function calcCX(form) {
     });
   }, 0);
 
-  // ================= HISTORY (FULL FIXED) =================
+  // ================= HISTORY =================
   saveHistory("CX", {
     comboName,
-
     parts: {
       lockChip: lc.name,
       mainBlade: mbA.name,
@@ -704,14 +717,12 @@ function calcCX(form) {
       bit: bit?.name || null,
       ratchetBit: rb?.name || null
     },
-
     top: {
       ATK: topAtk,
       DEF: topDef,
       STA: topSta,
       Weight: topWeight
     },
-
     bottom: {
       ATK: bAtk,
       DEF: bDef,
@@ -721,16 +732,13 @@ function calcCX(form) {
       Dash: isRB ? rbA?.dash : bit?.dash,
       "Burst Res": isRB ? rbA?.burstRes : bit?.burstRes
     },
-
     grandTotal: {
       ATK: gAtk,
       DEF: gDef,
       STA: gSta,
-
       Height: bHeight ? height(bHeight) : "TBA",
       Dash: isRB ? rbA?.dash : bit?.dash,
       "Burst Res": isRB ? rbA?.burstRes : bit?.burstRes,
-
       Weight: weight(topWeight + bWeight)
     }
   });
@@ -739,7 +747,6 @@ function calcCX(form) {
   renderResult({
     status: "Success",
     message: "",
-
     comboName: `
       <div id="${headerId}" class="combo-header">
         <div class="combo-inner">
@@ -749,16 +756,13 @@ function calcCX(form) {
         </div>
       </div>
     `,
-
     grandTotal: {
       ATK: stat(gAtk),
       DEF: stat(gDef),
       STA: stat(gSta),
-
       Height: height(bHeight),
       Dash: isRB ? rbA?.dash : bit?.dash,
       "Burst Res": isRB ? rbA?.burstRes : bit?.burstRes,
-
       Weight: weight(topWeight + bWeight),
 
       ...(mbModes ? {
@@ -773,6 +777,14 @@ function calcCX(form) {
         "Ratchet-Bit Mode": `<span class="clickable-mode" data-mode="rb">${rbModes[rb._modeIndex].modeName}</span>`
       } : {})
     }
+  });
+
+  // ================= AUTO SCROLL (追加) =================
+  requestAnimationFrame(() => {
+    window.scrollTo({
+      top: document.body.scrollHeight,
+      behavior: "smooth"
+    });
   });
 }
 
@@ -889,7 +901,6 @@ function calcCXExpand(form) {
   saveHistory("CX_EXPAND", {
     comboName,
     mode: "CX_EXPAND",
-
     parts: {
       lockChip: lc.name,
       metalBlade: mbA.name,
@@ -899,14 +910,12 @@ function calcCXExpand(form) {
       bit: bit?.name || null,
       ratchetBit: rb?.name || null
     },
-
     top: {
       ATK: topAtk,
       DEF: topDef,
       STA: topSta,
       Weight: topWeight
     },
-
     bottom: {
       ATK: bAtk,
       DEF: bDef,
@@ -914,7 +923,6 @@ function calcCXExpand(form) {
       Weight: bWeight,
       Height: bHeight
     },
-
     grandTotal: {
       ATK: stat(gAtk),
       DEF: stat(gDef),
@@ -959,7 +967,6 @@ function calcCXExpand(form) {
   renderResult({
     status: "Success",
     message: "",
-
     comboName: `
       <div class="combo-header">
         <span>${comboName}</span>
@@ -967,12 +974,10 @@ function calcCXExpand(form) {
         ${spinLogo(mbA.spindirection)}
       </div>
     `,
-
     grandTotal: {
       ATK: stat(gAtk),
       DEF: stat(gDef),
       STA: stat(gSta),
-
       Height: height(bHeight),
       Dash: bDash,
       "Burst Res": bBurstRes,
@@ -995,8 +1000,15 @@ function calcCXExpand(form) {
         : {})
     }
   });
-}
 
+  // ================= AUTO SCROLL（ここ追加） =================
+  requestAnimationFrame(() => {
+    window.scrollTo({
+      top: document.body.scrollHeight,
+      behavior: "smooth"
+    });
+  });
+}
 // --- Form handlers ---
 document.getElementById("form-standard").addEventListener("submit", e => { e.preventDefault(); calcStandard(e.target); });
 document.getElementById("form-cx").addEventListener("submit", e => { e.preventDefault(); calcCX(e.target); });
