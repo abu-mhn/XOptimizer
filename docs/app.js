@@ -358,167 +358,161 @@ function renderResult(res) {
   el.innerHTML = html;
 }
 
+function formatWeight(val) {
+  if (val === null || val === undefined || val === "TBA") return "TBA";
+  return `${Number(val).toFixed(1)} g`;
+}
+
+function formatStat(val) {
+  if (val === null || val === undefined || val === "TBA") return "TBA";
+  return Number(val);
+}
+
+function formatHeight(val) {
+  if (val === null || val === undefined || val === "TBA") return "TBA";
+  return `${(Number(val) / 10).toFixed(1)} mm`;
+}
+
 // --- Standard calculation ---
 function calcStandard(form) {
-  const bladeIdx = form.querySelector('[name="blade"]').value;
-  const ratchetIdx = form.querySelector('[name="ratchet"]').value;
-  const bitIdx = form.querySelector('[name="bit"]').value;
-  const rbIdx = form.querySelector('[name="ratchetBit"]').value;
+  console.log("calcStandard triggered");
 
-  if (bladeIdx === "") {
+  const bladeIdx = form.querySelector('[name="blade"]')?.value;
+  const ratchetIdx = form.querySelector('[name="ratchet"]')?.value;
+  const bitIdx = form.querySelector('[name="bit"]')?.value;
+  const rbIdx = form.querySelector('[name="ratchetBit"]')?.value;
+
+  if (!bladeIdx) {
     return renderResult({
       status: "Failure",
       message: "Please select a blade."
     });
   }
 
-  const blade = DATA.blades[bladeIdx];
-  const ratchet = ratchetIdx !== "" ? DATA.ratchets[ratchetIdx] : null;
-  const bit = bitIdx !== "" ? DATA.bits[bitIdx] : null;
-  const rb = rbIdx !== "" ? DATA.ratchetBits[rbIdx] : null;
+  const blade = DATA?.blades?.[bladeIdx];
+  const ratchet = ratchetIdx ? DATA?.ratchets?.[ratchetIdx] : null;
+  const bit = bitIdx ? DATA?.bits?.[bitIdx] : null;
+  const rb = rbIdx ? DATA?.ratchetBits?.[rbIdx] : null;
 
-  const isBulletGriffon = blade.codename === "BULLETGRIFFON";
-  const isClockMirage = blade.codename === "CLOCKMIRAGE";
-
-  const hasValidBottom = (ratchet && bit) || rb || (isBulletGriffon && bit);
-
-  const clockMirageMismatch =
-    isClockMirage && (!ratchet || !ratchet.name.endsWith("5")) && !rb;
-
-  const clockMirageInvalidBit = isClockMirage && rb;
-  const bulletGriffonInvalid = isBulletGriffon && (ratchet || rb);
-
-  if (!hasValidBottom || clockMirageMismatch || clockMirageInvalidBit || bulletGriffonInvalid) {
+  if (!blade) {
     return renderResult({
       status: "Failure",
-      message: "Combo failed to create"
+      message: "Blade not found."
     });
   }
 
-  // ================= HEIGHT FORMAT =================
-  function formatHeight(val) {
-    if (val === undefined || val === null || val === "TBA") return "TBA";
-    return `${(Number(val) / 10).toFixed(1)} mm`;
-  }
+  const isRB = !!rb;
 
-  // ================= TOP =================
-  const topAtkZ = blade.atk === 0;
-  const topDefZ = blade.def === 0;
-  const topStaZ = blade.sta === 0;
+  // ================= MODE INIT =================
+  const bladeModes = blade?.modes?.length ? blade.modes : null;
+  const rbModes = rb?.modes?.length ? rb.modes : null;
 
-  const topStats = {
-    Blade: blade.name,
-    ATK: tbaOrVal(blade.atk, topAtkZ),
-    DEF: tbaOrVal(blade.def, topDefZ),
-    STA: tbaOrVal(blade.sta, topStaZ),
-    Weight: weightStr(blade.weight),
-    "Spin Direction": blade.spindirection,
+  if (bladeModes && blade._modeIndex == null) blade._modeIndex = 0;
+  if (rbModes && rb._modeIndex == null) rb._modeIndex = 0;
+
+  const applyMode = (base, mode) => {
+    if (!base || !mode) return base;
+    return { ...base, ...mode };
   };
 
+  const bladeA = applyMode(
+    blade,
+    bladeModes ? bladeModes[blade._modeIndex] : null
+  );
+
+  const rbA = applyMode(
+    rb,
+    rbModes ? rbModes[rb._modeIndex] : null
+  );
+
+  // ================= FORMAT =================
+  const stat = (v) => (v ?? "TBA");
+  const weight = (w) =>
+    w == null ? "TBA" : `${Number(w).toFixed(1)} g`;
+  const height = (h) =>
+    h == null ? "TBA" : `${(Number(h) / 10).toFixed(1)} mm`;
+
   // ================= BOTTOM =================
-  let bottomStats = {};
-  let bAtk, bDef, bSta, bWeight, bHeight;
-  let bAtkZ, bDefZ, bStaZ, bWeightZ;
+  let bAtk = 0, bDef = 0, bSta = 0, bWeight = 0, bHeight = null;
 
-  const isRB = !!rb && !isClockMirage;
+  if (isRB && rbA) {
+    bAtk = rbA.atk || 0;
+    bDef = rbA.def || 0;
+    bSta = rbA.sta || 0;
+    bWeight = rbA.weight || 0;
+    bHeight = rbA.height || null;
+  } else if (bit) {
+    const r = ratchet || { atk: 0, def: 0, sta: 0, weight: 0 };
 
-  if (isRB) {
-    bAtk = rb.atk;
-    bDef = rb.def;
-    bSta = rb.sta;
-    bWeight = rb.weight;
-    bHeight = rb.height;
-
-    bAtkZ = rb.atk === 0;
-    bDefZ = rb.def === 0;
-    bStaZ = rb.sta === 0;
-    bWeightZ = rb.weight === 0;
-
-    bottomStats = {
-      "Ratchet-Bit": rb.name,
-      ATK: tbaOrVal(bAtk, bAtkZ),
-      DEF: tbaOrVal(bDef, bDefZ),
-      STA: tbaOrVal(bSta, bStaZ),
-      Height: formatHeight(bHeight),
-      Dash: rb.dash,
-      "Burst Res": rb.burstRes,
-      Weight: weightStr(bWeight),
-    };
-
-  } else {
-    const rAtk = ratchet ? ratchet.atk : 0;
-    const rDef = ratchet ? ratchet.def : 0;
-    const rSta = ratchet ? ratchet.sta : 0;
-    const rW = ratchet ? ratchet.weight : 0;
-
-    bAtk = isBulletGriffon ? bit.atk : rAtk + bit.atk;
-    bDef = isBulletGriffon ? bit.def : rDef + bit.def;
-    bSta = isBulletGriffon ? bit.sta : rSta + bit.sta;
-    bWeight = isBulletGriffon ? bit.weight : rW + bit.weight;
-
-    bAtkZ = isBulletGriffon ? bit.atk === 0 : rAtk === 0 || bit.atk === 0;
-    bDefZ = isBulletGriffon ? bit.def === 0 : rDef === 0 || bit.def === 0;
-    bStaZ = isBulletGriffon ? bit.sta === 0 : rSta === 0 || bit.sta === 0;
-    bWeightZ = isBulletGriffon ? bit.weight === 0 : rW === 0 || bit.weight === 0;
-
-    bHeight = ratchet ? ratchet.height : null;
-
-    bottomStats = {
-      Ratchet: ratchet ? ratchet.name : undefined,
-      Bit: bit.name,
-      ATK: tbaOrVal(bAtk, bAtkZ),
-      DEF: tbaOrVal(bDef, bDefZ),
-      STA: tbaOrVal(bSta, bStaZ),
-      Height: formatHeight(bHeight),
-      Dash: bit.dash,
-      "Burst Res": bit.burstRes,
-      Weight: weightStr(bWeight),
-    };
+    bAtk = r.atk + (bit.atk || 0);
+    bDef = r.def + (bit.def || 0);
+    bSta = r.sta + (bit.sta || 0);
+    bWeight = r.weight + (bit.weight || 0);
+    bHeight = ratchet?.height || null;
   }
 
   // ================= GRAND =================
-  const gAtk = blade.atk + (bAtkZ ? 0 : bAtk);
-  const gDef = blade.def + (bDefZ ? 0 : bDef);
-  const gSta = blade.sta + (bStaZ ? 0 : bSta);
+  const gAtk = (bladeA.atk || 0) + bAtk;
+  const gDef = (bladeA.def || 0) + bDef;
+  const gSta = (bladeA.sta || 0) + bSta;
 
-  const anyZeroStat = topAtkZ || topDefZ || topStaZ || bAtkZ || bDefZ || bStaZ;
+  const type = getType(gAtk, gDef, gSta, isRB);
 
-  const type = anyZeroStat
-    ? "TBA"
-    : getType(gAtk, gDef, gSta, isRB);
+  const comboName =
+    (bladeA.codename || bladeA.name) +
+    (isRB
+      ? (rbA?.codename || "")
+      : ((ratchet?.name || "") + (bit?.codename || "")));
 
-  // ================= NAME =================
-  let comboName = blade.codename;
-  if (isRB) comboName += rb.codename;
-  else comboName += (ratchet ? ratchet.name : "") + bit.codename;
+  const headerId = "comboHeader";
 
-  const bDash = isRB ? rb.dash : bit.dash;
-  const bBurstRes = isRB ? rb.burstRes : bit.burstRes;
+  // ================= CLICK MODE SYSTEM =================
+  setTimeout(() => {
+    const bladeModeEl = document.querySelector('[data-mode="blade"]');
+    const rbModeEl = document.querySelector('[data-mode="rb"]');
 
-  const bHeightFinal = isRB ? rb.height : (ratchet ? ratchet.height : null);
+    if (bladeModeEl) {
+      bladeModeEl.style.cursor = "pointer";
+      bladeModeEl.onclick = () => {
+        if (bladeModes) {
+          blade._modeIndex =
+            (blade._modeIndex + 1) % bladeModes.length;
+          calcStandard(form);
+        }
+      };
+    }
+
+    if (rbModeEl && rbModes) {
+      rbModeEl.style.cursor = "pointer";
+      rbModeEl.onclick = () => {
+        rb._modeIndex =
+          (rb._modeIndex + 1) % rbModes.length;
+        calcStandard(form);
+      };
+    }
+  }, 0);
 
   // ================= SAVE HISTORY =================
   saveHistory("BX", {
     comboName,
     parts: {
       blade: blade.name,
-      ratchet: ratchet ? ratchet.name : null,
-      bit: bit ? bit.name : null,
-      ratchetBit: rb ? rb.name : null
+      ratchet: ratchet?.name || null,
+      bit: bit?.name || null,
+      ratchetBit: rb?.name || null
     },
 
-    top: topStats,
-    bottom: bottomStats,
-
     grandTotal: {
-      ATK: anyZeroStat ? "TBA" : gAtk,
-      DEF: anyZeroStat ? "TBA" : gDef,
-      STA: anyZeroStat ? "TBA" : gSta,
+      ATK: gAtk,
+      DEF: gDef,
+      STA: gSta,
 
-      Weight: formatWeight(blade.weight + (bWeight || 0)) + " g",
-      Dash: bDash,
-      BurstRes: bBurstRes,
-      Height: formatHeight(bHeightFinal)
+      // ✅ FIXED ADDITIONAL STATS
+      Height: height(bHeight),
+      Dash: isRB ? rbA?.dash : bit?.dash,
+      "Burst Res": isRB ? rbA?.burstRes : bit?.burstRes,
+
+      Weight: weight(bladeA.weight + bWeight)
     }
   });
 
@@ -526,44 +520,65 @@ function calcStandard(form) {
   renderResult({
     status: "Success",
     message: "",
-    comboName,
 
-    type: typeLogo(type),
+    comboName: `
+      <div id="${headerId}" class="combo-header">
+        <div class="combo-inner">
+          <span class="combo-name">${comboName}</span>
+          ${typeLogo(type)}
+          ${spinLogo(bladeA?.spindirection)}
+        </div>
+      </div>
+    `,
 
     grandTotal: {
-      ATK: anyZeroStat ? "TBA" : tbaOrVal(gAtk, bAtkZ),
-      DEF: anyZeroStat ? "TBA" : tbaOrVal(gDef, bDefZ),
-      STA: anyZeroStat ? "TBA" : tbaOrVal(gSta, bStaZ),
+      ATK: stat(gAtk),
+      DEF: stat(gDef),
+      STA: stat(gSta),
 
-      Height: formatHeight(bHeightFinal),
-      Dash: bDash,
-      "Burst Res": bBurstRes,
+      Height: height(bHeight),
+      Dash: isRB ? rbA?.dash : bit?.dash,
+      "Burst Res": isRB ? rbA?.burstRes : bit?.burstRes,
 
-      Weight: weightStr(blade.weight + (bWeight || 0), anyZeroStat),
+      Weight: weight(bladeA.weight + bWeight),
 
-      "Spin Direction": spinLogo(blade.spindirection),
-
-      ...(blade.modes
-        ? { "Blade Mode": blade.modes[blade.currentMode].modeName }
+      ...(bladeModeElExists(bladeModes)
+        ? {
+          "Blade Mode": `
+              <span class="clickable-mode" data-mode="blade">
+                ${bladeModes[blade._modeIndex].modeName}
+              </span>`
+        }
         : {}),
 
-      ...(isRB && rb.modes
-        ? { "Ratchet-Bit Mode": rb.modes[rb.currentMode].modeName }
+      ...(rbModeElExists(rbModes)
+        ? {
+          "Ratchet-Bit Mode": `
+              <span class="clickable-mode" data-mode="rb">
+                ${rbModes[rb._modeIndex].modeName}
+              </span>`
+        }
         : {})
-    },
+    }
   });
+
+  // helpers (safe checks)
+  function bladeModeElExists(m) { return m && bladeModes; }
+  function rbModeElExists(m) { return m && rbModes; }
 }
 
 // --- CX calculation ---
 function calcCX(form) {
-  const lcIdx = form.querySelector('[name="lockChip"]').value;
-  const mbIdx = form.querySelector('[name="mainBlade"]').value;
-  const abIdx = form.querySelector('[name="assistBlade"]').value;
-  const rIdx = form.querySelector('[name="ratchet"]').value;
-  const bIdx = form.querySelector('[name="bit"]').value;
-  const rbIdx = form.querySelector('[name="ratchetBit"]').value;
+  console.log("calcCX triggered");
 
-  if (lcIdx === "" || mbIdx === "" || abIdx === "") {
+  const lcIdx = form.querySelector('[name="lockChip"]')?.value;
+  const mbIdx = form.querySelector('[name="mainBlade"]')?.value;
+  const abIdx = form.querySelector('[name="assistBlade"]')?.value;
+  const rIdx = form.querySelector('[name="ratchet"]')?.value;
+  const bIdx = form.querySelector('[name="bit"]')?.value;
+  const rbIdx = form.querySelector('[name="ratchetBit"]')?.value;
+
+  if (!lcIdx || !mbIdx || !abIdx) {
     return renderResult({
       status: "Failure",
       message: "Please select all top components."
@@ -573,99 +588,121 @@ function calcCX(form) {
   const lc = DATA.lockChips[lcIdx];
   const mb = DATA.mainBlades[mbIdx];
   const ab = DATA.assistBlades[abIdx];
-  const ratchet = rIdx !== "" ? DATA.ratchets[rIdx] : null;
-  const bit = bIdx !== "" ? DATA.bits[bIdx] : null;
-  const rb = rbIdx !== "" ? DATA.ratchetBits[rbIdx] : null;
+  const ratchet = rIdx ? DATA.ratchets[rIdx] : null;
+  const bit = bIdx ? DATA.bits[bIdx] : null;
+  const rb = rbIdx ? DATA.ratchetBits[rbIdx] : null;
 
-  const hasValidBottom = (ratchet && bit) || rb;
-
-  if (!hasValidBottom) {
+  if (!lc || !mb || !ab) {
     return renderResult({
       status: "Failure",
-      message: "One or more components not found"
+      message: "One or more parts not found."
     });
   }
 
-  // ================= TOP =================
-  const topAtk = mb.atk + ab.atk;
-  const topDef = mb.def + ab.def;
-  const topSta = mb.sta + ab.sta;
-
-  const topAtkZ = mb.atk === 0 || ab.atk === 0;
-  const topDefZ = mb.def === 0 || ab.def === 0;
-  const topStaZ = mb.sta === 0 || ab.sta === 0;
-
-  const topWeight = lc.weight + mb.weight + ab.weight;
-
-  // ================= BOTTOM =================
-  let bAtk, bDef, bSta, bWeight, bHeight;
-  let bAtkZ, bDefZ, bStaZ, bWeightZ;
-
-  if (rb) {
-    bAtk = rb.atk;
-    bDef = rb.def;
-    bSta = rb.sta;
-    bWeight = rb.weight;
-    bHeight = rb.height;
-
-    bAtkZ = rb.atk === 0;
-    bDefZ = rb.def === 0;
-    bStaZ = rb.sta === 0;
-    bWeightZ = rb.weight === 0;
-
-  } else {
-    bAtk = ratchet.atk + bit.atk;
-    bDef = ratchet.def + bit.def;
-    bSta = ratchet.sta + bit.sta;
-    bWeight = ratchet.weight + bit.weight;
-    bHeight = ratchet.height;
-
-    bAtkZ = ratchet.atk === 0 || bit.atk === 0;
-    bDefZ = ratchet.def === 0 || bit.def === 0;
-    bStaZ = ratchet.sta === 0 || bit.sta === 0;
-    bWeightZ = ratchet.weight === 0 || bit.weight === 0;
-  }
-
-  // ================= GRAND TOTAL =================
-  const gAtk = topAtk + (bAtkZ ? 0 : bAtk);
-  const gDef = topDef + (bDefZ ? 0 : bDef);
-  const gSta = topSta + (bStaZ ? 0 : bSta);
-
-  const anyZeroStat =
-    topAtkZ || topDefZ || topStaZ ||
-    bAtkZ || bDefZ || bStaZ;
-
   const isRB = !!rb;
 
-  // ================= HEIGHT (FIXED) =================
-  const totalHeight =
-    (bHeight == null || ab.height == null || bHeight === 0 || ab.height === 0)
-      ? "TBA"
-      : `${((Number(bHeight) + Number(ab.height)) / 10).toFixed(1)} mm`;
+  // ================= MODE SYSTEM =================
+  const mbModes = mb?.modes || null;
+  const abModes = ab?.modes || null;
+  const rbModes = rb?.modes || null;
 
-  // ================= NAME =================
-  let comboName = lc.codename + mb.codename + ab.codename;
-  comboName += rb ? rb.codename : ratchet.name + bit.codename;
+  if (mbModes && mb._modeIndex == null) mb._modeIndex = 0;
+  if (abModes && ab._modeIndex == null) ab._modeIndex = 0;
+  if (rbModes && rb._modeIndex == null) rb._modeIndex = 0;
 
-  const bDash = rb ? rb.dash : bit.dash;
-  const bBurstRes = rb ? rb.burstRes : bit.burstRes;
+  const applyMode = (base, mode) => {
+    if (!base || !mode) return base;
+    return { ...base, ...mode };
+  };
 
-  // ================= TYPE =================
-  const type = anyZeroStat
-    ? "TBA"
-    : getType(gAtk, gDef, gSta, isRB);
+  const mbA = applyMode(mb, mbModes?.[mb._modeIndex]);
+  const abA = applyMode(ab, abModes?.[ab._modeIndex]);
+  const rbA = applyMode(rb, rbModes?.[rb._modeIndex]);
 
-  // ================= SAVE HISTORY =================
+  // ================= FORMAT =================
+  const stat = (v) => (v ?? "TBA");
+  const weight = (w) => (w == null ? "TBA" : `${Number(w).toFixed(1)} g`);
+  const height = (h) => (h == null ? "TBA" : `${(Number(h) / 10).toFixed(1)} mm`);
+
+  // ================= TOP =================
+  const topAtk = (mbA.atk || 0) + (abA.atk || 0);
+  const topDef = (mbA.def || 0) + (abA.def || 0);
+  const topSta = (mbA.sta || 0) + (abA.sta || 0);
+
+  const topWeight = (lc.weight || 0) + (mbA.weight || 0) + (abA.weight || 0);
+
+  // ================= BOTTOM =================
+  let bAtk = 0, bDef = 0, bSta = 0, bWeight = 0, bHeight = null;
+
+  if (isRB && rbA) {
+    bAtk = rbA.atk || 0;
+    bDef = rbA.def || 0;
+    bSta = rbA.sta || 0;
+    bWeight = rbA.weight || 0;
+    bHeight = rbA.height || null;
+  } else if (bit) {
+    const r = ratchet || { atk: 0, def: 0, sta: 0, weight: 0 };
+
+    bAtk = r.atk + (bit.atk || 0);
+    bDef = r.def + (bit.def || 0);
+    bSta = r.sta + (bit.sta || 0);
+    bWeight = r.weight + (bit.weight || 0);
+    bHeight = ratchet?.height || null;
+  }
+
+  // ================= GRAND =================
+  const gAtk = topAtk + bAtk;
+  const gDef = topDef + bDef;
+  const gSta = topSta + bSta;
+
+  const type = getType(gAtk, gDef, gSta, isRB);
+
+  const comboName =
+    lc.codename +
+    mbA.codename +
+    abA.codename +
+    (isRB
+      ? rbA.codename
+      : (ratchet?.name || "") + (bit?.codename || ""));
+
+  const headerId = "comboHeader";
+
+  // ================= CLICK MODE =================
+  setTimeout(() => {
+    document.querySelectorAll(".clickable-mode").forEach(el => {
+      el.style.cursor = "pointer";
+
+      el.onclick = () => {
+        const mode = el.dataset.mode;
+
+        if (mode === "mb" && mbModes) {
+          mb._modeIndex = (mb._modeIndex + 1) % mbModes.length;
+        }
+
+        if (mode === "ab" && abModes) {
+          ab._modeIndex = (ab._modeIndex + 1) % abModes.length;
+        }
+
+        if (mode === "rb" && rbModes) {
+          rb._modeIndex = (rb._modeIndex + 1) % rbModes.length;
+        }
+
+        calcCX(form);
+      };
+    });
+  }, 0);
+
+  // ================= HISTORY (FULL FIXED) =================
   saveHistory("CX", {
     comboName,
 
     parts: {
       lockChip: lc.name,
-      mainBlade: mb.name,
-      assistBlade: ab.name,
-      ratchet: ratchet ? ratchet.name : null,
-      bit: bit ? bit.name : null,
-      ratchetBit: rb ? rb.name : null
+      mainBlade: mbA.name,
+      assistBlade: abA.name,
+      ratchet: ratchet?.name || null,
+      bit: bit?.name || null,
+      ratchetBit: rb?.name || null
     },
 
     top: {
@@ -675,20 +712,26 @@ function calcCX(form) {
       Weight: topWeight
     },
 
-    bottom: rb
-      ? { type: "ratchetBit", ATK: bAtk, DEF: bDef, STA: bSta, Weight: bWeight }
-      : { type: "ratchet+bit", ATK: bAtk, DEF: bDef, STA: bSta, Weight: bWeight },
+    bottom: {
+      ATK: bAtk,
+      DEF: bDef,
+      STA: bSta,
+      Weight: bWeight,
+      Height: bHeight ? height(bHeight) : "TBA",
+      Dash: isRB ? rbA?.dash : bit?.dash,
+      "Burst Res": isRB ? rbA?.burstRes : bit?.burstRes
+    },
 
     grandTotal: {
-      ATK: anyZeroStat ? "TBA" : gAtk,
-      DEF: anyZeroStat ? "TBA" : gDef,
-      STA: anyZeroStat ? "TBA" : gSta,
+      ATK: gAtk,
+      DEF: gDef,
+      STA: gSta,
 
-      Weight: formatWeight(topWeight + bWeight) + " g",
-      Dash: bDash,
-      BurstRes: bBurstRes,
+      Height: bHeight ? height(bHeight) : "TBA",
+      Dash: isRB ? rbA?.dash : bit?.dash,
+      "Burst Res": isRB ? rbA?.burstRes : bit?.burstRes,
 
-      Height: totalHeight
+      Weight: weight(topWeight + bWeight)
     }
   });
 
@@ -696,37 +739,56 @@ function calcCX(form) {
   renderResult({
     status: "Success",
     message: "",
-    comboName,
 
-    type: typeLogo(type),
+    comboName: `
+      <div id="${headerId}" class="combo-header">
+        <div class="combo-inner">
+          <span class="combo-name">${comboName}</span>
+          ${typeLogo(type)}
+          ${spinLogo(mbA?.spindirection)}
+        </div>
+      </div>
+    `,
 
     grandTotal: {
-      ATK: anyZeroStat ? "TBA" : tbaOrVal(gAtk, topAtkZ || bAtkZ),
-      DEF: anyZeroStat ? "TBA" : tbaOrVal(gDef, topDefZ || bDefZ),
-      STA: anyZeroStat ? "TBA" : tbaOrVal(gSta, topStaZ || bStaZ),
+      ATK: stat(gAtk),
+      DEF: stat(gDef),
+      STA: stat(gSta),
 
-      Height: totalHeight,
-      Dash: bDash,
-      "Burst Res": bBurstRes,
+      Height: height(bHeight),
+      Dash: isRB ? rbA?.dash : bit?.dash,
+      "Burst Res": isRB ? rbA?.burstRes : bit?.burstRes,
 
-      Weight: weightStr(topWeight + bWeight, false),
+      Weight: weight(topWeight + bWeight),
 
-      "Spin Direction": spinLogo(mb.spindirection),
-    },
+      ...(mbModes ? {
+        "Main Blade Mode": `<span class="clickable-mode" data-mode="mb">${mbModes[mb._modeIndex].modeName}</span>`
+      } : {}),
+
+      ...(abModes ? {
+        "Assist Blade Mode": `<span class="clickable-mode" data-mode="ab">${abModes[ab._modeIndex].modeName}</span>`
+      } : {}),
+
+      ...(rbModes ? {
+        "Ratchet-Bit Mode": `<span class="clickable-mode" data-mode="rb">${rbModes[rb._modeIndex].modeName}</span>`
+      } : {})
+    }
   });
 }
 
 // --- CX Expand calculation ---
 function calcCXExpand(form) {
-  const lcIdx = form.querySelector('[name="lockChip"]').value;
-  const mbIdx = form.querySelector('[name="metalBlade"]').value;
-  const obIdx = form.querySelector('[name="overBlade"]').value;
-  const abIdx = form.querySelector('[name="assistBlade"]').value;
-  const rIdx = form.querySelector('[name="ratchet"]').value;
-  const bIdx = form.querySelector('[name="bit"]').value;
-  const rbIdx = form.querySelector('[name="ratchetBit"]').value;
+  console.log("calcCXExpand triggered");
 
-  if (lcIdx === "" || mbIdx === "" || abIdx === "") {
+  const lcIdx = form.querySelector('[name="lockChip"]')?.value;
+  const mbIdx = form.querySelector('[name="metalBlade"]')?.value;
+  const obIdx = form.querySelector('[name="overBlade"]')?.value;
+  const abIdx = form.querySelector('[name="assistBlade"]')?.value;
+  const rIdx = form.querySelector('[name="ratchet"]')?.value;
+  const bIdx = form.querySelector('[name="bit"]')?.value;
+  const rbIdx = form.querySelector('[name="ratchetBit"]')?.value;
+
+  if (!lcIdx || !mbIdx || !abIdx) {
     return renderResult({
       status: "Failure",
       message: "Please select all required top components."
@@ -734,116 +796,108 @@ function calcCXExpand(form) {
   }
 
   const lc = DATA.lockChips[lcIdx];
-  const metalBlade = DATA.metalBlades[mbIdx];
-  const overBlade = obIdx !== "" ? DATA.overBlades[obIdx] : null;
+  const mb = DATA.metalBlades[mbIdx];
+  const ob = obIdx ? DATA.overBlades[obIdx] : null;
   const ab = DATA.assistBlades[abIdx];
 
-  const ratchet = rIdx !== "" ? DATA.ratchets[rIdx] : null;
-  const bit = bIdx !== "" ? DATA.bits[bIdx] : null;
-  const rb = rbIdx !== "" ? DATA.ratchetBits[rbIdx] : null;
+  const ratchet = rIdx ? DATA.ratchets[rIdx] : null;
+  const bit = bIdx ? DATA.bits[bIdx] : null;
+  const rb = rbIdx ? DATA.ratchetBits[rbIdx] : null;
 
-  const hasValidBottom = (ratchet && bit) || rb;
+  const isRB = !!rb;
 
-  if (!hasValidBottom) {
+  if (!lc || !mb || !ab) {
     return renderResult({
       status: "Failure",
       message: "One or more components not found"
     });
   }
 
+  // ================= MODE SYSTEM =================
+  const getActive = (item) => {
+    if (!item?.modes?.length) return item;
+    if (item._modeIndex == null) item._modeIndex = 0;
+    return { ...item, ...item.modes[item._modeIndex] };
+  };
+
+  const mbA = getActive(mb);
+  const obA = getActive(ob);
+  const abA = getActive(ab);
+  const rbA = getActive(rb);
+
+  const mbModes = mb?.modes || null;
+  const obModes = ob?.modes || null;
+  const abModes = ab?.modes || null;
+  const rbModes = rb?.modes || null;
+
+  // ================= FORMAT =================
+  const stat = (v) => (v ?? "TBA");
+  const weight = (w) => (w == null ? "TBA" : `${Number(w).toFixed(1)} g`);
+  const height = (h) => (h == null ? "TBA" : `${(Number(h) / 10).toFixed(1)} mm`);
+
   // ================= TOP =================
-  let topAtk = metalBlade.atk + ab.atk;
-  let topDef = metalBlade.def + ab.def;
-  let topSta = metalBlade.sta + ab.sta;
+  let topAtk = (mbA.atk || 0) + (abA.atk || 0);
+  let topDef = (mbA.def || 0) + (abA.def || 0);
+  let topSta = (mbA.sta || 0) + (abA.sta || 0);
+  let topWeight = (lc.weight || 0) + (mbA.weight || 0) + (abA.weight || 0);
 
-  let topAtkZ = metalBlade.atk === 0 || ab.atk === 0;
-  let topDefZ = metalBlade.def === 0 || ab.def === 0;
-  let topStaZ = metalBlade.sta === 0 || ab.sta === 0;
-
-  let topWeight = lc.weight + metalBlade.weight + ab.weight;
-
-  if (overBlade) {
-    topAtk += overBlade.atk;
-    topDef += overBlade.def;
-    topSta += overBlade.sta;
-
-    topAtkZ = topAtkZ || overBlade.atk === 0;
-    topDefZ = topDefZ || overBlade.def === 0;
-    topStaZ = topStaZ || overBlade.sta === 0;
-
-    topWeight += overBlade.weight;
+  if (obA) {
+    topAtk += obA.atk || 0;
+    topDef += obA.def || 0;
+    topSta += obA.sta || 0;
+    topWeight += obA.weight || 0;
   }
 
   // ================= BOTTOM =================
-  let bAtk, bDef, bSta, bWeight, bHeight;
-  let bAtkZ, bDefZ, bStaZ;
+  let bAtk = 0, bDef = 0, bSta = 0, bWeight = 0, bHeight = null;
 
-  if (rb) {
-    bAtk = rb.atk;
-    bDef = rb.def;
-    bSta = rb.sta;
-    bWeight = rb.weight;
-    bHeight = rb.height;
-
-    bAtkZ = rb.atk === 0;
-    bDefZ = rb.def === 0;
-    bStaZ = rb.sta === 0;
-  } else {
+  if (isRB && rbA) {
+    bAtk = rbA.atk || 0;
+    bDef = rbA.def || 0;
+    bSta = rbA.sta || 0;
+    bWeight = rbA.weight || 0;
+    bHeight = rbA.height || null;
+  } else if (bit && ratchet) {
     bAtk = ratchet.atk + bit.atk;
     bDef = ratchet.def + bit.def;
     bSta = ratchet.sta + bit.sta;
     bWeight = ratchet.weight + bit.weight;
     bHeight = ratchet.height;
-
-    bAtkZ = ratchet.atk === 0 || bit.atk === 0;
-    bDefZ = ratchet.def === 0 || bit.def === 0;
-    bStaZ = ratchet.sta === 0 || bit.sta === 0;
   }
 
-  // ================= GRAND TOTAL =================
+  const bDash = isRB ? rbA?.dash : bit?.dash;
+  const bBurstRes = isRB ? rbA?.burstRes : bit?.burstRes;
+
+  // ================= GRAND =================
   const gAtk = topAtk + bAtk;
   const gDef = topDef + bDef;
   const gSta = topSta + bSta;
   const gWeight = topWeight + bWeight;
 
-  const gAtkTBA = topAtkZ || bAtkZ;
-  const gDefTBA = topDefZ || bDefZ;
-  const gStaTBA = topStaZ || bStaZ;
-
-  const isAnyStatTBA = gAtkTBA || gDefTBA || gStaTBA;
-
-  // ================= HEIGHT FIXED (NEW) =================
-  const totalHeight =
-    (bHeight == null || ab.height == null || bHeight === 0 || ab.height === 0)
-      ? "TBA"
-      : `${((Number(bHeight) + Number(ab.height)) / 10).toFixed(1)} mm`;
+  const type = getType(gAtk, gDef, gSta, isRB);
 
   const comboName =
     lc.codename +
-    metalBlade.codename +
-    (overBlade ? overBlade.codename : "") +
-    ab.codename +
-    (rb ? rb.codename : ratchet.name + bit.codename);
+    mbA.codename +
+    (obA?.codename || "") +
+    abA.codename +
+    (isRB ? rbA.codename : ratchet.name + bit.codename);
 
-  const bDash = rb ? rb.dash : bit.dash;
-  const bBurstRes = rb ? rb.burstRes : bit.burstRes;
+  const headerId = "comboHeader";
 
+  // ================= HISTORY SAVE =================
   saveHistory("CX_EXPAND", {
     comboName,
     mode: "CX_EXPAND",
 
-    type: isAnyStatTBA
-      ? "TBA"
-      : getType(gAtk, gDef, gSta, !!rb),
-
     parts: {
       lockChip: lc.name,
-      metalBlade: metalBlade.name,
-      overBlade: overBlade ? overBlade.name : null,
-      assistBlade: ab.name,
-      ratchet: ratchet ? ratchet.name : null,
-      bit: bit ? bit.name : null,
-      ratchetBit: rb ? rb.name : null,
+      metalBlade: mbA.name,
+      overBlade: obA?.name || null,
+      assistBlade: abA.name,
+      ratchet: ratchet?.name || null,
+      bit: bit?.name || null,
+      ratchetBit: rb?.name || null
     },
 
     top: {
@@ -853,43 +907,92 @@ function calcCXExpand(form) {
       Weight: topWeight
     },
 
-    bottom: rb
-      ? { type: "ratchetBit", ATK: bAtk, DEF: bDef, STA: bSta, Weight: bWeight }
-      : { type: "ratchet+bit", ATK: bAtk, DEF: bDef, STA: bSta, Weight: bWeight },
+    bottom: {
+      ATK: bAtk,
+      DEF: bDef,
+      STA: bSta,
+      Weight: bWeight,
+      Height: bHeight
+    },
 
     grandTotal: {
-      ATK: gAtkTBA ? "TBA" : gAtk,
-      DEF: gDefTBA ? "TBA" : gDef,
-      STA: gStaTBA ? "TBA" : gSta,
-
-      Weight: formatWeight(gWeight) + " g",
+      ATK: stat(gAtk),
+      DEF: stat(gDef),
+      STA: stat(gSta),
+      Height: height(bHeight),
       Dash: bDash,
-      BurstRes: bBurstRes,
-      Height: totalHeight
+      "Burst Res": bBurstRes,
+      Weight: weight(gWeight)
     }
   });
 
+  // ================= CLICK MODE HANDLER =================
+  setTimeout(() => {
+    document.querySelectorAll(".clickable-mode").forEach(el => {
+      el.style.cursor = "pointer";
+
+      el.onclick = () => {
+        const mode = el.dataset.mode;
+
+        if (mode === "mb" && mbModes?.length) {
+          mb._modeIndex = (mb._modeIndex + 1) % mbModes.length;
+        }
+
+        if (mode === "ob" && obModes?.length) {
+          ob._modeIndex = (ob._modeIndex + 1) % obModes.length;
+        }
+
+        if (mode === "ab" && abModes?.length) {
+          ab._modeIndex = (ab._modeIndex + 1) % abModes.length;
+        }
+
+        if (mode === "rb" && rbModes?.length) {
+          rb._modeIndex = (rb._modeIndex + 1) % rbModes.length;
+        }
+
+        calcCXExpand(form);
+      };
+    });
+  }, 0);
+
+  // ================= RESULT =================
   renderResult({
     status: "Success",
     message: "",
-    comboName,
 
-    type: isAnyStatTBA
-      ? typeLogo("TBA")
-      : typeLogo(getType(gAtk, gDef, gSta, !!rb)),
+    comboName: `
+      <div class="combo-header">
+        <span>${comboName}</span>
+        ${typeLogo(type)}
+        ${spinLogo(mbA.spindirection)}
+      </div>
+    `,
 
     grandTotal: {
-      ATK: gAtkTBA ? "TBA" : gAtk,
-      DEF: gDefTBA ? "TBA" : gDef,
-      STA: gStaTBA ? "TBA" : gSta,
+      ATK: stat(gAtk),
+      DEF: stat(gDef),
+      STA: stat(gSta),
 
-      // ✅ ORDER FIXED HERE
-      Height: totalHeight,
+      Height: height(bHeight),
       Dash: bDash,
       "Burst Res": bBurstRes,
-      Weight: formatWeight(gWeight) + " g",
+      Weight: weight(gWeight),
 
-      "Spin Direction": spinLogo(metalBlade.spindirection)
+      ...(mbModes
+        ? { "Metal Blade Mode": `<span class="clickable-mode" data-mode="mb">${mbModes[mb._modeIndex || 0].modeName}</span>` }
+        : {}),
+
+      ...(obModes
+        ? { "Over Blade Mode": `<span class="clickable-mode" data-mode="ob">${obModes[ob._modeIndex || 0].modeName}</span>` }
+        : {}),
+
+      ...(abModes
+        ? { "Assist Blade Mode": `<span class="clickable-mode" data-mode="ab">${abModes[ab._modeIndex || 0].modeName}</span>` }
+        : {}),
+
+      ...(rbModes
+        ? { "Ratchet-Bit Mode": `<span class="clickable-mode" data-mode="rb">${rbModes[rb._modeIndex || 0].modeName}</span>` }
+        : {})
     }
   });
 }
@@ -949,54 +1052,58 @@ initDropdowns();
 function setupModeButton(form, selectName, dataArray) {
   const sel = form.querySelector(`[name="${selectName}"]`);
   if (!sel) return;
-  const label = sel.closest("label");
-  if (!label) return;
 
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = "btn btn-mode hidden";
-  btn.dataset.modeFor = selectName;
-  label.parentNode.insertBefore(btn, label.nextSibling);
+  function getItem() {
+    const idx = sel.value;
+    if (idx === "") return null;
+    return dataArray[idx] || null;
+  }
 
   function applyMode(item) {
+    if (!item?.modes || typeof item.currentMode !== "number") return item;
     const m = item.modes[item.currentMode];
+    if (!m) return item;
+
     for (const k in m) {
       if (k !== "modeName") item[k] = m[k];
     }
   }
 
-  function refreshBtn() {
-    const idx = sel.value;
-    if (idx === "") { btn.classList.add("hidden"); return; }
-    const item = dataArray[idx];
-    if (!item || !item.modes) { btn.classList.add("hidden"); return; }
-    btn.classList.remove("hidden");
-    btn.textContent = `Mode: ${item.modes[item.currentMode].modeName} (click to switch)`;
-  }
-
-  sel.addEventListener("change", () => {
-    const idx = sel.value;
-    if (idx !== "") {
-      const item = dataArray[idx];
-      if (item && item.modes) {
-        item.currentMode = 0;
-        applyMode(item);
-      }
-    }
-    refreshBtn();
-  });
-
-  btn.addEventListener("click", () => {
-    const idx = sel.value;
-    if (idx === "") return;
-    const item = dataArray[idx];
+  function updateMode() {
+    const item = getItem();
     if (!item || !item.modes) return;
-    item.currentMode = (item.currentMode + 1) % item.modes.length;
+
+    // reset mode when changed
+    item.currentMode = item.currentMode ?? 0;
     applyMode(item);
-    refreshBtn();
-    if (!document.getElementById("result").classList.contains("hidden")) {
+
+    // auto re-calc if result visible
+    const result = document.getElementById("result");
+    if (result && !result.classList.contains("hidden")) {
       form.requestSubmit();
     }
+  }
+
+  // ================= CHANGE EVENT =================
+  sel.addEventListener("change", () => {
+    const item = getItem();
+    if (item?.modes) {
+      item.currentMode = 0;
+      applyMode(item);
+    }
+
+    updateMode();
+  });
+
+  // ================= CLICK ANY ELEMENT WITH MODE =================
+  sel.addEventListener("dblclick", () => {
+    const item = getItem();
+    if (!item?.modes) return;
+
+    item.currentMode = (item.currentMode + 1) % item.modes.length;
+    applyMode(item);
+
+    updateMode();
   });
 }
 
@@ -1461,8 +1568,12 @@ function renderHistory() {
 
   function getColor(value) {
     if (value === "TBA") return "#95a5a6";
-    if (value > 100) return "#2ecc71";
-    if (value >= 50) return "#f1c40f";
+
+    const num = Number(value);
+    if (isNaN(num)) return "#95a5a6";
+
+    if (num >= 100) return "#2ecc71";
+    if (num >= 50) return "#f1c40f";
     return "#e74c3c";
   }
 

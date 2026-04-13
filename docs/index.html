@@ -66,10 +66,14 @@
 
       <div class="btn-row">
         <button type="submit" class="btn calc-btn" data-mode="standard">
-          Calculate
+          <img src="assets/icons/calculator.png">
         </button>
-        <button type="button" class="btn btn-reset">Reset</button>
-        <button type="button" class="btn btn-lucky">I'm Feeling Lucky</button>
+        <button type="button" class="btn btn-reset">
+          <img src="assets/icons/undo.png">
+        </button>
+        <button type="button" class="btn btn-lucky">
+          <img src="assets/icons/dice.png">
+        </button>
       </div>
     </form>
 
@@ -192,7 +196,7 @@
     <div id="result" class="result hidden"></div>
   </div>
 
-  <!-- ================= POPUP ================= -->
+  <!-- ================= POPUP (UPDATE) ================= -->
   <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-09">
     <div class="popup-card">
 
@@ -201,19 +205,17 @@
       <h2 class="popup-title">What's New</h2>
 
       <ul class="popup-list">
-        <li>For height, instead of using 60, use 6 mm format.</li>
-        <li>Balance logo now hides when stats are TBA.</li>
-        <li>Mode change stats enabled for selected parts.</li>
-        <li>Added stats for <strong>Vertical</strong> assist blade.</li>
-        <li>Fix image bugs from Library.</li>
+        <li>Updated <strong>Vertical</strong>, <strong>Dual</strong> and <strong>Turn</strong> data.</li>
+        <li>Removed mode buttons.</li>
+        <li>Enabled mode change in result.</li>
+        <li>Used icons instead of text for buttons.</li>
+        <li>Fixed some bugs.</li>
       </ul>
 
-      <!-- CTA BUTTON -->
       <button type="button" class="btn popup-ok">
         Got it
       </button>
 
-      <!-- ✨ CREATED BY SECTION -->
       <div class="popup-footer">
         <small>Created by <strong>Ashwolf</strong></small>
       </div>

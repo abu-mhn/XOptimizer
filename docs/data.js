@@ -94,9 +94,9 @@ const DATA = {
     { atk:40, def:15, sta:5, weight:30.3, spindirection:"R", name:"Brush", codename:"BRUSH" },
     { atk:5, def:15, sta:40, weight:28.5, spindirection:"R", name:"Flame", codename:"FLAME" },
     { atk:50, def:10, sta:15, weight:32.8, spindirection:"R", name:"Blast", codename:"BLAST" },
-    { atk:0, def:0, sta:0, weight:32.3, spindirection:"R", name:"Eclipse", codename:"ECLIPSE", currentMode:0, modes:[
-      { modeName:"Upper", atk:0, def:0, sta:0, weight:32.3, spindirection:"R" },
-      { modeName:"Smash", atk:0, def:0, sta:0, weight:32.3, spindirection:"R" },
+    { atk:25, def:15, sta:10, weight:32.3, spindirection:"R", name:"Eclipse", codename:"ECLIPSE", currentMode:0, modes:[
+      { modeName:"Upper", atk:25, def:15, sta:10, weight:32.3, spindirection:"R" },
+      { modeName:"Smash", atk:15, def:25, sta:10, weight:32.3, spindirection:"R" },
     ] },
     { atk:20, def:10, sta:30, weight:31.6, spindirection:"R", name:"Hunt", codename:"HUNT" },
     { atk:25, def:25, sta:25, weight:33.1, spindirection:"R", name:"Might", codename:"MIGHT" },
@@ -128,15 +128,15 @@ const DATA = {
     { atk:5, def:15, sta:20, weight:7.2, height:80, spindirection:"R", name:"Wheel", codename:"W" },
     { atk:15, def:15, sta:10, weight:5.3, height:60, spindirection:"R", name:"Massive", codename:"M" },
     { atk:25, def:10, sta:5, weight:5.0, height:60, spindirection:"R", name:"Assault", codename:"A" },
-    { atk:0, def:0, sta:0, weight:5.9, height:0, spindirection:"R", name:"Dual", codename:"D", currentMode:0, modes:[
-      { modeName:"Upper", atk:0, def:0, sta:0, weight:5.9, height:0, spindirection:"R" },
-      { modeName:"Smash", atk:0, def:0, sta:0, weight:5.9, height:0, spindirection:"R" },
+    { atk:22, def:18, sta:10, weight:5.9, height:60, spindirection:"R", name:"Dual", codename:"D", currentMode:0, modes:[
+      { modeName:"Upper", atk:22, def:18, sta:10, weight:5.9, height:60, spindirection:"R" },
+      { modeName:"Smash", atk:18, def:22, sta:10, weight:5.9, height:60, spindirection:"R" },
     ] },
     { atk:5, def:20, sta:25, weight:5.8, height:60, spindirection:"R", name:"Free", codename:"F" },
     { atk:17, def:17, sta:11, weight:7.8, height:50, spindirection:"R", name:"Heavy", codename:"H" },
     { atk:22, def:15, sta:3, weight:6.6, height:80, spindirection:"R", name:"Zillion", codename:"Z" },
     { atk:10, def:5, sta:25, weight:6.1, height:70, spindirection:"R", name:"Erase", codename:"E" },
-    { atk:10, def:25, sta:5, weight:0, height:0, spindirection:"R", name:"Vertical", codename:"V" },
+    { atk:10, def:25, sta:5, weight:5.4, height:70, spindirection:"R", name:"Vertical", codename:"V" },
     { atk:30, def:5, sta:5, weight:4.9, height:50, spindirection:"R", name:"Knuckle", codename:"K" },
   ],
 
@@ -174,7 +174,7 @@ const DATA = {
     { atk:13, def:10, sta:7, height:65, weight:4.5, name:"9-65" },
     { atk:3, def:14, sta:13, height:60, weight:6.5, name:"0-60" },
     { atk:6, def:14, sta:10, height:55, weight:5.2, name:"7-55" },
-    { atk:8, def:10, sta:12, height:70, weight:0, name:"8-70" },
+    { atk:8, def:10, sta:12, height:70, weight:7.7, name:"8-70" },
     { atk:18, def:9, sta:3, height:50, weight:5.7, name:"1-50" },
   ],
 
@@ -223,7 +223,7 @@ const DATA = {
     { atk:35, def:30, sta:20, dash:15, burstRes:80, weight:2.3, name:"Trans Kick", codename:"TK" },
     { atk:35, def:10, sta:15, dash:40, burstRes:80, weight:2.6, name:"Jolt", codename:"J" },
     { atk:5, def:60, sta:25, dash:10, burstRes:30, weight:2.4, name:"Wall Wedge", codename:"WW" },
-    { atk:10, def:15, sta:65, dash:10, burstRes:30, weight:0, name:"Yielding", codename:"Y" },
+    { atk:10, def:15, sta:65, dash:10, burstRes:30, weight:4.2, name:"Yielding", codename:"Y" },
     { atk:50, def:15, sta:5, dash:30, burstRes:80, weight:2.4, name:"Ignition", codename:"I" },
     { atk:40, def:15, sta:15, dash:30, burstRes:80, weight:0, name:"Free Flat", codename:"FF" },
   ],
