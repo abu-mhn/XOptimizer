@@ -1182,6 +1182,15 @@ function initLibrarySearch() {
   ].filter(i => i && typeof i.name === "string");
 
   // =========================
+  // SAFE INDEX MAP (CRITICAL FIX)
+  // =========================
+  function getIndex(item) {
+    return ALL_PARTS.findIndex(p =>
+      (p.codename || p.name) === (item.codename || item.name)
+    );
+  }
+
+  // =========================
   // FOLDER DETECTION
   // =========================
   function getFolder(item) {
@@ -1205,25 +1214,20 @@ function initLibrarySearch() {
   }
 
   // =========================
-  // NAME NORMALIZER (IMPORTANT FIX)
+  // IMAGE BUILDER (FINAL FIX)
   // =========================
-  function normalizeName(str) {
+  function normalize(str) {
     return (str || "")
       .trim()
-      .replace(/\s+/g, "")   // remove spaces
-      .replace(/-/g, "");    // remove hyphens
+      .replace(/\s+/g, "")
+      .replace(/-/g, "");
   }
 
-  // =========================
-  // IMAGE BUILDER (FIXED)
-  // =========================
   function getImage(item, index = 0) {
     const folder = getFolder(item);
 
-    // ✅ ALWAYS use NAME (NOT codename)
-    const baseRaw = item.name;
-
-    const base = normalizeName(baseRaw);
+    const baseRaw = item.name; // ALWAYS name-based
+    const base = normalize(baseRaw);
 
     const fileName = hasModes(item)
       ? `${base}${index}.webp`
@@ -1231,14 +1235,12 @@ function initLibrarySearch() {
 
     const path = `assets/${folder}/${fileName}`;
 
-    // 🔥 DEBUG (VERY IMPORTANT)
-    // console.log("🧠 WEBP DEBUG", {
-    //   name: item.name,
-    //   folder,
-    //   index,
-    //   fileName,
-    //   path
-    // });
+    console.log("🧠 IMG DEBUG", {
+      name: item.name,
+      folder,
+      fileName,
+      path
+    });
 
     return path;
   }
@@ -1272,10 +1274,12 @@ function initLibrarySearch() {
   }
 
   // =========================
-  // FORMAT ITEM
+  // FORMAT ITEM (FIXED INDEX)
   // =========================
   function formatItem(item) {
     const hasM = hasModes(item);
+
+    const globalIndex = getIndex(item);
     const index = item.currentMode ?? 0;
     const safeIndex = Math.min(index, hasM ? item.modes.length - 1 : 0);
 
@@ -1283,7 +1287,7 @@ function initLibrarySearch() {
 
     return `
       <div class="stat-card mode-card"
-        data-index="${ALL_PARTS.indexOf(item)}"
+        data-index="${globalIndex}"
         data-mode-index="${safeIndex}"
       >
         <img 
@@ -1311,7 +1315,7 @@ function initLibrarySearch() {
   }
 
   // =========================
-  // SEARCH (FIXED SAFE)
+  // SEARCH
   // =========================
   function runSearch() {
     const q = input.value.trim().toLowerCase();
@@ -1361,6 +1365,40 @@ function initLibrarySearch() {
       results.appendChild(div);
     });
   }
+
+  // =========================
+  // MODE SWITCH (FULL FIX)
+  // =========================
+  results.addEventListener("click", (e) => {
+    const card = e.target.closest(".mode-card");
+    if (!card) return;
+
+    const index = Number(card.dataset.index);
+    const item = ALL_PARTS[index];
+
+    if (!item || !item.modes) return;
+
+    let modeIndex = Number(card.dataset.modeIndex || 0);
+
+    if (e.shiftKey) {
+      modeIndex = (modeIndex - 1 + item.modes.length) % item.modes.length;
+    } else {
+      modeIndex = (modeIndex + 1) % item.modes.length;
+    }
+
+    card.dataset.modeIndex = modeIndex;
+
+    card.querySelector(".full-data").innerHTML =
+      renderStats(item.modes[modeIndex]);
+
+    const counter = card.querySelector(".mode-counter");
+    if (counter) {
+      counter.textContent = `${modeIndex + 1} / ${item.modes.length}`;
+    }
+
+    const img = card.querySelector("img");
+    if (img) img.src = getImage(item, modeIndex);
+  });
 
   // =========================
   // EVENTS
