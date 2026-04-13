@@ -1188,16 +1188,39 @@ document.querySelectorAll(".calc-form").forEach(form => {
 document.querySelectorAll(".btn-reset").forEach(btn => {
   btn.addEventListener("click", () => {
     const form = btn.closest("form");
+
     form.querySelectorAll(".search-dropdown").forEach(w => w._clear());
-    // Re-enable dropdowns that may have been disabled
+
+    // Re-enable dropdowns
     const rInput = form.querySelector('[name="ratchet"]')?.nextElementSibling?.querySelector("input");
-    if (rInput) { rInput.disabled = false; rInput.placeholder = "-- Select --"; }
+    if (rInput) {
+      rInput.disabled = false;
+      rInput.placeholder = "-- Select --";
+    }
+
     const bInput = form.querySelector('[name="bit"]')?.nextElementSibling?.querySelector("input");
-    if (bInput) { bInput.disabled = false; bInput.placeholder = "-- Select --"; }
+    if (bInput) {
+      bInput.disabled = false;
+      bInput.placeholder = "-- Select --";
+    }
+
     const rbInput = form.querySelector('[name="ratchetBit"]')?.nextElementSibling?.querySelector("input");
-    if (rbInput) { rbInput.disabled = false; rbInput.placeholder = "-- Select --"; }
+    if (rbInput) {
+      rbInput.disabled = false;
+      rbInput.placeholder = "-- Select --";
+    }
+
     form.querySelectorAll(".btn-mode").forEach(b => b.classList.add("hidden"));
-    document.getElementById("result").classList.add("hidden");
+
+    document.getElementById("result")?.classList.add("hidden");
+
+    // 🔽 AUTO SCROLL TO TOP (追加)
+    requestAnimationFrame(() => {
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+      });
+    });
   });
 });
 
