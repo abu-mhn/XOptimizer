@@ -5,7 +5,9 @@ const DATA = {
         ["#0a4797","#01aad9"],
         ["#57595b", "#636565"],
         ["#3d3936", "#8a3825"],
-        ["#e02939", "#1f2187"]
+        ["#e02939", "#1f2187", "#1f2187"],
+        ["#c9a24d", "#474243", "#ffffff"],
+        ["#272427", "#0e0e10", "#b52120"]
       ]
     },
     { atk: 30, def: 35, sta: 35, weight: 33.0, spindirection: "R", name: "Hells Scythe", codename: "HELLSSCYTHE" },

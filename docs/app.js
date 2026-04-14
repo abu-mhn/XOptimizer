@@ -1449,36 +1449,41 @@ function initLibrarySearch() {
 
       const key = k.toLowerCase();
 
-      // ================= COLOR (INNER + BORDER) =================
+      // ================= COLOR =================
       if (key === "color") {
         const colors = Array.isArray(v) ? v : [v];
 
         html += `
-        <div class="stat-line">
-          <b>COLOR:</b>
+    <div class="stat-line">
+      <b>COLOR:</b>
 
-          <span class="color-box-group">
-            ${colors.map(pair => {
-          const fill = Array.isArray(pair) ? pair[0] : pair;
-          const border = Array.isArray(pair) ? pair[1] : "transparent";
+      <span class="color-box-group">
+        ${colors.map(c => {
+          const fill = c?.[0] || "transparent";
+          const dot = c?.[1] || "#ffffff";
+          const border = c?.[2] || "transparent";
 
           return `
-                <span class="color-box"
-                  style="
-                    background:${fill};
-                    border:2px solid ${border};
-                    transform: translateY(2px);
-                  ">
-                </span>
-              `;
-        }).join("")}
-          </span>
+            <span class="color-box"
+              style="
+                background:${fill};
+                border:2px solid ${border};
+                transform: translateY(2px);
+              ">
 
-        </div>
-      `;
+              <span class="color-dot"
+                style="background:${dot};">
+              </span>
+
+            </span>
+          `;
+        }).join("")}
+      </span>
+
+    </div>
+  `;
         return;
       }
-
       // ================= HEIGHT =================
       if (key === "height") {
         const num = Number(v);

@@ -831,20 +831,34 @@ select {
   align-items: center;
 }
 
+.stat-line {
+  display: flex;
+  align-items: center; /* ⭐ THIS centers everything vertically */
+}
+
 .color-box-group {
   display: inline-flex;
   gap: 6px;
-  margin-left: 6px;
   align-items: center;
+  margin-left: 6px;
 }
 
 .color-box {
   width: 14px;
   height: 14px;
   border-radius: 3px;
-  display: inline-block;
 
-  /* 👇 THIS FIXES "a little down" alignment */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /* remove hacky vertical shift */
   position: relative;
-  top: 2px;
+  top: 0;
+}
+
+.color-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
 }
