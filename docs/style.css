@@ -100,18 +100,6 @@ h1 {
     position: relative;
 }
 
-/* optional nicer divider line */
-/* .separator::before,
-.separator::after {
-    content: "";
-    display: inline-block;
-    width: 30%;
-    height: 1px;
-    background: #21262d;
-    vertical-align: middle;
-    margin: 0 10px;
-} */
-
 /* =======================
    FIELDSETS
 ======================= */
@@ -211,7 +199,9 @@ select {
 ======================= */
 
 .btn {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     flex: 1;
     padding: 12px;
     background: #238636;
@@ -398,8 +388,10 @@ select {
     align-items: center;
     justify-content: center;
     z-index: 100;
-    padding: 16px;
+    padding: clamp(8px, 3vw, 20px);
     animation: popupFade .18s ease-out;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .popup-overlay.hidden {
@@ -411,18 +403,22 @@ select {
     background: #161b22;
     border: 1px solid #30363d;
     border-radius: 10px;
-    padding: 24px 22px 20px;
-    max-width: 420px;
+    padding: clamp(16px, 4vw, 24px) clamp(14px, 4vw, 22px) clamp(14px, 3.5vw, 20px);
+    max-width: min(420px, 100%);
     width: 100%;
+    max-height: calc(100dvh - 2 * clamp(8px, 3vw, 20px));
+    overflow-y: auto;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
     animation: popupRise .22s ease-out;
+    box-sizing: border-box;
 }
 
 .popup-card h2 {
-    font-size: 1.15rem;
+    font-size: clamp(1rem, 3.5vw, 1.15rem);
     color: #58a6ff;
     margin-bottom: 12px;
-    padding-right: 24px;
+    padding-right: 32px;
+    word-wrap: break-word;
 }
 
 .popup-list {
@@ -432,23 +428,27 @@ select {
 }
 
 .popup-list li {
-    font-size: .9rem;
+    font-size: clamp(.85rem, 2.8vw, .9rem);
     color: #e6edf3;
     margin-bottom: 8px;
     line-height: 1.45;
+    word-wrap: break-word;
 }
 
 .popup-close {
     position: absolute;
-    top: 8px;
-    right: 12px;
+    top: 6px;
+    right: 8px;
     background: transparent;
     border: none;
     color: #8b949e;
     font-size: 1.6rem;
+    line-height: 1;
     cursor: pointer;
-    padding: 4px 8px;
+    padding: 6px 10px;
     border-radius: 4px;
+    min-width: 36px;
+    min-height: 36px;
 }
 
 .popup-close:hover {
@@ -510,11 +510,6 @@ select {
     display: flex;
     gap: 10px;
 }
-
-/* 
-#library-search {
-  flex: 1;
-} */
 
 .stat-card {
     display: flex;
@@ -583,8 +578,12 @@ select {
     position: relative;
 }
 
+.help-icon {
+    border: none;
+}
+
 .help-icon:hover::after {
-    content: "Commands: @getallblades, @getallbits, @getallratchets, @getallratchetbits";
+    content: "Click for search commands";
     position: absolute;
     left: 25px;
     top: -5px;
@@ -631,6 +630,8 @@ select {
 }
 
 .stat-line {
+    display: flex;
+    align-items: center;
     font-size: 12px;
     margin: 2px 0;
 }
@@ -728,13 +729,6 @@ select {
     box-sizing: border-box;
 }
 
-
-.btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
 .btn img {
     width: 18px;
     height: 18px;
@@ -775,15 +769,13 @@ select {
 
 .btn-row {
     display: flex;
-    gap: 8px;
+    gap: 10px;
     align-items: center;
 }
 
 .btn-row .btn {
-    width: 48px;
-    /* ← 全ボタン同じ幅 */
+    flex: 1;
     height: 48px;
-    /* ← 全ボタン同じ高さ */
     padding: 0;
     display: flex;
     align-items: center;
@@ -809,11 +801,17 @@ select {
 .footer-inner {
   display: flex;
   justify-content: center;
-  align-items: center;   /* 🔥 key fix */
+  align-items: center;
   gap: 6px;
   flex-wrap: wrap;
   width: 100%;
   text-align: center;
+}
+
+.footer-inner span:last-child {
+  width: 100%;
+  justify-content: center;
+  margin-top: 6px;
 }
 
 .footer-inner span {
@@ -832,22 +830,6 @@ select {
   opacity: 0.5;
 }
 
-.btn-row {
-  display: flex;
-  gap: 10px; /* spacing between buttons */
-}
-
-.btn-row .btn {
-  flex: 1;              /* 👈 all buttons equal width */
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.stat-line {
-  display: flex;
-  align-items: center; /* ⭐ THIS centers everything vertically */
-}
 
 .color-box-group {
   display: inline-flex;
@@ -882,20 +864,4 @@ select {
 
 .footer-inner a:hover img {
   transform: translateY(-2px) scale(1.05);
-}
-
-.footer-inner {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center; /* 全体中央 */
-  text-align: center;
-}
-
-/* 👇 Powered by を完全中央に */
-.footer-inner span:last-child {
-  width: 100%;              /* 横幅いっぱい使う */
-  display: flex;
-  justify-content: center;  /* 中央揃え */
-  align-items: center;
-  margin-top: 6px;
 }

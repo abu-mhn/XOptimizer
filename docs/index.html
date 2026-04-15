@@ -5,14 +5,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- ================= FAVICON (UPDATED) ================= -->
-  <!-- Main favicon (modern browsers) -->
-  <link rel="icon" type="image/webp" href="assets/icons/revox.webp">
-
-  <!-- Fallback (recommended for full compatibility) -->
+  <!-- ================= FAVICON ================= -->
   <link rel="icon" type="image/png" href="assets/icons/revox.png">
-
-  <!-- Apple touch icon -->
   <link rel="apple-touch-icon" href="assets/icons/revox.png">
 
   <!-- Optional theme color -->
@@ -28,26 +22,26 @@
 
     <!-- ================= TAB MENU ================= -->
     <div class="mode-tabs">
-      <button class="tab active" data-mode="standard">
-        <img src="assets/line/Basic_Line_Logo.webp"> /
-        <img src="assets/line/Unique_Line_Logo.webp">
+      <button class="tab active" data-mode="standard" aria-label="Basic / Unique Line">
+        <img src="assets/line/Basic_Line_Logo.webp" alt="Basic Line"> /
+        <img src="assets/line/Unique_Line_Logo.webp" alt="Unique Line">
       </button>
 
-      <button class="tab" data-mode="cx">
-        <img src="assets/line/Custom_Line_Logo.webp">
+      <button class="tab" data-mode="cx" aria-label="Custom Line">
+        <img src="assets/line/Custom_Line_Logo.webp" alt="Custom Line">
       </button>
 
-      <button class="tab" data-mode="cxExpand">
-        <img src="assets/line/Custom_Line_Logo.webp">
-        <img src="assets/line/Expand_Blade_Logo.webp">
+      <button class="tab" data-mode="cxExpand" aria-label="Custom Line Expand">
+        <img src="assets/line/Custom_Line_Logo.webp" alt="Custom Line">
+        <img src="assets/line/Expand_Blade_Logo.webp" alt="Expand Blade">
       </button>
 
-      <button class="tab" data-mode="library">
-        <img src="assets/icons/book1.webp">
+      <button class="tab" data-mode="library" aria-label="Library">
+        <img src="assets/icons/book1.webp" alt="Library">
       </button>
 
-      <button class="tab" data-mode="history">
-        <img src="assets/icons/history1.webp">
+      <button class="tab" data-mode="history" aria-label="History">
+        <img src="assets/icons/history1.webp" alt="History">
       </button>
     </div>
 
@@ -75,14 +69,14 @@
       </fieldset>
 
       <div class="btn-row">
-        <button type="submit" class="btn calc-btn" data-mode="standard">
-          <img src="assets/icons/calculator.png">
+        <button type="submit" class="btn calc-btn" data-mode="standard" aria-label="Calculate">
+          <img src="assets/icons/calculator.png" alt="Calculate">
         </button>
-        <button type="button" class="btn btn-reset">
-          <img src="assets/icons/undo.png">
+        <button type="button" class="btn btn-reset" aria-label="Reset">
+          <img src="assets/icons/undo.png" alt="Reset">
         </button>
-        <button type="button" class="btn btn-lucky">
-          <img src="assets/icons/dice.png">
+        <button type="button" class="btn btn-lucky" aria-label="I'm Feeling Lucky">
+          <img src="assets/icons/dice.png" alt="Random">
         </button>
       </div>
     </form>
@@ -122,14 +116,14 @@
       </fieldset>
 
       <div class="btn-row">
-        <button type="submit" class="btn calc-btn" data-mode="cx">
-          <img src="assets/icons/calculator.png">
+        <button type="submit" class="btn calc-btn" data-mode="cx" aria-label="Calculate">
+          <img src="assets/icons/calculator.png" alt="Calculate">
         </button>
-        <button type="button" class="btn btn-reset">
-          <img src="assets/icons/undo.png">
+        <button type="button" class="btn btn-reset" aria-label="Reset">
+          <img src="assets/icons/undo.png" alt="Reset">
         </button>
-        <button type="button" class="btn btn-lucky">
-          <img src="assets/icons/dice.png">
+        <button type="button" class="btn btn-lucky" aria-label="I'm Feeling Lucky">
+          <img src="assets/icons/dice.png" alt="Random">
         </button>
       </div>
     </form>
@@ -144,12 +138,12 @@
             <select name="lockChip" required></select>
           </label>
 
-          <label>Over Blade
-            <select name="overBlade" required></select>
-          </label>
-
           <label>Metal Blade
             <select name="metalBlade" required></select>
+          </label>
+
+          <label>Over Blade
+            <select name="overBlade"></select>
           </label>
 
           <label>Assist Blade
@@ -173,42 +167,42 @@
       </fieldset>
 
       <div class="btn-row">
-        <button type="submit" class="btn calc-btn" data-mode="cxExpand">
-          <img src="assets/icons/calculator.png">
+        <button type="submit" class="btn calc-btn" data-mode="cxExpand" aria-label="Calculate">
+          <img src="assets/icons/calculator.png" alt="Calculate">
         </button>
-        <button type="button" class="btn btn-reset">
-          <img src="assets/icons/undo.png">
+        <button type="button" class="btn btn-reset" aria-label="Reset">
+          <img src="assets/icons/undo.png" alt="Reset">
         </button>
-        <button type="button" class="btn btn-lucky">
-          <img src="assets/icons/dice.png">
+        <button type="button" class="btn btn-lucky" aria-label="I'm Feeling Lucky">
+          <img src="assets/icons/dice.png" alt="Random">
         </button>
       </div>
     </form>
 
     <!-- ================= LIBRARY ================= -->
-    <form id="form-library" class="calc-form hidden">
+    <section id="form-library" class="calc-form hidden">
       <fieldset>
         <legend>Library Search</legend>
 
         <div class="library-search-row">
           <input type="text" id="library-search" placeholder="Search Beyblade parts..." autocomplete="off" />
 
-          <span id="library-help" class="help-icon" title="Click for search commands">
+          <button type="button" id="library-help" class="help-icon" title="Click for search commands" aria-label="Search commands help">
             ?
-          </span>
+          </button>
         </div>
 
         <div id="library-results" class="search-results"></div>
       </fieldset>
-    </form>
+    </section>
 
     <!-- ================= HISTORY ================= -->
-    <form id="form-history" class="calc-form hidden">
+    <section id="form-history" class="calc-form hidden">
       <fieldset>
         <legend>History (Last 3 Combos)</legend>
         <div id="history-list"></div>
       </fieldset>
-    </form>
+    </section>
 
     <!-- ================= RESULT ================= -->
     <div id="result" class="result hidden"></div>
@@ -221,7 +215,7 @@
       <span class="footer-dot">•</span>
       <span>Created by <strong>RvX Ashwolf</strong></span>
       <span>Powered by <a href="https://teamrevox.com/" target="_blank" rel="noopener noreferrer"><img
-            src="assets/icons/revoxName.webp" alt="Revox"></a></span>
+            src="assets/icons/revoxName.webp" alt="Revox" class="footer-logo"></a></span>
     </div>
   </footer>
 

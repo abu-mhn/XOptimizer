@@ -16,11 +16,6 @@ function getType(totalAtk, totalDef, totalSta, isRatchetBit) {
   return "Balance";
 }
 
-function formatWeight(value) {
-  const num = Number(value);
-  return isNaN(num) ? "0.00" : num.toFixed(2);
-}
-
 function tbaOrVal(val, hasZero) { return hasZero ? "TBA" : val; }
 function weightStr(w, hasZero) { return hasZero ? "TBA" : w.toFixed(2) + " g"; }
 
@@ -666,7 +661,7 @@ function calcCX(form) {
 
   const mbA = applyMode(mb, mbModes?.[mb._modeIndex]);
   const abA = applyMode(ab, abModes?.[ab._modeIndex]);
-  const rbA = applyMode(rb, rbModes?.[rb._modeIndex]);
+  const rbA = applyMode(rb, rbModes?.[rb?._modeIndex]);
 
   // ================= ZERO CHECK =================
   function hasZeroStat(...parts) {
@@ -744,7 +739,7 @@ function calcCX(form) {
     modeData: {
       mainBladeMode: mbModes?.[mb._modeIndex]?.modeName || null,
       assistBladeMode: abModes?.[ab._modeIndex]?.modeName || null,
-      ratchetBitMode: rbModes?.[rb._modeIndex]?.modeName || null
+      ratchetBitMode: rbModes?.[rb?._modeIndex]?.modeName || null
     },
 
     parts: {
@@ -979,7 +974,7 @@ function calcCXExpand(form) {
     comboName,
     modeData: {
       assistBlade: abModes?.[ab._modeIndex]?.modeName || null,
-      ratchetBit: rbModes?.[rb._modeIndex]?.modeName || null
+      ratchetBit: rbModes?.[rb?._modeIndex]?.modeName || null
     },
 
     parts: {
@@ -1375,7 +1370,9 @@ document.querySelectorAll(".btn-lucky").forEach(btn => {
   if (!popup) return;
 
   popup.classList.remove("hidden");
-  const dismiss = () => { popup.classList.add("hidden"); };
+  const dismiss = () => {
+    popup.classList.add("hidden");
+  };
   popup.querySelector(".popup-close").addEventListener("click", dismiss);
   popup.querySelector(".popup-ok").addEventListener("click", dismiss);
   popup.addEventListener("click", e => { if (e.target === popup) dismiss(); });
@@ -1757,14 +1754,7 @@ function renderHistory() {
     const d = Number(def);
     const s = Number(sta);
 
-    const max = Math.max(a, d, s);
-
-    if (a < 100 && d < 100 && s < 100) return "Balance";
-    if (max === a && a > d && a > s) return "Attack";
-    if (max === d && d > a && d > s) return "Defense";
-    if (max === s && s > a && s > d) return "Stamina";
-
-    return "Balance";
+    return getType(a, d, s, false);
   }
 
   history.forEach(item => {
