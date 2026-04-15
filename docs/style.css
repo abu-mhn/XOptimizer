@@ -883,3 +883,19 @@ select {
 .footer-inner a:hover img {
   transform: translateY(-2px) scale(1.05);
 }
+
+.footer-inner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center; /* 全体中央 */
+  text-align: center;
+}
+
+/* 👇 Powered by を完全中央に */
+.footer-inner span:last-child {
+  width: 100%;              /* 横幅いっぱい使う */
+  display: flex;
+  justify-content: center;  /* 中央揃え */
+  align-items: center;
+  margin-top: 6px;
+}
