@@ -83,10 +83,7 @@ function advanceToNext(sel) {
   if (next == null) return;
 
   if (next === "__BOTTOM__") {
-    const bottomFieldset = Array.from(form.querySelectorAll("fieldset"))
-      .find(fs => fs.querySelector("legend")?.textContent.trim() === "Bottom");
     requestAnimationFrame(() => {
-      bottomFieldset?.scrollIntoView({ behavior: "smooth", block: "start" });
       showBottomChoicePopup(form);
     });
     return;

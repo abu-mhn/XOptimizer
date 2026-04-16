@@ -472,6 +472,23 @@ select {
     font-weight: 600;
 }
 
+/* Lock the Ratchet / Ratchet-Bit chooser to viewport center */
+#bottom-choice-popup {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#bottom-choice-popup.hidden {
+    display: none;
+}
+
+#bottom-choice-popup .popup-card {
+    margin: auto;
+}
+
 /* =======================
    ANIMATION
 ======================= */
