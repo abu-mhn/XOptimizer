@@ -2,7 +2,7 @@ const DATA = {
   blades: [
     {
       atk: 55, def: 25, sta: 20, weight: 34.6, spindirection: "R", name: "Dran Sword", codename: "DRANSWORD", color: [
-        ["#0a4797","#01aad9"],
+        ["#0a4797", "#01aad9"],
         ["#57595b", "#636565"],
         ["#3d3936", "#8a3825"],
         ["#e02939", "#1f2187", "#1f2187"],
@@ -10,8 +10,21 @@ const DATA = {
         ["#272427", "#0e0e10", "#b52120"]
       ]
     },
-    { atk: 30, def: 35, sta: 35, weight: 33.0, spindirection: "R", name: "Hells Scythe", codename: "HELLSSCYTHE" },
-    { atk: 15, def: 30, sta: 55, weight: 31.8, spindirection: "R", name: "Wizard Arrow", codename: "WIZARDARROW" },
+    {
+      atk: 30, def: 35, sta: 35, weight: 33.0, spindirection: "R", name: "Hells Scythe", codename: "HELLSSCYTHE", color: [
+        ["#792320", "#e7375a"],
+        ["#c98f0c", "#fdcf6f"],
+        ["#138734", "#7cab15"],
+        ["#a06e05", "#cf090e", "#f2e60c"],
+        ["#0fa3c1", "#020204"]
+      ]
+    },
+    { atk: 15, def: 30, sta: 55, weight: 31.8, spindirection: "R", name: "Wizard Arrow", codename: "WIZARDARROW", color: [
+      ["#eddf27", "#be9f0b"],
+      ["#b6151b", "#b93824"],
+      ["#c6db59", "#84ba4a"],
+      
+    ] },
     { atk: 20, def: 55, sta: 25, weight: 32.4, spindirection: "R", name: "Knight Shield", codename: "KNIGHTSHIELD" },
     { atk: 35, def: 30, sta: 35, weight: 27.7, spindirection: "R", name: "Dranzer Spiral", codename: "DRANZERSPIRAL" },
     { atk: 25, def: 60, sta: 15, weight: 32.9, spindirection: "R", name: "Knight Lance", codename: "KNIGHTLANCE" },
