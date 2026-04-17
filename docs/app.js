@@ -1287,14 +1287,20 @@ initDropdowns();
       rbInput.disabled = true;
       rbInput.placeholder = "Not available";
     } else {
-      // Default: enable everything, clear filters (without resetting existing selections)
+      // Default: clear filters, re-enable based on current selections
       ratchetWrapper._filterFn = null;
-      ratchetInput.disabled = false;
-      ratchetInput.placeholder = "-- Select --";
 
-      // Only re-enable ratchet-bit if both ratchet and bit are empty
       const ratchetSel = stdForm.querySelector('[name="ratchet"]');
       const bitSel = stdForm.querySelector('[name="bit"]');
+      const rbSel = stdForm.querySelector('[name="ratchetBit"]');
+
+      // Only re-enable ratchet if ratchet-bit is not chosen
+      if (!rbSel.value) {
+        ratchetInput.disabled = false;
+        ratchetInput.placeholder = "-- Select --";
+      }
+
+      // Only re-enable ratchet-bit if both ratchet and bit are empty
       if (!ratchetSel.value && !bitSel.value) {
         rbInput.disabled = false;
         rbInput.placeholder = "-- Select --";
