@@ -770,7 +770,6 @@ function calcStandard(form) {
       behavior: "smooth"
     });
   });
-
 }
 
 // --- CX calculation ---
@@ -963,7 +962,7 @@ function calcCX(form) {
     }
   });
 
-  // ================= AUTO SCROLL ONLY HERE =================
+  // ================= AUTO SCROLL =================
   requestAnimationFrame(() => {
     window.scrollTo({
       top: document.body.scrollHeight,
@@ -1568,12 +1567,7 @@ document.querySelectorAll(".btn-lucky").forEach(btn => {
   const dismiss = () => {
     popup.classList.add("hidden");
   };
-  popup.querySelector(".popup-close").addEventListener("click", dismiss);
   popup.querySelector(".popup-ok").addEventListener("click", dismiss);
-  popup.addEventListener("click", e => { if (e.target === popup) dismiss(); });
-  document.addEventListener("keydown", function onEsc(e) {
-    if (e.key === "Escape") { dismiss(); document.removeEventListener("keydown", onEsc); }
-  });
 })();
 
 function initLibrarySearch() {
