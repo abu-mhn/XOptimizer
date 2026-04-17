@@ -1287,13 +1287,18 @@ initDropdowns();
       rbInput.disabled = true;
       rbInput.placeholder = "Not available";
     } else {
-      // Default: enable everything, clear filters
-      ratchetWrapper._setFilter(null);
+      // Default: enable everything, clear filters (without resetting existing selections)
       ratchetWrapper._filterFn = null;
       ratchetInput.disabled = false;
       ratchetInput.placeholder = "-- Select --";
-      rbInput.disabled = false;
-      rbInput.placeholder = "-- Select --";
+
+      // Only re-enable ratchet-bit if both ratchet and bit are empty
+      const ratchetSel = stdForm.querySelector('[name="ratchet"]');
+      const bitSel = stdForm.querySelector('[name="bit"]');
+      if (!ratchetSel.value && !bitSel.value) {
+        rbInput.disabled = false;
+        rbInput.placeholder = "-- Select --";
+      }
     }
   });
 })();
