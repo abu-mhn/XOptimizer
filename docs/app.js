@@ -503,18 +503,32 @@ function downloadResultPNG(el) {
   const dlBtn = el.querySelector(".download-row");
   if (dlBtn) dlBtn.style.display = "none";
 
-  // Temporarily add footer for the screenshot
+  // Temporarily add footer for the screenshot (hidden from user view)
   const footer = document.createElement("div");
   footer.className = "png-footer";
   footer.style.cssText = "text-align:center;padding:12px 0 8px;font-size:12px;color:#8b949e;border-top:1px solid #21262d;margin-top:12px;";
-  footer.innerHTML = "Beyblade X Stat Calculator &bull; Created by <strong style='color:#c9d1d9'>RvX Ashwolf</strong> &bull; Powered by <img src='assets/icons/revoxName.webp' alt='Team Revox' style='height:34px;vertical-align:middle;margin-left:4px;position:relative;top:-4px;'>";
+  footer.innerHTML = `
+    <div style="display:flex;justify-content:center;align-items:center;gap:6px;flex-wrap:wrap;width:100%;text-align:center;">
+      <span style="display:flex;align-items:center;gap:4px;">Beyblade X Stat Calculator</span>
+      <span style="opacity:0.5;">•</span>
+      <span style="display:flex;align-items:center;gap:4px;">Created by <strong style="color:#c9d1d9;">RvX Ashwolf</strong></span>
+      <span style="display:flex;align-items:center;gap:4px;width:100%;justify-content:center;margin-top:6px;">Powered by <img src="assets/icons/revoxName.webp" alt="Revox" style="height:40px;width:auto;transform:translateY(-5px);"></span>
+    </div>`;
   el.appendChild(footer);
+
+  // Move element off-screen so the user doesn't see the footer flash
+  const origPos = el.style.position;
+  const origLeft = el.style.left;
+  el.style.position = "fixed";
+  el.style.left = "-9999px";
 
   html2canvas(el, {
     backgroundColor: "#0d1117",
     scale: 2,
     useCORS: true
   }).then(canvas => {
+    el.style.position = origPos;
+    el.style.left = origLeft;
     if (dlBtn) dlBtn.style.display = "";
     footer.remove();
     const link = document.createElement("a");
@@ -525,6 +539,8 @@ function downloadResultPNG(el) {
     link.href = canvas.toDataURL("image/png");
     link.click();
   }).catch(() => {
+    el.style.position = origPos;
+    el.style.left = origLeft;
     if (dlBtn) dlBtn.style.display = "";
     footer.remove();
     alert("Failed to generate image.");
@@ -1764,8 +1780,8 @@ function initLibrarySearch() {
   // SORT STATE
   // =========================
   const sortBar = document.getElementById("library-sort");
-  let currentSort = "name";
-  let currentDir = "asc";
+  let currentSort = "atk";
+  let currentDir = "desc";
 
   function getStatValue(item, key) {
     const mode = hasModes(item) ? item.modes[item.currentMode ?? 0] : item;
@@ -1777,11 +1793,7 @@ function initLibrarySearch() {
   function sortItems(items) {
     return [...items].sort((a, b) => {
       let cmp;
-      if (currentSort === "name") {
-        cmp = a.name.localeCompare(b.name);
-      } else {
-        cmp = getStatValue(b, currentSort) - getStatValue(a, currentSort);
-      }
+      cmp = getStatValue(b, currentSort) - getStatValue(a, currentSort);
       return currentDir === "desc" ? -cmp : cmp;
     });
   }
@@ -1811,7 +1823,7 @@ function initLibrarySearch() {
       currentDir = currentDir === "asc" ? "desc" : "asc";
     } else {
       currentSort = key;
-      currentDir = key === "name" ? "asc" : "desc";
+      currentDir = "desc";
     }
 
     updateSortButtons();
@@ -1864,8 +1876,8 @@ function initLibrarySearch() {
       if (heightBtn) {
         heightBtn.style.display = hasHeight ? "" : "none";
         if (!hasHeight && currentSort === "height") {
-          currentSort = "name";
-          currentDir = "asc";
+          currentSort = "atk";
+          currentDir = "desc";
           updateSortButtons();
         }
       }
