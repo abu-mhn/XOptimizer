@@ -435,7 +435,11 @@ function getBarColor(val) {
   return "#f85149";
 }
 
+let statDisplayMode = "bar";
+
 function renderStatBars(grandTotal) {
+  if (statDisplayMode === "radar") return renderRadarChart(grandTotal);
+
   const stats = [
     { label: "ATK", value: grandTotal.ATK },
     { label: "DEF", value: grandTotal.DEF },
@@ -457,6 +461,109 @@ function renderStatBars(grandTotal) {
   }
   html += '</div>';
   return html;
+}
+
+function getRadarColor(label, val) {
+  if (label === "Dash") {
+    if (val >= 35) return "#3fb950";
+    if (val >= 20) return "#d29922";
+    return "#f85149";
+  }
+  if (label === "B.Res") {
+    if (val >= 80) return "#3fb950";
+    if (val >= 50) return "#d29922";
+    return "#f85149";
+  }
+  return getBarColor(val);
+}
+
+function renderRadarChart(grandTotal) {
+  const stats = [
+    { label: "ATK", value: grandTotal.ATK },
+    { label: "DEF", value: grandTotal.DEF },
+    { label: "STA", value: grandTotal.STA },
+    { label: "Dash", value: grandTotal.Dash },
+    { label: "B.Res", value: grandTotal["Burst Res"] },
+  ];
+
+  const count = stats.length;
+  const cx = 160, cy = 150, r = 90;
+  const maxVal = 150;
+  const isLight = document.body.classList.contains("light-mode");
+  const gridColor = isLight ? "#c0c5cc" : "#30363d";
+  const textColor = isLight ? "#1f2328" : "#e6edf3";
+
+  // Evenly space angles starting from top
+  const angles = stats.map((_, i) => -90 + (360 / count) * i);
+
+  function polar(angle, radius) {
+    const rad = angle * Math.PI / 180;
+    return [cx + radius * Math.cos(rad), cy + radius * Math.sin(rad)];
+  }
+
+  // Grid lines (3 levels)
+  let grid = "";
+  for (const level of [0.33, 0.66, 1]) {
+    const pts = angles.map(a => polar(a, r * level).join(",")).join(" ");
+    grid += `<polygon points="${pts}" fill="none" stroke="${gridColor}" stroke-width="1"/>`;
+  }
+
+  // Axis lines
+  let axes = "";
+  for (const a of angles) {
+    const [x, y] = polar(a, r);
+    axes += `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="${gridColor}" stroke-width="1"/>`;
+  }
+
+  // Data polygon
+  const dataPoints = stats.map((s, i) => {
+    const val = (s.value === "TBA" || s.value == null) ? 0 : Number(s.value);
+    const ratio = Math.min(val / maxVal, 1);
+    return polar(angles[i], r * Math.max(ratio, 0.02));
+  });
+  const dataPts = dataPoints.map(p => p.join(",")).join(" ");
+
+  const allTBA = stats.every(s => s.value === "TBA" || s.value == null);
+  const fillColor = allTBA ? "rgba(72,79,88,0.3)" : "rgba(56,139,253,0.25)";
+  const strokeColor = allTBA ? "#484f58" : "#388bfd";
+
+  // Data points (dots)
+  let dots = "";
+  dataPoints.forEach(([x, y]) => {
+    dots += `<circle cx="${x}" cy="${y}" r="3" fill="${strokeColor}"/>`;
+  });
+
+  // Labels
+  let labels = "";
+  stats.forEach((s, i) => {
+    const angle = angles[i];
+    const [x, y] = polar(angle, r + 30);
+    const isTBA = s.value === "TBA" || s.value == null;
+    const val = isTBA ? 0 : Number(s.value);
+    const color = isTBA ? "#484f58" : getRadarColor(s.label, val);
+
+    // Adjust vertical offset based on position
+    let yOff = 0;
+    if (angle === -90) yOff = -8;
+    else if (angle > 90 && angle < 270) yOff = 8;
+
+    labels += `<text x="${x}" y="${y + yOff}"
+      text-anchor="middle" dominant-baseline="middle"
+      fill="${textColor}" font-size="12" font-weight="600">${s.label}</text>`;
+    labels += `<text x="${x}" y="${y + yOff + 14}"
+      text-anchor="middle" dominant-baseline="middle"
+      fill="${color}" font-size="11" font-weight="700">${isTBA ? "TBA" : val}</text>`;
+  });
+
+  return `<div class="stat-radar">
+    <svg viewBox="0 0 320 300" width="320" height="300">
+      ${grid}
+      ${axes}
+      <polygon points="${dataPts}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2"/>
+      ${dots}
+      ${labels}
+    </svg>
+  </div>`;
 }
 
 function renderResult(res) {
@@ -492,7 +599,12 @@ function renderResult(res) {
   const { ATK, DEF, STA, Type, "Spin Direction": _spin, ...grandTotalRest } =
     res.grandTotal;
 
-  html += renderStatTable("", grandTotalRest);
+  if (statDisplayMode === "radar") {
+    const { Dash: _d, "Burst Res": _b, ...radarRest } = grandTotalRest;
+    html += renderStatTable("", radarRest);
+  } else {
+    html += renderStatTable("", grandTotalRest);
+  }
 
   html += `<div class="download-row">
     <button type="button" class="btn btn-download" aria-label="Download as PNG">
@@ -522,7 +634,7 @@ function downloadResultPNG(el) {
       <span style="display:flex;align-items:center;gap:4px;">Beyblade X Stat Calculator</span>
       <span style="opacity:0.5;">•</span>
       <span style="display:flex;align-items:center;gap:4px;">Created by <strong style="color:#c9d1d9;">RvX Ashwolf</strong></span>
-      <span style="display:flex;align-items:center;gap:4px;width:100%;justify-content:center;margin-top:6px;">Powered by <img src="assets/icons/revoxName.webp" alt="Revox" style="height:40px;width:auto;transform:translateY(-5px);"></span>
+      <span style="display:flex;align-items:center;gap:4px;width:100%;justify-content:center;margin-top:6px;">Powered by <img src="${document.body.classList.contains('light-mode') ? 'assets/icons/revoxNameLight.webp' : 'assets/icons/revoxName.webp'}" alt="Revox" style="height:40px;width:auto;transform:translateY(-5px);"></span>
     </div>`;
   el.appendChild(footer);
 
@@ -1511,50 +1623,226 @@ document.querySelectorAll(".btn-reset").forEach(btn => {
 // --- I'm Feeling Lucky ---
 function randIdx(arr) { return Math.floor(Math.random() * arr.length); }
 
+function heaviestIdx(arr) {
+  let max = -1, idx = 0;
+  arr.forEach((item, i) => {
+    const w = item.weight || 0;
+    if (w > max) { max = w; idx = i; }
+  });
+  return idx;
+}
+
+function lightestIdx(arr) {
+  let min = Infinity, idx = 0;
+  arr.forEach((item, i) => {
+    const w = item.weight || Infinity;
+    if (w < min) { min = w; idx = i; }
+  });
+  return idx;
+}
+
 function getWrapper(form, name) { return form.querySelector(`[name="${name}"]`).nextElementSibling; }
 
-document.querySelectorAll(".btn-lucky").forEach(btn => {
-  btn.addEventListener("click", () => {
-    const form = btn.closest("form");
-    // Reset first
-    form.querySelector(".btn-reset").click();
+// --- Settings ---
+function initSettingDropdown(id, storageKey, defaultVal, onChange) {
+  const dropdown = document.getElementById(id);
+  const btn = dropdown.querySelector(".setting-dropdown-btn");
+  const menu = dropdown.querySelector(".setting-dropdown-menu");
+  const text = dropdown.querySelector(".setting-dropdown-text");
+  const options = dropdown.querySelectorAll(".setting-dropdown-option");
 
-    const mode = form.id.replace("form-", "");
+  let value = localStorage.getItem(storageKey) || defaultVal;
 
-    if (mode === "standard") {
-      const bladeIdx = randIdx(DATA.blades);
-      getWrapper(form, "blade")._select(bladeIdx);
-      const codename = DATA.blades[bladeIdx].codename;
+  // Init from saved value
+  btn.dataset.value = value;
+  const saved = dropdown.querySelector(`.setting-dropdown-option[data-value="${value}"]`);
+  if (saved) {
+    text.textContent = saved.textContent;
+    options.forEach(o => o.classList.remove("active"));
+    saved.classList.add("active");
+  }
 
-      if (codename === "BULLETGRIFFON") {
-        getWrapper(form, "bit")._select(randIdx(DATA.bits));
-      } else if (codename === "CLOCKMIRAGE") {
-        const valid = DATA.ratchets.map((r, i) => ({ r, i })).filter(x => x.r.name.endsWith("5"));
-        getWrapper(form, "ratchet")._select(valid[Math.floor(Math.random() * valid.length)].i);
-        getWrapper(form, "bit")._select(randIdx(DATA.bits));
-      } else {
-        if (Math.random() < 0.05 && DATA.ratchetBits.length > 0) {
-          getWrapper(form, "ratchetBit")._select(randIdx(DATA.ratchetBits));
-        } else {
-          getWrapper(form, "ratchet")._select(randIdx(DATA.ratchets));
-          getWrapper(form, "bit")._select(randIdx(DATA.bits));
-        }
-      }
-    } else if (mode === "cx") {
-      getWrapper(form, "lockChip")._select(randIdx(DATA.lockChips));
-      getWrapper(form, "mainBlade")._select(randIdx(DATA.mainBlades));
-      getWrapper(form, "assistBlade")._select(randIdx(DATA.assistBlades));
-      if (Math.random() < 0.05 && DATA.ratchetBits.length > 0) {
-        getWrapper(form, "ratchetBit")._select(randIdx(DATA.ratchetBits));
-      } else {
-        getWrapper(form, "ratchet")._select(randIdx(DATA.ratchets));
-        getWrapper(form, "bit")._select(randIdx(DATA.bits));
-      }
-    } else if (mode === "cxExpand") {
-      getWrapper(form, "lockChip")._select(randIdx(DATA.lockChips));
-      getWrapper(form, "metalBlade")._select(randIdx(DATA.metalBlades));
-      getWrapper(form, "overBlade")._select(randIdx(DATA.overBlades));
-      getWrapper(form, "assistBlade")._select(randIdx(DATA.assistBlades));
+  btn.addEventListener("click", () => menu.classList.toggle("hidden"));
+
+  options.forEach(option => {
+    option.addEventListener("click", () => {
+      value = option.dataset.value;
+      btn.dataset.value = value;
+      text.textContent = option.textContent;
+      options.forEach(o => o.classList.remove("active"));
+      option.classList.add("active");
+      menu.classList.add("hidden");
+      localStorage.setItem(storageKey, value);
+      onChange(value);
+    });
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!dropdown.contains(e.target)) menu.classList.add("hidden");
+  });
+
+  onChange(value);
+  return () => value;
+}
+
+// Theme setting
+initSettingDropdown("setting-theme", "theme", "dark", (val) => {
+  document.body.classList.toggle("light-mode", val === "light");
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = val === "light" ? "#f6f8fa" : "#0a4797";
+  document.querySelectorAll('img.footer-logo').forEach(img => {
+    img.src = val === "light" ? "assets/icons/revoxNameLight.webp" : "assets/icons/revoxName.webp";
+  });
+});
+
+// Stat display setting
+initSettingDropdown("setting-stat-display", "statDisplay", "bar", (val) => {
+  statDisplayMode = val;
+});
+
+// Random button mode setting
+let randomModeValue;
+const getRandomMode = initSettingDropdown("setting-random-mode", "randomMode", "random", (val) => {
+  randomModeValue = val;
+  updateLuckyButtons();
+});
+
+function updateLuckyButtons() {
+  document.querySelectorAll(".btn-lucky").forEach(btn => {
+    if (randomModeValue === "maxweight") {
+      btn.innerHTML = '<img src="assets/icons/heavy.png" alt="Max Weight">';
+      btn.setAttribute("aria-label", "Max Weight");
+    } else if (randomModeValue === "minweight") {
+      btn.innerHTML = '<img src="assets/icons/lightweight.png" alt="Min Weight">';
+      btn.setAttribute("aria-label", "Min Weight");
+    } else {
+      btn.innerHTML = '<img src="assets/icons/dice.png" alt="Random">';
+      btn.setAttribute("aria-label", "I'm Feeling Lucky");
+    }
+  });
+}
+
+function selectMaxWeight(form, mode) {
+  if (mode === "standard") {
+    getWrapper(form, "blade")._select(heaviestIdx(DATA.blades));
+
+    const maxRatchetW = Math.max(...DATA.ratchets.map(r => r.weight || 0));
+    const maxBitW = Math.max(...DATA.bits.map(b => b.weight || 0));
+    const maxRBW = DATA.ratchetBits.length > 0
+      ? Math.max(...DATA.ratchetBits.map(rb => rb.weight || 0))
+      : 0;
+
+    if (maxRBW > maxRatchetW + maxBitW) {
+      getWrapper(form, "ratchetBit")._select(heaviestIdx(DATA.ratchetBits));
+    } else {
+      getWrapper(form, "ratchet")._select(heaviestIdx(DATA.ratchets));
+      getWrapper(form, "bit")._select(heaviestIdx(DATA.bits));
+    }
+  } else if (mode === "cx") {
+    getWrapper(form, "lockChip")._select(heaviestIdx(DATA.lockChips));
+    getWrapper(form, "mainBlade")._select(heaviestIdx(DATA.mainBlades));
+    getWrapper(form, "assistBlade")._select(heaviestIdx(DATA.assistBlades));
+
+    const maxRatchetW = Math.max(...DATA.ratchets.map(r => r.weight || 0));
+    const maxBitW = Math.max(...DATA.bits.map(b => b.weight || 0));
+    const maxRBW = DATA.ratchetBits.length > 0
+      ? Math.max(...DATA.ratchetBits.map(rb => rb.weight || 0))
+      : 0;
+
+    if (maxRBW > maxRatchetW + maxBitW) {
+      getWrapper(form, "ratchetBit")._select(heaviestIdx(DATA.ratchetBits));
+    } else {
+      getWrapper(form, "ratchet")._select(heaviestIdx(DATA.ratchets));
+      getWrapper(form, "bit")._select(heaviestIdx(DATA.bits));
+    }
+  } else if (mode === "cxExpand") {
+    getWrapper(form, "lockChip")._select(heaviestIdx(DATA.lockChips));
+    getWrapper(form, "metalBlade")._select(heaviestIdx(DATA.metalBlades));
+    getWrapper(form, "overBlade")._select(heaviestIdx(DATA.overBlades));
+    getWrapper(form, "assistBlade")._select(heaviestIdx(DATA.assistBlades));
+
+    const maxRatchetW = Math.max(...DATA.ratchets.map(r => r.weight || 0));
+    const maxBitW = Math.max(...DATA.bits.map(b => b.weight || 0));
+    const maxRBW = DATA.ratchetBits.length > 0
+      ? Math.max(...DATA.ratchetBits.map(rb => rb.weight || 0))
+      : 0;
+
+    if (maxRBW > maxRatchetW + maxBitW) {
+      getWrapper(form, "ratchetBit")._select(heaviestIdx(DATA.ratchetBits));
+    } else {
+      getWrapper(form, "ratchet")._select(heaviestIdx(DATA.ratchets));
+      getWrapper(form, "bit")._select(heaviestIdx(DATA.bits));
+    }
+  }
+}
+
+function selectMinWeight(form, mode) {
+  if (mode === "standard") {
+    getWrapper(form, "blade")._select(lightestIdx(DATA.blades));
+
+    const minRatchetW = Math.min(...DATA.ratchets.map(r => r.weight || Infinity));
+    const minBitW = Math.min(...DATA.bits.map(b => b.weight || Infinity));
+    const minRBW = DATA.ratchetBits.length > 0
+      ? Math.min(...DATA.ratchetBits.map(rb => rb.weight || Infinity))
+      : Infinity;
+
+    if (minRBW < minRatchetW + minBitW) {
+      getWrapper(form, "ratchetBit")._select(lightestIdx(DATA.ratchetBits));
+    } else {
+      getWrapper(form, "ratchet")._select(lightestIdx(DATA.ratchets));
+      getWrapper(form, "bit")._select(lightestIdx(DATA.bits));
+    }
+  } else if (mode === "cx") {
+    getWrapper(form, "lockChip")._select(lightestIdx(DATA.lockChips));
+    getWrapper(form, "mainBlade")._select(lightestIdx(DATA.mainBlades));
+    getWrapper(form, "assistBlade")._select(lightestIdx(DATA.assistBlades));
+
+    const minRatchetW = Math.min(...DATA.ratchets.map(r => r.weight || Infinity));
+    const minBitW = Math.min(...DATA.bits.map(b => b.weight || Infinity));
+    const minRBW = DATA.ratchetBits.length > 0
+      ? Math.min(...DATA.ratchetBits.map(rb => rb.weight || Infinity))
+      : Infinity;
+
+    if (minRBW < minRatchetW + minBitW) {
+      getWrapper(form, "ratchetBit")._select(lightestIdx(DATA.ratchetBits));
+    } else {
+      getWrapper(form, "ratchet")._select(lightestIdx(DATA.ratchets));
+      getWrapper(form, "bit")._select(lightestIdx(DATA.bits));
+    }
+  } else if (mode === "cxExpand") {
+    getWrapper(form, "lockChip")._select(lightestIdx(DATA.lockChips));
+    getWrapper(form, "metalBlade")._select(lightestIdx(DATA.metalBlades));
+    getWrapper(form, "overBlade")._select(lightestIdx(DATA.overBlades));
+    getWrapper(form, "assistBlade")._select(lightestIdx(DATA.assistBlades));
+
+    const minRatchetW = Math.min(...DATA.ratchets.map(r => r.weight || Infinity));
+    const minBitW = Math.min(...DATA.bits.map(b => b.weight || Infinity));
+    const minRBW = DATA.ratchetBits.length > 0
+      ? Math.min(...DATA.ratchetBits.map(rb => rb.weight || Infinity))
+      : Infinity;
+
+    if (minRBW < minRatchetW + minBitW) {
+      getWrapper(form, "ratchetBit")._select(lightestIdx(DATA.ratchetBits));
+    } else {
+      getWrapper(form, "ratchet")._select(lightestIdx(DATA.ratchets));
+      getWrapper(form, "bit")._select(lightestIdx(DATA.bits));
+    }
+  }
+}
+
+function selectRandom(form, mode) {
+  if (mode === "standard") {
+    const bladeIdx = randIdx(DATA.blades);
+    getWrapper(form, "blade")._select(bladeIdx);
+    const codename = DATA.blades[bladeIdx].codename;
+
+    if (codename === "BULLETGRIFFON") {
+      getWrapper(form, "bit")._select(randIdx(DATA.bits));
+    } else if (codename === "CLOCKMIRAGE") {
+      const valid = DATA.ratchets.map((r, i) => ({ r, i })).filter(x => x.r.name.endsWith("5"));
+      getWrapper(form, "ratchet")._select(valid[Math.floor(Math.random() * valid.length)].i);
+      getWrapper(form, "bit")._select(randIdx(DATA.bits));
+    } else {
       if (Math.random() < 0.05 && DATA.ratchetBits.length > 0) {
         getWrapper(form, "ratchetBit")._select(randIdx(DATA.ratchetBits));
       } else {
@@ -1562,8 +1850,44 @@ document.querySelectorAll(".btn-lucky").forEach(btn => {
         getWrapper(form, "bit")._select(randIdx(DATA.bits));
       }
     }
+  } else if (mode === "cx") {
+    getWrapper(form, "lockChip")._select(randIdx(DATA.lockChips));
+    getWrapper(form, "mainBlade")._select(randIdx(DATA.mainBlades));
+    getWrapper(form, "assistBlade")._select(randIdx(DATA.assistBlades));
+    if (Math.random() < 0.05 && DATA.ratchetBits.length > 0) {
+      getWrapper(form, "ratchetBit")._select(randIdx(DATA.ratchetBits));
+    } else {
+      getWrapper(form, "ratchet")._select(randIdx(DATA.ratchets));
+      getWrapper(form, "bit")._select(randIdx(DATA.bits));
+    }
+  } else if (mode === "cxExpand") {
+    getWrapper(form, "lockChip")._select(randIdx(DATA.lockChips));
+    getWrapper(form, "metalBlade")._select(randIdx(DATA.metalBlades));
+    getWrapper(form, "overBlade")._select(randIdx(DATA.overBlades));
+    getWrapper(form, "assistBlade")._select(randIdx(DATA.assistBlades));
+    if (Math.random() < 0.05 && DATA.ratchetBits.length > 0) {
+      getWrapper(form, "ratchetBit")._select(randIdx(DATA.ratchetBits));
+    } else {
+      getWrapper(form, "ratchet")._select(randIdx(DATA.ratchets));
+      getWrapper(form, "bit")._select(randIdx(DATA.bits));
+    }
+  }
+}
 
-    // Auto-calculate
+document.querySelectorAll(".btn-lucky").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const form = btn.closest("form");
+    form.querySelector(".btn-reset").click();
+    const mode = form.id.replace("form-", "");
+
+    if (randomModeValue === "maxweight") {
+      selectMaxWeight(form, mode);
+    } else if (randomModeValue === "minweight") {
+      selectMinWeight(form, mode);
+    } else {
+      selectRandom(form, mode);
+    }
+
     form.requestSubmit();
   });
 });
@@ -2128,11 +2452,12 @@ function renderHistory() {
       <div class="history-section">
         <b>Grand Total</b>
 
-        ${createBar("ATK", atk, isAtkTBA)}
-        ${createBar("DEF", def, isDefTBA)}
-        ${createBar("STA", sta, isStaTBA)}
+        ${statDisplayMode === "radar"
+          ? renderRadarChart({ ATK: atk, DEF: def, STA: sta, Dash: total.Dash, "Burst Res": total["Burst Res"] })
+          : createBar("ATK", atk, isAtkTBA) + createBar("DEF", def, isDefTBA) + createBar("STA", sta, isStaTBA)
+        }
 
-        ${renderObject(total)}
+        ${statDisplayMode === "radar" ? renderObject((() => { const { Dash: _d, "Burst Res": _b, ...rest } = total; return rest; })()) : renderObject(total)}
 
         ${(mainBladeMode || assistBladeMode || rbMode) ? `
           <div class="stat-section">

@@ -43,6 +43,8 @@
       <button class="tab" data-mode="history" aria-label="History">
         <img src="assets/icons/history1.webp" alt="History">
       </button>
+
+      <button class="tab tab-settings" data-mode="settings" aria-label="Settings">&#9881;</button>
     </div>
 
     <!-- ================= STANDARD ================= -->
@@ -223,6 +225,55 @@
       </fieldset>
     </section>
 
+    <!-- ================= SETTINGS ================= -->
+    <section id="form-settings" class="calc-form hidden">
+      <fieldset>
+        <legend>Settings</legend>
+        <div class="setting-item">
+          <span class="setting-label-text">Theme</span>
+          <div class="setting-dropdown" id="setting-theme">
+            <button type="button" class="setting-dropdown-btn" data-value="dark">
+              <span class="setting-dropdown-text">Dark</span>
+              <span class="setting-dropdown-arrow">&#9662;</span>
+            </button>
+            <div class="setting-dropdown-menu hidden">
+              <div class="setting-dropdown-option active" data-value="dark">Dark</div>
+              <div class="setting-dropdown-option" data-value="light">Light</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <span class="setting-label-text">Stat display</span>
+          <div class="setting-dropdown" id="setting-stat-display">
+            <button type="button" class="setting-dropdown-btn" data-value="bar">
+              <span class="setting-dropdown-text">Bar</span>
+              <span class="setting-dropdown-arrow">&#9662;</span>
+            </button>
+            <div class="setting-dropdown-menu hidden">
+              <div class="setting-dropdown-option active" data-value="bar">Bar</div>
+              <div class="setting-dropdown-option" data-value="radar">Radar</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <span class="setting-label-text">Additional button mode</span>
+          <div class="setting-dropdown" id="setting-random-mode">
+            <button type="button" class="setting-dropdown-btn" data-value="random">
+              <span class="setting-dropdown-text">Random</span>
+              <span class="setting-dropdown-arrow">&#9662;</span>
+            </button>
+            <div class="setting-dropdown-menu hidden">
+              <div class="setting-dropdown-option active" data-value="random">Random</div>
+              <div class="setting-dropdown-option" data-value="maxweight">Max Weight</div>
+              <div class="setting-dropdown-option" data-value="minweight">Min Weight</div>
+            </div>
+          </div>
+        </div>
+      </fieldset>
+    </section>
+
     <!-- ================= RESULT ================= -->
     <div id="result" class="result hidden"></div>
   </div>
@@ -245,12 +296,15 @@
       <h2 class="popup-title">What's New</h2>
 
       <ul class="popup-list">
-        <li>Fixed mode change — switching modes now works correctly across all calculator tabs.</li>
-        <li>Removed Name sort from Library — sort defaults to ATK (descending).</li>
-        <li>Calculate, Reset, and Random buttons are now floating at the bottom for easy access.</li>
+        <li>New Settings tab — configure theme, stat display, and button mode.</li>
+        <li>Light mode and Dark mode theme support.</li>
+        <li>Stat display can now be switched between Bar and Radar chart (pentagon with ATK, DEF, STA, Dash, Burst Res).</li>
+        <li>Additional button mode: Random, Max Weight, or Min Weight — configurable in Settings.</li>
+        <li>Tabs now displayed in a 3x2 grid layout with hover effects.</li>
+        <li>Fixed mode change across all calculator tabs.</li>
+        <li>Calculate, Reset, and Random buttons are now floating at the bottom.</li>
         <li>Footer is now always visible at the bottom of the screen.</li>
-        <li>Download PNG footer now matches the site footer layout.</li>
-        <li>PNG generation no longer flashes the footer on screen.</li>
+        <li>History tab now respects the stat display setting.</li>
       </ul>
 
       <button type="button" class="btn popup-ok">
