@@ -2546,13 +2546,34 @@ function renderHistory() {
     return window.innerWidth > window.innerHeight;
   }
 
+  function enterFullscreen() {
+    const el = document.documentElement;
+    (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el).catch(() => {});
+  }
+
+  function exitFullscreen() {
+    const fn = document.exitFullscreen || document.webkitExitFullscreen;
+    if (fn && (document.fullscreenElement || document.webkitFullscreenElement)) {
+      fn.call(document).catch(() => {});
+    }
+  }
+
   function handleOrientation() {
     if (isLandscape()) {
       overlay.classList.remove("hidden");
+      enterFullscreen();
     } else {
       overlay.classList.add("hidden");
+      exitFullscreen();
     }
   }
+
+  // Fallback: if auto-fullscreen was blocked, enter on first tap
+  overlay.addEventListener("touchstart", () => {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      enterFullscreen();
+    }
+  }, { once: false, passive: true });
 
   if (screen.orientation) {
     screen.orientation.addEventListener("change", handleOrientation);
