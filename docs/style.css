@@ -1243,17 +1243,17 @@ body.light-mode .search-dropdown input {
     color: #1f2328;
 }
 
-body.light-mode .search-dropdown .dropdown-list {
+body.light-mode .search-dropdown .dd-list {
     background: #ffffff;
     border-color: #d1d9e0;
 }
 
-body.light-mode .dropdown-item {
+body.light-mode .dd-item {
     color: #1f2328;
 }
 
-body.light-mode .dropdown-item:hover,
-body.light-mode .dropdown-item.highlighted {
+body.light-mode .dd-item:hover,
+body.light-mode .dd-item.active {
     background: #ddf4ff;
 }
 
@@ -1483,3 +1483,4 @@ body.light-mode .btn img {
 body.light-mode .part-img {
     background: #e5e7eb;
 }
+

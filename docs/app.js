@@ -2491,3 +2491,32 @@ function renderHistory() {
     container.appendChild(div);
   });
 }
+
+// ================= FULLSCREEN ON ROTATE (MOBILE) =================
+(function () {
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (!isMobile) return;
+
+  function isLandscape() {
+    if (screen.orientation) return screen.orientation.type.startsWith("landscape");
+    return window.innerWidth > window.innerHeight;
+  }
+
+  function handleOrientation() {
+    if (isLandscape()) {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen?.().catch(() => {});
+      }
+    } else {
+      if (document.fullscreenElement) {
+        document.exitFullscreen?.().catch(() => {});
+      }
+    }
+  }
+
+  if (screen.orientation) {
+    screen.orientation.addEventListener("change", handleOrientation);
+  } else {
+    window.addEventListener("orientationchange", handleOrientation);
+  }
+})();
