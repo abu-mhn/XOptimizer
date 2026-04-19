@@ -1636,6 +1636,63 @@ body.light-mode .part-img {
     color: #e6edf3;
 }
 
+/* Advanced scoreboard buttons */
+.scoreboard-score-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    position: relative;
+}
+
+.scoreboard-btns {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 6px;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.scoreboard-left .scoreboard-btns {
+    left: 8px;
+}
+
+.scoreboard-right .scoreboard-btns {
+    right: 8px;
+}
+
+.scoreboard-btns.hidden {
+    display: none;
+}
+
+.sb-btn {
+    background: #30363d;
+    color: #e6edf3;
+    border: 1px solid #484f58;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 0.7rem;
+    font-weight: 400;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.sb-btn:active {
+    background: #484f58;
+}
+
+/* Light mode */
+body.light-mode .sb-btn {
+    background: #e8ecf0;
+    color: #1f2328;
+    border-color: #d1d9e0;
+}
+
+body.light-mode .sb-btn:active {
+    background: #d1d9e0;
+}
+
 /* Light mode */
 body.light-mode .scoreboard-overlay {
     background: #f6f8fa;
@@ -1672,4 +1729,5 @@ body.light-mode .scoreboard-reset:hover {
     background: #f3f4f6;
     color: #1f2328;
 }
+
 

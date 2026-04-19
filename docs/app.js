@@ -859,9 +859,11 @@ function calcStandard(form) {
 
       Weight: finalWeight,
 
-      Height: bHeight == null
-        ? "TBA"
-        : `${(Number(bHeight) / 10).toFixed(1)} mm`,
+      ...(bladeA.codename === "BULLETGRIFFON" ? {} : {
+        Height: bHeight == null
+          ? "TBA"
+          : `${(Number(bHeight) / 10).toFixed(1)} mm`
+      }),
 
       Dash: isRB ? rbA?.dash : bit?.dash,
       "Burst Res": isRB ? rbA?.burstRes : bit?.burstRes
@@ -903,9 +905,11 @@ function calcStandard(form) {
 
       Weight: finalWeight,
 
-      Height: bHeight == null
-        ? "TBA"
-        : `${(Number(bHeight) / 10).toFixed(1)} mm`,
+      ...(bladeA.codename === "BULLETGRIFFON" ? {} : {
+        Height: bHeight == null
+          ? "TBA"
+          : `${(Number(bHeight) / 10).toFixed(1)} mm`
+      }),
 
       Dash: isRB ? rbA?.dash : bit?.dash,
       "Burst Res": isRB ? rbA?.burstRes : bit?.burstRes,
@@ -1860,6 +1864,18 @@ initSettingDropdown("setting-stat-display", "statDisplay", "bar", (val) => {
   statDisplayMode = val;
 });
 
+// Scoreboard mode setting
+let scoreboardMode = "simple";
+initSettingDropdown("setting-scoreboard-mode", "scoreboardMode", "simple", (val) => {
+  scoreboardMode = val;
+  document.querySelectorAll(".scoreboard-hint-simple").forEach(el => {
+    el.classList.toggle("hidden", val === "advanced");
+  });
+  document.querySelectorAll(".scoreboard-advanced").forEach(el => {
+    el.classList.toggle("hidden", val !== "advanced");
+  });
+});
+
 // Random button mode setting
 let randomModeValue;
 const getRandomMode = initSettingDropdown("setting-random-mode", "randomMode", "random", (val) => {
@@ -1884,19 +1900,32 @@ function updateLuckyButtons() {
 
 function selectMaxWeight(form, mode) {
   if (mode === "standard") {
-    getWrapper(form, "blade")._select(heaviestIdx(DATA.blades));
+    const bladeIdx = heaviestIdx(DATA.blades);
+    getWrapper(form, "blade")._select(bladeIdx);
+    const codename = DATA.blades[bladeIdx].codename;
 
-    const maxRatchetW = Math.max(...DATA.ratchets.map(r => r.weight || 0));
-    const maxBitW = Math.max(...DATA.bits.map(b => b.weight || 0));
-    const maxRBW = DATA.ratchetBits.length > 0
-      ? Math.max(...DATA.ratchetBits.map(rb => rb.weight || 0))
-      : 0;
-
-    if (maxRBW > maxRatchetW + maxBitW) {
-      getWrapper(form, "ratchetBit")._select(heaviestIdx(DATA.ratchetBits));
-    } else {
-      getWrapper(form, "ratchet")._select(heaviestIdx(DATA.ratchets));
+    if (codename === "BULLETGRIFFON") {
       getWrapper(form, "bit")._select(heaviestIdx(DATA.bits));
+    } else if (codename === "CLOCKMIRAGE") {
+      const valid = DATA.ratchets.map((r, i) => ({ r, i })).filter(x => x.r.name.endsWith("5"));
+      let bestIdx = valid[0].i;
+      let bestW = valid[0].r.weight || 0;
+      valid.forEach(x => { if ((x.r.weight || 0) > bestW) { bestW = x.r.weight || 0; bestIdx = x.i; } });
+      getWrapper(form, "ratchet")._select(bestIdx);
+      getWrapper(form, "bit")._select(heaviestIdx(DATA.bits));
+    } else {
+      const maxRatchetW = Math.max(...DATA.ratchets.map(r => r.weight || 0));
+      const maxBitW = Math.max(...DATA.bits.map(b => b.weight || 0));
+      const maxRBW = DATA.ratchetBits.length > 0
+        ? Math.max(...DATA.ratchetBits.map(rb => rb.weight || 0))
+        : 0;
+
+      if (maxRBW > maxRatchetW + maxBitW) {
+        getWrapper(form, "ratchetBit")._select(heaviestIdx(DATA.ratchetBits));
+      } else {
+        getWrapper(form, "ratchet")._select(heaviestIdx(DATA.ratchets));
+        getWrapper(form, "bit")._select(heaviestIdx(DATA.bits));
+      }
     }
   } else if (mode === "cx") {
     getWrapper(form, "lockChip")._select(heaviestIdx(DATA.lockChips));
@@ -1938,19 +1967,32 @@ function selectMaxWeight(form, mode) {
 
 function selectMinWeight(form, mode) {
   if (mode === "standard") {
-    getWrapper(form, "blade")._select(lightestIdx(DATA.blades));
+    const bladeIdx = lightestIdx(DATA.blades);
+    getWrapper(form, "blade")._select(bladeIdx);
+    const codename = DATA.blades[bladeIdx].codename;
 
-    const minRatchetW = Math.min(...DATA.ratchets.map(r => r.weight || Infinity));
-    const minBitW = Math.min(...DATA.bits.map(b => b.weight || Infinity));
-    const minRBW = DATA.ratchetBits.length > 0
-      ? Math.min(...DATA.ratchetBits.map(rb => rb.weight || Infinity))
-      : Infinity;
-
-    if (minRBW < minRatchetW + minBitW) {
-      getWrapper(form, "ratchetBit")._select(lightestIdx(DATA.ratchetBits));
-    } else {
-      getWrapper(form, "ratchet")._select(lightestIdx(DATA.ratchets));
+    if (codename === "BULLETGRIFFON") {
       getWrapper(form, "bit")._select(lightestIdx(DATA.bits));
+    } else if (codename === "CLOCKMIRAGE") {
+      const valid = DATA.ratchets.map((r, i) => ({ r, i })).filter(x => x.r.name.endsWith("5"));
+      let bestIdx = valid[0].i;
+      let bestW = valid[0].r.weight || Infinity;
+      valid.forEach(x => { const w = x.r.weight || Infinity; if (w < bestW) { bestW = w; bestIdx = x.i; } });
+      getWrapper(form, "ratchet")._select(bestIdx);
+      getWrapper(form, "bit")._select(lightestIdx(DATA.bits));
+    } else {
+      const minRatchetW = Math.min(...DATA.ratchets.map(r => r.weight || Infinity));
+      const minBitW = Math.min(...DATA.bits.map(b => b.weight || Infinity));
+      const minRBW = DATA.ratchetBits.length > 0
+        ? Math.min(...DATA.ratchetBits.map(rb => rb.weight || Infinity))
+        : Infinity;
+
+      if (minRBW < minRatchetW + minBitW) {
+        getWrapper(form, "ratchetBit")._select(lightestIdx(DATA.ratchetBits));
+      } else {
+        getWrapper(form, "ratchet")._select(lightestIdx(DATA.ratchets));
+        getWrapper(form, "bit")._select(lightestIdx(DATA.bits));
+      }
     }
   } else if (mode === "cx") {
     getWrapper(form, "lockChip")._select(lightestIdx(DATA.lockChips));
@@ -2722,8 +2764,32 @@ let scoreboardEnabled = false;
     });
   }
 
-  addSwipe(leftSide, d => { scoreA = Math.max(0, scoreA + d); updateDisplay(); });
-  addSwipe(rightSide, d => { scoreB = Math.max(0, scoreB + d); updateDisplay(); });
+  addSwipe(leftSide, d => { if (scoreboardMode === "simple") { scoreA = Math.max(0, scoreA + d); updateDisplay(); } });
+  addSwipe(rightSide, d => { if (scoreboardMode === "simple") { scoreB = Math.max(0, scoreB + d); updateDisplay(); } });
+
+  // Advanced mode buttons
+  const finishSounds = {
+    Spin: new Audio("assets/voices/spinFinish.wav"),
+    Over: new Audio("assets/voices/overFinish.wav"),
+    Burst: new Audio("assets/voices/burstFinish.wav"),
+    Extreme: new Audio("assets/voices/extremeFinish.wav")
+  };
+
+  overlay.querySelectorAll(".sb-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const side = btn.dataset.side;
+      const delta = parseInt(btn.dataset.delta, 10);
+      if (side === "a") { scoreA = Math.max(0, scoreA + delta); }
+      else { scoreB = Math.max(0, scoreB + delta); }
+      updateDisplay();
+      const sound = finishSounds[btn.textContent.trim()];
+      if (sound) {
+        sound.currentTime = 0;
+        sound.play().catch(() => {});
+      }
+    });
+  });
 
   resetBtn.addEventListener("click", () => {
     scoreA = 0;

@@ -89,7 +89,7 @@ const DATA = {
     { atk: 30, def: 60, sta: 20, weight: 37.5, spindirection: "R", name: "Mummy Curse", codename: "MUMMYCURSE" },
     { atk: 55, def: 30, sta: 15, weight: 25.1, spindirection: "L", name: "Dragoon Storm", codename: "DRAGOONSTORM" },
     { atk: 30, def: 40, sta: 30, weight: 31.0, spindirection: "R", name: "Storm Spriggan", codename: "STORMSPRIGGAN" },
-    { atk: 45, def: 45, sta: 40, weight: 0, spindirection: "R", name: "Bullet Griffon", codename: "BULLETGRIFFON" },
+    { atk: 45, def: 45, sta: 40, weight: 60.6, spindirection: "R", name: "Bullet Griffon", codename: "BULLETGRIFFON" },
     { atk: 58, def: 25, sta: 17, weight: 41.4, spindirection: "R", name: "Dran Strike", codename: "DRANSTRIKE" },
   ],
 
