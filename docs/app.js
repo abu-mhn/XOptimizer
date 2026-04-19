@@ -332,6 +332,87 @@ function initDropdowns() {
   makeSearchable(cxeForm.querySelector('[name="ratchetBit"]'), DATA.ratchetBits, rb => rb.name);
 }
 
+// --- Helper: switch to a calculator sub-mode ---
+const subTabs = document.getElementById("sub-tabs");
+const calcModes = ["standard", "cx", "cxExpand"];
+
+function switchToCalcMode(mode) {
+  // ================= SWITCH FORM =================
+  document.querySelectorAll(".calc-form").forEach(f => f.classList.add("hidden"));
+
+  const form = document.getElementById("form-" + mode);
+
+  if (form) {
+    form.classList.remove("hidden");
+
+    // ================= RESET FORM =================
+    form.querySelectorAll("select, input").forEach(el => {
+      if (el.tagName === "SELECT") {
+        el.selectedIndex = 0;
+      } else {
+        el.value = "";
+      }
+    });
+
+    // ================= dropdown clear =================
+    form.querySelectorAll(".search-dropdown").forEach(w => {
+      if (w._clear) w._clear();
+    });
+
+    // ================= re-enable inputs =================
+    const rInput = form.querySelector('[name="ratchet"]')?.nextElementSibling?.querySelector("input");
+    if (rInput) {
+      rInput.disabled = false;
+      rInput.placeholder = "-- Select --";
+    }
+
+    const bInput = form.querySelector('[name="bit"]')?.nextElementSibling?.querySelector("input");
+    if (bInput) {
+      bInput.disabled = false;
+      bInput.placeholder = "-- Select --";
+    }
+
+    const rbInput = form.querySelector('[name="ratchetBit"]')?.nextElementSibling?.querySelector("input");
+    if (rbInput) {
+      rbInput.disabled = false;
+      rbInput.placeholder = "-- Select --";
+    }
+
+    // ================= hide mode buttons =================
+    form.querySelectorAll(".btn-mode").forEach(b => {
+      b.classList.add("hidden");
+    });
+  }
+
+  // ================= HIDE RESULT =================
+  document.getElementById("result")?.classList.add("hidden");
+
+  // ================= FIX CALCULATE BUTTON =================
+  document.querySelectorAll(".calc-btn").forEach(btn => {
+    btn.classList.add("hidden");
+    btn.style.display = "none";
+  });
+
+  const activeBtn = document.querySelector(`.calc-btn[data-mode="${mode}"]`);
+  if (activeBtn) {
+    activeBtn.classList.remove("hidden");
+    activeBtn.style.display = "inline-block";
+  }
+
+  // Re-check calc button state for the active form
+  const activeForm = document.querySelector(`#form-${mode}`);
+  if (activeForm && window._updateCalcBtn) window._updateCalcBtn(activeForm);
+}
+
+// --- Sub-tabs (standard / cx / cxExpand) ---
+document.querySelectorAll(".sub-tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".sub-tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    switchToCalcMode(tab.dataset.mode);
+  });
+});
+
 // --- Mode tabs ---
 document.querySelectorAll(".tab").forEach(tab => {
   tab.addEventListener("click", () => {
@@ -342,66 +423,56 @@ document.querySelectorAll(".tab").forEach(tab => {
 
     const mode = tab.dataset.mode;
 
-    // ================= SWITCH FORM =================
-    document.querySelectorAll(".calc-form").forEach(f => f.classList.add("hidden"));
+    if (mode === "calculator") {
+      // Show sub-tabs and activate the current sub-tab's form
+      subTabs.classList.remove("hidden");
+      const activeSubTab = subTabs.querySelector(".sub-tab.active");
+      const subMode = activeSubTab ? activeSubTab.dataset.mode : "standard";
+      switchToCalcMode(subMode);
+    } else {
+      // Hide sub-tabs for non-calculator tabs
+      subTabs.classList.add("hidden");
 
-    const form = document.getElementById("form-" + mode);
+      // ================= SWITCH FORM =================
+      document.querySelectorAll(".calc-form").forEach(f => f.classList.add("hidden"));
 
-    if (form) {
-      form.classList.remove("hidden");
+      const form = document.getElementById("form-" + mode);
 
-      // ================= RESET FORM =================
-      form.querySelectorAll("select, input").forEach(el => {
-        if (el.tagName === "SELECT") {
-          el.selectedIndex = 0;
-        } else {
-          el.value = "";
-        }
-      });
+      if (form) {
+        form.classList.remove("hidden");
 
-      // ================= dropdown clear =================
-      form.querySelectorAll(".search-dropdown").forEach(w => {
-        if (w._clear) w._clear();
-      });
+        // ================= RESET FORM =================
+        form.querySelectorAll("select, input").forEach(el => {
+          if (el.tagName === "SELECT") {
+            el.selectedIndex = 0;
+          } else {
+            el.value = "";
+          }
+        });
 
-      // ================= re-enable inputs =================
-      const rInput = form.querySelector('[name="ratchet"]')?.nextElementSibling?.querySelector("input");
-      if (rInput) {
-        rInput.disabled = false;
-        rInput.placeholder = "-- Select --";
+        // ================= dropdown clear =================
+        form.querySelectorAll(".search-dropdown").forEach(w => {
+          if (w._clear) w._clear();
+        });
       }
 
-      const bInput = form.querySelector('[name="bit"]')?.nextElementSibling?.querySelector("input");
-      if (bInput) {
-        bInput.disabled = false;
-        bInput.placeholder = "-- Select --";
+      // ================= RESET SEARCH =================
+      const searchInput = document.getElementById("library-search");
+      const searchResults = document.getElementById("library-results");
+
+      if (searchInput) searchInput.value = "";
+      if (searchResults) searchResults.innerHTML = "";
+
+      const sortBar = document.getElementById("library-sort");
+      if (sortBar) sortBar.classList.add("hidden");
+
+      // ================= HISTORY =================
+      if (mode === "history") {
+        renderHistory();
       }
 
-      const rbInput = form.querySelector('[name="ratchetBit"]')?.nextElementSibling?.querySelector("input");
-      if (rbInput) {
-        rbInput.disabled = false;
-        rbInput.placeholder = "-- Select --";
-      }
-
-      // ================= hide mode buttons =================
-      form.querySelectorAll(".btn-mode").forEach(b => {
-        b.classList.add("hidden");
-      });
-    }
-
-    // ================= RESET SEARCH =================
-    const searchInput = document.getElementById("library-search");
-    const searchResults = document.getElementById("library-results");
-
-    if (searchInput) searchInput.value = "";
-    if (searchResults) searchResults.innerHTML = "";
-
-    const sortBar = document.getElementById("library-sort");
-    if (sortBar) sortBar.classList.add("hidden");
-
-    // ================= HISTORY =================
-    if (mode === "history") {
-      renderHistory();
+      // ================= HIDE RESULT =================
+      document.getElementById("result")?.classList.add("hidden");
     }
 
     // 🔽 AUTO SCROLL TO TOP ON TAB SWITCH
@@ -411,26 +482,6 @@ document.querySelectorAll(".tab").forEach(tab => {
         behavior: "smooth"
       });
     });
-
-    // ================= HIDE RESULT =================
-    document.getElementById("result")?.classList.add("hidden");
-
-    // ================= FIX CALCULATE BUTTON =================
-    document.querySelectorAll(".calc-btn").forEach(btn => {
-      btn.classList.add("hidden");
-      btn.style.display = "none";
-    });
-
-    const activeBtn = document.querySelector(`.calc-btn[data-mode="${mode}"]`);
-
-    if (activeBtn) {
-      activeBtn.classList.remove("hidden");
-      activeBtn.style.display = "inline-block";
-    }
-
-    // Re-check calc button state for the active form
-    const activeForm = document.querySelector(`#form-${mode}`);
-    if (activeForm && window._updateCalcBtn) window._updateCalcBtn(activeForm);
   });
 });
 
@@ -658,7 +709,7 @@ function downloadResultPNG(el) {
   footer.style.cssText = "text-align:center;padding:12px 0 8px;font-size:12px;color:#8b949e;border-top:1px solid #21262d;margin-top:12px;";
   footer.innerHTML = `
     <div style="display:flex;justify-content:center;align-items:center;gap:6px;flex-wrap:wrap;width:100%;text-align:center;">
-      <span style="display:flex;align-items:center;gap:4px;">Beyblade X Stat Calculator</span>
+      <span style="display:flex;align-items:center;gap:4px;">X Optimizer</span>
       <span style="opacity:0.5;">•</span>
       <span style="display:flex;align-items:center;gap:4px;">Created by <strong style="color:#c9d1d9;">RvX Ashwolf</strong></span>
       <span style="display:flex;align-items:center;gap:4px;width:100%;justify-content:center;margin-top:6px;">Powered by <img src="${document.body.classList.contains('light-mode') ? 'assets/icons/revoxNameLight.webp' : 'assets/icons/revoxName.webp'}" alt="Revox" style="height:40px;width:auto;transform:translateY(-5px);"></span>

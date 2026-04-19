@@ -12,28 +12,18 @@
   <!-- Optional theme color -->
   <meta name="theme-color" content="#0a4797">
 
-  <title>Beyblade X Stat Calculator</title>
+  <title>X Optimizer</title>
   <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
   <div class="container">
-    <h1>Beyblade X Stat Calculator</h1>
+    <h1><img src="assets/title/xOptimizer.webp" alt="X-Optimizer" class="title-logo"></h1>
 
     <!-- ================= TAB MENU ================= -->
     <div class="mode-tabs">
-      <button class="tab active" data-mode="standard" aria-label="Basic / Unique Line">
-        <img src="assets/line/Basic_Line_Logo.webp" alt="Basic Line"> /
-        <img src="assets/line/Unique_Line_Logo.webp" alt="Unique Line">
-      </button>
-
-      <button class="tab" data-mode="cx" aria-label="Custom Line">
-        <img src="assets/line/Custom_Line_Logo.webp" alt="Custom Line">
-      </button>
-
-      <button class="tab" data-mode="cxExpand" aria-label="Custom Line Expand">
-        <img src="assets/line/Custom_Line_Logo.webp" alt="Custom Line">
-        <img src="assets/line/Expand_Blade_Logo.webp" alt="Expand Blade">
+      <button class="tab active" data-mode="calculator" aria-label="Calculator">
+        <img src="assets/icons/calculator.png" alt="Calculator">
       </button>
 
       <button class="tab" data-mode="library" aria-label="Library">
@@ -44,7 +34,26 @@
         <img src="assets/icons/history1.webp" alt="History">
       </button>
 
-      <button class="tab tab-settings" data-mode="settings" aria-label="Settings">&#9881;</button>
+      <button class="tab tab-settings" data-mode="settings" aria-label="Settings">
+        <img src="assets/icons/setting.png" alt="Settings">
+      </button>
+    </div>
+
+    <!-- ================= CALCULATOR SUB-TABS ================= -->
+    <div class="sub-tabs" id="sub-tabs">
+      <button class="sub-tab active" data-mode="standard" aria-label="Basic / Unique Line">
+        <img src="assets/line/Basic_Line_Logo.webp" alt="Basic Line"> /
+        <img src="assets/line/Unique_Line_Logo.webp" alt="Unique Line">
+      </button>
+
+      <button class="sub-tab" data-mode="cx" aria-label="Custom Line">
+        <img src="assets/line/Custom_Line_Logo.webp" alt="Custom Line">
+      </button>
+
+      <button class="sub-tab" data-mode="cxExpand" aria-label="Custom Line Expand">
+        <img src="assets/line/Custom_Line_Logo.webp" alt="Custom Line">
+        <img src="assets/line/Expand_Blade_Logo.webp" alt="Expand Blade">
+      </button>
     </div>
 
     <!-- ================= STANDARD ================= -->
@@ -281,7 +290,7 @@
   <!-- ================= FOOTER ================= -->
   <footer class="app-footer">
     <div class="footer-inner">
-      <span>Beyblade X Stat Calculator</span>
+      <span>X Optimizer</span>
       <span class="footer-dot">•</span>
       <span>Created by <strong>RvX Ashwolf</strong></span>
       <span>Powered by <a href="https://teamrevox.com/" target="_blank" rel="noopener noreferrer"><img
@@ -296,13 +305,12 @@
       <h2 class="popup-title">What's New</h2>
 
       <ul class="popup-list">
-        <li>Fixed Max/Min Weight mode for <strong>Bullet Griffon</strong> (no longer selects a ratchet).</li>
-        <li>Removed Height stat from <strong>Bullet Griffon</strong> combos.</li>
-        <li>Added weight for <strong>Bullet Griffon</strong>.</li>
-        <li>Scoreboard now uses advanced mode (Spin/Over/Burst/Extreme buttons).</li>
-        <li>Bigger scoreboard buttons with more spacing.</li>
-        <li>Swipe down on scoreboard to subtract 1 point.</li>
-        <li>Fixed part images not appearing in history for mode-change parts.</li>
+        <li>New <strong>X-Optimizer</strong> title logo.</li>
+        <li>Combined Standard, CX, and CX Expand into one <strong>Calculator</strong> tab with sub-tabs.</li>
+        <li>New icon for <strong>Settings</strong> tab.</li>
+        <li>Smaller radar chart.</li>
+        <li>Improved light/dark mode icon styling.</li>
+        <li>Updated data for <strong>Delta</strong>, <strong>Peak</strong>, <strong>Odd</strong> and <strong>Gear Unite</strong>.</li>
       </ul>
 
       <button type="button" class="btn popup-ok">

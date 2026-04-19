@@ -27,14 +27,21 @@ h1 {
     font-size: 1.6rem;
 }
 
+.title-logo {
+    max-width: 180px;
+    width: 100%;
+    height: auto;
+}
+
+
 /* =======================
    TABS (FIXED FLEX SAFETY)
 ======================= */
 .mode-tabs {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 4px;
-    margin-bottom: 20px;
+    margin-bottom: 0;
     position: sticky;
     top: 0;
     z-index: 50;
@@ -90,6 +97,70 @@ h1 {
 /* spacing between multiple logos */
 .tab img+img {
     margin-left: 4px;
+}
+
+.tab[data-mode="calculator"] img,
+.tab[data-mode="settings"] img {
+    filter: brightness(0) invert(1);
+}
+
+/* =======================
+   SUB-TABS
+======================= */
+.sub-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    margin-bottom: 20px;
+    padding: 8px 0;
+    background: #0d1117;
+    position: sticky;
+    top: 63px;
+    z-index: 49;
+}
+
+.sub-tabs.hidden {
+    display: none;
+}
+
+.sub-tab {
+    padding: 8px;
+    border: 1px solid #30363d;
+    background: #161b22;
+    color: #8b949e;
+    cursor: pointer;
+    border-radius: 6px;
+    font-size: .8rem;
+    transition: .15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-height: 36px;
+}
+
+.sub-tab:hover:not(.active) {
+    background: #21262d;
+    border-color: #484f58;
+    color: #e6edf3;
+}
+
+.sub-tab.active {
+    background: #1a4a8a;
+    color: #fff;
+    border-color: #1a4a8a;
+}
+
+.sub-tab img {
+    height: 16px;
+    width: auto;
+    max-width: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.sub-tab img+img {
+    margin-left: 3px;
 }
 
 /* =======================
@@ -449,8 +520,8 @@ body.light-mode .result-part-name {
 }
 
 .stat-radar svg {
-    width: 320px;
-    height: 300px;
+    width: 240px;
+    height: 240px;
     max-width: 100%;
     height: auto;
 }
@@ -1287,6 +1358,28 @@ body.light-mode .tab:hover:not(.active) {
     color: #1f2328;
 }
 
+body.light-mode .sub-tabs {
+    background: #f6f8fa;
+}
+
+body.light-mode .sub-tab {
+    border-color: #d1d9e0;
+    background: #ffffff;
+    color: #656d76;
+}
+
+body.light-mode .sub-tab.active {
+    background: #0550ae;
+    color: #ffffff;
+    border-color: #0550ae;
+}
+
+body.light-mode .sub-tab:hover:not(.active) {
+    background: #e1e4e8;
+    border-color: #afb8c1;
+    color: #1f2328;
+}
+
 body.light-mode fieldset {
     background: #ffffff;
     border-color: #d1d9e0;
@@ -1528,10 +1621,24 @@ body.light-mode h1 {
     color: #1f2328;
 }
 
+body.light-mode .title-logo {
+    filter: brightness(0);
+}
+
 /* White icons that need to become black in light mode */
+body.light-mode .tab[data-mode="calculator"] img,
+body.light-mode .tab[data-mode="settings"] img {
+    filter: brightness(0);
+}
+
 body.light-mode .tab[data-mode="library"] img,
 body.light-mode .tab[data-mode="history"] img {
     filter: invert(1);
+}
+
+body.light-mode .tab.active[data-mode="calculator"] img,
+body.light-mode .tab.active[data-mode="settings"] img {
+    filter: brightness(0) invert(1);
 }
 
 body.light-mode .tab.active[data-mode="library"] img,
