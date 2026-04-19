@@ -1648,7 +1648,7 @@ body.light-mode .part-img {
 .scoreboard-btns {
     display: flex;
     flex-direction: column-reverse;
-    gap: 6px;
+    gap: 12px;
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
@@ -1671,8 +1671,8 @@ body.light-mode .part-img {
     color: #e6edf3;
     border: 1px solid #484f58;
     border-radius: 6px;
-    padding: 4px 8px;
-    font-size: 0.7rem;
+    padding: 10px 14px;
+    font-size: 0.85rem;
     font-weight: 400;
     cursor: pointer;
     touch-action: manipulation;

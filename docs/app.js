@@ -1864,17 +1864,8 @@ initSettingDropdown("setting-stat-display", "statDisplay", "bar", (val) => {
   statDisplayMode = val;
 });
 
-// Scoreboard mode setting
-let scoreboardMode = "simple";
-initSettingDropdown("setting-scoreboard-mode", "scoreboardMode", "simple", (val) => {
-  scoreboardMode = val;
-  document.querySelectorAll(".scoreboard-hint-simple").forEach(el => {
-    el.classList.toggle("hidden", val === "advanced");
-  });
-  document.querySelectorAll(".scoreboard-advanced").forEach(el => {
-    el.classList.toggle("hidden", val !== "advanced");
-  });
-});
+// Scoreboard mode — always advanced
+let scoreboardMode = "advanced";
 
 // Random button mode setting
 let randomModeValue;
@@ -2764,8 +2755,9 @@ let scoreboardEnabled = false;
     });
   }
 
-  addSwipe(leftSide, d => { if (scoreboardMode === "simple") { scoreA = Math.max(0, scoreA + d); updateDisplay(); } });
-  addSwipe(rightSide, d => { if (scoreboardMode === "simple") { scoreB = Math.max(0, scoreB + d); updateDisplay(); } });
+  // Swipe down to subtract 1 point
+  addSwipe(leftSide, d => { if (d < 0) { scoreA = Math.max(0, scoreA + d); updateDisplay(); } });
+  addSwipe(rightSide, d => { if (d < 0) { scoreB = Math.max(0, scoreB + d); updateDisplay(); } });
 
   // Advanced mode buttons
   const finishSounds = {

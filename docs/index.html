@@ -258,20 +258,6 @@
         </div>
 
         <div class="setting-item">
-          <span class="setting-label-text">Scoreboard mode</span>
-          <div class="setting-dropdown" id="setting-scoreboard-mode">
-            <button type="button" class="setting-dropdown-btn" data-value="simple">
-              <span class="setting-dropdown-text">Simple</span>
-              <span class="setting-dropdown-arrow">&#9662;</span>
-            </button>
-            <div class="setting-dropdown-menu hidden">
-              <div class="setting-dropdown-option active" data-value="simple">Simple</div>
-              <div class="setting-dropdown-option" data-value="advanced">Advanced</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="setting-item">
           <span class="setting-label-text">Additional button mode</span>
           <div class="setting-dropdown" id="setting-random-mode">
             <button type="button" class="setting-dropdown-btn" data-value="random">
@@ -313,7 +299,9 @@
         <li>Fixed Max/Min Weight mode for <strong>Bullet Griffon</strong> (no longer selects a ratchet).</li>
         <li>Removed Height stat from <strong>Bullet Griffon</strong> combos.</li>
         <li>Added weight for <strong>Bullet Griffon</strong>.</li>
-        <li>Added setting for Scoreboard (can change between simple or advance).</li>
+        <li>Scoreboard now uses advanced mode (Spin/Over/Burst/Extreme buttons).</li>
+        <li>Bigger scoreboard buttons with more spacing.</li>
+        <li>Swipe down on scoreboard to subtract 1 point.</li>
       </ul>
 
       <button type="button" class="btn popup-ok">
@@ -340,7 +328,7 @@
     <div class="scoreboard-side scoreboard-left" id="scoreboard-left">
       <div class="scoreboard-player-label">A</div>
       <div class="scoreboard-score-row">
-        <div class="scoreboard-btns scoreboard-advanced hidden">
+        <div class="scoreboard-btns scoreboard-advanced">
           <button type="button" class="sb-btn" data-side="a" data-delta="1">Spin</button>
           <button type="button" class="sb-btn" data-side="a" data-delta="2">Over</button>
           <button type="button" class="sb-btn" data-side="a" data-delta="2">Burst</button>
@@ -348,21 +336,19 @@
         </div>
         <div class="scoreboard-score" id="score-a">0</div>
       </div>
-      <div class="scoreboard-hint scoreboard-hint-simple">swipe up/down</div>
     </div>
     <div class="scoreboard-divider">VS</div>
     <div class="scoreboard-side scoreboard-right" id="scoreboard-right">
       <div class="scoreboard-player-label">B</div>
       <div class="scoreboard-score-row">
         <div class="scoreboard-score" id="score-b">0</div>
-        <div class="scoreboard-btns scoreboard-advanced hidden">
+        <div class="scoreboard-btns scoreboard-advanced">
           <button type="button" class="sb-btn" data-side="b" data-delta="1">Spin</button>
           <button type="button" class="sb-btn" data-side="b" data-delta="2">Over</button>
           <button type="button" class="sb-btn" data-side="b" data-delta="2">Burst</button>
           <button type="button" class="sb-btn" data-side="b" data-delta="3">Extreme</button>
         </div>
       </div>
-      <div class="scoreboard-hint scoreboard-hint-simple">swipe up/down</div>
     </div>
     <button class="scoreboard-reset" id="scoreboard-reset">Reset</button>
   </div>
