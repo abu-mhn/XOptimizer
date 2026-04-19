@@ -410,6 +410,9 @@ document.querySelectorAll(".sub-tab").forEach(tab => {
     document.querySelectorAll(".sub-tab").forEach(t => t.classList.remove("active"));
     tab.classList.add("active");
     switchToCalcMode(tab.dataset.mode);
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
   });
 });
 
