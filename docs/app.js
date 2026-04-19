@@ -851,6 +851,10 @@ function calcStandard(form) {
       bit: bit?.name || null,
       ratchetBit: rb?.name || null
     },
+    partModes: {
+      blade: bladeModes ? blade?._modeIndex ?? null : null,
+      ratchetBit: rbModes ? rb?._modeIndex ?? null : null
+    },
 
     grandTotal: {
       ATK: finalAtk,
@@ -1082,6 +1086,11 @@ function calcCX(form) {
       ratchet: ratchet?.name || null,
       bit: bit?.name || null,
       ratchetBit: rb?.name || null
+    },
+    partModes: {
+      mainBlade: mbModes ? mb?._modeIndex ?? null : null,
+      assistBlade: abModes ? ab?._modeIndex ?? null : null,
+      ratchetBit: rbModes ? rb?._modeIndex ?? null : null
     },
 
     grandTotal: {
@@ -1315,6 +1324,10 @@ function calcCXExpand(form) {
       ratchet: ratchet?.name || null,
       bit: bit?.name || null,
       ratchetBit: rb?.name || null
+    },
+    partModes: {
+      assistBlade: abModes ? ab?._modeIndex ?? null : null,
+      ratchetBit: rbModes ? rb?._modeIndex ?? null : null
     },
 
     top: {
@@ -2635,6 +2648,7 @@ function renderHistory() {
 
     // ================= PART IMAGES =================
     const parts = data.parts || {};
+    const partModes = data.partModes || {};
     const PART_FOLDER = {
       blade: "blades", lockChip: "lockChips",
       mainBlade: "mainBlades", assistBlade: "assistBlades",
@@ -2644,7 +2658,8 @@ function renderHistory() {
     let partsHtml = "";
     for (const [key, name] of Object.entries(parts)) {
       if (!name || !PART_FOLDER[key]) continue;
-      const src = partImgPath(PART_FOLDER[key], name);
+      const modeIdx = partModes[key] != null ? partModes[key] : null;
+      const src = partImgPath(PART_FOLDER[key], name, modeIdx);
       partsHtml += `<div class="result-part">
         <div class="result-part-img-box">
           <img src="${src}" alt="${name}" class="result-part-img"
