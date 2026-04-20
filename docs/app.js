@@ -499,7 +499,8 @@ function renderStatTable(label, stats) {
 }
 
 function getBarColor(val) {
-  const yellow = document.body.classList.contains("light-mode") ? "#ffbd59" : "#d29922";
+  const cls = document.body.classList;
+  const yellow = (cls.contains("light-mode") || cls.contains("tropical-mode")) ? "#ffbd59" : "#d29922";
   if (val >= 100) return "#3fb950";
   if (val >= 50) return yellow;
   return "#f85149";
@@ -536,7 +537,8 @@ function renderStatBars(grandTotal) {
 }
 
 function getRadarColor(label, val) {
-  const yellow = document.body.classList.contains("light-mode") ? "#ffbd59" : "#d29922";
+  const cls = document.body.classList;
+  const yellow = (cls.contains("light-mode") || cls.contains("tropical-mode")) ? "#ffbd59" : "#d29922";
   if (label === "DAS") {
     if (val >= 35) return "#3fb950";
     if (val >= 20) return yellow;
@@ -562,9 +564,11 @@ function renderRadarChart(grandTotal) {
   const count = stats.length;
   const cx = 160, cy = 150, r = 90;
   const maxVal = 150;
-  const isLight = document.body.classList.contains("light-mode");
-  const gridColor = isLight ? "#c0c5cc" : "#30363d";
-  const textColor = isLight ? "#1f2328" : "#e6edf3";
+  const cls = document.body.classList;
+  const isLight = cls.contains("light-mode");
+  const isTropical = cls.contains("tropical-mode");
+  const gridColor = isTropical ? "#ffd8a8" : isLight ? "#c0c5cc" : "#30363d";
+  const textColor = isTropical ? "#8a6d3b" : isLight ? "#1f2328" : "#e6edf3";
 
   // Evenly space angles starting from top
   const angles = stats.map((_, i) => -90 + (360 / count) * i);
@@ -597,8 +601,8 @@ function renderRadarChart(grandTotal) {
   const dataPts = dataPoints.map(p => p.join(",")).join(" ");
 
   const allTBA = stats.every(s => s.value === "TBA" || s.value == null);
-  const fillColor = allTBA ? "rgba(72,79,88,0.3)" : "rgba(56,139,253,0.25)";
-  const strokeColor = allTBA ? "#484f58" : "#388bfd";
+  const fillColor = allTBA ? "rgba(72,79,88,0.3)" : isTropical ? "rgba(0,184,169,0.25)" : "rgba(56,139,253,0.25)";
+  const strokeColor = allTBA ? "#484f58" : isTropical ? "#00b8a9" : "#388bfd";
 
   // Data points (dots)
   let dots = "";
@@ -709,15 +713,24 @@ function downloadResultPNG(el) {
   if (dlBtn) dlBtn.style.display = "none";
 
   // Temporarily add footer for the screenshot (hidden from user view)
+  const cls = document.body.classList;
+  const isLightLike = cls.contains("light-mode") || cls.contains("tropical-mode");
+  const isTropical = cls.contains("tropical-mode");
+  const footerColor = isTropical ? "#8a6d3b" : isLightLike ? "#656d76" : "#8b949e";
+  const footerBorder = isTropical ? "#ffd8a8" : isLightLike ? "#d1d9e0" : "#21262d";
+  const strongColor = isTropical ? "#2d3a3a" : isLightLike ? "#1f2328" : "#c9d1d9";
+  const pageBg = isTropical ? "#fff6e6" : cls.contains("light-mode") ? "#f6f8fa" : cls.contains("space-mode") ? "#0b0d1a" : "#0d1117";
+  const logoSrc = isLightLike ? "assets/icons/revoxNameLight.webp" : "assets/icons/revoxName.webp";
+
   const footer = document.createElement("div");
   footer.className = "png-footer";
-  footer.style.cssText = "text-align:center;padding:12px 0 8px;font-size:12px;color:#8b949e;border-top:1px solid #21262d;margin-top:12px;";
+  footer.style.cssText = `text-align:center;padding:12px 0 8px;font-size:12px;color:${footerColor};border-top:1px solid ${footerBorder};margin-top:12px;`;
   footer.innerHTML = `
     <div style="display:flex;justify-content:center;align-items:center;gap:6px;flex-wrap:wrap;width:100%;text-align:center;">
       <span style="display:flex;align-items:center;gap:4px;">X Optimizer</span>
       <span style="opacity:0.5;">•</span>
-      <span style="display:flex;align-items:center;gap:4px;">Created by <strong style="color:#c9d1d9;">RvX Ashwolf</strong></span>
-      <span style="display:flex;align-items:center;gap:4px;width:100%;justify-content:center;margin-top:6px;">Powered by <img src="${document.body.classList.contains('light-mode') ? 'assets/icons/revoxNameLight.webp' : 'assets/icons/revoxName.webp'}" alt="Revox" style="height:40px;width:auto;transform:translateY(-5px);"></span>
+      <span style="display:flex;align-items:center;gap:4px;">Created by <strong style="color:${strongColor};">RvX Ashwolf</strong></span>
+      <span style="display:flex;align-items:center;gap:4px;width:100%;justify-content:center;margin-top:6px;">Powered by <img src="${logoSrc}" alt="Revox" style="height:40px;width:auto;transform:translateY(-5px);"></span>
     </div>`;
   el.appendChild(footer);
 
@@ -731,7 +744,7 @@ function downloadResultPNG(el) {
   el.style.left = "-9999px";
 
   html2canvas(el, {
-    backgroundColor: "#0d1117",
+    backgroundColor: pageBg,
     scale: 2,
     useCORS: true,
     width: captureWidth
@@ -1920,13 +1933,14 @@ function initSettingDropdown(id, storageKey, defaultVal, onChange) {
 
 // Theme setting
 initSettingDropdown("setting-theme", "theme", "dark", (val) => {
-  document.body.classList.remove("light-mode", "space-mode");
+  document.body.classList.remove("light-mode", "space-mode", "tropical-mode");
   if (val === "light") document.body.classList.add("light-mode");
   if (val === "space") document.body.classList.add("space-mode");
+  if (val === "tropical") document.body.classList.add("tropical-mode");
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = val === "light" ? "#f6f8fa" : val === "space" ? "#0b0d1a" : "#0a4797";
+  if (meta) meta.content = val === "light" ? "#f6f8fa" : val === "space" ? "#0b0d1a" : val === "tropical" ? "#fff6e6" : "#0a4797";
   document.querySelectorAll('img.footer-logo').forEach(img => {
-    img.src = val === "light" ? "assets/icons/revoxNameLight.webp" : "assets/icons/revoxName.webp";
+    img.src = (val === "light" || val === "tropical") ? "assets/icons/revoxNameLight.webp" : "assets/icons/revoxName.webp";
   });
 });
 
@@ -1959,6 +1973,10 @@ function updateLuckyButtons() {
       btn.innerHTML = '<img src="assets/icons/calendar.png" alt="1D1C" class="icon-1d1c">';
       btn.setAttribute("aria-label", "1D1C");
       btn.title = "1 Day, 1 Combo";
+    } else if (randomModeValue === "meta") {
+      btn.innerHTML = '<img src="assets/icons/confrontation.png" alt="Meta" class="icon-meta">';
+      btn.setAttribute("aria-label", "Meta Combo");
+      btn.title = "Meta Combo";
     } else {
       btn.innerHTML = '<img src="assets/icons/dice.png" alt="Random">';
       btn.setAttribute("aria-label", "Random Combo");
@@ -2145,6 +2163,48 @@ function selectRandom(form, mode) {
   }
 }
 
+// --- Meta (random combo from parts flagged meta:true; falls back to full list) ---
+function selectMeta(form, mode) {
+  const pickMeta = (arr) => {
+    const metas = arr.filter(p => p && p.meta === true);
+    const pool = metas.length > 0 ? metas : arr;
+    const chosen = pool[Math.floor(Math.random() * pool.length)];
+    return arr.indexOf(chosen);
+  };
+
+  if (mode === "standard") {
+    const bladeIdx = pickMeta(DATA.blades);
+    getWrapper(form, "blade")._select(bladeIdx);
+    const codename = DATA.blades[bladeIdx].codename;
+
+    if (codename === "BULLETGRIFFON") {
+      getWrapper(form, "bit")._select(pickMeta(DATA.bits));
+    } else if (codename === "CLOCKMIRAGE") {
+      const validMeta = DATA.ratchets.map((r, i) => ({ r, i })).filter(x => x.r.name.endsWith("5") && x.r.meta === true);
+      const validAny = DATA.ratchets.map((r, i) => ({ r, i })).filter(x => x.r.name.endsWith("5"));
+      const pool = validMeta.length > 0 ? validMeta : validAny;
+      getWrapper(form, "ratchet")._select(pool[Math.floor(Math.random() * pool.length)].i);
+      getWrapper(form, "bit")._select(pickMeta(DATA.bits));
+    } else {
+      getWrapper(form, "ratchet")._select(pickMeta(DATA.ratchets));
+      getWrapper(form, "bit")._select(pickMeta(DATA.bits));
+    }
+  } else if (mode === "cx") {
+    getWrapper(form, "lockChip")._select(heaviestIdx(DATA.lockChips));
+    getWrapper(form, "mainBlade")._select(pickMeta(DATA.mainBlades));
+    getWrapper(form, "assistBlade")._select(heaviestIdx(DATA.assistBlades));
+    getWrapper(form, "ratchet")._select(pickMeta(DATA.ratchets));
+    getWrapper(form, "bit")._select(pickMeta(DATA.bits));
+  } else if (mode === "cxExpand") {
+    getWrapper(form, "lockChip")._select(heaviestIdx(DATA.lockChips));
+    getWrapper(form, "metalBlade")._select(pickMeta(DATA.metalBlades));
+    getWrapper(form, "overBlade")._select(heaviestIdx(DATA.overBlades));
+    getWrapper(form, "assistBlade")._select(heaviestIdx(DATA.assistBlades));
+    getWrapper(form, "ratchet")._select(pickMeta(DATA.ratchets));
+    getWrapper(form, "bit")._select(pickMeta(DATA.bits));
+  }
+}
+
 // --- Combo of the Day (date-seeded deterministic selection) ---
 function dateSeededRng(seed) {
   let h = seed;
@@ -2207,6 +2267,8 @@ document.querySelectorAll(".btn-lucky").forEach(btn => {
       selectMinWeight(form, mode);
     } else if (randomModeValue === "comboday") {
       selectComboOfDay(form, mode);
+    } else if (randomModeValue === "meta") {
+      selectMeta(form, mode);
     } else {
       selectRandom(form, mode);
     }
@@ -2656,7 +2718,10 @@ function renderHistory() {
     if (isNaN(num)) return "#95a5a6";
 
     if (num >= 100) return "#2ecc71";
-    if (num >= 50) return document.body.classList.contains("light-mode") ? "#ffbd59" : "#f1c40f";
+    if (num >= 50) {
+      const cls = document.body.classList;
+      return (cls.contains("light-mode") || cls.contains("tropical-mode")) ? "#ffbd59" : "#f1c40f";
+    }
     return "#e74c3c";
   }
 

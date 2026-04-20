@@ -1084,6 +1084,10 @@ body.light-mode .result-part-name {
     filter: brightness(0) invert(1);
 }
 
+.icon-meta {
+    filter: brightness(0) invert(1);
+}
+
 .calc-btn img,
 .btn-reset img {
     filter: brightness(0) invert(1);
@@ -1663,6 +1667,14 @@ body.light-mode .icon-1d1c {
     filter: brightness(0);
 }
 
+body.light-mode .icon-meta {
+    filter: brightness(0);
+}
+
+body.tropical-mode .icon-meta {
+    filter: brightness(0) invert(1);
+}
+
 body.light-mode .part-img {
     background: #e5e7eb;
 }
@@ -2128,4 +2140,403 @@ body.space-mode .scoreboard-reset {
     background: rgba(15, 18, 40, 0.8);
     border-color: #1a1f3d;
     color: #c8d6e5;
+}
+
+/* =======================
+   TROPICAL THEME
+   Palette: sand cream bg, ocean teal primary, sunset coral secondary, palm green accent
+======================= */
+body.tropical-mode {
+    background: #fff6e6;
+    background-image:
+        radial-gradient(circle at 10% 0%, rgba(255, 180, 120, 0.25) 0%, transparent 45%),
+        radial-gradient(circle at 90% 0%, rgba(0, 184, 169, 0.18) 0%, transparent 45%),
+        radial-gradient(circle at 50% 100%, rgba(255, 210, 120, 0.2) 0%, transparent 50%);
+    background-attachment: fixed;
+    color: #2d3a3a;
+}
+
+body.tropical-mode .mode-tabs {
+    background: rgba(255, 246, 230, 0.9);
+    border-bottom-color: #ffd8a8;
+}
+
+body.tropical-mode .sub-tabs {
+    background: rgba(255, 246, 230, 0.9);
+}
+
+body.tropical-mode .tab {
+    border-color: #ffd8a8;
+    background: #f5b86b;
+    color: #fff;
+}
+
+body.tropical-mode .tab.active {
+    background: linear-gradient(135deg, #00b8a9, #0d8a80);
+    color: #fff;
+    border-color: #00b8a9;
+}
+
+body.tropical-mode .tab:hover:not(.active) {
+    background: #ec9a4a;
+    border-color: #ec9a4a;
+    color: #fff;
+}
+
+body.tropical-mode .sub-tab {
+    border-color: #ffd8a8;
+    background: #ffffff;
+    color: #8a6d3b;
+}
+
+body.tropical-mode .sub-tab.active {
+    color: #fff;
+}
+
+body.tropical-mode .sub-tab.active[data-mode="standard"] {
+    background: linear-gradient(135deg, #2ea043, #238636);
+    border-color: #2ea043;
+}
+
+body.tropical-mode .sub-tab.active[data-mode="cx"] {
+    background: linear-gradient(135deg, #fcc419, #f0b000);
+    border-color: #fcc419;
+    color: #2d3a3a;
+}
+
+body.tropical-mode .sub-tab.active[data-mode="cxExpand"] {
+    background: linear-gradient(135deg, #06b6d4, #0891b2);
+    border-color: #06b6d4;
+}
+
+body.tropical-mode .sub-tab:hover:not(.active) {
+    background: #fff0d6;
+    border-color: #f5b86b;
+    color: #2d3a3a;
+}
+
+body.tropical-mode fieldset {
+    background: #ffffff;
+    border-color: #ffd8a8;
+}
+
+body.tropical-mode legend {
+    color: #0d8a80;
+}
+
+body.tropical-mode label {
+    color: #6b7a6a;
+}
+
+body.tropical-mode .search-dropdown input {
+    background: #ffffff;
+    border-color: #ffd8a8;
+    color: #2d3a3a;
+}
+
+body.tropical-mode .search-dropdown .dd-list {
+    background: #ffffff;
+    border-color: #ffd8a8;
+}
+
+body.tropical-mode .dd-item {
+    color: #2d3a3a;
+}
+
+body.tropical-mode .dd-item:hover,
+body.tropical-mode .dd-item.active {
+    background: #ccf2ee;
+}
+
+body.tropical-mode .result {
+    background: #ffffff;
+    border-color: #ffd8a8;
+}
+
+body.tropical-mode .result th {
+    color: #8a6d3b;
+    border-bottom-color: #ffd8a8;
+}
+
+body.tropical-mode .result td {
+    color: #8a6d3b;
+    border-bottom-color: #ffe8c5;
+}
+
+body.tropical-mode .btn {
+    background: #00b8a9;
+    border: none;
+    color: #fff;
+}
+
+body.tropical-mode .btn:hover {
+    background: #0d8a80;
+}
+
+body.tropical-mode .btn-reset {
+    background: #ff7e67;
+}
+
+body.tropical-mode .btn-reset:hover {
+    background: #ff5e4a;
+}
+
+body.tropical-mode .btn-lucky {
+    background: #fcc419;
+}
+
+body.tropical-mode .btn-lucky:hover {
+    background: #f0b000;
+}
+
+body.tropical-mode .btn-lucky img {
+    filter: brightness(0) invert(1);
+}
+
+body.tropical-mode .btn-download {
+    background: #06b6d4;
+    color: #fff;
+}
+
+body.tropical-mode .btn-download:hover {
+    background: #0891b2;
+}
+
+body.tropical-mode .popup-ok {
+    background: #00b8a9;
+    color: #fff;
+}
+
+body.tropical-mode .popup-ok:hover {
+    background: #0d8a80;
+}
+
+body.tropical-mode .btn-row {
+    background: rgba(255, 246, 230, 0.6);
+}
+
+body.tropical-mode .app-footer {
+    background: rgba(255, 246, 230, 0.95);
+    border-top-color: #ffd8a8;
+    color: #8a6d3b;
+}
+
+body.tropical-mode .separator {
+    color: #8a6d3b;
+}
+
+body.tropical-mode .popup-overlay {
+    background: rgba(45, 58, 58, 0.5);
+}
+
+body.tropical-mode .popup-card {
+    background: #ffffff;
+    border-color: #ffd8a8;
+    color: #2d3a3a;
+}
+
+body.tropical-mode .popup-title {
+    color: #0d8a80;
+}
+
+body.tropical-mode .popup-list li {
+    color: #2d3a3a;
+}
+
+body.tropical-mode .setting-dropdown-btn {
+    background: #ffffff;
+    color: #2d3a3a;
+    border-color: #ffd8a8;
+}
+
+body.tropical-mode .setting-dropdown-btn:hover {
+    background: #fff0d6;
+}
+
+body.tropical-mode .setting-dropdown-menu {
+    background: #ffffff;
+    border-color: #ffd8a8;
+}
+
+body.tropical-mode .setting-dropdown-option {
+    color: #2d3a3a;
+}
+
+body.tropical-mode .setting-dropdown-option:hover {
+    background: #ccf2ee;
+}
+
+body.tropical-mode .setting-dropdown-option.active {
+    background: #ccf2ee;
+    color: #0d8a80;
+}
+
+body.tropical-mode .setting-label-text {
+    color: #2d3a3a;
+}
+
+body.tropical-mode .stat-bar-bg,
+body.tropical-mode .stat-bar-track {
+    background: #ffe8c5;
+}
+
+body.tropical-mode .library-sort {
+    background: #ffffff;
+}
+
+body.tropical-mode .sort-btn {
+    background: #ffffff;
+    border-color: #ffd8a8;
+    color: #8a6d3b;
+}
+
+body.tropical-mode .sort-btn.active {
+    background: #00b8a9;
+    color: #fff;
+    border-color: #00b8a9;
+}
+
+body.tropical-mode .search-item {
+    background: #ffffff;
+    border-color: #ffd8a8;
+    color: #2d3a3a;
+}
+
+body.tropical-mode .dd-clear {
+    color: #8a6d3b;
+}
+
+body.tropical-mode .image-popup-content {
+    background: #ffffff;
+    border-color: #ffd8a8;
+}
+
+body.tropical-mode .image-popup-content img {
+    background: #fff0d6;
+}
+
+body.tropical-mode .image-popup-name {
+    color: #2d3a3a;
+}
+
+body.tropical-mode .combo-name {
+    color: #ff5e4a;
+}
+
+body.tropical-mode .history-section {
+    background: rgba(255, 246, 230, 0.6);
+}
+
+body.tropical-mode .history-item {
+    background: #ffffff;
+    border: 1px solid #ffd8a8;
+}
+
+body.tropical-mode .history-parts {
+    color: #8a6d3b;
+}
+
+body.tropical-mode .history-mode {
+    color: #0d8a80;
+}
+
+body.tropical-mode .history-name {
+    color: #2d3a3a;
+}
+
+body.tropical-mode h1 {
+    color: #8a6d3b;
+}
+
+body.tropical-mode .title-logo {
+    filter: brightness(0) saturate(100%) invert(41%) sepia(75%) saturate(369%) hue-rotate(13deg) brightness(96%) contrast(85%);
+}
+
+body.tropical-mode .tab[data-mode="calculator"] img,
+body.tropical-mode .tab[data-mode="settings"] img,
+body.tropical-mode .tab.active[data-mode="calculator"] img,
+body.tropical-mode .tab.active[data-mode="settings"] img {
+    filter: brightness(0) invert(1);
+}
+
+body.tropical-mode .tab[data-mode="library"] img,
+body.tropical-mode .tab[data-mode="history"] img,
+body.tropical-mode .tab.active[data-mode="library"] img,
+body.tropical-mode .tab.active[data-mode="history"] img {
+    filter: brightness(0) invert(1);
+}
+
+body.tropical-mode .icon-1d1c {
+    filter: brightness(0) invert(1);
+}
+
+body.tropical-mode .part-img,
+body.tropical-mode .result-part-img-box {
+    background: #fff0d6;
+    border-color: #ffd8a8;
+}
+
+body.tropical-mode .result-part-name {
+    color: #8a6d3b;
+}
+
+body.tropical-mode .scoreboard-overlay {
+    background: #fff6e6;
+}
+
+body.tropical-mode .scoreboard-left {
+    background: rgba(0, 184, 169, 0.15);
+}
+
+body.tropical-mode .scoreboard-right {
+    background: rgba(255, 126, 103, 0.15);
+}
+
+body.tropical-mode .scoreboard-divider {
+    color: #0d8a80;
+}
+
+body.tropical-mode .scoreboard-score {
+    color: #2d3a3a;
+}
+
+body.tropical-mode .sb-btn {
+    background: #ffffff;
+    border-color: #ffd8a8;
+    color: #2d3a3a;
+}
+
+body.tropical-mode .sb-btn:active {
+    background: #ccf2ee;
+}
+
+body.tropical-mode .scoreboard-reset {
+    background: #ff7e67;
+    border-color: #ff5e4a;
+    color: #fff;
+}
+
+body.tropical-mode .stat-bar-label {
+    color: #8a6d3b;
+}
+
+body.tropical-mode .popup-close {
+    color: #8a6d3b;
+}
+
+body.tropical-mode .popup-close:hover {
+    color: #2d3a3a;
+    background: #fff0d6;
+}
+
+body.tropical-mode .sort-label {
+    color: #8a6d3b;
+}
+
+body.tropical-mode .scoreboard-player-label {
+    color: #2d3a3a;
+}
+
+body.tropical-mode .setting-dropdown-arrow {
+    color: #8a6d3b;
 }
