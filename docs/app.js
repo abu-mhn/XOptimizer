@@ -499,8 +499,9 @@ function renderStatTable(label, stats) {
 }
 
 function getBarColor(val) {
+  const yellow = document.body.classList.contains("light-mode") ? "#ffbd59" : "#d29922";
   if (val >= 100) return "#3fb950";
-  if (val >= 50) return "#d29922";
+  if (val >= 50) return yellow;
   return "#f85149";
 }
 
@@ -535,14 +536,15 @@ function renderStatBars(grandTotal) {
 }
 
 function getRadarColor(label, val) {
+  const yellow = document.body.classList.contains("light-mode") ? "#ffbd59" : "#d29922";
   if (label === "DAS") {
     if (val >= 35) return "#3fb950";
-    if (val >= 20) return "#d29922";
+    if (val >= 20) return yellow;
     return "#f85149";
   }
   if (label === "BUR") {
     if (val >= 80) return "#3fb950";
-    if (val >= 50) return "#d29922";
+    if (val >= 50) return yellow;
     return "#f85149";
   }
   return getBarColor(val);
@@ -2654,7 +2656,7 @@ function renderHistory() {
     if (isNaN(num)) return "#95a5a6";
 
     if (num >= 100) return "#2ecc71";
-    if (num >= 50) return "#f1c40f";
+    if (num >= 50) return document.body.classList.contains("light-mode") ? "#ffbd59" : "#f1c40f";
     return "#e74c3c";
   }
 

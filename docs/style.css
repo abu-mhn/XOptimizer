@@ -466,10 +466,10 @@ select {
     font-size: 0.65rem;
     color: #8b949e;
     text-align: center;
-    max-width: 64px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    max-width: 80px;
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.2;
 }
 
 body.light-mode .result-part-img-box {
@@ -1558,7 +1558,8 @@ body.light-mode .setting-label-text {
     color: #1f2328;
 }
 
-body.light-mode .stat-bar-bg {
+body.light-mode .stat-bar-bg,
+body.light-mode .stat-bar-track {
     background: #e1e4e8;
 }
 
