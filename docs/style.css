@@ -2094,7 +2094,7 @@ body.space-mode .history-item {
 }
 
 body.space-mode .scoreboard-overlay {
-    background: rgba(5, 5, 15, 0.95);
+    background: #0b0d1a;
 }
 
 body.space-mode .scoreboard-left {
