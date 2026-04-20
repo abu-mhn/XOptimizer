@@ -1982,6 +1982,10 @@ body.space-mode .btn-reset:hover {
     background: rgba(74, 20, 140, 0.5);
 }
 
+body.space-mode .btn-lucky img {
+    filter: brightness(0) invert(1);
+}
+
 body.space-mode .separator {
     color: #3949ab;
 }
