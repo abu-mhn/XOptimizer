@@ -1918,9 +1918,11 @@ function initSettingDropdown(id, storageKey, defaultVal, onChange) {
 
 // Theme setting
 initSettingDropdown("setting-theme", "theme", "dark", (val) => {
-  document.body.classList.toggle("light-mode", val === "light");
+  document.body.classList.remove("light-mode", "space-mode");
+  if (val === "light") document.body.classList.add("light-mode");
+  if (val === "space") document.body.classList.add("space-mode");
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = val === "light" ? "#f6f8fa" : "#0a4797";
+  if (meta) meta.content = val === "light" ? "#f6f8fa" : val === "space" ? "#0b0d1a" : "#0a4797";
   document.querySelectorAll('img.footer-logo').forEach(img => {
     img.src = val === "light" ? "assets/icons/revoxNameLight.webp" : "assets/icons/revoxName.webp";
   });
@@ -1949,6 +1951,9 @@ function updateLuckyButtons() {
     } else if (randomModeValue === "minweight") {
       btn.innerHTML = '<img src="assets/icons/lightweight.png" alt="Min Weight">';
       btn.setAttribute("aria-label", "Min Weight");
+    } else if (randomModeValue === "comboday") {
+      btn.innerHTML = '<img src="assets/icons/calendar.png" alt="1D1C" class="icon-1d1c">';
+      btn.setAttribute("aria-label", "1D1C");
     } else {
       btn.innerHTML = '<img src="assets/icons/dice.png" alt="Random">';
       btn.setAttribute("aria-label", "I'm Feeling Lucky");
@@ -2134,6 +2139,56 @@ function selectRandom(form, mode) {
   }
 }
 
+// --- Combo of the Day (date-seeded deterministic selection) ---
+function dateSeededRng(seed) {
+  let h = seed;
+  return function () {
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    h ^= h >>> 16;
+    return (h >>> 0) / 4294967296;
+  };
+}
+
+function selectComboOfDay(form, mode) {
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}-${mode}`;
+  let seed = 0;
+  for (let i = 0; i < dateStr.length; i++) seed = ((seed << 5) - seed + dateStr.charCodeAt(i)) | 0;
+  const rng = dateSeededRng(seed);
+  const pick = (arr) => Math.floor(rng() * arr.length);
+
+  if (mode === "standard") {
+    const bladeIdx = pick(DATA.blades);
+    getWrapper(form, "blade")._select(bladeIdx);
+    const codename = DATA.blades[bladeIdx].codename;
+
+    if (codename === "BULLETGRIFFON") {
+      getWrapper(form, "bit")._select(pick(DATA.bits));
+    } else if (codename === "CLOCKMIRAGE") {
+      const valid = DATA.ratchets.map((r, i) => ({ r, i })).filter(x => x.r.name.endsWith("5"));
+      getWrapper(form, "ratchet")._select(valid[Math.floor(rng() * valid.length)].i);
+      getWrapper(form, "bit")._select(pick(DATA.bits));
+    } else {
+      getWrapper(form, "ratchet")._select(pick(DATA.ratchets));
+      getWrapper(form, "bit")._select(pick(DATA.bits));
+    }
+  } else if (mode === "cx") {
+    getWrapper(form, "lockChip")._select(pick(DATA.lockChips));
+    getWrapper(form, "mainBlade")._select(pick(DATA.mainBlades));
+    getWrapper(form, "assistBlade")._select(pick(DATA.assistBlades));
+    getWrapper(form, "ratchet")._select(pick(DATA.ratchets));
+    getWrapper(form, "bit")._select(pick(DATA.bits));
+  } else if (mode === "cxExpand") {
+    getWrapper(form, "lockChip")._select(pick(DATA.lockChips));
+    getWrapper(form, "metalBlade")._select(pick(DATA.metalBlades));
+    getWrapper(form, "overBlade")._select(pick(DATA.overBlades));
+    getWrapper(form, "assistBlade")._select(pick(DATA.assistBlades));
+    getWrapper(form, "ratchet")._select(pick(DATA.ratchets));
+    getWrapper(form, "bit")._select(pick(DATA.bits));
+  }
+}
+
 document.querySelectorAll(".btn-lucky").forEach(btn => {
   btn.addEventListener("click", () => {
     const form = btn.closest("form");
@@ -2144,6 +2199,8 @@ document.querySelectorAll(".btn-lucky").forEach(btn => {
       selectMaxWeight(form, mode);
     } else if (randomModeValue === "minweight") {
       selectMinWeight(form, mode);
+    } else if (randomModeValue === "comboday") {
+      selectComboOfDay(form, mode);
     } else {
       selectRandom(form, mode);
     }
