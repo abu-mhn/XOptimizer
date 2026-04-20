@@ -513,14 +513,14 @@ function renderStatBars(grandTotal) {
     { label: "ATK", value: grandTotal.ATK, max: 150 },
     { label: "DEF", value: grandTotal.DEF, max: 150 },
     { label: "STA", value: grandTotal.STA, max: 150 },
-    { label: "Dash", value: grandTotal.Dash, max: 50 },
-    { label: "B.Res", value: grandTotal["Burst Res"], max: 100 },
+    { label: "DAS", value: grandTotal.Dash, max: 50 },
+    { label: "BUR", value: grandTotal["Burst Res"], max: 100 },
   ];
   let html = '<div class="stat-bars">';
   for (const s of stats) {
     const isTBA = s.value === "TBA" || s.value == null;
     const val = isTBA ? 0 : Number(s.value);
-    const color = isTBA ? "#484f58" : (s.label === "Dash" || s.label === "B.Res") ? getRadarColor(s.label, val) : getBarColor(val);
+    const color = isTBA ? "#484f58" : (s.label === "DAS" || s.label === "BUR") ? getRadarColor(s.label, val) : getBarColor(val);
     const pct = isTBA ? 0 : Math.min(val / s.max * 100, 100);
     html += `<div class="stat-bar-row">
       <span class="stat-bar-label">${s.label}</span>
@@ -535,12 +535,12 @@ function renderStatBars(grandTotal) {
 }
 
 function getRadarColor(label, val) {
-  if (label === "Dash") {
+  if (label === "DAS") {
     if (val >= 35) return "#3fb950";
     if (val >= 20) return "#d29922";
     return "#f85149";
   }
-  if (label === "B.Res") {
+  if (label === "BUR") {
     if (val >= 80) return "#3fb950";
     if (val >= 50) return "#d29922";
     return "#f85149";
@@ -553,8 +553,8 @@ function renderRadarChart(grandTotal) {
     { label: "ATK", value: grandTotal.ATK },
     { label: "DEF", value: grandTotal.DEF },
     { label: "STA", value: grandTotal.STA },
-    { label: "Dash", value: grandTotal.Dash },
-    { label: "B.Res", value: grandTotal["Burst Res"] },
+    { label: "DAS", value: grandTotal.Dash },
+    { label: "BUR", value: grandTotal["Burst Res"] },
   ];
 
   const count = stats.length;
@@ -1948,15 +1948,19 @@ function updateLuckyButtons() {
     if (randomModeValue === "maxweight") {
       btn.innerHTML = '<img src="assets/icons/heavy.png" alt="Max Weight">';
       btn.setAttribute("aria-label", "Max Weight");
+      btn.title = "Max Weight";
     } else if (randomModeValue === "minweight") {
       btn.innerHTML = '<img src="assets/icons/lightweight.png" alt="Min Weight">';
       btn.setAttribute("aria-label", "Min Weight");
+      btn.title = "Min Weight";
     } else if (randomModeValue === "comboday") {
       btn.innerHTML = '<img src="assets/icons/calendar.png" alt="1D1C" class="icon-1d1c">';
       btn.setAttribute("aria-label", "1D1C");
+      btn.title = "1 Day, 1 Combo";
     } else {
       btn.innerHTML = '<img src="assets/icons/dice.png" alt="Random">';
-      btn.setAttribute("aria-label", "I'm Feeling Lucky");
+      btn.setAttribute("aria-label", "Random Combo");
+      btn.title = "Random Combo";
     }
   });
 }
@@ -2655,9 +2659,9 @@ function renderHistory() {
   }
 
   function createBar(label, value, isTBA) {
-    const maxMap = { "Dash": 50, "B.Res": 100 };
+    const maxMap = { "DAS": 50, "BUR": 100 };
     const max = maxMap[label] || 120;
-    const color = isTBA ? "#95a5a6" : (label === "Dash" || label === "B.Res") ? getRadarColor(label, Number(value)) : getColor(value);
+    const color = isTBA ? "#95a5a6" : (label === "DAS" || label === "BUR") ? getRadarColor(label, Number(value)) : getColor(value);
     const width = isTBA ? 0 : Math.min(Number(value) / max * 100, 100);
 
     return `
@@ -2800,8 +2804,8 @@ function renderHistory() {
         ${statDisplayMode === "radar"
           ? renderRadarChart({ ATK: atk, DEF: def, STA: sta, Dash: total.Dash, "Burst Res": total["Burst Res"] })
           : createBar("ATK", atk, isAtkTBA) + createBar("DEF", def, isDefTBA) + createBar("STA", sta, isStaTBA)
-            + createBar("Dash", total.Dash, total.Dash == null || total.Dash === "TBA")
-            + createBar("B.Res", total["Burst Res"], total["Burst Res"] == null || total["Burst Res"] === "TBA")
+            + createBar("DAS", total.Dash, total.Dash == null || total.Dash === "TBA")
+            + createBar("BUR", total["Burst Res"], total["Burst Res"] == null || total["Burst Res"] === "TBA")
         }
 
         ${renderObject((() => { const { Dash: _d, "Burst Res": _b, ...rest } = total; return rest; })())}

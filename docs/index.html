@@ -22,35 +22,35 @@
 
     <!-- ================= TAB MENU ================= -->
     <div class="mode-tabs">
-      <button class="tab active" data-mode="calculator" aria-label="Calculator">
+      <button class="tab active" data-mode="calculator" aria-label="Calculator" title="Calculator">
         <img src="assets/icons/calculator.png" alt="Calculator">
       </button>
 
-      <button class="tab" data-mode="library" aria-label="Library">
+      <button class="tab" data-mode="library" aria-label="Library" title="Library">
         <img src="assets/icons/book1.webp" alt="Library">
       </button>
 
-      <button class="tab" data-mode="history" aria-label="History">
+      <button class="tab" data-mode="history" aria-label="History" title="History">
         <img src="assets/icons/history1.webp" alt="History">
       </button>
 
-      <button class="tab tab-settings" data-mode="settings" aria-label="Settings">
+      <button class="tab tab-settings" data-mode="settings" aria-label="Settings" title="Settings">
         <img src="assets/icons/setting.png" alt="Settings">
       </button>
     </div>
 
     <!-- ================= CALCULATOR SUB-TABS ================= -->
     <div class="sub-tabs" id="sub-tabs">
-      <button class="sub-tab active" data-mode="standard" aria-label="Basic / Unique Line">
+      <button class="sub-tab active" data-mode="standard" aria-label="Basic / Unique Line" title="Basic / Unique Line">
         <img src="assets/line/Basic_Line_Logo.webp" alt="Basic Line"> /
         <img src="assets/line/Unique_Line_Logo.webp" alt="Unique Line">
       </button>
 
-      <button class="sub-tab" data-mode="cx" aria-label="Custom Line">
+      <button class="sub-tab" data-mode="cx" aria-label="Custom Line" title="Custom Line">
         <img src="assets/line/Custom_Line_Logo.webp" alt="Custom Line">
       </button>
 
-      <button class="sub-tab" data-mode="cxExpand" aria-label="Custom Line Expand">
+      <button class="sub-tab" data-mode="cxExpand" aria-label="Custom Line Expand" title="Custom Line Expand">
         <img src="assets/line/Custom_Line_Logo.webp" alt="Custom Line">
         <img src="assets/line/Expand_Blade_Logo.webp" alt="Expand Blade">
       </button>
@@ -80,10 +80,10 @@
       </fieldset>
 
       <div class="btn-row">
-        <button type="submit" class="btn calc-btn" data-mode="standard" aria-label="Calculate">
+        <button type="submit" class="btn calc-btn" data-mode="standard" aria-label="Calculate" title="Calculate">
           <img src="assets/icons/calculator.png" alt="Calculate">
         </button>
-        <button type="button" class="btn btn-reset" aria-label="Reset">
+        <button type="button" class="btn btn-reset" aria-label="Reset" title="Reset">
           <img src="assets/icons/undo.png" alt="Reset">
         </button>
         <button type="button" class="btn btn-lucky" aria-label="I'm Feeling Lucky">
@@ -127,10 +127,10 @@
       </fieldset>
 
       <div class="btn-row">
-        <button type="submit" class="btn calc-btn" data-mode="cx" aria-label="Calculate">
+        <button type="submit" class="btn calc-btn" data-mode="cx" aria-label="Calculate" title="Calculate">
           <img src="assets/icons/calculator.png" alt="Calculate">
         </button>
-        <button type="button" class="btn btn-reset" aria-label="Reset">
+        <button type="button" class="btn btn-reset" aria-label="Reset" title="Reset">
           <img src="assets/icons/undo.png" alt="Reset">
         </button>
         <button type="button" class="btn btn-lucky" aria-label="I'm Feeling Lucky">
@@ -178,10 +178,10 @@
       </fieldset>
 
       <div class="btn-row">
-        <button type="submit" class="btn calc-btn" data-mode="cxExpand" aria-label="Calculate">
+        <button type="submit" class="btn calc-btn" data-mode="cxExpand" aria-label="Calculate" title="Calculate">
           <img src="assets/icons/calculator.png" alt="Calculate">
         </button>
-        <button type="button" class="btn btn-reset" aria-label="Reset">
+        <button type="button" class="btn btn-reset" aria-label="Reset" title="Reset">
           <img src="assets/icons/undo.png" alt="Reset">
         </button>
         <button type="button" class="btn btn-lucky" aria-label="I'm Feeling Lucky">
@@ -301,15 +301,14 @@
   </footer>
 
   <!-- ================= POPUP ================= -->
-  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-19">
+  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-20">
     <div class="popup-card">
 
       <h2 class="popup-title">What's New</h2>
 
       <ul class="popup-list">
-        <li>Added <strong>1D1C</strong> (1 Day, 1 Combo) mode — daily deterministic combo.</li>
-        <li>New <strong>Space</strong> theme.</li>
-        <li>Updated data for <strong>Delta</strong>, <strong>Peak</strong>, <strong>Odd</strong> and <strong>Gear Unite</strong>.</li>
+        <li>Renamed stat labels: <strong>Dash</strong> → <strong>DAS</strong>, <strong>Burst Res</strong> → <strong>BUR</strong>.</li>
+        <li>Added <strong>hover tooltips</strong> to all tabs and buttons.</li>
       </ul>
 
       <button type="button" class="btn popup-ok">
@@ -337,10 +336,10 @@
       <div class="scoreboard-player-label">A</div>
       <div class="scoreboard-score-row">
         <div class="scoreboard-btns scoreboard-advanced">
-          <button type="button" class="sb-btn" data-side="a" data-delta="1">Spin</button>
-          <button type="button" class="sb-btn" data-side="a" data-delta="2">Over</button>
-          <button type="button" class="sb-btn" data-side="a" data-delta="2">Burst</button>
-          <button type="button" class="sb-btn" data-side="a" data-delta="3">Extreme</button>
+          <button type="button" class="sb-btn" data-side="a" data-delta="1" title="Spin Finish (+1)">Spin</button>
+          <button type="button" class="sb-btn" data-side="a" data-delta="2" title="Over Finish (+2)">Over</button>
+          <button type="button" class="sb-btn" data-side="a" data-delta="2" title="Burst Finish (+2)">Burst</button>
+          <button type="button" class="sb-btn" data-side="a" data-delta="3" title="Extreme Finish (+3)">Extreme</button>
         </div>
         <div class="scoreboard-score" id="score-a">0</div>
       </div>
@@ -351,14 +350,14 @@
       <div class="scoreboard-score-row">
         <div class="scoreboard-score" id="score-b">0</div>
         <div class="scoreboard-btns scoreboard-advanced">
-          <button type="button" class="sb-btn" data-side="b" data-delta="1">Spin</button>
-          <button type="button" class="sb-btn" data-side="b" data-delta="2">Over</button>
-          <button type="button" class="sb-btn" data-side="b" data-delta="2">Burst</button>
-          <button type="button" class="sb-btn" data-side="b" data-delta="3">Extreme</button>
+          <button type="button" class="sb-btn" data-side="b" data-delta="1" title="Spin Finish (+1)">Spin</button>
+          <button type="button" class="sb-btn" data-side="b" data-delta="2" title="Over Finish (+2)">Over</button>
+          <button type="button" class="sb-btn" data-side="b" data-delta="2" title="Burst Finish (+2)">Burst</button>
+          <button type="button" class="sb-btn" data-side="b" data-delta="3" title="Extreme Finish (+3)">Extreme</button>
         </div>
       </div>
     </div>
-    <button class="scoreboard-reset" id="scoreboard-reset">Reset</button>
+    <button class="scoreboard-reset" id="scoreboard-reset" title="Reset Scoreboard">Reset</button>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
