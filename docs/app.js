@@ -1,3 +1,17 @@
+// --- Block pinch/gesture zoom (iOS Safari ignores user-scalable=no) ---
+document.addEventListener("gesturestart", e => e.preventDefault());
+document.addEventListener("gesturechange", e => e.preventDefault());
+document.addEventListener("gestureend", e => e.preventDefault());
+document.addEventListener("touchmove", e => {
+  if (e.touches.length > 1) e.preventDefault();
+}, { passive: false });
+let _lastTouchEnd = 0;
+document.addEventListener("touchend", e => {
+  const now = Date.now();
+  if (now - _lastTouchEnd <= 300) e.preventDefault();
+  _lastTouchEnd = now;
+}, { passive: false });
+
 // --- Part image path helper ---
 function partImgNormalize(str) {
   return (str || "").trim().replace(/\s+/g, "").replace(/-/g, "");
