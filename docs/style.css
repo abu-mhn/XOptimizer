@@ -374,6 +374,7 @@ select {
    RESULT
 ======================= */
 .result {
+    position: relative;
     margin-top: 20px;
     background: #161b22;
     border: 1px solid #30363d;
@@ -1139,18 +1140,20 @@ body.light-mode .result-part-name {
 }
 
 .download-row {
-    margin-top: 16px;
-    display: flex;
-    justify-content: center;
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    margin: 0;
 }
 
 
 .btn-download {
     background: #1f6feb;
     flex: 0 0 auto;
-    padding: 10px 20px;
-    font-size: .85rem;
-    gap: 6px;
+    padding: 6px 8px;
+    font-size: 0;
+    gap: 0;
+    line-height: 0;
 }
 
 .btn-download:hover {

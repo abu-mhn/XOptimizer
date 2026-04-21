@@ -694,10 +694,9 @@ function renderResult(res) {
   html += renderStatTable("", filteredRest);
 
   html += `<div class="download-row">
-    <button type="button" class="btn btn-download" aria-label="Download as PNG">
+    <button type="button" class="btn btn-download" aria-label="Download as PNG" title="Download as PNG">
       <img src="assets/icons/download.png" alt="Download"
            onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x2B07;');">
-      Download PNG
     </button>
   </div>`;
 
