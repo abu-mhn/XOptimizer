@@ -2798,6 +2798,17 @@ function initLibrarySearch() {
     openImagePopup(img.src, name);
   });
 
+  document.getElementById("history-list")?.addEventListener("click", (e) => {
+    const img = e.target.closest(".result-part-img");
+    if (!img) return;
+
+    e.stopPropagation();
+
+    const part = img.closest(".result-part");
+    const name = part ? part.querySelector(".result-part-name")?.textContent || "" : "";
+    openImagePopup(img.src, name);
+  });
+
   // =========================
   // EVENTS
   // =========================

@@ -6,6 +6,8 @@
 
 html, body {
     touch-action: manipulation;
+    overflow-x: hidden;
+    max-width: 100%;
 }
 
 body {
@@ -445,6 +447,23 @@ select {
     flex-wrap: nowrap;
     overflow-x: auto;
     margin: 12px 0;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #484f58 transparent;
+    padding-bottom: 4px;
+}
+
+.result-parts::-webkit-scrollbar {
+    height: 6px;
+}
+
+.result-parts::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.result-parts::-webkit-scrollbar-thumb {
+    background: #484f58;
+    border-radius: 3px;
 }
 
 .result-part {
@@ -877,6 +896,9 @@ body.light-mode .result-part-name {
     padding: 6px;
     background: #0d1117;
     border-radius: 6px;
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
 }
 
 .stat-line {
@@ -891,6 +913,19 @@ body.light-mode .result-part-name {
     background: #161b22;
     border-radius: 10px;
     margin-bottom: 12px;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.history-item .result-parts {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    justify-content: center;
+}
+
+.history-item .result-part {
+    flex: 0 0 auto;
 }
 
 .history-parts {
@@ -909,6 +944,25 @@ body.light-mode .result-part-name {
     align-items: center;
     justify-content: space-between;
     gap: 10px;
+    min-width: 0;
+}
+
+.history-icons {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.history-item .type-logo {
+    height: 22px;
+    margin-left: 0;
+}
+
+.history-item .spin-logo {
+    height: 18px;
+    width: 18px;
+    padding: 2px;
 }
 
 .history-type-inline {
@@ -959,6 +1013,8 @@ body.light-mode .result-part-name {
     font-size: 13px;
     font-weight: 600;
     opacity: 0.9;
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .popup-footer {
