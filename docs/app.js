@@ -1882,7 +1882,18 @@ document.querySelectorAll(".btn-reset").forEach(btn => {
 })();
 
 // --- I'm Feeling Lucky ---
-function randIdx(arr) { return Math.floor(Math.random() * arr.length); }
+function isExclusive(item) { return !!(item && item.exclusive === true); }
+
+function nonExclusiveIndices(arr) {
+  const idxs = [];
+  arr.forEach((item, i) => { if (!isExclusive(item)) idxs.push(i); });
+  return idxs.length > 0 ? idxs : arr.map((_, i) => i);
+}
+
+function randIdx(arr) {
+  const idxs = nonExclusiveIndices(arr);
+  return idxs[Math.floor(Math.random() * idxs.length)];
+}
 
 function getModeWeight(item) {
   if (item.modes && item.modes.length > 0) {
@@ -1893,19 +1904,21 @@ function getModeWeight(item) {
 }
 
 function heaviestIdx(arr) {
-  let max = -1, idx = 0;
+  let max = -1, idx = 0, found = false;
   arr.forEach((item, i) => {
+    if (isExclusive(item)) return;
     const w = getModeWeight(item);
-    if (w > max) { max = w; idx = i; }
+    if (!found || w > max) { max = w; idx = i; found = true; }
   });
   return idx;
 }
 
 function lightestIdx(arr) {
-  let min = Infinity, idx = 0;
+  let min = Infinity, idx = 0, found = false;
   arr.forEach((item, i) => {
+    if (isExclusive(item)) return;
     const w = getModeWeight(item) || Infinity;
-    if (w < min) { min = w; idx = i; }
+    if (!found || w < min) { min = w; idx = i; found = true; }
   });
   return idx;
 }
@@ -1919,10 +1932,11 @@ function getModeStat(item, key) {
 }
 
 function highestStatIdx(arr, key) {
-  let max = -Infinity, idx = 0;
+  let max = -Infinity, idx = 0, found = false;
   arr.forEach((item, i) => {
+    if (isExclusive(item)) return;
     const v = getModeStat(item, key);
-    if (v > max) { max = v; idx = i; }
+    if (!found || v > max) { max = v; idx = i; found = true; }
   });
   return idx;
 }
@@ -2295,8 +2309,10 @@ function selectRandom(form, mode) {
 // --- Meta (random combo from parts flagged meta:true; falls back to full list) ---
 function selectMeta(form, mode) {
   const pickMeta = (arr) => {
-    const metas = arr.filter(p => p && p.meta === true);
-    const pool = metas.length > 0 ? metas : arr;
+    const eligible = arr.filter(p => p && !isExclusive(p));
+    const base = eligible.length > 0 ? eligible : arr;
+    const metas = base.filter(p => p.meta === true);
+    const pool = metas.length > 0 ? metas : base;
     const chosen = pool[Math.floor(Math.random() * pool.length)];
     return arr.indexOf(chosen);
   };
@@ -2351,7 +2367,10 @@ function selectComboOfDay(form, mode) {
   let seed = 0;
   for (let i = 0; i < dateStr.length; i++) seed = ((seed << 5) - seed + dateStr.charCodeAt(i)) | 0;
   const rng = dateSeededRng(seed);
-  const pick = (arr) => Math.floor(rng() * arr.length);
+  const pick = (arr) => {
+    const idxs = nonExclusiveIndices(arr);
+    return idxs[Math.floor(rng() * idxs.length)];
+  };
 
   if (mode === "standard") {
     const bladeIdx = pick(DATA.blades);
@@ -2510,7 +2529,7 @@ function initLibrarySearch() {
     if (!obj) return "";
 
     let html = "";
-    const EXCLUDE_KEYS = ["name", "meta"];
+    const EXCLUDE_KEYS = ["name", "meta", "exclusive"];
 
     Object.entries(obj).forEach(([k, v]) => {
       if (EXCLUDE_KEYS.includes(k.toLowerCase())) return;

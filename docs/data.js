@@ -70,6 +70,9 @@ const DATA = {
     { atk: 30, def: 40, sta: 30, weight: 31.0, spindirection: "R", name: "Storm Spriggan", codename: "STORMSPRIGGAN" },
     { atk: 45, def: 45, sta: 40, weight: 60.6, spindirection: "R", name: "Bullet Griffon", codename: "BULLETGRIFFON" },
     { atk: 58, def: 25, sta: 17, weight: 41.4, spindirection: "R", name: "Dran Strike", codename: "DRANSTRIKE" },
+    { atk: 60, def: 25, sta: 30, weight: 38.7, spindirection: "R", name: "Aero Pegasus", codename: "AEROPEGASUS", exclusive: true },
+    { atk: 13, def: 60, sta: 27, weight: 35.1, spindirection: "R", name: "Wyvern Hover", codename: "WYVERNHOVER", exclusive: true },
+    { atk: 0, def: 0, sta: 0, weight: 36.6, spindirection: "R", name: "Orochi Cluster", codename: "OROCHICLUSTER", exclusive: true },
   ],
 
   lockChips: [
@@ -89,7 +92,8 @@ const DATA = {
     { name: "Bahamut", weight: 1.7, codename: "BAHAMUT" },
     { name: "Knight", weight: 1.7, codename: "KNIGHT" },
     { name: "Ragna", weight: 1.7, codename: "RAGNA" },
-    { name: "Unicorn", weight: 1.7, codename: "UNICORN" }
+    { name: "Unicorn", weight: 1.7, codename: "UNICORN" },
+    { name: "Valkyrie", weight: 5.6, codename: "VALKYRIE", exclusive: true },
   ],
 
   mainBlades: [
@@ -110,6 +114,7 @@ const DATA = {
     { atk: 20, def: 10, sta: 30, weight: 31.6, spindirection: "R", name: "Hunt", codename: "HUNT" },
     { atk: 25, def: 25, sta: 25, weight: 33.1, spindirection: "R", name: "Might", codename: "MIGHT", meta: true },
     { atk: 25, def: 40, sta: 10, weight: 31.1, spindirection: "R", name: "Flare", codename: "FLARE", meta: true },
+    { atk: 45, def: 15, sta: 15, weight: 31.0, spindirection: "R", name: "Volt", codename: "VOLT", exclusive: true },
   ],
 
   metalBlades: [
