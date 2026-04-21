@@ -719,7 +719,7 @@ function downloadResultPNG(el) {
   const footerColor = isTropical ? "#8a6d3b" : isLightLike ? "#656d76" : "#8b949e";
   const footerBorder = isTropical ? "#ffd8a8" : isLightLike ? "#d1d9e0" : "#21262d";
   const strongColor = isTropical ? "#2d3a3a" : isLightLike ? "#1f2328" : "#c9d1d9";
-  const pageBg = isTropical ? "#fff6e6" : cls.contains("light-mode") ? "#f6f8fa" : cls.contains("space-mode") ? "#0b0d1a" : "#0d1117";
+  const pageBg = isTropical ? "#fff6e6" : cls.contains("light-mode") ? "#f6f8fa" : cls.contains("space-mode") ? "#0b0d1a" : cls.contains("stormy-mode") ? "#1e2330" : "#0d1117";
   const logoSrc = isLightLike ? "assets/icons/revoxNameLight.webp" : "assets/icons/revoxName.webp";
 
   const footer = document.createElement("div");
@@ -1887,6 +1887,23 @@ function lightestIdx(arr) {
   return idx;
 }
 
+function getModeStat(item, key) {
+  if (item.modes && item.modes.length > 0) {
+    const mode = item.modes[item.currentMode || 0];
+    if (mode && mode[key] != null) return mode[key];
+  }
+  return item[key] || 0;
+}
+
+function highestStatIdx(arr, key) {
+  let max = -Infinity, idx = 0;
+  arr.forEach((item, i) => {
+    const v = getModeStat(item, key);
+    if (v > max) { max = v; idx = i; }
+  });
+  return idx;
+}
+
 function getWrapper(form, name) { return form.querySelector(`[name="${name}"]`).nextElementSibling; }
 
 // --- Settings ---
@@ -1908,7 +1925,15 @@ function initSettingDropdown(id, storageKey, defaultVal, onChange) {
     saved.classList.add("active");
   }
 
-  btn.addEventListener("click", () => menu.classList.toggle("hidden"));
+  let sized = false;
+  btn.addEventListener("click", () => {
+    menu.classList.toggle("hidden");
+    if (!sized && !menu.classList.contains("hidden") && options.length > 4) {
+      const h = options[0].getBoundingClientRect().height;
+      if (h > 0) menu.style.maxHeight = (h * 4) + "px";
+      sized = true;
+    }
+  });
 
   options.forEach(option => {
     option.addEventListener("click", () => {
@@ -1933,12 +1958,13 @@ function initSettingDropdown(id, storageKey, defaultVal, onChange) {
 
 // Theme setting
 initSettingDropdown("setting-theme", "theme", "dark", (val) => {
-  document.body.classList.remove("light-mode", "space-mode", "tropical-mode");
+  document.body.classList.remove("light-mode", "space-mode", "tropical-mode", "stormy-mode");
   if (val === "light") document.body.classList.add("light-mode");
   if (val === "space") document.body.classList.add("space-mode");
   if (val === "tropical") document.body.classList.add("tropical-mode");
+  if (val === "stormy") document.body.classList.add("stormy-mode");
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = val === "light" ? "#f6f8fa" : val === "space" ? "#0b0d1a" : val === "tropical" ? "#fff6e6" : "#0a4797";
+  if (meta) meta.content = val === "light" ? "#f6f8fa" : val === "space" ? "#0b0d1a" : val === "tropical" ? "#fff6e6" : val === "stormy" ? "#1e2330" : "#0a4797";
   document.querySelectorAll('img.footer-logo').forEach(img => {
     img.src = (val === "light" || val === "tropical") ? "assets/icons/revoxNameLight.webp" : "assets/icons/revoxName.webp";
   });
@@ -1977,6 +2003,18 @@ function updateLuckyButtons() {
       btn.innerHTML = '<img src="assets/icons/confrontation.png" alt="Meta" class="icon-meta">';
       btn.setAttribute("aria-label", "Meta Combo");
       btn.title = "Meta Combo";
+    } else if (randomModeValue === "maxatk") {
+      btn.innerHTML = '<span class="btn-lucky-stat">ATK</span>';
+      btn.setAttribute("aria-label", "Max ATK");
+      btn.title = "Max ATK Build";
+    } else if (randomModeValue === "maxdef") {
+      btn.innerHTML = '<span class="btn-lucky-stat">DEF</span>';
+      btn.setAttribute("aria-label", "Max DEF");
+      btn.title = "Max DEF Build";
+    } else if (randomModeValue === "maxsta") {
+      btn.innerHTML = '<span class="btn-lucky-stat">STA</span>';
+      btn.setAttribute("aria-label", "Max STA");
+      btn.title = "Max STA Build";
     } else {
       btn.innerHTML = '<img src="assets/icons/dice.png" alt="Random">';
       btn.setAttribute("aria-label", "Random Combo");
@@ -2118,6 +2156,74 @@ function selectMinWeight(form, mode) {
     }
   }
 }
+
+function selectMaxStat(form, mode, key) {
+  const pickIdx = (arr) => highestStatIdx(arr, key);
+  const statOf = (item) => getModeStat(item, key);
+
+  if (mode === "standard") {
+    const bladeIdx = pickIdx(DATA.blades);
+    getWrapper(form, "blade")._select(bladeIdx);
+    const codename = DATA.blades[bladeIdx].codename;
+
+    if (codename === "BULLETGRIFFON") {
+      getWrapper(form, "bit")._select(pickIdx(DATA.bits));
+    } else if (codename === "CLOCKMIRAGE") {
+      const valid = DATA.ratchets.map((r, i) => ({ r, i })).filter(x => x.r.name.endsWith("5"));
+      let bestIdx = valid[0].i;
+      let bestV = statOf(valid[0].r);
+      valid.forEach(x => { const v = statOf(x.r); if (v > bestV) { bestV = v; bestIdx = x.i; } });
+      getWrapper(form, "ratchet")._select(bestIdx);
+      getWrapper(form, "bit")._select(pickIdx(DATA.bits));
+    } else {
+      const maxR = Math.max(...DATA.ratchets.map(statOf));
+      const maxB = Math.max(...DATA.bits.map(statOf));
+      const maxRB = DATA.ratchetBits.length > 0 ? Math.max(...DATA.ratchetBits.map(statOf)) : 0;
+
+      if (maxRB > maxR + maxB) {
+        getWrapper(form, "ratchetBit")._select(pickIdx(DATA.ratchetBits));
+      } else {
+        getWrapper(form, "ratchet")._select(pickIdx(DATA.ratchets));
+        getWrapper(form, "bit")._select(pickIdx(DATA.bits));
+      }
+    }
+  } else if (mode === "cx") {
+    getWrapper(form, "lockChip")._select(pickIdx(DATA.lockChips));
+    getWrapper(form, "mainBlade")._select(pickIdx(DATA.mainBlades));
+    getWrapper(form, "assistBlade")._select(pickIdx(DATA.assistBlades));
+
+    const maxR = Math.max(...DATA.ratchets.map(statOf));
+    const maxB = Math.max(...DATA.bits.map(statOf));
+    const maxRB = DATA.ratchetBits.length > 0 ? Math.max(...DATA.ratchetBits.map(statOf)) : 0;
+
+    if (maxRB > maxR + maxB) {
+      getWrapper(form, "ratchetBit")._select(pickIdx(DATA.ratchetBits));
+    } else {
+      getWrapper(form, "ratchet")._select(pickIdx(DATA.ratchets));
+      getWrapper(form, "bit")._select(pickIdx(DATA.bits));
+    }
+  } else if (mode === "cxExpand") {
+    getWrapper(form, "lockChip")._select(pickIdx(DATA.lockChips));
+    getWrapper(form, "metalBlade")._select(pickIdx(DATA.metalBlades));
+    getWrapper(form, "overBlade")._select(pickIdx(DATA.overBlades));
+    getWrapper(form, "assistBlade")._select(pickIdx(DATA.assistBlades));
+
+    const maxR = Math.max(...DATA.ratchets.map(statOf));
+    const maxB = Math.max(...DATA.bits.map(statOf));
+    const maxRB = DATA.ratchetBits.length > 0 ? Math.max(...DATA.ratchetBits.map(statOf)) : 0;
+
+    if (maxRB > maxR + maxB) {
+      getWrapper(form, "ratchetBit")._select(pickIdx(DATA.ratchetBits));
+    } else {
+      getWrapper(form, "ratchet")._select(pickIdx(DATA.ratchets));
+      getWrapper(form, "bit")._select(pickIdx(DATA.bits));
+    }
+  }
+}
+
+const selectMaxAtk = (form, mode) => selectMaxStat(form, mode, "atk");
+const selectMaxDef = (form, mode) => selectMaxStat(form, mode, "def");
+const selectMaxSta = (form, mode) => selectMaxStat(form, mode, "sta");
 
 function selectRandom(form, mode) {
   if (mode === "standard") {
@@ -2269,6 +2375,12 @@ document.querySelectorAll(".btn-lucky").forEach(btn => {
       selectComboOfDay(form, mode);
     } else if (randomModeValue === "meta") {
       selectMeta(form, mode);
+    } else if (randomModeValue === "maxatk") {
+      selectMaxAtk(form, mode);
+    } else if (randomModeValue === "maxdef") {
+      selectMaxDef(form, mode);
+    } else if (randomModeValue === "maxsta") {
+      selectMaxSta(form, mode);
     } else {
       selectRandom(form, mode);
     }

@@ -46,7 +46,7 @@ h1 {
     top: 0;
     z-index: 50;
     padding: 10px 0;
-    background: #0d1117;
+    background: transparent;
     border-bottom: 1px solid #21262d;
 }
 
@@ -113,7 +113,7 @@ h1 {
     gap: 4px;
     margin-bottom: 20px;
     padding: 8px 0;
-    background: #0d1117;
+    background: transparent;
     position: sticky;
     top: 63px;
     z-index: 49;
@@ -1088,6 +1088,13 @@ body.light-mode .result-part-name {
     filter: brightness(0) invert(1);
 }
 
+.btn-lucky-stat {
+    font-weight: 700;
+    font-size: .85rem;
+    letter-spacing: .5px;
+    color: #fff;
+}
+
 .calc-btn img,
 .btn-reset img {
     filter: brightness(0) invert(1);
@@ -1162,7 +1169,7 @@ body.light-mode .result-part-name {
     width: calc(100% - 32px);
     max-width: 608px;
     z-index: 101;
-    background: #0d1117;
+    background: transparent;
     padding: 10px 0;
 }
 
@@ -1235,7 +1242,7 @@ body.light-mode .result-part-name {
     background: #161b22;
     border: 1px solid #30363d;
     border-radius: 6px;
-    overflow: hidden;
+    overflow-y: auto;
     z-index: 10;
     min-width: 100%;
 }
@@ -1348,7 +1355,7 @@ body.light-mode {
 }
 
 body.light-mode .mode-tabs {
-    background: #f6f8fa;
+    background: transparent;
     border-bottom-color: #d1d9e0;
 }
 
@@ -1371,7 +1378,7 @@ body.light-mode .tab:hover:not(.active) {
 }
 
 body.light-mode .sub-tabs {
-    background: #f6f8fa;
+    background: transparent;
 }
 
 body.light-mode .sub-tab {
@@ -1496,7 +1503,7 @@ body.light-mode .popup-ok:hover {
 }
 
 body.light-mode .btn-row {
-    background: #f6f8fa;
+    background: transparent;
 }
 
 body.light-mode .app-footer {
@@ -1885,14 +1892,12 @@ body.space-mode {
 }
 
 body.space-mode .mode-tabs {
-    background: rgba(11, 13, 26, 0.9);
-    backdrop-filter: blur(8px);
+    background: transparent;
     border-bottom-color: #1a1f3d;
 }
 
 body.space-mode .sub-tabs {
-    background: rgba(11, 13, 26, 0.9);
-    backdrop-filter: blur(8px);
+    background: transparent;
 }
 
 body.space-mode .tab {
@@ -2157,12 +2162,12 @@ body.tropical-mode {
 }
 
 body.tropical-mode .mode-tabs {
-    background: rgba(255, 246, 230, 0.9);
+    background: transparent;
     border-bottom-color: #ffd8a8;
 }
 
 body.tropical-mode .sub-tabs {
-    background: rgba(255, 246, 230, 0.9);
+    background: transparent;
 }
 
 body.tropical-mode .tab {
@@ -2312,7 +2317,7 @@ body.tropical-mode .popup-ok:hover {
 }
 
 body.tropical-mode .btn-row {
-    background: rgba(255, 246, 230, 0.6);
+    background: transparent;
 }
 
 body.tropical-mode .app-footer {
@@ -2539,4 +2544,279 @@ body.tropical-mode .scoreboard-player-label {
 
 body.tropical-mode .setting-dropdown-arrow {
     color: #8a6d3b;
+}
+
+/* =======================
+   STORMY THEME
+   Palette: slate storm-cloud bg, electric blue primary, lightning yellow accent
+======================= */
+body.stormy-mode {
+    background: #1e2330;
+    background-image:
+        radial-gradient(ellipse 60% 40% at 20% 15%, rgba(90, 100, 120, 0.25) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 35% at 80% 30%, rgba(70, 85, 110, 0.2) 0%, transparent 70%),
+        radial-gradient(ellipse 70% 45% at 50% 85%, rgba(60, 75, 100, 0.22) 0%, transparent 70%),
+        repeating-linear-gradient(110deg, rgba(180, 200, 230, 0.025) 0 1px, transparent 1px 6px);
+    background-attachment: fixed;
+    color: #d5dae4;
+}
+
+body.stormy-mode .mode-tabs {
+    background: transparent;
+    border-bottom-color: #3a4054;
+}
+
+body.stormy-mode .sub-tabs {
+    background: transparent;
+}
+
+body.stormy-mode .btn-row {
+    background: transparent;
+}
+
+body.stormy-mode .tab {
+    border-color: #3a4054;
+    background: rgba(42, 48, 64, 0.8);
+    color: #9098a8;
+}
+
+body.stormy-mode .tab.active {
+    background: linear-gradient(135deg, #2c4a7a, #4a90e2);
+    color: #fff;
+    border-color: #4a90e2;
+}
+
+body.stormy-mode .tab:hover:not(.active) {
+    background: rgba(74, 144, 226, 0.2);
+    border-color: #5a6278;
+    color: #d5dae4;
+}
+
+body.stormy-mode .sub-tab {
+    border-color: #3a4054;
+    background: rgba(42, 48, 64, 0.8);
+    color: #9098a8;
+}
+
+body.stormy-mode .sub-tab.active {
+    background: linear-gradient(135deg, #2c4a7a, #3a6fb0);
+    color: #fff;
+    border-color: #4a90e2;
+}
+
+body.stormy-mode .sub-tab:hover:not(.active) {
+    background: rgba(74, 144, 226, 0.2);
+    border-color: #5a6278;
+    color: #d5dae4;
+}
+
+body.stormy-mode fieldset {
+    border-color: #3a4054;
+    background: rgba(42, 48, 64, 0.6);
+}
+
+body.stormy-mode legend {
+    color: #f5c518;
+}
+
+body.stormy-mode label {
+    color: #9098a8;
+}
+
+body.stormy-mode .search-dropdown input {
+    background: rgba(30, 35, 48, 0.8);
+    border-color: #3a4054;
+    color: #d5dae4;
+}
+
+body.stormy-mode .search-dropdown .dd-list {
+    background: #252a38;
+    border-color: #3a4054;
+}
+
+body.stormy-mode .dd-item:hover,
+body.stormy-mode .dd-item.active {
+    background: rgba(74, 144, 226, 0.3);
+}
+
+body.stormy-mode .result {
+    background: rgba(42, 48, 64, 0.6);
+    border-color: #3a4054;
+}
+
+body.stormy-mode .result th {
+    background: rgba(74, 144, 226, 0.2);
+    color: #f5c518;
+}
+
+body.stormy-mode .result td {
+    border-color: #3a4054;
+    color: #d5dae4;
+}
+
+body.stormy-mode .btn {
+    background: rgba(42, 48, 64, 0.8);
+    border-color: #3a4054;
+    color: #d5dae4;
+}
+
+body.stormy-mode .btn:hover {
+    background: rgba(74, 144, 226, 0.3);
+    border-color: #4a90e2;
+}
+
+body.stormy-mode .btn-reset {
+    background: rgba(60, 40, 30, 0.6);
+    border-color: #7a4a3a;
+}
+
+body.stormy-mode .btn-reset:hover {
+    background: rgba(122, 74, 58, 0.5);
+}
+
+body.stormy-mode .btn-lucky img {
+    filter: brightness(0) invert(1);
+}
+
+body.stormy-mode .separator {
+    color: #5a6278;
+}
+
+body.stormy-mode .app-footer {
+    background: rgba(30, 35, 48, 0.95);
+    border-top-color: #3a4054;
+    color: #9098a8;
+}
+
+body.stormy-mode .popup-overlay {
+    background: rgba(15, 18, 25, 0.85);
+}
+
+body.stormy-mode .popup-card {
+    background: #252a38;
+    border: 1px solid #3a4054;
+    color: #d5dae4;
+}
+
+body.stormy-mode .popup-title {
+    color: #f5c518;
+}
+
+body.stormy-mode .popup-list li {
+    color: #9098a8;
+}
+
+body.stormy-mode .popup-ok {
+    background: linear-gradient(135deg, #2c4a7a, #4a90e2);
+    color: #fff;
+}
+
+body.stormy-mode .popup-ok:hover {
+    background: linear-gradient(135deg, #3a5a8a, #5aa0f2);
+}
+
+body.stormy-mode .setting-dropdown-btn {
+    background: rgba(42, 48, 64, 0.8);
+    border-color: #3a4054;
+    color: #d5dae4;
+}
+
+body.stormy-mode .setting-dropdown-menu {
+    background: #252a38;
+    border-color: #3a4054;
+}
+
+body.stormy-mode .setting-dropdown-option {
+    color: #9098a8;
+}
+
+body.stormy-mode .setting-dropdown-option:hover {
+    background: rgba(74, 144, 226, 0.25);
+}
+
+body.stormy-mode .setting-dropdown-option.active {
+    background: rgba(74, 144, 226, 0.4);
+    color: #fff;
+}
+
+body.stormy-mode .setting-label-text {
+    color: #9098a8;
+}
+
+body.stormy-mode .stat-bar-bg {
+    background: #3a4054;
+}
+
+body.stormy-mode .library-sort {
+    border-color: #3a4054;
+}
+
+body.stormy-mode .sort-btn {
+    background: rgba(42, 48, 64, 0.8);
+    border-color: #3a4054;
+    color: #9098a8;
+}
+
+body.stormy-mode .sort-btn.active {
+    background: linear-gradient(135deg, #2c4a7a, #3a6fb0);
+    color: #fff;
+}
+
+body.stormy-mode .search-item {
+    background: rgba(42, 48, 64, 0.6);
+    border-color: #3a4054;
+}
+
+body.stormy-mode .image-popup-content {
+    background: #252a38;
+    border-color: #3a4054;
+}
+
+body.stormy-mode .combo-name {
+    color: #f5c518;
+}
+
+body.stormy-mode .history-section {
+    border-color: #3a4054;
+}
+
+body.stormy-mode .history-item {
+    background: rgba(42, 48, 64, 0.6);
+    border-color: #3a4054;
+}
+
+body.stormy-mode .scoreboard-overlay {
+    background: #1e2330;
+}
+
+body.stormy-mode .scoreboard-left {
+    background: rgba(74, 144, 226, 0.2);
+}
+
+body.stormy-mode .scoreboard-right {
+    background: rgba(245, 197, 24, 0.15);
+}
+
+body.stormy-mode .scoreboard-divider {
+    color: #5a6278;
+}
+
+body.stormy-mode .scoreboard-score {
+    color: #fff;
+}
+
+body.stormy-mode .sb-btn {
+    background: rgba(74, 144, 226, 0.3);
+    border-color: #4a90e2;
+    color: #d5dae4;
+}
+
+body.stormy-mode .sb-btn:active {
+    background: rgba(74, 144, 226, 0.55);
+}
+
+body.stormy-mode .scoreboard-reset {
+    background: rgba(42, 48, 64, 0.8);
+    border-color: #3a4054;
+    color: #d5dae4;
 }
