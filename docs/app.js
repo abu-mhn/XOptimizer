@@ -1009,10 +1009,7 @@ function calcStandard(form) {
 
   // ================= AUTO SCROLL =================
   requestAnimationFrame(() => {
-    window.scrollTo({
-      top: document.body.scrollHeight,
-      behavior: "smooth"
-    });
+    document.getElementById("result")?.scrollIntoView({ behavior: "smooth", block: "center" });
   });
 }
 
@@ -1227,10 +1224,7 @@ function calcCX(form) {
 
   // ================= AUTO SCROLL =================
   requestAnimationFrame(() => {
-    window.scrollTo({
-      top: document.body.scrollHeight,
-      behavior: "smooth"
-    });
+    document.getElementById("result")?.scrollIntoView({ behavior: "smooth", block: "center" });
   });
 }
 
@@ -1482,10 +1476,7 @@ function calcCXExpand(form) {
 
   // ================= AUTO SCROLL =================
   requestAnimationFrame(() => {
-    window.scrollTo({
-      top: document.body.scrollHeight,
-      behavior: "smooth"
-    });
+    document.getElementById("result")?.scrollIntoView({ behavior: "smooth", block: "center" });
   });
 }
 
@@ -2487,7 +2478,7 @@ function initLibrarySearch() {
     if (!obj) return "";
 
     let html = "";
-    const EXCLUDE_KEYS = ["name"];
+    const EXCLUDE_KEYS = ["name", "meta"];
 
     Object.entries(obj).forEach(([k, v]) => {
       if (EXCLUDE_KEYS.includes(k.toLowerCase())) return;
