@@ -725,6 +725,23 @@ function downloadResultPNG(el) {
   const dlBtn = el.querySelector(".download-row");
   if (dlBtn) dlBtn.style.display = "none";
 
+  // Temporarily allow part images to wrap onto multiple rows for the capture
+  const partsEl = el.querySelector(".result-parts");
+  const origFlexWrap = partsEl?.style.flexWrap;
+  const origOverflowX = partsEl?.style.overflowX;
+  const origJustify = partsEl?.style.justifyContent;
+  if (partsEl) {
+    partsEl.style.flexWrap = "wrap";
+    partsEl.style.overflowX = "visible";
+    partsEl.style.justifyContent = "center";
+  }
+  const restoreParts = () => {
+    if (!partsEl) return;
+    partsEl.style.flexWrap = origFlexWrap;
+    partsEl.style.overflowX = origOverflowX;
+    partsEl.style.justifyContent = origJustify;
+  };
+
   // Temporarily add footer for the screenshot (hidden from user view)
   const cls = document.body.classList;
   const isLightLike = cls.contains("light-mode") || cls.contains("tropical-mode");
@@ -767,6 +784,7 @@ function downloadResultPNG(el) {
     el.style.width = origWidth;
     if (dlBtn) dlBtn.style.display = "";
     footer.remove();
+    restoreParts();
     const link = document.createElement("a");
     // Use combo name for filename if available
     const comboEl = el.querySelector(".combo-name, .combo-header");
@@ -780,6 +798,7 @@ function downloadResultPNG(el) {
     el.style.width = origWidth;
     if (dlBtn) dlBtn.style.display = "";
     footer.remove();
+    restoreParts();
     alert("Failed to generate image.");
   });
 }
@@ -2765,6 +2784,17 @@ function initLibrarySearch() {
 
     const card = img.closest(".mode-card");
     const name = card ? card.querySelector("strong")?.textContent || "" : "";
+    openImagePopup(img.src, name);
+  });
+
+  document.getElementById("result")?.addEventListener("click", (e) => {
+    const img = e.target.closest(".result-part-img");
+    if (!img) return;
+
+    e.stopPropagation();
+
+    const part = img.closest(".result-part");
+    const name = part ? part.querySelector(".result-part-name")?.textContent || "" : "";
     openImagePopup(img.src, name);
   });
 
