@@ -3242,6 +3242,11 @@ body.mono-mode .btn-download img {
     filter: brightness(0);
 }
 
+/* Pencil icon on the Edit participants button should be black in mono. */
+body.mono-mode #swiss-edit-participants img {
+    filter: brightness(0);
+}
+
 body.mono-mode .calc-btn:disabled {
     background: #2a2a2a;
 }
@@ -3521,6 +3526,24 @@ body.mono-mode .popup-ok:hover {
     font-size: 0;
     line-height: 0;
     flex: 0 0 auto;
+}
+
+.swiss-toolbar-actions {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+
+.swiss-toolbar .btn-icon-sm {
+    padding: 3px 6px;
+    flex: 0 0 auto;
+}
+
+.swiss-toolbar .btn-icon-sm img {
+    width: 13px;
+    height: 13px;
+    object-fit: contain;
 }
 
 .swiss-toolbar .btn img {
@@ -3844,6 +3867,22 @@ body.light-mode .swiss-group-progress {
     padding: 4px 10px;
     font-size: 0.8rem;
     font-weight: 500;
+}
+
+/* Small button (e.g. the tournament Edit button) is easy to lose against
+   the near-black toolbar in the Space and Stormy themes — give it a lighter
+   translucent panel so it stays visible in both. */
+body.space-mode .btn-small,
+body.stormy-mode .btn-small {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: #e6edf3;
+}
+
+body.space-mode .btn-small:hover,
+body.stormy-mode .btn-small:hover {
+    background: rgba(255, 255, 255, 0.22);
+    border-color: rgba(255, 255, 255, 0.55);
 }
 
 .swiss-bracket {
