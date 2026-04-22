@@ -502,6 +502,11 @@ document.querySelectorAll(".tab").forEach(tab => {
         renderDeck();
       }
 
+      // ================= SWISS =================
+      if (mode === "swiss") {
+        renderSwiss();
+      }
+
       // ================= HIDE RESULT =================
       document.getElementById("result")?.classList.add("hidden");
     }
@@ -3147,6 +3152,636 @@ document.getElementById("deck-download")?.addEventListener("click", downloadDeck
 document.getElementById("deck-reset")?.addEventListener("click", resetDeck);
 document.getElementById("deck-shuffle")?.addEventListener("click", shuffleDeck);
 
+// ================= SWISS LIVE SYNC (Firebase Realtime DB) =================
+// When a host generates groups, a 6-char room code is created and the full
+// state is mirrored to `swissRooms/{code}`. Anyone who enters that code reads
+// the room live (read-only in the UI). The host device retains write authority
+// via a local flag; the DB rules stay open on `swissRooms` by design.
+const SWISS_ROOM_STORAGE = "beyblade_swiss_room";       // current joined room
+const SWISS_HOST_STORAGE = "beyblade_swiss_host_rooms"; // rooms this device hosts
+
+let swissDb = null;
+let swissRoomCode = null;
+let swissIsHost = false;
+let swissRoomRef = null;
+let swissApplyingRemote = false;
+
+function initFirebase() {
+  if (swissDb) return swissDb;
+  const cfg = window.FIREBASE_CONFIG;
+  if (!cfg || !cfg.apiKey || !cfg.databaseURL) return null;
+  if (typeof firebase === "undefined") return null;
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(cfg);
+    swissDb = firebase.database();
+    return swissDb;
+  } catch (e) {
+    console.warn("Firebase init failed:", e);
+    return null;
+  }
+}
+
+function firebaseReady() {
+  return !!initFirebase();
+}
+
+function generateRoomCode() {
+  const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no 0/1/O/I/L
+  let code = "";
+  for (let i = 0; i < 6; i++) code += alphabet[Math.floor(Math.random() * alphabet.length)];
+  return code;
+}
+
+function loadHostedRooms() {
+  try { return JSON.parse(localStorage.getItem(SWISS_HOST_STORAGE)) || []; } catch (e) { return []; }
+}
+function markRoomHosted(code) {
+  const rooms = loadHostedRooms();
+  if (!rooms.includes(code)) {
+    rooms.push(code);
+    localStorage.setItem(SWISS_HOST_STORAGE, JSON.stringify(rooms));
+  }
+}
+function isRoomHosted(code) {
+  return loadHostedRooms().includes(code);
+}
+
+function saveJoinedRoom(code) {
+  if (code) localStorage.setItem(SWISS_ROOM_STORAGE, code);
+  else localStorage.removeItem(SWISS_ROOM_STORAGE);
+}
+function loadJoinedRoom() {
+  return localStorage.getItem(SWISS_ROOM_STORAGE) || null;
+}
+
+function disconnectSwissRoom() {
+  if (swissRoomRef) {
+    try { swissRoomRef.off(); } catch (e) {}
+  }
+  swissRoomRef = null;
+  swissRoomCode = null;
+  swissIsHost = false;
+  saveJoinedRoom(null);
+}
+
+function connectSwissRoom(code, asHost) {
+  const db = initFirebase();
+  if (!db) return { ok: false, reason: "Firebase not configured" };
+  if (swissRoomRef) {
+    try { swissRoomRef.off(); } catch (e) {}
+  }
+  swissRoomCode = code;
+  swissIsHost = !!asHost;
+  swissRoomRef = db.ref("swissRooms/" + code);
+  swissRoomRef.on("value", snap => {
+    const remote = snap.val();
+    if (remote && remote.groups) {
+      swissApplyingRemote = true;
+      localStorage.setItem(SWISS_KEY, JSON.stringify(remote));
+      swissApplyingRemote = false;
+      renderSwiss();
+    } else if (!remote && swissIsHost) {
+      // Room was wiped remotely (or first-time creation). Push our local state.
+      const local = loadSwiss();
+      if (local.groups) {
+        swissApplyingRemote = true;
+        swissRoomRef.set(local).finally(() => { swissApplyingRemote = false; });
+      }
+    } else if (!remote && !swissIsHost) {
+      // Guest: room not yet populated.
+      renderSwiss();
+    }
+  }, err => {
+    console.warn("Swiss room listen error:", err);
+  });
+  saveJoinedRoom(code);
+  return { ok: true };
+}
+
+function pushSwissState() {
+  if (swissApplyingRemote) return;
+  if (!swissRoomRef || !swissIsHost) return;
+  const state = loadSwiss();
+  swissRoomRef.set(state).catch(e => console.warn("Swiss push failed:", e));
+}
+
+function initSwissRoomOnLoad() {
+  const code = loadJoinedRoom();
+  if (!code) return;
+  if (!firebaseReady()) return;
+  connectSwissRoom(code, isRoomHosted(code));
+}
+
+// ================= SWISS TOURNAMENT =================
+// 4 groups, 4 rounds per group. Each round pairs group members using Swiss rules
+// (by current wins, avoiding rematches). Odd-count groups push one BYE per round
+// (counts as a win) and rotate which member receives it.
+const SWISS_KEY = "beyblade_swiss";
+const SWISS_GROUP_COUNT = 4;
+const SWISS_ROUND_COUNT = 4;
+const SWISS_MIN_PER_GROUP = 2; // minimum so every group can run at least one match per round
+
+function loadSwiss() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SWISS_KEY) || "null");
+    if (raw && Array.isArray(raw.groups)) {
+      if (!raw.matches) raw.matches = {};
+      // Migrate legacy global `roundsGenerated` into the per-group array.
+      if (!Array.isArray(raw.groupRounds)) {
+        const fill = typeof raw.roundsGenerated === "number" ? raw.roundsGenerated : 0;
+        raw.groupRounds = raw.groups.map(() => fill);
+      }
+      return raw;
+    }
+  } catch (e) {}
+  return { groups: null, matches: {}, groupRounds: [] };
+}
+
+function persistSwiss(state) {
+  localStorage.setItem(SWISS_KEY, JSON.stringify(state));
+  pushSwissState();
+}
+
+function shuffleArray(arr) {
+  const out = arr.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+function pairKey(a, b) {
+  return [a, b].sort().join("|");
+}
+
+function playedPairs(matches, groupIndex) {
+  const set = new Set();
+  Object.values(matches).forEach(m => {
+    if (m.groupIndex !== groupIndex) return;
+    if (!m.b) return;
+    set.add(pairKey(m.a, m.b));
+  });
+  return set;
+}
+
+function previousByeReceivers(matches, groupIndex) {
+  const set = new Set();
+  Object.values(matches).forEach(m => {
+    if (m.groupIndex !== groupIndex) return;
+    if (m.bye && m.a) set.add(m.a);
+  });
+  return set;
+}
+
+function pairSwissRound(members, matches, groupIndex, round) {
+  // members: ordered (round 1 = shuffled; round 2+ = standings-sorted)
+  const played = playedPairs(matches, groupIndex);
+  const queue = members.slice();
+  const pairs = [];
+
+  if (queue.length % 2 === 1) {
+    // Give the BYE to the lowest-ranked member who hasn't had one yet.
+    const prevByes = previousByeReceivers(matches, groupIndex);
+    let byeIdx = -1;
+    for (let i = queue.length - 1; i >= 0; i--) {
+      if (!prevByes.has(queue[i])) { byeIdx = i; break; }
+    }
+    if (byeIdx === -1) byeIdx = queue.length - 1;
+    const byeMember = queue.splice(byeIdx, 1)[0];
+    pairs.push({ a: byeMember, b: null, bye: true });
+  }
+
+  while (queue.length >= 2) {
+    const a = queue.shift();
+    let partnerIdx = -1;
+    for (let i = 0; i < queue.length; i++) {
+      if (!played.has(pairKey(a, queue[i]))) { partnerIdx = i; break; }
+    }
+    if (partnerIdx === -1) partnerIdx = 0; // fallback: rematch rather than strand
+    const b = queue.splice(partnerIdx, 1)[0];
+    pairs.push({ a, b, bye: false });
+  }
+
+  return pairs.map((p, i) => ({
+    id: `g${groupIndex}-r${round}-m${i}`,
+    groupIndex,
+    round,
+    a: p.a,
+    b: p.b,
+    scoreA: null,
+    scoreB: null,
+    bye: p.bye
+  }));
+}
+
+function appendGroupRound(state, groupIndex) {
+  const members = state.groups[groupIndex];
+  const roundIndex = state.groupRounds[groupIndex] || 0;
+  if (roundIndex >= SWISS_ROUND_COUNT) return false;
+  const ordered = roundIndex === 0
+    ? shuffleArray(members)
+    : computeStandings(members, state.matches, groupIndex).map(r => r.name);
+  const matchObjs = pairSwissRound(ordered, state.matches, groupIndex, roundIndex);
+  matchObjs.forEach(m => { state.matches[m.id] = m; });
+  state.groupRounds[groupIndex] = roundIndex + 1;
+  return true;
+}
+
+function generateSwissFromText(text) {
+  const names = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  const seen = new Set();
+  const unique = [];
+  names.forEach(n => { if (!seen.has(n.toLowerCase())) { seen.add(n.toLowerCase()); unique.push(n); } });
+
+  const minTotal = SWISS_GROUP_COUNT * SWISS_MIN_PER_GROUP;
+  if (unique.length < minTotal) {
+    alert(`Need at least ${minTotal} participants (${SWISS_MIN_PER_GROUP} per group × ${SWISS_GROUP_COUNT} groups).`);
+    return null;
+  }
+
+  const shuffled = shuffleArray(unique);
+  const groups = Array.from({ length: SWISS_GROUP_COUNT }, () => []);
+  shuffled.forEach((name, i) => { groups[i % SWISS_GROUP_COUNT].push(name); });
+
+  const state = { groups, matches: {}, groupRounds: groups.map(() => 0) };
+  groups.forEach((_, gi) => appendGroupRound(state, gi));
+  return state;
+}
+
+function isGroupRoundComplete(matches, groupIndex, roundIndex) {
+  const roundMatches = Object.values(matches).filter(m => m.groupIndex === groupIndex && m.round === roundIndex);
+  if (roundMatches.length === 0) return false;
+  return roundMatches.every(m => m.bye || (m.scoreA != null && m.scoreB != null));
+}
+
+function resetSwiss() {
+  const state = loadSwiss();
+  const hasAny = state.groups || Object.keys(state.matches || {}).length > 0;
+  const promptMsg = swissRoomCode && !swissIsHost
+    ? "Leave this live room?"
+    : "Clear participants, groups, and all match scores?";
+  if ((hasAny || swissRoomCode) && !confirm(promptMsg)) return;
+  // If host, wipe the remote room so guests see it clear too.
+  if (swissRoomCode && swissIsHost && swissRoomRef) {
+    try { swissRoomRef.set(null); } catch (e) {}
+  }
+  disconnectSwissRoom();
+  // Bypass push-on-persist by writing directly.
+  localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [] }));
+  const textarea = document.getElementById("swiss-names");
+  if (textarea) textarea.value = "";
+  const joinInput = document.getElementById("swiss-join-code");
+  if (joinInput) joinInput.value = "";
+  const joinStatus = document.getElementById("swiss-join-status");
+  if (joinStatus) joinStatus.textContent = "";
+  renderSwiss();
+}
+
+function startSwissMatch(matchId) {
+  if (swissRoomCode && !swissIsHost) return; // guests can't score
+  const state = loadSwiss();
+  const match = state.matches[matchId];
+  if (!match) return;
+  if (match.bye) {
+    alert(`${match.a} has a BYE this round.`);
+    return;
+  }
+  const isEdit = match.scoreA != null && match.scoreB != null;
+  window.openScoreboard(match.a, match.b, ({ scoreA, scoreB }) => {
+    const s = loadSwiss();
+    const stored = s.matches[matchId];
+    if (!stored) return;
+    stored.scoreA = scoreA;
+    stored.scoreB = scoreB;
+
+    // On a fresh completion, if this finished the latest generated round for
+    // the group, auto-generate the next round (up to SWISS_ROUND_COUNT).
+    // Skip on edits — the next round already exists and must not be duplicated.
+    if (!isEdit) {
+      const gi = stored.groupIndex;
+      const latestRoundIdx = (s.groupRounds[gi] || 0) - 1;
+      if (stored.round === latestRoundIdx && isGroupRoundComplete(s.matches, gi, latestRoundIdx)) {
+        if ((s.groupRounds[gi] || 0) < SWISS_ROUND_COUNT) {
+          appendGroupRound(s, gi);
+        }
+      }
+    }
+
+    persistSwiss(s);
+    renderSwiss();
+  }, isEdit ? match.scoreA : 0, isEdit ? match.scoreB : 0);
+}
+
+let swissGroupViews = {}; // gi -> "matches" | "standings"
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
+function renderSwissMatchCard(matchNum, id, m, seedA, seedB) {
+  const done = m.scoreA != null && m.scoreB != null;
+  const aWin = done && m.scoreA > m.scoreB;
+  const bWin = done && m.scoreB > m.scoreA;
+  const aScore = done ? m.scoreA : "";
+  const bScore = done ? m.scoreB : "";
+
+  if (m.bye) {
+    return `<div class="swiss-match-wrap">
+      <div class="swiss-match-num">${matchNum}</div>
+      <div class="swiss-match-card swiss-match-bye">
+        <div class="swiss-match-row swiss-match-row-win swiss-match-row-bye">
+          <span class="swiss-seed">${seedA}</span>
+          <span class="swiss-name-cell">${escapeHtml(m.a)} <span class="swiss-bye-tag">BYE</span></span>
+          <span class="swiss-score-cell swiss-score-win">W</span>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  const clickable = ` data-match="${id}" role="button" tabindex="0"`;
+  const cardClass = "swiss-match-card swiss-match-card-play";
+  return `<div class="swiss-match-wrap">
+    <div class="swiss-match-num">${matchNum}</div>
+    <div class="${cardClass}"${clickable}>
+      <div class="swiss-match-row ${aWin ? "swiss-match-row-win" : done ? "swiss-match-row-lose" : ""}">
+        <span class="swiss-seed">${seedA}</span>
+        <span class="swiss-name-cell">${escapeHtml(m.a)}</span>
+        <span class="swiss-score-cell ${aWin ? "swiss-score-win" : ""}">${aScore}</span>
+      </div>
+      <div class="swiss-match-row ${bWin ? "swiss-match-row-win" : done ? "swiss-match-row-lose" : ""}">
+        <span class="swiss-seed">${seedB}</span>
+        <span class="swiss-name-cell">${escapeHtml(m.b)}</span>
+        <span class="swiss-score-cell ${bWin ? "swiss-score-win" : ""}">${bScore}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderSwissGroupMatches(state, gi) {
+  const members = state.groups[gi];
+  const seedOf = (name) => members.indexOf(name) + 1;
+
+  // Assign stable sequential match numbers within the group (round asc, match index asc).
+  const groupMatchEntries = Object.entries(state.matches)
+    .filter(([, m]) => m.groupIndex === gi)
+    .sort(([a], [b]) => a.localeCompare(b));
+  const numberFor = {};
+  groupMatchEntries.forEach(([id], i) => { numberFor[id] = i + 1; });
+
+  const roundsGen = state.groupRounds[gi] || 0;
+  const rounds = [];
+  for (let ri = 0; ri < roundsGen; ri++) {
+    const roundMatches = groupMatchEntries.filter(([, m]) => m.round === ri);
+    const cards = roundMatches.map(([id, m]) =>
+      renderSwissMatchCard(numberFor[id], id, m, seedOf(m.a), m.b ? seedOf(m.b) : "")
+    ).join("");
+    rounds.push(`<div class="swiss-round-col">
+      <div class="swiss-round-title">Round ${ri + 1}</div>
+      <div class="swiss-match-list">${cards}</div>
+    </div>`);
+  }
+
+  if (rounds.length === 0) {
+    return `<div class="swiss-empty">No rounds yet.</div>`;
+  }
+
+  return `<div class="swiss-rounds-scroll">${rounds.join("")}</div>`;
+}
+
+function renderSwissGroupStandings(state, gi) {
+  const members = state.groups[gi];
+  const standings = computeStandings(members, state.matches, gi);
+  const rows = standings.map((row, idx) => {
+    const pd = row.pointsDiff > 0 ? `+${row.pointsDiff}` : `${row.pointsDiff}`;
+    return `
+    <li>
+      <span class="swiss-rank">${idx + 1}</span>
+      <span class="swiss-name-cell">${escapeHtml(row.name)}</span>
+      <span class="swiss-record">${row.wins}W-${row.losses}L-${row.draws}D</span>
+      <span class="swiss-tiebreak" title="Points Scored · Points Difference · Median-Buchholz">PS ${row.pointsScored} · PD ${pd} · MB ${row.medianBuchholz}</span>
+    </li>
+  `;
+  }).join("");
+  return `<ol class="swiss-members">${rows}</ol>`;
+}
+
+function renderSwissRoomBadge() {
+  if (!swissRoomCode) return "";
+  const role = swissIsHost ? "Host" : "Live";
+  return `
+    <span class="swiss-room-badge" title="${role} — click the code to copy">
+      <span class="swiss-room-role">${role}</span>
+      <button type="button" class="swiss-room-code" data-room="${swissRoomCode}">${swissRoomCode}</button>
+    </span>
+  `;
+}
+
+function bindSwissRoomBadge(view) {
+  view.querySelectorAll(".swiss-room-code").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const code = btn.dataset.room || "";
+      if (!code) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code).then(() => {
+          const prev = btn.textContent;
+          btn.textContent = "Copied!";
+          setTimeout(() => { btn.textContent = prev; }, 1200);
+        }).catch(() => {});
+      }
+    });
+  });
+}
+
+function renderSwiss() {
+  const view = document.getElementById("swiss-view");
+  const setup = document.getElementById("swiss-setup");
+  if (!view || !setup) return;
+
+  const state = loadSwiss();
+  const hasGroups = !!state.groups;
+  const inRoom = !!swissRoomCode;
+  const asGuest = inRoom && !swissIsHost;
+
+  // Hide the setup form once we have a live tournament OR when the user is
+  // connected as a guest (the guest shouldn't be able to generate their own).
+  setup.classList.toggle("hidden", hasGroups || asGuest);
+
+  if (!hasGroups) {
+    if (asGuest) {
+      view.innerHTML = `
+        <div class="swiss-toolbar">
+          ${renderSwissRoomBadge()}
+          <button type="button" id="swiss-clear" class="btn btn-reset" title="Leave Room">
+            <img src="assets/icons/undo.png" alt="Leave"
+                 onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
+          </button>
+        </div>
+        <div class="swiss-empty">Waiting for host to generate groups…</div>
+      `;
+      view.querySelector("#swiss-clear")?.addEventListener("click", resetSwiss);
+      bindSwissRoomBadge(view);
+    } else {
+      view.innerHTML = "";
+    }
+    return;
+  }
+
+  const allDone = state.groups.every((_, gi) => (state.groupRounds[gi] || 0) >= SWISS_ROUND_COUNT
+    && isGroupRoundComplete(state.matches, gi, SWISS_ROUND_COUNT - 1));
+
+  const groupsHtml = state.groups.map((members, gi) => {
+    const mode = swissGroupViews[gi] || "matches";
+    const body = mode === "standings"
+      ? renderSwissGroupStandings(state, gi)
+      : renderSwissGroupMatches(state, gi);
+    const roundsGen = state.groupRounds[gi] || 0;
+
+    return `<section class="swiss-group">
+      <header class="swiss-group-header">
+        <span class="swiss-group-title">Group ${String.fromCharCode(65 + gi)}</span>
+        <span class="swiss-group-progress">Round ${roundsGen} / ${SWISS_ROUND_COUNT}</span>
+        <div class="swiss-group-tabs">
+          <button type="button" class="swiss-group-tab ${mode === "standings" ? "active" : ""}" data-group="${gi}" data-view="standings">Standings</button>
+          <button type="button" class="swiss-group-tab ${mode === "matches" ? "active" : ""}" data-group="${gi}" data-view="matches">Matches</button>
+        </div>
+      </header>
+      <div class="swiss-group-body">${body}</div>
+    </section>`;
+  }).join("");
+
+  const resetTitle = asGuest ? "Leave Room" : "Reset Swiss";
+  view.innerHTML = `
+    <div class="swiss-toolbar">
+      ${allDone ? `<span class="swiss-complete">Tournament Complete</span>` : ""}
+      ${renderSwissRoomBadge()}
+      <button type="button" id="swiss-clear" class="btn btn-reset" title="${resetTitle}">
+        <img src="assets/icons/undo.png" alt="${resetTitle}"
+             onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
+      </button>
+    </div>
+    ${groupsHtml}
+  `;
+
+  bindSwissRoomBadge(view);
+
+  if (!asGuest) {
+    view.querySelectorAll(".swiss-match-card-play").forEach(el => {
+      const id = el.dataset.match;
+      if (!id) return;
+      el.addEventListener("click", () => startSwissMatch(id));
+      el.addEventListener("keydown", e => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); startSwissMatch(id); }
+      });
+    });
+  } else {
+    // Guests: keep the visual look but drop the interactive affordance.
+    view.querySelectorAll(".swiss-match-card-play").forEach(el => {
+      el.classList.remove("swiss-match-card-play");
+      el.removeAttribute("role");
+      el.removeAttribute("tabindex");
+    });
+  }
+  view.querySelectorAll(".swiss-group-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const gi = Number(btn.dataset.group);
+      swissGroupViews[gi] = btn.dataset.view;
+      renderSwiss();
+    });
+  });
+  view.querySelector("#swiss-clear")?.addEventListener("click", resetSwiss);
+}
+
+function computeStandings(members, matches, groupIndex) {
+  const stats = {};
+  members.forEach(n => {
+    stats[n] = { name: n, wins: 0, losses: 0, draws: 0, pointsScored: 0, pointsAgainst: 0, opponents: [] };
+  });
+  Object.values(matches).forEach(m => {
+    if (m.groupIndex !== groupIndex) return;
+    if (m.bye && m.a && stats[m.a]) { stats[m.a].wins++; return; }
+    if (m.scoreA == null || m.scoreB == null) return;
+    if (!stats[m.a] || !stats[m.b]) return;
+    stats[m.a].pointsScored += m.scoreA;
+    stats[m.a].pointsAgainst += m.scoreB;
+    stats[m.b].pointsScored += m.scoreB;
+    stats[m.b].pointsAgainst += m.scoreA;
+    stats[m.a].opponents.push(m.b);
+    stats[m.b].opponents.push(m.a);
+    if (m.scoreA > m.scoreB) { stats[m.a].wins++; stats[m.b].losses++; }
+    else if (m.scoreB > m.scoreA) { stats[m.b].wins++; stats[m.a].losses++; }
+    else { stats[m.a].draws++; stats[m.b].draws++; }
+  });
+
+  // Tie-breakers: Points Scored, Points Difference, Median-Buchholz
+  // (sum of opponents' wins, dropping highest and lowest when >= 3 opponents).
+  members.forEach(n => {
+    const s = stats[n];
+    s.pointsDiff = s.pointsScored - s.pointsAgainst;
+    const oppWins = s.opponents.map(o => (stats[o] ? stats[o].wins : 0));
+    if (oppWins.length >= 3) {
+      oppWins.sort((a, b) => a - b);
+      oppWins.shift();
+      oppWins.pop();
+    }
+    s.medianBuchholz = oppWins.reduce((sum, w) => sum + w, 0);
+  });
+
+  return members
+    .map(n => stats[n])
+    .sort((a, b) =>
+      (b.wins - a.wins) ||
+      (b.pointsScored - a.pointsScored) ||
+      (b.pointsDiff - a.pointsDiff) ||
+      (b.medianBuchholz - a.medianBuchholz) ||
+      a.name.localeCompare(b.name)
+    );
+}
+
+document.getElementById("swiss-generate")?.addEventListener("click", () => {
+  const textarea = document.getElementById("swiss-names");
+  if (!textarea) return;
+  const next = generateSwissFromText(textarea.value);
+  if (!next) return;
+  // Write local state first (disconnected), then create a live room if Firebase is available.
+  disconnectSwissRoom();
+  localStorage.setItem(SWISS_KEY, JSON.stringify(next));
+  if (firebaseReady()) {
+    const code = generateRoomCode();
+    markRoomHosted(code);
+    connectSwissRoom(code, true);
+    // connectSwissRoom's listener will push the local state because remote is empty.
+  }
+  renderSwiss();
+});
+
+document.getElementById("swiss-join")?.addEventListener("click", () => {
+  const input = document.getElementById("swiss-join-code");
+  const status = document.getElementById("swiss-join-status");
+  if (!input) return;
+  const code = (input.value || "").trim().toUpperCase();
+  if (!code) return;
+  if (!firebaseReady()) {
+    if (status) status.textContent = "Live sync isn't configured on this build.";
+    return;
+  }
+  if (status) status.textContent = "Connecting…";
+  // Joining as guest. Clear any local tournament first so remote fully owns the view.
+  localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [] }));
+  const result = connectSwissRoom(code, isRoomHosted(code));
+  if (!result.ok) {
+    if (status) status.textContent = result.reason || "Failed to connect.";
+    return;
+  }
+  if (status) status.textContent = `Joined room ${code}. Waiting for host…`;
+  renderSwiss();
+});
+
+document.getElementById("swiss-reset")?.addEventListener("click", resetSwiss);
+
+// Re-join a previously connected room on page load.
+window.addEventListener("load", initSwissRoomOnLoad);
+
 (function initDeckName() {
   const input = document.getElementById("deck-name");
   if (!input) return;
@@ -3368,20 +4003,21 @@ function renderHistory() {
   });
 }
 
-// ================= SCOREBOARD ON ROTATE (MOBILE) =================
+// ================= SCOREBOARD =================
 let scoreboardEnabled = false;
+let scoreboardSaveCallback = null;
 
 (function () {
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  if (!isMobile) return;
-
   let scoreA = 0;
   let scoreB = 0;
 
   const overlay = document.getElementById("scoreboard-overlay");
   const scoreAEl = document.getElementById("score-a");
   const scoreBEl = document.getElementById("score-b");
+  const labelA = overlay?.querySelector(".scoreboard-left .scoreboard-player-label");
+  const labelB = overlay?.querySelector(".scoreboard-right .scoreboard-player-label");
   const resetBtn = document.getElementById("scoreboard-reset");
+  const closeBtn = document.getElementById("scoreboard-close");
   const leftSide = document.getElementById("scoreboard-left");
   const rightSide = document.getElementById("scoreboard-right");
 
@@ -3392,29 +4028,25 @@ let scoreboardEnabled = false;
     scoreBEl.textContent = scoreB;
   }
 
-  function addSwipe(el, onChange) {
-    let startY = 0;
-    let swiping = false;
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-    el.addEventListener("touchstart", e => {
-      startY = e.touches[0].clientY;
-      swiping = true;
-    }, { passive: true });
-
-    el.addEventListener("touchend", e => {
-      if (!swiping) return;
-      swiping = false;
-      const dy = startY - e.changedTouches[0].clientY;
-      if (Math.abs(dy) < 30) return;
-      onChange(dy > 0 ? 1 : -1);
-    });
+  if (isMobile) {
+    const addSwipe = (el, onChange) => {
+      let startY = 0;
+      let swiping = false;
+      el.addEventListener("touchstart", e => { startY = e.touches[0].clientY; swiping = true; }, { passive: true });
+      el.addEventListener("touchend", e => {
+        if (!swiping) return;
+        swiping = false;
+        const dy = startY - e.changedTouches[0].clientY;
+        if (Math.abs(dy) < 30) return;
+        onChange(dy > 0 ? 1 : -1);
+      });
+    };
+    addSwipe(leftSide, d => { if (d < 0) { scoreA = Math.max(0, scoreA + d); updateDisplay(); } });
+    addSwipe(rightSide, d => { if (d < 0) { scoreB = Math.max(0, scoreB + d); updateDisplay(); } });
   }
 
-  // Swipe down to subtract 1 point
-  addSwipe(leftSide, d => { if (d < 0) { scoreA = Math.max(0, scoreA + d); updateDisplay(); } });
-  addSwipe(rightSide, d => { if (d < 0) { scoreB = Math.max(0, scoreB + d); updateDisplay(); } });
-
-  // Advanced mode buttons
   const finishSounds = {
     Spin: new Audio("assets/voices/spinFinish.wav"),
     Over: new Audio("assets/voices/overFinish.wav"),
@@ -3444,44 +4076,66 @@ let scoreboardEnabled = false;
     updateDisplay();
   });
 
-  function isLandscape() {
-    if (screen.orientation) return screen.orientation.type.startsWith("landscape");
-    return window.innerWidth > window.innerHeight;
-  }
+  closeBtn?.addEventListener("click", () => {
+    const cb = scoreboardSaveCallback;
+    scoreboardSaveCallback = null;
+    closeBtn.classList.add("hidden");
+    if (cb) cb({ scoreA, scoreB });
+  });
 
-  function enterFullscreen() {
+  const isLandscape = () => screen.orientation ? screen.orientation.type.startsWith("landscape") : window.innerWidth > window.innerHeight;
+  const enterFullscreen = () => {
     const el = document.documentElement;
     (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el).catch(() => {});
-  }
-
-  function exitFullscreen() {
+  };
+  const exitFullscreen = () => {
     const fn = document.exitFullscreen || document.webkitExitFullscreen;
-    if (fn && (document.fullscreenElement || document.webkitFullscreenElement)) {
-      fn.call(document).catch(() => {});
-    }
-  }
+    if (fn && (document.fullscreenElement || document.webkitFullscreenElement)) fn.call(document).catch(() => {});
+  };
 
-  function handleOrientation() {
-    if (!scoreboardEnabled) return;
-    if (isLandscape()) {
-      overlay.classList.remove("hidden");
-      enterFullscreen();
-    } else {
-      overlay.classList.add("hidden");
-      exitFullscreen();
-    }
-  }
+  // Scoreboard overlay is mobile-only (tilt to landscape to reveal it).
+  // On desktop, fall back to a simple prompt-based score entry so Swiss
+  // scoring still works without a phone.
+  window.openScoreboard = function (nameA, nameB, onSave, initialA, initialB) {
+    const fallbackA = typeof initialA === "number" ? initialA : 0;
+    const fallbackB = typeof initialB === "number" ? initialB : 0;
 
-  // Fallback: if auto-fullscreen was blocked, enter on first tap
-  overlay.addEventListener("touchstart", () => {
-    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-      enterFullscreen();
+    if (!isMobile) {
+      const rawA = prompt(`${nameA || "A"} score:`, String(fallbackA));
+      if (rawA === null) return;
+      const sa = parseInt(rawA, 10);
+      if (isNaN(sa)) return;
+      const rawB = prompt(`${nameB || "B"} score:`, String(fallbackB));
+      if (rawB === null) return;
+      const sb = parseInt(rawB, 10);
+      if (isNaN(sb)) return;
+      if (typeof onSave === "function") onSave({ scoreA: sa, scoreB: sb });
+      return;
     }
-  }, { once: false, passive: true });
 
-  if (screen.orientation) {
-    screen.orientation.addEventListener("change", handleOrientation);
-  } else {
-    window.addEventListener("orientationchange", handleOrientation);
+    if (labelA) labelA.textContent = nameA || "A";
+    if (labelB) labelB.textContent = nameB || "B";
+    scoreA = fallbackA;
+    scoreB = fallbackB;
+    updateDisplay();
+    scoreboardSaveCallback = typeof onSave === "function" ? onSave : null;
+    closeBtn?.classList.toggle("hidden", !scoreboardSaveCallback);
+    // Only reveal if already tilted; otherwise wait for the orientation handler.
+    if (isLandscape()) { overlay.classList.remove("hidden"); enterFullscreen(); }
+    else { overlay.classList.add("hidden"); }
+  };
+
+  if (isMobile) {
+    const handleOrientation = () => {
+      const armed = scoreboardEnabled || !!scoreboardSaveCallback;
+      if (!armed) { overlay.classList.add("hidden"); exitFullscreen(); return; }
+      if (isLandscape()) { overlay.classList.remove("hidden"); enterFullscreen(); }
+      else { overlay.classList.add("hidden"); exitFullscreen(); }
+    };
+    overlay.addEventListener("touchstart", () => {
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) enterFullscreen();
+    }, { once: false, passive: true });
+    if (screen.orientation) screen.orientation.addEventListener("change", handleOrientation);
+    else window.addEventListener("orientationchange", handleOrientation);
   }
 })();

@@ -67,6 +67,10 @@
         <img src="assets/icons/history1.webp" alt="History">
       </button>
 
+      <button class="tab" data-mode="swiss" aria-label="Swiss" title="Swiss Tournament">
+        <img src="assets/icons/confrontation.png" alt="Swiss">
+      </button>
+
       <button class="tab tab-settings" data-mode="settings" aria-label="Settings" title="Settings">
         <img src="assets/icons/setting.png" alt="Settings">
       </button>
@@ -255,6 +259,33 @@
       </fieldset>
     </section>
 
+    <!-- ================= SWISS ================= -->
+    <section id="form-swiss" class="calc-form hidden">
+      <fieldset>
+        <legend>Swiss — 4 Groups</legend>
+        <div id="swiss-setup">
+          <label class="swiss-label">Participants (one name per line)</label>
+          <textarea id="swiss-names" class="swiss-names" rows="8" placeholder="Alice&#10;Bob&#10;Carol&#10;..."></textarea>
+          <div class="swiss-actions">
+            <button type="button" id="swiss-generate" class="btn">Generate Groups</button>
+            <button type="button" id="swiss-reset" class="btn btn-reset" aria-label="Reset Swiss" title="Reset Swiss">
+              <img src="assets/icons/undo.png" alt="Reset"
+                   onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
+            </button>
+          </div>
+          <div class="swiss-join">
+            <span class="swiss-or">— or watch a live tournament —</span>
+            <div class="swiss-join-row">
+              <input type="text" id="swiss-join-code" class="swiss-join-input" placeholder="Room code" maxlength="8" autocomplete="off" spellcheck="false" />
+              <button type="button" id="swiss-join" class="btn">Join</button>
+            </div>
+            <div id="swiss-join-status" class="swiss-join-status"></div>
+          </div>
+        </div>
+        <div id="swiss-view"></div>
+      </fieldset>
+    </section>
+
     <!-- ================= DECK ================= -->
     <section id="form-deck" class="calc-form hidden">
       <fieldset>
@@ -377,6 +408,7 @@
 
   <!-- ================= SCOREBOARD OVERLAY ================= -->
   <div id="scoreboard-overlay" class="scoreboard-overlay hidden">
+    <button class="scoreboard-close hidden" id="scoreboard-close" title="Save &amp; Close">&#x2713;</button>
     <div class="scoreboard-side scoreboard-left" id="scoreboard-left">
       <div class="scoreboard-player-label">A</div>
       <div class="scoreboard-score-row">
@@ -405,6 +437,9 @@
     <button class="scoreboard-reset" id="scoreboard-reset" title="Reset Scoreboard">Reset</button>
   </div>
 
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+  <script src="firebase-config.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="data.js"></script>
   <script src="app.js"></script>
