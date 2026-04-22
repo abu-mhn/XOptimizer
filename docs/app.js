@@ -3248,7 +3248,11 @@ function connectSwissRoom(code, asHost) {
         swissRoomRef.set(local).finally(() => { swissApplyingRemote = false; });
       }
     } else if (!remote && !swissIsHost) {
-      // Guest: room not yet populated.
+      // Non-host: room was wiped (or doesn't exist yet). Clear local view so
+      // we don't keep showing stale groups after a host reset.
+      swissApplyingRemote = true;
+      localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [] }));
+      swissApplyingRemote = false;
       renderSwiss();
     }
   }, err => {
@@ -3258,11 +3262,24 @@ function connectSwissRoom(code, asHost) {
   return { ok: true };
 }
 
-function pushSwissState() {
+// Targeted update for a single score save (optionally with new matches +
+// updated round counter if completing the round generated the next one).
+// Using .update() with leaf paths lets two refs score different matches
+// concurrently without overwriting each other's work.
+function pushSwissMatchUpdate(matchId, match, state, newMatchIds) {
   if (swissApplyingRemote) return;
-  if (!swissRoomRef || !swissIsHost) return;
-  const state = loadSwiss();
-  swissRoomRef.set(state).catch(e => console.warn("Swiss push failed:", e));
+  if (!swissRoomRef) return;
+  const updates = {
+    [`matches/${matchId}/scoreA`]: match.scoreA,
+    [`matches/${matchId}/scoreB`]: match.scoreB
+  };
+  if (newMatchIds && newMatchIds.length) {
+    newMatchIds.forEach(id => {
+      updates[`matches/${id}`] = state.matches[id];
+    });
+    updates[`groupRounds/${match.groupIndex}`] = state.groupRounds[match.groupIndex];
+  }
+  swissRoomRef.update(updates).catch(e => console.warn("Swiss match push failed:", e));
 }
 
 function initSwissRoomOnLoad() {
@@ -3299,7 +3316,9 @@ function loadSwiss() {
 
 function persistSwiss(state) {
   localStorage.setItem(SWISS_KEY, JSON.stringify(state));
-  pushSwissState();
+  // Remote sync is handled by explicit callers (pushSwissMatchUpdate /
+  // full-state .set for initial room creation and reset) so concurrent
+  // writes from multiple refs don't clobber each other.
 }
 
 function shuffleArray(arr) {
@@ -3439,7 +3458,8 @@ function resetSwiss() {
 }
 
 function startSwissMatch(matchId) {
-  if (swissRoomCode && !swissIsHost) return; // guests can't score
+  // Anyone in the room can score (multi-ref tournaments). The room code itself
+  // is the access control — only people the host shared it with get in.
   const state = loadSwiss();
   const match = state.matches[matchId];
   if (!match) return;
@@ -3458,17 +3478,21 @@ function startSwissMatch(matchId) {
     // On a fresh completion, if this finished the latest generated round for
     // the group, auto-generate the next round (up to SWISS_ROUND_COUNT).
     // Skip on edits — the next round already exists and must not be duplicated.
+    let newMatchIds = null;
     if (!isEdit) {
       const gi = stored.groupIndex;
       const latestRoundIdx = (s.groupRounds[gi] || 0) - 1;
       if (stored.round === latestRoundIdx && isGroupRoundComplete(s.matches, gi, latestRoundIdx)) {
         if ((s.groupRounds[gi] || 0) < SWISS_ROUND_COUNT) {
+          const before = new Set(Object.keys(s.matches));
           appendGroupRound(s, gi);
+          newMatchIds = Object.keys(s.matches).filter(k => !before.has(k));
         }
       }
     }
 
     persistSwiss(s);
+    pushSwissMatchUpdate(matchId, stored, s, newMatchIds);
     renderSwiss();
   }, isEdit ? match.scoreA : 0, isEdit ? match.scoreB : 0);
 }
@@ -3499,7 +3523,8 @@ function renderSwissMatchCard(matchNum, id, m, seedA, seedB) {
     </div>`;
   }
 
-  const clickable = ` data-match="${id}" role="button" tabindex="0"`;
+  const hint = done ? "Tap to fix score" : "Tap to score this match";
+  const clickable = ` data-match="${id}" role="button" tabindex="0" title="${hint}" aria-label="${hint}"`;
   const cardClass = "swiss-match-card swiss-match-card-play";
   return `<div class="swiss-match-wrap">
     <div class="swiss-match-num">${matchNum}</div>
@@ -3665,23 +3690,16 @@ function renderSwiss() {
 
   bindSwissRoomBadge(view);
 
-  if (!asGuest) {
-    view.querySelectorAll(".swiss-match-card-play").forEach(el => {
-      const id = el.dataset.match;
-      if (!id) return;
-      el.addEventListener("click", () => startSwissMatch(id));
-      el.addEventListener("keydown", e => {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); startSwissMatch(id); }
-      });
+  // Everyone in the room can score (multi-ref). Host distinction now only
+  // affects the reset button (wipe remote vs leave locally).
+  view.querySelectorAll(".swiss-match-card-play").forEach(el => {
+    const id = el.dataset.match;
+    if (!id) return;
+    el.addEventListener("click", () => startSwissMatch(id));
+    el.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); startSwissMatch(id); }
     });
-  } else {
-    // Guests: keep the visual look but drop the interactive affordance.
-    view.querySelectorAll(".swiss-match-card-play").forEach(el => {
-      el.classList.remove("swiss-match-card-play");
-      el.removeAttribute("role");
-      el.removeAttribute("tabindex");
-    });
-  }
+  });
   view.querySelectorAll(".swiss-group-tab").forEach(btn => {
     btn.addEventListener("click", () => {
       const gi = Number(btn.dataset.group);
@@ -4093,30 +4111,18 @@ let scoreboardSaveCallback = null;
     if (fn && (document.fullscreenElement || document.webkitFullscreenElement)) fn.call(document).catch(() => {});
   };
 
-  // Scoreboard overlay is mobile-only (tilt to landscape to reveal it).
-  // On desktop, fall back to a simple prompt-based score entry so Swiss
-  // scoring still works without a phone.
+  // Scores are entered only via the scoreboard overlay, and the overlay is
+  // only revealed by tilting the phone to landscape. No alternative input.
   window.openScoreboard = function (nameA, nameB, onSave, initialA, initialB) {
-    const fallbackA = typeof initialA === "number" ? initialA : 0;
-    const fallbackB = typeof initialB === "number" ? initialB : 0;
-
     if (!isMobile) {
-      const rawA = prompt(`${nameA || "A"} score:`, String(fallbackA));
-      if (rawA === null) return;
-      const sa = parseInt(rawA, 10);
-      if (isNaN(sa)) return;
-      const rawB = prompt(`${nameB || "B"} score:`, String(fallbackB));
-      if (rawB === null) return;
-      const sb = parseInt(rawB, 10);
-      if (isNaN(sb)) return;
-      if (typeof onSave === "function") onSave({ scoreA: sa, scoreB: sb });
+      alert("Scoring uses the tilt-activated scoreboard — open this page on your phone and rotate to landscape.");
       return;
     }
 
     if (labelA) labelA.textContent = nameA || "A";
     if (labelB) labelB.textContent = nameB || "B";
-    scoreA = fallbackA;
-    scoreB = fallbackB;
+    scoreA = typeof initialA === "number" ? initialA : 0;
+    scoreB = typeof initialB === "number" ? initialB : 0;
     updateDisplay();
     scoreboardSaveCallback = typeof onSave === "function" ? onSave : null;
     closeBtn?.classList.toggle("hidden", !scoreboardSaveCallback);
