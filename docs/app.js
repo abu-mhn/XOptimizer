@@ -3235,6 +3235,11 @@ function disconnectSwissRoom() {
   swissIsHost = false;
   swissCanEdit = false;
   saveJoinedRoom(null);
+  // Drop any match-linked state on the scoreboard so leaving a room doesn't
+  // leave stale match names / score / save callback on the overlay.
+  if (typeof window.resetScoreboardToDefault === "function") {
+    window.resetScoreboardToDefault();
+  }
 }
 
 // Strip metadata fields (viewCode) before persisting remote state locally —
@@ -4210,6 +4215,20 @@ let scoreboardSaveCallback = null;
   const exitFullscreen = () => {
     const fn = document.exitFullscreen || document.webkitExitFullscreen;
     if (fn && (document.fullscreenElement || document.webkitFullscreenElement)) fn.call(document).catch(() => {});
+  };
+
+  // Clear any match-linked state so the scoreboard behaves as the default
+  // standalone board again (empty names, 0-0, no save target). Called when
+  // the user leaves / resets a live room so they don't end up with stale
+  // match context stuck on the overlay.
+  window.resetScoreboardToDefault = function () {
+    scoreboardSaveCallback = null;
+    if (labelA) labelA.textContent = "A";
+    if (labelB) labelB.textContent = "B";
+    scoreA = 0;
+    scoreB = 0;
+    updateDisplay();
+    closeBtn?.classList.add("hidden");
   };
 
   // Scores are entered only via the scoreboard overlay, and the overlay is
