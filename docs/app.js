@@ -975,6 +975,10 @@ function calcStandard(form) {
         : null
     },
 
+    top: {
+      spinDirection: bladeA?.spindirection || "R"
+    },
+
     parts: {
       blade: blade.name,
       ratchet: ratchet?.name || null,
@@ -1203,6 +1207,10 @@ function calcCX(form) {
       mainBladeMode: mbModes?.[mb._modeIndex]?.modeName || null,
       assistBladeMode: abModes?.[ab._modeIndex]?.modeName || null,
       ratchetBitMode: rbModes?.[rb?._modeIndex]?.modeName || null
+    },
+
+    top: {
+      spinDirection: mbA?.spindirection || "R"
     },
 
     parts: {
@@ -1455,7 +1463,8 @@ function calcCXExpand(form) {
       ATK: topAtk,
       DEF: topDef,
       STA: topSta,
-      Weight: topWeight
+      Weight: topWeight,
+      spinDirection: mbA?.spindirection || "R"
     },
 
     bottom: {
@@ -2855,6 +2864,19 @@ help.addEventListener("click", () => {
 @getalllockchips`);
 });
 
+function resolveSpinDirection(data) {
+  const top = data?.top || {};
+  const direct = top.spinDirection || top["Spin Direction"];
+  if (direct) return direct;
+  const parts = data?.parts || {};
+  const findIn = (arr, name) => arr?.find(p => p.name === name);
+  const src =
+    findIn(DATA.blades, parts.blade) ||
+    findIn(DATA.mainBlades, parts.mainBlade) ||
+    findIn(DATA.metalBlades, parts.metalBlade);
+  return src?.spindirection || "R";
+}
+
 function saveHistory(mode, comboData) {
   const key = "beyblade_history";
 
@@ -2985,8 +3007,7 @@ function renderDeck() {
     }
     const data = item.data || {};
     const total = data.grandTotal || {};
-    const top = data.top || {};
-    const spinDir = top.spinDirection || top["Spin Direction"] || "R";
+    const spinDir = resolveSpinDirection(data);
     const atk = total.ATK, def = total.DEF, sta = total.STA;
     const isFullTBA = atk === "TBA" && def === "TBA" && sta === "TBA";
     const type = isFullTBA ? "TBA" : getType(Number(atk), Number(def), Number(sta), false);
@@ -3221,7 +3242,6 @@ function renderHistory() {
   history.forEach(item => {
     const data = item.data || {};
     const total = data.grandTotal || {};
-    const top = data.top || {};
 
     const atk = total.ATK;
     const def = total.DEF;
@@ -3233,7 +3253,7 @@ function renderHistory() {
 
     const isFullTBA = isAtkTBA && isDefTBA && isStaTBA;
 
-    const spinDir = top.spinDirection || top["Spin Direction"] || "R";
+    const spinDir = resolveSpinDirection(data);
 
     const type = isFullTBA
       ? "TBA"
