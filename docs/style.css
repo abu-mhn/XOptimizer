@@ -2048,7 +2048,7 @@ body.light-mode .part-img {
 .scoreboard-btns {
     display: flex;
     flex-direction: column-reverse;
-    gap: 12px;
+    gap: 28px;
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
@@ -3759,6 +3759,54 @@ body.light-mode .swiss-group-progress {
     letter-spacing: 0.06em;
     text-transform: uppercase;
     text-align: center;
+}
+
+.tournament-mode-choices {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 14px 0;
+}
+
+.tournament-mode-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 12px 14px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.04);
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    font: inherit;
+}
+
+.tournament-mode-btn:hover,
+.tournament-mode-btn:focus-visible {
+    border-color: #58a6ff;
+    background: rgba(88, 166, 255, 0.08);
+    outline: none;
+}
+
+.tournament-mode-name {
+    font-weight: 700;
+    font-size: 1rem;
+    color: #58a6ff;
+    letter-spacing: 0.02em;
+}
+
+.tournament-mode-desc {
+    font-size: 0.82rem;
+    opacity: 0.8;
+    line-height: 1.35;
+}
+
+.popup-cancel {
+    margin-top: 6px;
+    opacity: 0.75;
 }
 
 .swiss-bracket {

@@ -63,8 +63,8 @@
         <img src="assets/icons/cards.png" alt="Deck">
       </button>
 
-      <button class="tab" data-mode="swiss" aria-label="Swiss" title="Swiss Tournament">
-        <img src="assets/icons/confrontation.png" alt="Swiss">
+      <button class="tab" data-mode="swiss" aria-label="Tournament" title="Tournament">
+        <img src="assets/icons/confrontation.png" alt="Tournament">
       </button>
 
       <button class="tab" data-mode="history" aria-label="History" title="History">
@@ -262,13 +262,13 @@
     <!-- ================= SWISS ================= -->
     <section id="form-swiss" class="calc-form hidden">
       <fieldset>
-        <legend>Swiss — 4 Groups</legend>
+        <legend>Tournament — 4 Groups</legend>
         <div id="swiss-setup">
           <label class="swiss-label">Participants (one name per line)</label>
           <textarea id="swiss-names" class="swiss-names" rows="8" placeholder="Alice&#10;Bob&#10;Carol&#10;..."></textarea>
           <div class="swiss-actions">
             <button type="button" id="swiss-generate" class="btn">Generate Groups</button>
-            <button type="button" id="swiss-reset" class="btn btn-reset" aria-label="Reset Swiss" title="Reset Swiss">
+            <button type="button" id="swiss-reset" class="btn btn-reset" aria-label="Reset Tournament" title="Reset Tournament">
               <img src="assets/icons/undo.png" alt="Reset"
                    onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
             </button>
@@ -384,20 +384,36 @@
     </div>
   </footer>
 
+  <!-- ================= TOURNAMENT FORMAT POPUP ================= -->
+  <div id="tournament-mode-popup" class="popup-overlay hidden">
+    <div class="popup-card">
+      <h2 class="popup-title">Tournament Format</h2>
+      <div class="tournament-mode-choices">
+        <button type="button" id="tournament-mode-swiss" class="tournament-mode-btn">
+          <span class="tournament-mode-name">Swiss + Top 8</span>
+          <span class="tournament-mode-desc">4 groups, Swiss rounds, top 2 per group advance into the knockout bracket.</span>
+        </button>
+        <button type="button" id="tournament-mode-single" class="tournament-mode-btn">
+          <span class="tournament-mode-name">Single Elimination</span>
+          <span class="tournament-mode-desc">Any number of players, direct knockout — no group stage. Bracket auto-sizes to the next power of 2; empty slots become BYEs that auto-advance.</span>
+        </button>
+      </div>
+      <button type="button" id="tournament-mode-cancel" class="btn popup-cancel">Cancel</button>
+    </div>
+  </div>
+
   <!-- ================= POPUP ================= -->
-  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-24-swiss">
+  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-24-formats">
     <div class="popup-card">
 
       <h2 class="popup-title">What's New</h2>
 
       <ul class="popup-list">
-        <li><strong>Swiss Tournament — now live across devices.</strong> Hitting <em>Generate Groups</em> now creates two shareable codes: a <strong>Co-host</strong> code for referees (view + score) and a <strong>Participant</strong> code for spectators (view only). Everyone's screen updates in real time.</li>
-        <li><strong>LIVE toggle.</strong> Tap an unscored match to go live on it — a pulsing <strong>LIVE</strong> badge shows on every device so other refs don't double up. Tap the same card again to turn it off. One live match per device.</li>
-        <li><strong>Tilt-to-score scoreboard.</strong> Scoring is mobile-only: tap a match, then rotate the phone to landscape to enter scores. The names/scores stay on screen after saving — the board only resets once you rotate back to portrait.</li>
-        <li><strong>Top 8 knockout bracket.</strong> The instant every group's final round is saved, a single-elimination bracket auto-generates from the top 2 of each group — <strong>Quarterfinals → Semifinals → Final</strong>, plus full <strong>3rd</strong>, <strong>5th</strong>, and <strong>7th</strong> place matches (QF losers drop into a consolation bracket).</li>
-        <li><strong>Top 8 rankings.</strong> A ranked list above the bracket fills in as each placement match finishes, with gold / silver / bronze accents on the top three.</li>
-        <li><strong>Better tie-breakers.</strong> Group standings now rank by Swiss points → Points Scored → Points Difference → Median-Buchholz.</li>
-        <li><strong>Fix miscalculations anytime.</strong> Any completed match card can be tapped to re-open the scoreboard and correct the score — future rounds are not regenerated, so pairings stay stable.</li>
+        <li><strong>Tab renamed and moved.</strong> The old <em>Swiss</em> tab is now <strong>Tournament</strong>, and it sits between <strong>Deck</strong> and <strong>History</strong>.</li>
+        <li><strong>Two tournament formats.</strong> Hitting <em>Generate Groups</em> now pops up a format picker: <strong>Swiss + Top 8</strong> (4 groups → knockout bracket) or <strong>Single Elimination</strong> (direct knockout, no group stage).</li>
+        <li><strong>Flexible Single Elimination size.</strong> Single elimination accepts any number of participants (2+). The bracket auto-sizes to the next power of 2; empty slots become <strong>BYEs</strong> that auto-advance the lone player. 3rd-place match is included whenever you have 4+ players.</li>
+        <li><strong>More breathing room on the scoreboard.</strong> Bigger vertical gap between <strong>Spin / Over / Burst / Extreme</strong> buttons so you don't mis-tap Burst while aiming for Extreme mid-battle.</li>
+        <li><strong>Clearer exit icon.</strong> The reset / leave button inside an active tournament now shows an exit-door icon, so it's obvious you're closing out of the live room rather than just undoing an input.</li>
       </ul>
 
       <button type="button" class="btn popup-ok">

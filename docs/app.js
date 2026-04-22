@@ -3258,7 +3258,8 @@ function resolveRoomCode(code, cb) {
   if (!db) { cb({ ok: false, reason: "Live sync isn't configured on this build." }); return; }
   db.ref("swissRooms/" + code).once("value").then(editSnap => {
     const remote = editSnap.val();
-    if (remote && remote.groups) {
+    const populated = !!(remote && (remote.groups || (remote.matches && Object.keys(remote.matches).length > 0)));
+    if (populated) {
       cb({ ok: true, editCode: code, viewCode: remote.viewCode || null, role: "edit" });
       return null;
     }
@@ -3287,9 +3288,12 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit) {
   swissIsHost = !!asHost;
   swissCanEdit = !!canEdit;
   swissRoomRef = db.ref("swissRooms/" + editCode);
+  const isPopulatedRemote = (r) => !!(r && (r.groups || (r.matches && Object.keys(r.matches).length > 0)));
+  const isPopulatedLocal = (s) => !!(s && (s.groups || (s.matches && Object.keys(s.matches).length > 0)));
+
   swissRoomRef.on("value", snap => {
     const remote = snap.val();
-    if (remote && remote.groups) {
+    if (isPopulatedRemote(remote)) {
       if (remote.viewCode && !swissViewCode) swissViewCode = remote.viewCode;
       swissApplyingRemote = true;
       localStorage.setItem(SWISS_KEY, JSON.stringify(stripRoomMetadata(remote)));
@@ -3299,7 +3303,7 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit) {
       // Room was wiped remotely (or first-time creation). Push our local state
       // together with the viewCode metadata and publish the viewer mapping.
       const local = loadSwiss();
-      if (local.groups && swissViewCode) {
+      if (isPopulatedLocal(local) && swissViewCode) {
         swissApplyingRemote = true;
         const payload = { ...local, viewCode: swissViewCode };
         swissRoomRef.set(payload)
@@ -3378,12 +3382,14 @@ const SWISS_BRACKET_TOP_N = 2; // top N per group advance to the knockout bracke
 function loadSwiss() {
   try {
     const raw = JSON.parse(localStorage.getItem(SWISS_KEY) || "null");
-    if (raw && Array.isArray(raw.groups)) {
+    const hasGroups = raw && Array.isArray(raw.groups);
+    const hasMatches = raw && raw.matches && Object.keys(raw.matches).length > 0;
+    if (raw && (hasGroups || hasMatches || raw.mode === "single-elim")) {
       if (!raw.matches) raw.matches = {};
       // Migrate legacy global `roundsGenerated` into the per-group array.
       if (!Array.isArray(raw.groupRounds)) {
         const fill = typeof raw.roundsGenerated === "number" ? raw.roundsGenerated : 0;
-        raw.groupRounds = raw.groups.map(() => fill);
+        raw.groupRounds = hasGroups ? raw.groups.map(() => fill) : [];
       }
       return raw;
     }
@@ -3500,9 +3506,111 @@ function generateSwissFromText(text) {
   const groups = Array.from({ length: SWISS_GROUP_COUNT }, () => []);
   shuffled.forEach((name, i) => { groups[i % SWISS_GROUP_COUNT].push(name); });
 
-  const state = { groups, matches: {}, groupRounds: groups.map(() => 0) };
+  const state = { groups, matches: {}, groupRounds: groups.map(() => 0), mode: "swiss" };
   groups.forEach((_, gi) => appendGroupRound(state, gi));
   return state;
+}
+
+// Variable-size single-elimination bracket (any number of participants ≥ 2).
+// Pads the bracket up to the next power of 2 with BYEs which auto-advance
+// their sole player to the next round. Uses round-indexed match IDs
+// (bracket-r0-*, bracket-r1-*, ...) for pre-final rounds and bracket-f-0
+// for the final. 3rd place match is included when at least 4 participants
+// are present (otherwise there's nothing meaningful to play for 3rd).
+function generateSingleElimFromText(text) {
+  const names = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  const seen = new Set();
+  const unique = [];
+  names.forEach(n => { if (!seen.has(n.toLowerCase())) { seen.add(n.toLowerCase()); unique.push(n); } });
+
+  if (unique.length < 2) {
+    alert(`Single elimination needs at least 2 participants (${unique.length} provided).`);
+    return null;
+  }
+
+  let bracketSize = 2;
+  while (bracketSize < unique.length) bracketSize *= 2;
+  const preFinalRounds = Math.round(Math.log2(bracketSize)) - 1; // rounds before the final
+
+  const shuffled = shuffleArray(unique);
+  // Pad with null for BYE slots. Simple tail-padding — the tail positions
+  // get the byes.
+  while (shuffled.length < bracketSize) shuffled.push(null);
+
+  const state = {
+    groups: null,
+    matches: {},
+    groupRounds: [],
+    mode: "single-elim",
+    bracketSize,
+    preFinalRounds
+  };
+
+  const emptyBracketMatch = (round, idx) => ({
+    bracket: true, round, bracketIndex: idx,
+    groupIndex: null, a: null, b: null,
+    scoreA: null, scoreB: null, startedAt: null, bye: false
+  });
+
+  if (preFinalRounds === 0) {
+    // 2-player bracket — just the final.
+    state.matches["bracket-f-0"] = {
+      ...emptyBracketMatch("f", 0),
+      a: shuffled[0], b: shuffled[1]
+    };
+  } else {
+    // Round 0: fill with the actual seeded pairs (plus any BYEs from padding).
+    for (let j = 0; j < bracketSize / 2; j++) {
+      state.matches[`bracket-r0-${j}`] = {
+        ...emptyBracketMatch(0, j),
+        a: shuffled[j * 2],
+        b: shuffled[j * 2 + 1]
+      };
+    }
+    // Intermediate rounds — empty slots, filled later via propagation.
+    for (let r = 1; r < preFinalRounds; r++) {
+      const matchesInRound = bracketSize / Math.pow(2, r + 1);
+      for (let j = 0; j < matchesInRound; j++) {
+        state.matches[`bracket-r${r}-${j}`] = emptyBracketMatch(r, j);
+      }
+    }
+    state.matches["bracket-f-0"] = emptyBracketMatch("f", 0);
+    if (unique.length >= 4) {
+      state.matches["bracket-3rd-0"] = emptyBracketMatch("3rd", 0);
+    }
+  }
+
+  autoAdvanceByes(state);
+  return state;
+}
+
+// Walk the bracket and auto-score any match where one slot is a BYE (null).
+// Propagates the non-null player up the bracket. Runs to a fixed point so
+// cascading byes (BYE → BYE → real match) are all handled in one pass.
+function autoAdvanceByes(state) {
+  let changed = true;
+  let iter = 0;
+  while (changed && iter < 100) {
+    changed = false;
+    Object.entries(state.matches).forEach(([id, m]) => {
+      if (!m.bracket) return;
+      if (m.scoreA != null || m.scoreB != null) return;
+      const hasA = m.a != null && m.a !== "";
+      const hasB = m.b != null && m.b !== "";
+      if (hasA === hasB) return; // both filled or both empty — skip
+      m.bye = true;
+      if (hasA) { m.scoreA = 1; m.scoreB = 0; }
+      else       { m.scoreA = 0; m.scoreB = 1; }
+      const prop = getBracketPropagation(m.round, m.bracketIndex, state);
+      if (prop && prop.winner) {
+        const winner = hasA ? m.a : m.b;
+        const target = state.matches[prop.winner.toId];
+        if (target) target[prop.winner.slot] = winner;
+      }
+      changed = true;
+    });
+    iter++;
+  }
 }
 
 function isGroupRoundComplete(matches, groupIndex, roundIndex) {
@@ -3633,7 +3741,7 @@ function startSwissMatch(matchId) {
     // blank so the UI flags them for re-scoring.
     let extraUpdates = null;
     if (stored.bracket) {
-      const prop = getBracketPropagation(stored.round, stored.bracketIndex);
+      const prop = getBracketPropagation(stored.round, stored.bracketIndex, s);
       if (prop) {
         let winner = null, loser = null;
         if (scoreA > scoreB) { winner = stored.a; loser = stored.b; }
@@ -3765,6 +3873,20 @@ function renderSwissGroupStandings(state, gi) {
 }
 
 function renderSwissBracketCard(label, id, m) {
+  // Bracket BYE — one slot empty, auto-scored. Renders as a single-row card.
+  if (m.bye) {
+    const player = m.a || m.b || "";
+    return `<div class="swiss-match-wrap">
+      <div class="swiss-match-num">${label}</div>
+      <div class="swiss-match-card swiss-match-card-bracket swiss-match-bye">
+        <div class="swiss-match-row swiss-match-row-win swiss-match-row-bye">
+          <span class="swiss-name-cell">${escapeHtml(player)} <span class="swiss-bye-tag">BYE</span></span>
+          <span class="swiss-score-cell swiss-score-win">W</span>
+        </div>
+      </div>
+    </div>`;
+  }
+
   const done = m.scoreA != null && m.scoreB != null;
   const isTie = done && m.scoreA === m.scoreB;
   const pending = !m.a || !m.b;
@@ -3857,6 +3979,82 @@ function renderSwissTop8({ final, third, fifth, seventh }) {
 }
 
 function renderSwissBracket(state) {
+  if (state.mode === "single-elim") {
+    return renderSingleElimBracket(state);
+  }
+  return renderSwissTop8Bracket(state);
+}
+
+function getBracketRoundName(matchesInRound) {
+  if (matchesInRound === 1) return "Final";
+  if (matchesInRound === 2) return "Semifinals";
+  if (matchesInRound === 4) return "Quarterfinals";
+  return `Round of ${matchesInRound * 2}`;
+}
+
+function getBracketShortLabel(matchesInRound, index) {
+  if (matchesInRound === 1) return "F";
+  if (matchesInRound === 2) return `SF${index + 1}`;
+  if (matchesInRound === 4) return `QF${index + 1}`;
+  return `R${index + 1}`;
+}
+
+function renderSingleElimBracket(state) {
+  const bracketSize = state.bracketSize || 2;
+  const preFinalRounds = typeof state.preFinalRounds === "number" ? state.preFinalRounds : 0;
+  const finalMatch = state.matches["bracket-f-0"];
+  const thirdMatch = state.matches["bracket-3rd-0"];
+
+  // Pre-final round columns
+  const columnHtml = [];
+  for (let r = 0; r < preFinalRounds; r++) {
+    const matchesInRound = bracketSize / Math.pow(2, r + 1);
+    const roundName = getBracketRoundName(matchesInRound);
+    const cards = [];
+    for (let j = 0; j < matchesInRound; j++) {
+      const id = `bracket-r${r}-${j}`;
+      const m = state.matches[id];
+      if (m) cards.push(renderSwissBracketCard(getBracketShortLabel(matchesInRound, j), id, m));
+    }
+    columnHtml.push(`
+      <div class="swiss-round-col">
+        <div class="swiss-round-title">${roundName}</div>
+        <div class="swiss-match-list">${cards.join("")}</div>
+      </div>
+    `);
+  }
+
+  // Final column — the Final plus (optionally) the 3rd place match.
+  const finalColParts = [];
+  finalColParts.push(`<div class="swiss-round-title">Final</div>`);
+  finalColParts.push(`<div class="swiss-match-list">${finalMatch ? renderSwissBracketCard("F", "bracket-f-0", finalMatch) : ""}</div>`);
+  if (thirdMatch) {
+    finalColParts.push(`<div class="swiss-round-subtitle">3rd Place</div>`);
+    finalColParts.push(`<div class="swiss-match-list">${renderSwissBracketCard("3rd", "bracket-3rd-0", thirdMatch)}</div>`);
+  }
+  columnHtml.push(`<div class="swiss-round-col">${finalColParts.join("")}</div>`);
+
+  const topRankings = renderSwissTop8({
+    final: finalMatch ? { id: "bracket-f-0", m: finalMatch } : null,
+    third: thirdMatch ? { id: "bracket-3rd-0", m: thirdMatch } : null,
+    fifth: null,
+    seventh: null
+  });
+
+  return `
+    <section class="swiss-bracket">
+      <header class="swiss-bracket-header">
+        <span class="swiss-bracket-title">Single Elimination — ${bracketSize}-slot bracket</span>
+      </header>
+      ${topRankings}
+      <div class="swiss-rounds-scroll">
+        ${columnHtml.join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderSwissTop8Bracket(state) {
   const qf = [];
   const sf = [];
   const cqf = [];
@@ -3970,24 +4168,26 @@ function renderSwiss() {
 
   const state = loadSwiss();
   const hasGroups = !!state.groups;
+  const bracketActive = hasSwissBracket(state);
+  const hasTournament = hasGroups || bracketActive;
   const inRoom = !!swissEditCode;
   const inRoomNonHost = inRoom && !swissIsHost;
 
   // Hide the setup form once we have a live tournament OR when the user is
   // connected to someone else's room (they shouldn't generate their own).
-  setup.classList.toggle("hidden", hasGroups || inRoomNonHost);
+  setup.classList.toggle("hidden", hasTournament || inRoomNonHost);
 
-  if (!hasGroups) {
+  if (!hasTournament) {
     if (inRoomNonHost) {
       view.innerHTML = `
         <div class="swiss-toolbar">
           ${renderSwissRoomBadge()}
           <button type="button" id="swiss-clear" class="btn btn-reset" title="Leave Room">
-            <img src="assets/icons/undo.png" alt="Leave"
+            <img src="assets/icons/exit-button.png" alt="Leave"
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
           </button>
         </div>
-        <div class="swiss-empty">Waiting for host to generate groups…</div>
+        <div class="swiss-empty">Waiting for host to start the tournament…</div>
       `;
       view.querySelector("#swiss-clear")?.addEventListener("click", resetSwiss);
       bindSwissRoomBadge(view);
@@ -3998,14 +4198,18 @@ function renderSwiss() {
   }
 
   const groupStageDone = isGroupStageComplete(state);
-  const bracketActive = hasSwissBracket(state);
-  const placementIds = ["bracket-f-0", "bracket-3rd-0", "bracket-5th-0", "bracket-7th-0"];
   const isMatchDecided = (m) => m && m.scoreA != null && m.scoreB != null && m.scoreA !== m.scoreB;
-  const allPlacementsDone = placementIds.every(id => isMatchDecided(state.matches[id]));
+  // Swiss + top-8 mode needs every placement decided. Single-elim needs the
+  // Final and (if present) the 3rd place match.
+  const isSingleElim = state.mode === "single-elim";
+  const placementIds = isSingleElim
+    ? ["bracket-f-0"].concat(state.matches["bracket-3rd-0"] ? ["bracket-3rd-0"] : [])
+    : ["bracket-f-0", "bracket-3rd-0", "bracket-5th-0", "bracket-7th-0"];
+  const allPlacementsDone = bracketActive && placementIds.every(id => isMatchDecided(state.matches[id]));
   const tournamentComplete = bracketActive && allPlacementsDone;
   const canEdit = !inRoom || swissCanEdit;
 
-  const groupsHtml = state.groups.map((members, gi) => {
+  const groupsHtml = hasGroups ? state.groups.map((members, gi) => {
     const mode = swissGroupViews[gi] || "matches";
     const body = mode === "standings"
       ? renderSwissGroupStandings(state, gi)
@@ -4023,11 +4227,11 @@ function renderSwiss() {
       </header>
       <div class="swiss-group-body">${body}</div>
     </section>`;
-  }).join("");
+  }).join("") : "";
 
   const bracketHtml = bracketActive ? renderSwissBracket(state) : "";
   const showStartKnockoutBtn = groupStageDone && !bracketActive && canEdit;
-  const resetTitle = inRoomNonHost ? "Leave Room" : "Reset Swiss";
+  const resetTitle = inRoomNonHost ? "Leave Room" : "Reset Tournament";
 
   view.innerHTML = `
     <div class="swiss-toolbar">
@@ -4035,7 +4239,7 @@ function renderSwiss() {
       ${renderSwissRoomBadge()}
       ${showStartKnockoutBtn ? `<button type="button" id="swiss-start-bracket" class="btn">Start Knockout</button>` : ""}
       <button type="button" id="swiss-clear" class="btn btn-reset" title="${resetTitle}">
-        <img src="assets/icons/undo.png" alt="${resetTitle}"
+        <img src="assets/icons/exit-button.png" alt="${resetTitle}"
              onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
       </button>
     </div>
@@ -4157,7 +4361,7 @@ function isGroupStageComplete(state) {
   );
 }
 
-function getBracketPropagation(round, bracketIndex) {
+function getBracketPropagation(round, bracketIndex, state) {
   // Return both winner and loser destinations. Placement-final rounds
   // (f, 3rd, 5th, 7th) are terminal and return null.
   if (round === "qf") {
@@ -4180,6 +4384,23 @@ function getBracketPropagation(round, bracketIndex) {
     return {
       winner: { toId: "bracket-5th-0", slot },
       loser:  { toId: "bracket-7th-0", slot }
+    };
+  }
+  // Single-elimination (variable size) — numeric round index.
+  if (typeof round === "number") {
+    const preFinal = state && typeof state.preFinalRounds === "number" ? state.preFinalRounds : 0;
+    const isSemi = round === preFinal - 1;
+    const slot = bracketIndex % 2 === 0 ? "a" : "b";
+    if (isSemi) {
+      const has3rd = !!(state && state.matches && state.matches["bracket-3rd-0"]);
+      return {
+        winner: { toId: "bracket-f-0", slot },
+        loser:  has3rd ? { toId: "bracket-3rd-0", slot } : null
+      };
+    }
+    return {
+      winner: { toId: `bracket-r${round + 1}-${Math.floor(bracketIndex / 2)}`, slot },
+      loser:  null
     };
   }
   return null;
@@ -4251,12 +4472,26 @@ function startSwissBracket() {
   renderSwiss();
 }
 
-document.getElementById("swiss-generate")?.addEventListener("click", () => {
-  const textarea = document.getElementById("swiss-names");
-  if (!textarea) return;
-  const next = generateSwissFromText(textarea.value);
-  if (!next) return;
-  // Write local state first (disconnected), then create a live room if Firebase is available.
+function showTournamentModePopup(onPick) {
+  const popup = document.getElementById("tournament-mode-popup");
+  if (!popup) { onPick("swiss"); return; } // popup missing, fall back to swiss
+  const swissBtn = popup.querySelector("#tournament-mode-swiss");
+  const singleBtn = popup.querySelector("#tournament-mode-single");
+  const cancelBtn = popup.querySelector("#tournament-mode-cancel");
+  const close = (choice) => {
+    popup.classList.add("hidden");
+    swissBtn.onclick = null;
+    singleBtn.onclick = null;
+    cancelBtn.onclick = null;
+    if (choice) onPick(choice);
+  };
+  swissBtn.onclick = () => close("swiss");
+  singleBtn.onclick = () => close("single-elim");
+  cancelBtn.onclick = () => close(null);
+  popup.classList.remove("hidden");
+}
+
+function startTournamentFromState(next) {
   disconnectSwissRoom();
   localStorage.setItem(SWISS_KEY, JSON.stringify(next));
   if (firebaseReady()) {
@@ -4270,6 +4505,19 @@ document.getElementById("swiss-generate")?.addEventListener("click", () => {
     // metadata) and publish the swissViewCodes mapping because remote is empty.
   }
   renderSwiss();
+}
+
+document.getElementById("swiss-generate")?.addEventListener("click", () => {
+  const textarea = document.getElementById("swiss-names");
+  if (!textarea) return;
+  const namesText = textarea.value;
+  showTournamentModePopup((mode) => {
+    const next = mode === "single-elim"
+      ? generateSingleElimFromText(namesText)
+      : generateSwissFromText(namesText);
+    if (!next) return;
+    startTournamentFromState(next);
+  });
 });
 
 document.getElementById("swiss-join")?.addEventListener("click", () => {
