@@ -4267,16 +4267,17 @@ let scoreboardSaveCallback = null;
     updateDisplay();
   });
 
+  // Set when the user taps check to save — the scoreboard keeps the just-
+  // scored names/scores on screen, and only resets to the default board once
+  // the user tilts back to portrait (see handleOrientation below).
+  let pendingResetOnPortrait = false;
+
   closeBtn?.addEventListener("click", () => {
     const cb = scoreboardSaveCallback;
     scoreboardSaveCallback = null;
     closeBtn.classList.add("hidden");
     if (cb) cb({ scoreA, scoreB });
-    // Clean slate after save — the next tilt should show the default board,
-    // not the just-scored match's names/scores.
-    if (typeof window.resetScoreboardToDefault === "function") {
-      window.resetScoreboardToDefault();
-    }
+    pendingResetOnPortrait = true;
   });
 
   const isLandscape = () => screen.orientation ? screen.orientation.type.startsWith("landscape") : window.innerWidth > window.innerHeight;
@@ -4340,7 +4341,18 @@ let scoreboardSaveCallback = null;
       const armed = scoreboardEnabled || !!scoreboardSaveCallback;
       if (!armed) { overlay.classList.add("hidden"); exitFullscreen(); return; }
       if (isLandscape()) { overlay.classList.remove("hidden"); enterFullscreen(); }
-      else { overlay.classList.add("hidden"); exitFullscreen(); }
+      else {
+        overlay.classList.add("hidden");
+        exitFullscreen();
+        // Now-in-portrait: if the user just saved a match, clear the match
+        // context so the next tilt shows the default board.
+        if (pendingResetOnPortrait) {
+          pendingResetOnPortrait = false;
+          if (typeof window.resetScoreboardToDefault === "function") {
+            window.resetScoreboardToDefault();
+          }
+        }
+      }
     };
     overlay.addEventListener("touchstart", () => {
       if (!document.fullscreenElement && !document.webkitFullscreenElement) enterFullscreen();
