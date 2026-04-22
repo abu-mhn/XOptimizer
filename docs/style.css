@@ -3685,6 +3685,35 @@ body.light-mode .swiss-group-progress {
     border-color: #484f58;
 }
 
+.swiss-match-card-live {
+    border-color: #f1c40f;
+    box-shadow: 0 0 0 1px rgba(241, 196, 15, 0.25) inset;
+}
+
+.swiss-match-card-live:hover,
+.swiss-match-card-live:focus-visible {
+    border-color: #f1c40f;
+}
+
+.swiss-live-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(241, 196, 15, 0.18);
+    color: #f1c40f;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    vertical-align: middle;
+    animation: swiss-live-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes swiss-live-pulse {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 1; }
+}
+
 .swiss-match-row {
     display: grid;
     grid-template-columns: 1.8em 1fr 2.4em;

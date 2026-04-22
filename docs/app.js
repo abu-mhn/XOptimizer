@@ -3328,7 +3328,8 @@ function pushSwissMatchUpdate(matchId, match, state, newMatchIds) {
   if (!swissRoomRef || !swissCanEdit) return;
   const updates = {
     [`matches/${matchId}/scoreA`]: match.scoreA,
-    [`matches/${matchId}/scoreB`]: match.scoreB
+    [`matches/${matchId}/scoreB`]: match.scoreB,
+    [`matches/${matchId}/startedAt`]: null
   };
   if (newMatchIds && newMatchIds.length) {
     newMatchIds.forEach(id => {
@@ -3337,6 +3338,15 @@ function pushSwissMatchUpdate(matchId, match, state, newMatchIds) {
     updates[`groupRounds/${match.groupIndex}`] = state.groupRounds[match.groupIndex];
   }
   swissRoomRef.update(updates).catch(e => console.warn("Swiss match push failed:", e));
+}
+
+// Small push for just the "match is being scored" flag so other refs see
+// the in-progress state the moment someone opens the scoreboard.
+function pushSwissMatchStart(matchId, startedAt) {
+  if (swissApplyingRemote) return;
+  if (!swissRoomRef || !swissCanEdit) return;
+  swissRoomRef.child(`matches/${matchId}/startedAt`).set(startedAt)
+    .catch(e => console.warn("Swiss start push failed:", e));
 }
 
 function initSwissRoomOnLoad() {
@@ -3535,12 +3545,28 @@ function startSwissMatch(matchId) {
     return;
   }
   const isEdit = match.scoreA != null && match.scoreB != null;
+
+  // Mark a fresh (unscored) match as "in progress" so other refs see it's
+  // being scored. Edits skip this — an already-scored match doesn't need a
+  // "being scored" indicator, it shows the score instead.
+  if (!isEdit) {
+    const now = Date.now();
+    const s = loadSwiss();
+    if (s.matches[matchId] && s.matches[matchId].startedAt == null) {
+      s.matches[matchId].startedAt = now;
+      persistSwiss(s);
+      pushSwissMatchStart(matchId, now);
+      renderSwiss();
+    }
+  }
+
   window.openScoreboard(match.a, match.b, ({ scoreA, scoreB }) => {
     const s = loadSwiss();
     const stored = s.matches[matchId];
     if (!stored) return;
     stored.scoreA = scoreA;
     stored.scoreB = scoreB;
+    stored.startedAt = null; // final score set — clear the in-progress flag
 
     // On a fresh completion, if this finished the latest generated round for
     // the group, auto-generate the next round (up to SWISS_ROUND_COUNT).
@@ -3572,10 +3598,11 @@ function escapeHtml(s) {
 
 function renderSwissMatchCard(matchNum, id, m, seedA, seedB) {
   const done = m.scoreA != null && m.scoreB != null;
+  const live = !done && m.startedAt != null;
   const aWin = done && m.scoreA > m.scoreB;
   const bWin = done && m.scoreB > m.scoreA;
-  const aScore = done ? m.scoreA : "";
-  const bScore = done ? m.scoreB : "";
+  const aScore = done ? m.scoreA : (live ? "…" : "");
+  const bScore = done ? m.scoreB : (live ? "…" : "");
 
   if (m.bye) {
     return `<div class="swiss-match-wrap">
@@ -3590,11 +3617,14 @@ function renderSwissMatchCard(matchNum, id, m, seedA, seedB) {
     </div>`;
   }
 
-  const hint = done ? "Tap to fix score" : "Tap to score this match";
+  const hint = done
+    ? "Tap to fix score"
+    : (live ? "Match in progress — tap to continue" : "Tap to score this match");
   const clickable = ` data-match="${id}" role="button" tabindex="0" title="${hint}" aria-label="${hint}"`;
-  const cardClass = "swiss-match-card swiss-match-card-play";
+  const cardClass = "swiss-match-card swiss-match-card-play" + (live ? " swiss-match-card-live" : "");
+  const liveBadge = live ? `<span class="swiss-live-badge" aria-label="Match in progress">LIVE</span>` : "";
   return `<div class="swiss-match-wrap">
-    <div class="swiss-match-num">${matchNum}</div>
+    <div class="swiss-match-num">${matchNum}${liveBadge}</div>
     <div class="${cardClass}"${clickable}>
       <div class="swiss-match-row ${aWin ? "swiss-match-row-win" : done ? "swiss-match-row-lose" : ""}">
         <span class="swiss-seed">${seedA}</span>
