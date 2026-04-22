@@ -3808,6 +3808,54 @@ function renderSwissBracketCard(label, id, m) {
   </div>`;
 }
 
+function renderSwissTop8({ final, third, fifth, seventh }) {
+  const isDecided = (m) => m && m.scoreA != null && m.scoreB != null && m.scoreA !== m.scoreB;
+  const winnerLoser = (m) => {
+    const aWin = m.scoreA > m.scoreB;
+    return { winner: aWin ? m.a : m.b, loser: aWin ? m.b : m.a };
+  };
+
+  const rows = [];
+  if (final && isDecided(final.m)) {
+    const { winner, loser } = winnerLoser(final.m);
+    rows.push({ rank: 1, name: winner });
+    rows.push({ rank: 2, name: loser });
+  }
+  if (third && isDecided(third.m)) {
+    const { winner, loser } = winnerLoser(third.m);
+    rows.push({ rank: 3, name: winner });
+    rows.push({ rank: 4, name: loser });
+  }
+  if (fifth && isDecided(fifth.m)) {
+    const { winner, loser } = winnerLoser(fifth.m);
+    rows.push({ rank: 5, name: winner });
+    rows.push({ rank: 6, name: loser });
+  }
+  if (seventh && isDecided(seventh.m)) {
+    const { winner, loser } = winnerLoser(seventh.m);
+    rows.push({ rank: 7, name: winner });
+    rows.push({ rank: 8, name: loser });
+  }
+
+  if (!rows.length) return "";
+
+  const ordinal = (n) => ({ 1: "1st", 2: "2nd", 3: "3rd" })[n] || (n + "th");
+  const medal = (n) => ({ 1: "🥇", 2: "🥈", 3: "🥉" })[n] || "";
+
+  const items = rows.map(r => {
+    const rankClass = r.rank <= 3 ? ` swiss-top-rank-${r.rank}` : "";
+    return `
+      <li class="swiss-top-rank${rankClass}">
+        <span class="swiss-top-rank-num">${ordinal(r.rank)}</span>
+        <span class="swiss-top-rank-medal">${medal(r.rank)}</span>
+        <span class="swiss-top-rank-name">${escapeHtml(r.name || "")}</span>
+      </li>
+    `;
+  }).join("");
+
+  return `<ol class="swiss-top-8">${items}</ol>`;
+}
+
 function renderSwissBracket(state) {
   const qf = [];
   const sf = [];
@@ -3830,18 +3878,14 @@ function renderSwissBracket(state) {
   const cqfHtml = cqf.map((e, i) => e ? renderSwissBracketCard(`C${i + 1}`, e.id, e.m) : "").join("");
   const cardOrBlank = (entry, label) => entry ? renderSwissBracketCard(label, entry.id, entry.m) : "";
 
-  let champBanner = "";
-  if (final && final.m.scoreA != null && final.m.scoreB != null && final.m.scoreA !== final.m.scoreB) {
-    const champ = final.m.scoreA > final.m.scoreB ? final.m.a : final.m.b;
-    if (champ) champBanner = `<div class="swiss-champion">Champion: <strong>${escapeHtml(champ)}</strong></div>`;
-  }
+  const top8 = renderSwissTop8({ final, third, fifth, seventh });
 
   return `
     <section class="swiss-bracket">
       <header class="swiss-bracket-header">
         <span class="swiss-bracket-title">Knockout — Top 8</span>
       </header>
-      ${champBanner}
+      ${top8}
       <div class="swiss-rounds-scroll">
         <div class="swiss-round-col">
           <div class="swiss-round-title">Quarterfinals</div>

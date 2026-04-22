@@ -63,12 +63,12 @@
         <img src="assets/icons/cards.png" alt="Deck">
       </button>
 
-      <button class="tab" data-mode="history" aria-label="History" title="History">
-        <img src="assets/icons/history1.webp" alt="History">
-      </button>
-
       <button class="tab" data-mode="swiss" aria-label="Swiss" title="Swiss Tournament">
         <img src="assets/icons/confrontation.png" alt="Swiss">
+      </button>
+
+      <button class="tab" data-mode="history" aria-label="History" title="History">
+        <img src="assets/icons/history1.webp" alt="History">
       </button>
 
       <button class="tab tab-settings" data-mode="settings" aria-label="Settings" title="Settings">
@@ -385,18 +385,19 @@
   </footer>
 
   <!-- ================= POPUP ================= -->
-  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-23">
+  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-24-swiss">
     <div class="popup-card">
 
       <h2 class="popup-title">What's New</h2>
 
       <ul class="popup-list">
-        <li>The "Choose Bottom Type" popup after selecting a blade is gone — the next bottom field auto-focuses instead.</li>
-        <li><strong>Turbo</strong> and <strong>Operate</strong> now live in the Bit dropdown (not a separate Ratchet-Bit field). To use one, pick <strong>No Ratchet</strong> at the top of the Ratchet dropdown; the Bit list then switches to ratchet-bit items. Otherwise the Bit list stays regular bits only.</li>
-        <li>Picking a different bottom type now swaps the matching field cleanly — e.g., choosing a Ratchet while <strong>No Ratchet</strong> is active flips the Bit list back to regular bits.</li>
-        <li>Deck slot part images now <strong>scroll horizontally</strong> on narrow screens instead of clipping.</li>
-        <li>On mobile, the result card's <strong>Download</strong> and <strong>+ cards</strong> buttons stack vertically and share the same fixed width, so tapping "Added" doesn't resize the button.</li>
-        <li>Fixed a bug where <strong>left-spin</strong> combos added to the Deck (or shown in History) rendered as right-spin. New combos save the blade's spin direction, and older entries resolve it from the blade name.</li>
+        <li><strong>Swiss Tournament — now live across devices.</strong> Hitting <em>Generate Groups</em> now creates two shareable codes: a <strong>Co-host</strong> code for referees (view + score) and a <strong>Participant</strong> code for spectators (view only). Everyone's screen updates in real time.</li>
+        <li><strong>LIVE toggle.</strong> Tap an unscored match to go live on it — a pulsing <strong>LIVE</strong> badge shows on every device so other refs don't double up. Tap the same card again to turn it off. One live match per device.</li>
+        <li><strong>Tilt-to-score scoreboard.</strong> Scoring is mobile-only: tap a match, then rotate the phone to landscape to enter scores. The names/scores stay on screen after saving — the board only resets once you rotate back to portrait.</li>
+        <li><strong>Top 8 knockout bracket.</strong> The instant every group's final round is saved, a single-elimination bracket auto-generates from the top 2 of each group — <strong>Quarterfinals → Semifinals → Final</strong>, plus full <strong>3rd</strong>, <strong>5th</strong>, and <strong>7th</strong> place matches (QF losers drop into a consolation bracket).</li>
+        <li><strong>Top 8 rankings.</strong> A ranked list above the bracket fills in as each placement match finishes, with gold / silver / bronze accents on the top three.</li>
+        <li><strong>Better tie-breakers.</strong> Group standings now rank by Swiss points → Points Scored → Points Difference → Median-Buchholz.</li>
+        <li><strong>Fix miscalculations anytime.</strong> Any completed match card can be tapped to re-open the scoreboard and correct the score — future rounds are not regenerated, so pairings stay stable.</li>
       </ul>
 
       <button type="button" class="btn popup-ok">
