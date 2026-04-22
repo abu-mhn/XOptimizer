@@ -3171,6 +3171,7 @@ let swissCanEdit = false;    // joined via co-host code (or is host) — can sco
 let swissRoomRef = null;
 let swissApplyingRemote = false;
 let swissLiveMatchId = null; // which match (if any) this device is currently live on
+let swissScrollPositions = []; // horizontal scrollLeft of each rounds-scroll strip (groups then bracket)
 
 function initFirebase() {
   if (swissDb) return swissDb;
@@ -3325,7 +3326,7 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit) {
 // updated round counter if completing the round generated the next one).
 // Using .update() with leaf paths lets two refs score different matches
 // concurrently without overwriting each other's work.
-function pushSwissMatchUpdate(matchId, match, state, newMatchIds) {
+function pushSwissMatchUpdate(matchId, match, state, newMatchIds, extraUpdates) {
   if (swissApplyingRemote) return;
   if (!swissRoomRef || !swissCanEdit) return;
   const updates = {
@@ -3337,8 +3338,12 @@ function pushSwissMatchUpdate(matchId, match, state, newMatchIds) {
     newMatchIds.forEach(id => {
       updates[`matches/${id}`] = state.matches[id];
     });
-    updates[`groupRounds/${match.groupIndex}`] = state.groupRounds[match.groupIndex];
+    // Only group matches track round progression via groupRounds.
+    if (typeof match.groupIndex === "number") {
+      updates[`groupRounds/${match.groupIndex}`] = state.groupRounds[match.groupIndex];
+    }
   }
+  if (extraUpdates) Object.assign(updates, extraUpdates);
   swissRoomRef.update(updates).catch(e => console.warn("Swiss match push failed:", e));
 }
 
@@ -3368,6 +3373,7 @@ const SWISS_KEY = "beyblade_swiss";
 const SWISS_GROUP_COUNT = 4;
 const SWISS_ROUND_COUNT = 4;
 const SWISS_MIN_PER_GROUP = 2; // minimum so every group can run at least one match per round
+const SWISS_BRACKET_TOP_N = 2; // top N per group advance to the knockout bracket
 
 function loadSwiss() {
   try {
@@ -3595,11 +3601,10 @@ function startSwissMatch(matchId) {
     stored.scoreB = scoreB;
     stored.startedAt = null;
 
-    // On a fresh completion, if this finished the latest generated round for
-    // the group, auto-generate the next round (up to SWISS_ROUND_COUNT).
-    // Skip on edits — the next round already exists and must not be duplicated.
+    // Group match: on a fresh completion of the latest generated round,
+    // auto-generate the next round. Skip on edits and on bracket matches.
     let newMatchIds = null;
-    if (!isEdit) {
+    if (!isEdit && !stored.bracket) {
       const gi = stored.groupIndex;
       const latestRoundIdx = (s.groupRounds[gi] || 0) - 1;
       if (stored.round === latestRoundIdx && isGroupRoundComplete(s.matches, gi, latestRoundIdx)) {
@@ -3611,8 +3616,42 @@ function startSwissMatch(matchId) {
       }
     }
 
+    // Auto-generate the top-8 knockout bracket the moment every group's
+    // final round completes, so no one has to hunt for a "Start" button.
+    // Only fires once — the hasSwissBracket guard makes this idempotent for
+    // late edits that don't change group completion.
+    if (!stored.bracket && isGroupStageComplete(s) && !hasSwissBracket(s)) {
+      const bracketMatches = buildBracketMatches(s);
+      Object.assign(s.matches, bracketMatches);
+      newMatchIds = (newMatchIds || []).concat(Object.keys(bracketMatches));
+    }
+
+    // Bracket match: propagate both winner and loser into their respective
+    // downstream slots. Winners go up the main bracket (SF → F) or the
+    // consolation bracket (CQF → 5th); losers drop into placement matches
+    // (SF → 3rd, QF → CQF, CQF → 7th). Ties leave both downstream slots
+    // blank so the UI flags them for re-scoring.
+    let extraUpdates = null;
+    if (stored.bracket) {
+      const prop = getBracketPropagation(stored.round, stored.bracketIndex);
+      if (prop) {
+        let winner = null, loser = null;
+        if (scoreA > scoreB) { winner = stored.a; loser = stored.b; }
+        else if (scoreB > scoreA) { winner = stored.b; loser = stored.a; }
+        extraUpdates = {};
+        if (prop.winner && s.matches[prop.winner.toId]) {
+          s.matches[prop.winner.toId][prop.winner.slot] = winner;
+          extraUpdates[`matches/${prop.winner.toId}/${prop.winner.slot}`] = winner;
+        }
+        if (prop.loser && s.matches[prop.loser.toId]) {
+          s.matches[prop.loser.toId][prop.loser.slot] = loser;
+          extraUpdates[`matches/${prop.loser.toId}/${prop.loser.slot}`] = loser;
+        }
+      }
+    }
+
     persistSwiss(s);
-    pushSwissMatchUpdate(matchId, stored, s, newMatchIds);
+    pushSwissMatchUpdate(matchId, stored, s, newMatchIds, extraUpdates);
     renderSwiss();
   }, isEdit ? match.scoreA : 0, isEdit ? match.scoreB : 0);
 }
@@ -3725,6 +3764,110 @@ function renderSwissGroupStandings(state, gi) {
   return `<ol class="swiss-members">${rows}</ol>`;
 }
 
+function renderSwissBracketCard(label, id, m) {
+  const done = m.scoreA != null && m.scoreB != null;
+  const isTie = done && m.scoreA === m.scoreB;
+  const pending = !m.a || !m.b;
+  const live = !done && m.startedAt != null;
+  const isMine = live && swissLiveMatchId === id;
+  const aWin = done && !isTie && m.scoreA > m.scoreB;
+  const bWin = done && !isTie && m.scoreB > m.scoreA;
+  const aScore = done ? m.scoreA : (live ? "…" : "");
+  const bScore = done ? m.scoreB : (live ? "…" : "");
+
+  const hint = pending
+    ? "Waiting for earlier round"
+    : isTie
+      ? "Tied — tap to re-score (ties can't advance)"
+      : done
+        ? "Tap to fix score"
+        : isMine
+          ? "Tap to switch LIVE off"
+          : live
+            ? "Match in progress on another device"
+            : "Tap to go LIVE on this match";
+
+  const clickable = pending ? "" : ` data-match="${id}" role="button" tabindex="0" title="${hint}" aria-label="${hint}"`;
+  const liveClass = live ? (isMine ? " swiss-match-card-live swiss-match-card-live-mine" : " swiss-match-card-live") : "";
+  const cardClass = "swiss-match-card swiss-match-card-bracket" + (pending ? " swiss-match-card-pending" : " swiss-match-card-play") + liveClass + (isTie ? " swiss-match-card-tie" : "");
+  const liveBadge = live ? `<span class="swiss-live-badge${isMine ? " swiss-live-badge-mine" : ""}">LIVE</span>` : "";
+  const tieBadge = isTie ? `<span class="swiss-tie-badge">TIE</span>` : "";
+
+  return `<div class="swiss-match-wrap">
+    <div class="swiss-match-num">${label}${liveBadge}${tieBadge}</div>
+    <div class="${cardClass}"${clickable}>
+      <div class="swiss-match-row ${aWin ? "swiss-match-row-win" : (done && !isTie) ? "swiss-match-row-lose" : ""}">
+        <span class="swiss-name-cell">${escapeHtml(m.a || "TBD")}</span>
+        <span class="swiss-score-cell ${aWin ? "swiss-score-win" : ""}">${aScore}</span>
+      </div>
+      <div class="swiss-match-row ${bWin ? "swiss-match-row-win" : (done && !isTie) ? "swiss-match-row-lose" : ""}">
+        <span class="swiss-name-cell">${escapeHtml(m.b || "TBD")}</span>
+        <span class="swiss-score-cell ${bWin ? "swiss-score-win" : ""}">${bScore}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderSwissBracket(state) {
+  const qf = [];
+  const sf = [];
+  const cqf = [];
+  let final = null, third = null, fifth = null, seventh = null;
+
+  Object.entries(state.matches || {}).forEach(([id, m]) => {
+    if (!id.startsWith("bracket-")) return;
+    if (m.round === "qf") qf[m.bracketIndex] = { id, m };
+    else if (m.round === "sf") sf[m.bracketIndex] = { id, m };
+    else if (m.round === "cqf") cqf[m.bracketIndex] = { id, m };
+    else if (m.round === "f") final = { id, m };
+    else if (m.round === "3rd") third = { id, m };
+    else if (m.round === "5th") fifth = { id, m };
+    else if (m.round === "7th") seventh = { id, m };
+  });
+
+  const qfHtml = qf.map((e, i) => e ? renderSwissBracketCard(`QF${i + 1}`, e.id, e.m) : "").join("");
+  const sfHtml = sf.map((e, i) => e ? renderSwissBracketCard(`SF${i + 1}`, e.id, e.m) : "").join("");
+  const cqfHtml = cqf.map((e, i) => e ? renderSwissBracketCard(`C${i + 1}`, e.id, e.m) : "").join("");
+  const cardOrBlank = (entry, label) => entry ? renderSwissBracketCard(label, entry.id, entry.m) : "";
+
+  let champBanner = "";
+  if (final && final.m.scoreA != null && final.m.scoreB != null && final.m.scoreA !== final.m.scoreB) {
+    const champ = final.m.scoreA > final.m.scoreB ? final.m.a : final.m.b;
+    if (champ) champBanner = `<div class="swiss-champion">Champion: <strong>${escapeHtml(champ)}</strong></div>`;
+  }
+
+  return `
+    <section class="swiss-bracket">
+      <header class="swiss-bracket-header">
+        <span class="swiss-bracket-title">Knockout — Top 8</span>
+      </header>
+      ${champBanner}
+      <div class="swiss-rounds-scroll">
+        <div class="swiss-round-col">
+          <div class="swiss-round-title">Quarterfinals</div>
+          <div class="swiss-match-list">${qfHtml}</div>
+        </div>
+        <div class="swiss-round-col">
+          <div class="swiss-round-title">Semifinals</div>
+          <div class="swiss-match-list">${sfHtml}</div>
+          <div class="swiss-round-subtitle">Consolation (QF losers)</div>
+          <div class="swiss-match-list">${cqfHtml}</div>
+        </div>
+        <div class="swiss-round-col">
+          <div class="swiss-round-title">Final</div>
+          <div class="swiss-match-list">${cardOrBlank(final, "F")}</div>
+          <div class="swiss-round-subtitle">3rd Place</div>
+          <div class="swiss-match-list">${cardOrBlank(third, "3rd")}</div>
+          <div class="swiss-round-subtitle">5th Place</div>
+          <div class="swiss-match-list">${cardOrBlank(fifth, "5th")}</div>
+          <div class="swiss-round-subtitle">7th Place</div>
+          <div class="swiss-match-list">${cardOrBlank(seventh, "7th")}</div>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
 function renderSwissRoomBadge() {
   if (!swissEditCode) return "";
   const pills = [];
@@ -3772,6 +3915,15 @@ function renderSwiss() {
   const setup = document.getElementById("swiss-setup");
   if (!view || !setup) return;
 
+  // Capture current horizontal scroll of each rounds strip so re-rendering
+  // doesn't snap back to round 1. Groups are in stable A/B/C/D order, bracket
+  // always follows — index-based mapping works. We merge with stored state so
+  // a user-scrolled value from before the render is preserved even if the
+  // element was temporarily detached.
+  Array.from(view.querySelectorAll(".swiss-rounds-scroll")).forEach((el, i) => {
+    swissScrollPositions[i] = el.scrollLeft;
+  });
+
   const state = loadSwiss();
   const hasGroups = !!state.groups;
   const inRoom = !!swissEditCode;
@@ -3801,8 +3953,13 @@ function renderSwiss() {
     return;
   }
 
-  const allDone = state.groups.every((_, gi) => (state.groupRounds[gi] || 0) >= SWISS_ROUND_COUNT
-    && isGroupRoundComplete(state.matches, gi, SWISS_ROUND_COUNT - 1));
+  const groupStageDone = isGroupStageComplete(state);
+  const bracketActive = hasSwissBracket(state);
+  const placementIds = ["bracket-f-0", "bracket-3rd-0", "bracket-5th-0", "bracket-7th-0"];
+  const isMatchDecided = (m) => m && m.scoreA != null && m.scoreB != null && m.scoreA !== m.scoreB;
+  const allPlacementsDone = placementIds.every(id => isMatchDecided(state.matches[id]));
+  const tournamentComplete = bracketActive && allPlacementsDone;
+  const canEdit = !inRoom || swissCanEdit;
 
   const groupsHtml = state.groups.map((members, gi) => {
     const mode = swissGroupViews[gi] || "matches";
@@ -3824,24 +3981,39 @@ function renderSwiss() {
     </section>`;
   }).join("");
 
+  const bracketHtml = bracketActive ? renderSwissBracket(state) : "";
+  const showStartKnockoutBtn = groupStageDone && !bracketActive && canEdit;
   const resetTitle = inRoomNonHost ? "Leave Room" : "Reset Swiss";
+
   view.innerHTML = `
     <div class="swiss-toolbar">
-      ${allDone ? `<span class="swiss-complete">Tournament Complete</span>` : ""}
+      ${tournamentComplete ? `<span class="swiss-complete">Tournament Complete</span>` : ""}
       ${renderSwissRoomBadge()}
+      ${showStartKnockoutBtn ? `<button type="button" id="swiss-start-bracket" class="btn">Start Knockout</button>` : ""}
       <button type="button" id="swiss-clear" class="btn btn-reset" title="${resetTitle}">
         <img src="assets/icons/undo.png" alt="${resetTitle}"
              onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
       </button>
     </div>
     ${groupsHtml}
+    ${bracketHtml}
   `;
 
+  // Restore each rounds strip's scrollLeft and attach a scroll listener so
+  // subsequent orientation/fullscreen-change restores use the user's latest
+  // position, not whatever was last set by the renderer.
+  view.querySelectorAll(".swiss-rounds-scroll").forEach((el, i) => {
+    if (swissScrollPositions[i] != null) el.scrollLeft = swissScrollPositions[i];
+    el.addEventListener("scroll", () => {
+      swissScrollPositions[i] = el.scrollLeft;
+    }, { passive: true });
+  });
+
   bindSwissRoomBadge(view);
+  view.querySelector("#swiss-start-bracket")?.addEventListener("click", startSwissBracket);
 
   // Match cards are interactive only for users who can edit (host + co-host).
   // Participants joined via the view-only code see cards but can't open them.
-  const canEdit = !inRoom || swissCanEdit;
   if (canEdit) {
     view.querySelectorAll(".swiss-match-card-play").forEach(el => {
       const id = el.dataset.match;
@@ -3916,6 +4088,125 @@ function computeStandings(members, matches, groupIndex) {
     );
 }
 
+// ---------------- Knockout bracket -----------------
+// Top 2 per group (A1, A2, B1, B2, C1, C2, D1, D2) → 8-player single
+// elimination with full placement matches (1st, 3rd, 5th, 7th).
+//
+// Main bracket:
+//   QF0: A1 vs B2   QF1: C1 vs D2   QF2: B1 vs A2   QF3: D1 vs C2
+//   SF0: QF0w vs QF1w              SF1: QF2w vs QF3w
+//   F0:  SF0w vs SF1w              3rd: SF0l vs SF1l
+//
+// Consolation (QF losers) for 5th/7th:
+//   CQF0: QF0l vs QF1l             CQF1: QF2l vs QF3l
+//   5th:  CQF0w vs CQF1w           7th:  CQF0l vs CQF1l
+
+function hasSwissBracket(state) {
+  return Object.keys(state.matches || {}).some(k => k.startsWith("bracket-"));
+}
+
+function isGroupStageComplete(state) {
+  if (!state.groups || state.groups.length !== SWISS_GROUP_COUNT) return false;
+  return state.groups.every((_, gi) =>
+    (state.groupRounds[gi] || 0) >= SWISS_ROUND_COUNT &&
+    isGroupRoundComplete(state.matches, gi, SWISS_ROUND_COUNT - 1)
+  );
+}
+
+function getBracketPropagation(round, bracketIndex) {
+  // Return both winner and loser destinations. Placement-final rounds
+  // (f, 3rd, 5th, 7th) are terminal and return null.
+  if (round === "qf") {
+    const sfIdx = Math.floor(bracketIndex / 2);
+    const slot = bracketIndex % 2 === 0 ? "a" : "b";
+    return {
+      winner: { toId: `bracket-sf-${sfIdx}`, slot },
+      loser:  { toId: `bracket-cqf-${sfIdx}`, slot }
+    };
+  }
+  if (round === "sf") {
+    const slot = bracketIndex === 0 ? "a" : "b";
+    return {
+      winner: { toId: "bracket-f-0", slot },
+      loser:  { toId: "bracket-3rd-0", slot }
+    };
+  }
+  if (round === "cqf") {
+    const slot = bracketIndex === 0 ? "a" : "b";
+    return {
+      winner: { toId: "bracket-5th-0", slot },
+      loser:  { toId: "bracket-7th-0", slot }
+    };
+  }
+  return null;
+}
+
+function bracketSeedingFromStandings(state) {
+  const top = state.groups.map((members, gi) => {
+    const st = computeStandings(members, state.matches, gi);
+    return { first: (st[0] && st[0].name) || null, second: (st[1] && st[1].name) || null };
+  });
+  const [A, B, C, D] = top;
+  return [
+    [A.first, B.second],
+    [C.first, D.second],
+    [B.first, A.second],
+    [D.first, C.second]
+  ];
+}
+
+function buildBracketMatches(state) {
+  const qfPairs = bracketSeedingFromStandings(state);
+  const newMatches = {};
+  const emptyBracketMatch = (round, idx) => ({
+    bracket: true, round, bracketIndex: idx,
+    groupIndex: null, a: null, b: null,
+    scoreA: null, scoreB: null, startedAt: null, bye: false
+  });
+
+  // QFs — the only round that has names up front.
+  qfPairs.forEach((pair, i) => {
+    newMatches[`bracket-qf-${i}`] = {
+      ...emptyBracketMatch("qf", i),
+      a: pair[0], b: pair[1]
+    };
+  });
+  // Semifinals + consolation QFs (QF losers cross).
+  for (let i = 0; i < 2; i++) {
+    newMatches[`bracket-sf-${i}`] = emptyBracketMatch("sf", i);
+    newMatches[`bracket-cqf-${i}`] = emptyBracketMatch("cqf", i);
+  }
+  // Placement finals.
+  newMatches["bracket-f-0"] = emptyBracketMatch("f", 0);
+  newMatches["bracket-3rd-0"] = emptyBracketMatch("3rd", 0);
+  newMatches["bracket-5th-0"] = emptyBracketMatch("5th", 0);
+  newMatches["bracket-7th-0"] = emptyBracketMatch("7th", 0);
+  return newMatches;
+}
+
+function startSwissBracket() {
+  const s = loadSwiss();
+  if (!isGroupStageComplete(s)) {
+    alert("Finish every group match first.");
+    return;
+  }
+  if (hasSwissBracket(s)) {
+    if (!confirm("Bracket already started. Regenerate from current standings?")) return;
+    Object.keys(s.matches).forEach(k => { if (k.startsWith("bracket-")) delete s.matches[k]; });
+  }
+  const newMatches = buildBracketMatches(s);
+  Object.assign(s.matches, newMatches);
+  persistSwiss(s);
+
+  // Push all new bracket matches at once.
+  if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
+    const updates = {};
+    Object.entries(newMatches).forEach(([id, m]) => { updates[`matches/${id}`] = m; });
+    swissRoomRef.update(updates).catch(e => console.warn("Bracket push failed:", e));
+  }
+  renderSwiss();
+}
+
 document.getElementById("swiss-generate")?.addEventListener("click", () => {
   const textarea = document.getElementById("swiss-names");
   if (!textarea) return;
@@ -3972,6 +4263,30 @@ document.getElementById("swiss-reset")?.addEventListener("click", resetSwiss);
 
 // Re-join a previously connected room on page load.
 window.addEventListener("load", initSwissRoomOnLoad);
+
+// Rotating the device (especially through the scoreboard's fullscreen flow)
+// can reset the rounds-scroll containers back to scrollLeft 0. Re-apply the
+// stored scroll positions after a brief settle so the user stays on the
+// round they were viewing.
+function restoreSwissScrollPositions() {
+  const view = document.getElementById("swiss-view");
+  if (!view) return;
+  view.querySelectorAll(".swiss-rounds-scroll").forEach((el, i) => {
+    if (swissScrollPositions[i] != null && el.scrollLeft !== swissScrollPositions[i]) {
+      el.scrollLeft = swissScrollPositions[i];
+    }
+  });
+}
+function scheduleSwissScrollRestore() {
+  [50, 200, 500].forEach(delay => setTimeout(restoreSwissScrollPositions, delay));
+}
+if (screen.orientation && typeof screen.orientation.addEventListener === "function") {
+  screen.orientation.addEventListener("change", scheduleSwissScrollRestore);
+} else {
+  window.addEventListener("orientationchange", scheduleSwissScrollRestore);
+}
+document.addEventListener("fullscreenchange", scheduleSwissScrollRestore);
+document.addEventListener("webkitfullscreenchange", scheduleSwissScrollRestore);
 
 (function initDeckName() {
   const input = document.getElementById("deck-name");
