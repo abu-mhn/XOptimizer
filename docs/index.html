@@ -384,6 +384,20 @@
     </div>
   </footer>
 
+  <!-- ================= EDIT PARTICIPANTS POPUP ================= -->
+  <div id="edit-participants-popup" class="popup-overlay hidden">
+    <div class="popup-card">
+      <h2 class="popup-title">Edit Participants</h2>
+      <p class="popup-text">One name per line. Keep the same total to <strong>rename</strong> in place (scores and pairings preserved). Add or remove lines to <strong>regenerate</strong> the tournament from scratch.</p>
+      <textarea id="edit-participants-names" class="swiss-names" rows="10" placeholder="Alice&#10;Bob&#10;Carol&#10;..." autocomplete="off" spellcheck="false"></textarea>
+      <div id="edit-participants-status" class="swiss-join-status"></div>
+      <div class="popup-actions">
+        <button type="button" id="edit-participants-save" class="btn">Save</button>
+        <button type="button" id="edit-participants-cancel" class="btn popup-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= TOURNAMENT FORMAT POPUP ================= -->
   <div id="tournament-mode-popup" class="popup-overlay hidden">
     <div class="popup-card">
@@ -403,17 +417,15 @@
   </div>
 
   <!-- ================= POPUP ================= -->
-  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-24-formats2">
+  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-23-edit">
     <div class="popup-card">
 
       <h2 class="popup-title">What's New</h2>
 
       <ul class="popup-list">
-        <li><strong>Tab renamed and moved.</strong> The old <em>Swiss</em> tab is now <strong>Tournament</strong>, and it sits between <strong>Deck</strong> and <strong>History</strong>.</li>
-        <li><strong>Two tournament formats.</strong> Hitting <em>Generate Groups</em> now pops up a format picker: <strong>Swiss + Top 8</strong> (4 groups → knockout bracket) or <strong>Single Elimination</strong> (direct knockout, no group stage).</li>
-        <li><strong>Flexible Single Elimination size.</strong> Single elimination accepts any number of participants (2+). The bracket auto-sizes to the next power of 2; empty slots become <strong>BYEs</strong> that auto-advance the lone player. 3rd-place match is included whenever you have 4+ players.</li>
-        <li><strong>Scoreboard taps fixed on iPhone.</strong> Fixed an iOS 15 Pro bug where tapping <strong>Extreme</strong> landed on <strong>Burst</strong> (and Burst→Over, Over→Spin). Buttons now register exactly what you tap, even mid-fullscreen / orientation transition. The vertical gap between Spin / Over / Burst / Extreme is also wider so mis-taps are harder in the first place.</li>
-        <li><strong>Clearer exit icon.</strong> The reset / leave button inside an active tournament now shows an exit-door icon, so it's obvious you're closing out of the live room rather than just undoing an input.</li>
+        <li><strong>Edit participants anytime.</strong> New <strong>Edit</strong> button in the tournament toolbar opens a list of every participant. Keep the same total → renames in place (scores, pairings and standings preserved). Add or remove lines → regenerates the tournament from the new list in the same format you started with.</li>
+        <li><strong>Scoreboard Reset moved under "VS".</strong> The <strong>Reset</strong> button now sits directly below the big <em>VS</em> divider in the center of the scoreboard instead of floating at the bottom — always visible, always in thumb reach, no more hunting for it in landscape.</li>
+        <li><strong>Cleaner popup buttons.</strong> Save / Cancel pairs (in the Edit Participants and Tournament Format popups) now render at identical widths and heights, so they read as a clean pair.</li>
       </ul>
 
       <button type="button" class="btn popup-ok">
@@ -438,7 +450,10 @@
         <div class="scoreboard-score" id="score-a">0</div>
       </div>
     </div>
-    <div class="scoreboard-divider">VS</div>
+    <div class="scoreboard-divider">
+      <span class="scoreboard-vs">VS</span>
+      <button class="scoreboard-reset" id="scoreboard-reset" title="Reset Scoreboard">Reset</button>
+    </div>
     <div class="scoreboard-side scoreboard-right" id="scoreboard-right">
       <div class="scoreboard-player-label">B</div>
       <div class="scoreboard-score-row">
@@ -451,7 +466,6 @@
         </div>
       </div>
     </div>
-    <button class="scoreboard-reset" id="scoreboard-reset" title="Reset Scoreboard">Reset</button>
   </div>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>

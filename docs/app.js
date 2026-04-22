@@ -3506,9 +3506,35 @@ function generateSwissFromText(text) {
   const groups = Array.from({ length: SWISS_GROUP_COUNT }, () => []);
   shuffled.forEach((name, i) => { groups[i % SWISS_GROUP_COUNT].push(name); });
 
-  const state = { groups, matches: {}, groupRounds: groups.map(() => 0), mode: "swiss" };
+  const state = {
+    groups,
+    matches: {},
+    groupRounds: groups.map(() => 0),
+    mode: "swiss",
+    participants: unique
+  };
   groups.forEach((_, gi) => appendGroupRound(state, gi));
   return state;
+}
+
+// Back-compat: derive the participant list from any state shape. New
+// generated states carry `participants` explicitly; older localStorage
+// or remote snapshots may not, so fall back to groups / matches names.
+function getParticipants(state) {
+  if (state && Array.isArray(state.participants) && state.participants.length) {
+    return state.participants.slice();
+  }
+  if (state && Array.isArray(state.groups)) {
+    return state.groups.flat();
+  }
+  const seen = new Set();
+  const out = [];
+  Object.values((state && state.matches) || {}).forEach(m => {
+    if (!m || m.bracket) { /* bracket may contain winners-only names; still include */ }
+    if (m && m.a && !seen.has(m.a.toLowerCase())) { seen.add(m.a.toLowerCase()); out.push(m.a); }
+    if (m && m.b && !seen.has(m.b.toLowerCase())) { seen.add(m.b.toLowerCase()); out.push(m.b); }
+  });
+  return out;
 }
 
 // Variable-size single-elimination bracket (any number of participants ≥ 2).
@@ -3543,7 +3569,8 @@ function generateSingleElimFromText(text) {
     groupRounds: [],
     mode: "single-elim",
     bracketSize,
-    preFinalRounds
+    preFinalRounds,
+    participants: unique
   };
 
   const emptyBracketMatch = (round, idx) => ({
@@ -4238,6 +4265,7 @@ function renderSwiss() {
       ${tournamentComplete ? `<span class="swiss-complete">Tournament Complete</span>` : ""}
       ${renderSwissRoomBadge()}
       ${showStartKnockoutBtn ? `<button type="button" id="swiss-start-bracket" class="btn">Start Knockout</button>` : ""}
+      ${canEdit ? `<button type="button" id="swiss-edit-participants" class="btn btn-small" title="Edit participants">Edit</button>` : ""}
       <button type="button" id="swiss-clear" class="btn btn-reset" title="${resetTitle}">
         <img src="assets/icons/exit-button.png" alt="${resetTitle}"
              onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
@@ -4259,6 +4287,7 @@ function renderSwiss() {
 
   bindSwissRoomBadge(view);
   view.querySelector("#swiss-start-bracket")?.addEventListener("click", startSwissBracket);
+  view.querySelector("#swiss-edit-participants")?.addEventListener("click", showEditParticipantsPopup);
 
   // Match cards are interactive only for users who can edit (host + co-host).
   // Participants joined via the view-only code see cards but can't open them.
@@ -4470,6 +4499,97 @@ function startSwissBracket() {
     swissRoomRef.update(updates).catch(e => console.warn("Bracket push failed:", e));
   }
   renderSwiss();
+}
+
+// Apply a pure rename mapping (old names → new names at the same positions)
+// across groups, matches and the participants list. Returns true if any
+// actual change was applied.
+function applyParticipantRenames(state, oldNames, newNames) {
+  const renames = Object.create(null);
+  let any = false;
+  for (let i = 0; i < oldNames.length; i++) {
+    if (oldNames[i] !== newNames[i]) {
+      renames[oldNames[i]] = newNames[i];
+      any = true;
+    }
+  }
+  if (!any) return false;
+  state.participants = newNames.slice();
+  if (Array.isArray(state.groups)) {
+    state.groups = state.groups.map(grp => grp.map(name => (name in renames) ? renames[name] : name));
+  }
+  Object.values(state.matches || {}).forEach(m => {
+    if (m && m.a && (m.a in renames)) m.a = renames[m.a];
+    if (m && m.b && (m.b in renames)) m.b = renames[m.b];
+  });
+  return true;
+}
+
+function showEditParticipantsPopup() {
+  const popup = document.getElementById("edit-participants-popup");
+  if (!popup) return;
+  const textarea = popup.querySelector("#edit-participants-names");
+  const status = popup.querySelector("#edit-participants-status");
+  const saveBtn = popup.querySelector("#edit-participants-save");
+  const cancelBtn = popup.querySelector("#edit-participants-cancel");
+  const state = loadSwiss();
+  const current = getParticipants(state);
+  textarea.value = current.join("\n");
+  if (status) status.textContent = "";
+  popup.classList.remove("hidden");
+
+  const close = () => {
+    popup.classList.add("hidden");
+    saveBtn.onclick = null;
+    cancelBtn.onclick = null;
+  };
+  cancelBtn.onclick = close;
+  saveBtn.onclick = () => {
+    const lines = textarea.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    const seen = new Set();
+    const unique = [];
+    for (const n of lines) {
+      const k = n.toLowerCase();
+      if (!seen.has(k)) { seen.add(k); unique.push(n); }
+    }
+    if (unique.length === 0) {
+      if (status) status.textContent = "Need at least one participant.";
+      return;
+    }
+    const sameCount = unique.length === current.length;
+    if (sameCount) {
+      // Pure rename path — preserves scores, pairings and standings.
+      const s = loadSwiss();
+      const changed = applyParticipantRenames(s, current, unique);
+      if (!changed) { close(); return; }
+      persistSwiss(s);
+      if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
+        const payload = { ...s };
+        if (swissViewCode) payload.viewCode = swissViewCode;
+        swissRoomRef.set(payload).catch(e => console.warn("Rename push failed:", e));
+      }
+      renderSwiss();
+      close();
+      return;
+    }
+    // Count changed — regenerate the tournament.
+    const msg = `Participant count changes from ${current.length} to ${unique.length}. ` +
+                `This will regenerate the tournament — all current matches and scores will be lost. Continue?`;
+    if (!confirm(msg)) return;
+    const mode = state.mode === "single-elim" ? "single-elim" : "swiss";
+    const next = mode === "single-elim"
+      ? generateSingleElimFromText(unique.join("\n"))
+      : generateSwissFromText(unique.join("\n"));
+    if (!next) return; // generator already alerted (e.g. Swiss min participants)
+    persistSwiss(next);
+    if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
+      const payload = { ...next };
+      if (swissViewCode) payload.viewCode = swissViewCode;
+      swissRoomRef.set(payload).catch(e => console.warn("Regenerate push failed:", e));
+    }
+    renderSwiss();
+    close();
+  };
 }
 
 function showTournamentModePopup(onPick) {

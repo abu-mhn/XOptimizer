@@ -2006,9 +2006,14 @@ body.light-mode .part-img {
 
 .scoreboard-divider {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 14px;
     width: 50px;
+    overflow: visible;
+    position: relative;
+    z-index: 2;
     font-size: 1.2rem;
     font-weight: 800;
     color: #484f58;
@@ -2016,19 +2021,23 @@ body.light-mode .part-img {
     letter-spacing: 1px;
 }
 
+.scoreboard-vs {
+    line-height: 1;
+}
+
 .scoreboard-reset {
-    position: absolute;
-    bottom: 12px;
-    left: 50%;
-    transform: translateX(-50%);
     background: #21262d;
     color: #8b949e;
     border: 1px solid #30363d;
     border-radius: 6px;
     padding: 6px 16px;
     font-size: 0.75rem;
+    font-weight: 400;
+    letter-spacing: normal;
+    white-space: nowrap;
     cursor: pointer;
-    z-index: 1;
+    position: relative;
+    z-index: 3;
 }
 
 .scoreboard-reset:hover {
@@ -3807,6 +3816,34 @@ body.light-mode .swiss-group-progress {
 .popup-cancel {
     margin-top: 6px;
     opacity: 0.75;
+}
+
+.popup-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    align-items: stretch;
+}
+
+.popup-actions .btn {
+    flex: 1 1 0;
+    width: 0;
+    min-width: 0;
+    margin: 0;
+    opacity: 1;
+}
+
+.popup-text {
+    margin: 4px 0 10px;
+    font-size: 0.85rem;
+    opacity: 0.85;
+    line-height: 1.4;
+}
+
+.btn-small {
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    font-weight: 500;
 }
 
 .swiss-bracket {
