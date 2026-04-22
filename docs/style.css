@@ -3695,6 +3695,16 @@ body.light-mode .swiss-group-progress {
     border-color: #f1c40f;
 }
 
+.swiss-match-card-live-mine {
+    border-color: #2ea043;
+    box-shadow: 0 0 0 1px rgba(46, 160, 67, 0.3) inset;
+}
+
+.swiss-match-card-live-mine:hover,
+.swiss-match-card-live-mine:focus-visible {
+    border-color: #2ea043;
+}
+
 .swiss-live-badge {
     display: inline-block;
     margin-left: 6px;
@@ -3707,6 +3717,11 @@ body.light-mode .swiss-group-progress {
     letter-spacing: 0.1em;
     vertical-align: middle;
     animation: swiss-live-pulse 1.2s ease-in-out infinite;
+}
+
+.swiss-live-badge-mine {
+    background: rgba(46, 160, 67, 0.18);
+    color: #2ea043;
 }
 
 @keyframes swiss-live-pulse {

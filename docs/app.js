@@ -3170,6 +3170,7 @@ let swissIsHost = false;     // created this room (has reset authority)
 let swissCanEdit = false;    // joined via co-host code (or is host) — can score
 let swissRoomRef = null;
 let swissApplyingRemote = false;
+let swissLiveMatchId = null; // which match (if any) this device is currently live on
 
 function initFirebase() {
   if (swissDb) return swissDb;
@@ -3234,6 +3235,7 @@ function disconnectSwissRoom() {
   swissViewCode = null;
   swissIsHost = false;
   swissCanEdit = false;
+  swissLiveMatchId = null;
   saveJoinedRoom(null);
   // Drop any match-linked state on the scoreboard so leaving a room doesn't
   // leave stale match names / score / save callback on the overlay.
@@ -3535,8 +3537,6 @@ function startSwissMatch(matchId) {
   // Participants (joined via view-only code) can't score — never open the
   // match scoreboard for them, even if something bypasses the UI gating.
   if (swissEditCode && !swissCanEdit) return;
-  // Anyone else in the room can score (multi-ref tournaments). The room code
-  // is the access control — only people the host shared it with get in.
   const state = loadSwiss();
   const match = state.matches[matchId];
   if (!match) return;
@@ -3544,15 +3544,41 @@ function startSwissMatch(matchId) {
     alert(`${match.a} has a BYE this round.`);
     return;
   }
+
+  // One live match per device. If we're already live on a different match,
+  // block and tell the user to switch that one off first.
+  if (swissLiveMatchId && swissLiveMatchId !== matchId) {
+    alert("You're already live on another match. Tap that card to switch it off first.");
+    return;
+  }
+
   const isEdit = match.scoreA != null && match.scoreB != null;
 
-  // Mark a fresh (unscored) match as "in progress" so other refs see it's
-  // being scored. Edits skip this — an already-scored match doesn't need a
-  // "being scored" indicator, it shows the score instead.
+  // Tapping the same unscored match we went live on toggles live OFF:
+  // clears the in-progress flag, resets the scoreboard to default. Any
+  // scores entered but not saved are discarded.
+  if (!isEdit && swissLiveMatchId === matchId) {
+    swissLiveMatchId = null;
+    const s = loadSwiss();
+    if (s.matches[matchId]) {
+      s.matches[matchId].startedAt = null;
+      persistSwiss(s);
+      pushSwissMatchStart(matchId, null);
+    }
+    if (typeof window.resetScoreboardToDefault === "function") {
+      window.resetScoreboardToDefault();
+    }
+    renderSwiss();
+    return;
+  }
+
+  // Going live ON an unscored match — mark startedAt and claim the device
+  // slot. Edits don't flip live (the card shows the score, not a badge).
   if (!isEdit) {
+    swissLiveMatchId = matchId;
     const now = Date.now();
     const s = loadSwiss();
-    if (s.matches[matchId] && s.matches[matchId].startedAt == null) {
+    if (s.matches[matchId]) {
       s.matches[matchId].startedAt = now;
       persistSwiss(s);
       pushSwissMatchStart(matchId, now);
@@ -3561,12 +3587,13 @@ function startSwissMatch(matchId) {
   }
 
   window.openScoreboard(match.a, match.b, ({ scoreA, scoreB }) => {
+    swissLiveMatchId = null;
     const s = loadSwiss();
     const stored = s.matches[matchId];
     if (!stored) return;
     stored.scoreA = scoreA;
     stored.scoreB = scoreB;
-    stored.startedAt = null; // final score set — clear the in-progress flag
+    stored.startedAt = null;
 
     // On a fresh completion, if this finished the latest generated round for
     // the group, auto-generate the next round (up to SWISS_ROUND_COUNT).
@@ -3617,12 +3644,22 @@ function renderSwissMatchCard(matchNum, id, m, seedA, seedB) {
     </div>`;
   }
 
+  const isMine = live && swissLiveMatchId === id;
   const hint = done
     ? "Tap to fix score"
-    : (live ? "Match in progress — tap to continue" : "Tap to score this match");
+    : isMine
+      ? "Tap to switch LIVE off"
+      : live
+        ? "Match in progress on another device"
+        : "Tap to go LIVE on this match";
   const clickable = ` data-match="${id}" role="button" tabindex="0" title="${hint}" aria-label="${hint}"`;
-  const cardClass = "swiss-match-card swiss-match-card-play" + (live ? " swiss-match-card-live" : "");
-  const liveBadge = live ? `<span class="swiss-live-badge" aria-label="Match in progress">LIVE</span>` : "";
+  const liveClass = live
+    ? (isMine ? " swiss-match-card-live swiss-match-card-live-mine" : " swiss-match-card-live")
+    : "";
+  const cardClass = "swiss-match-card swiss-match-card-play" + liveClass;
+  const liveBadge = live
+    ? `<span class="swiss-live-badge${isMine ? " swiss-live-badge-mine" : ""}" aria-label="Match in progress">LIVE</span>`
+    : "";
   return `<div class="swiss-match-wrap">
     <div class="swiss-match-num">${matchNum}${liveBadge}</div>
     <div class="${cardClass}"${clickable}>
@@ -4235,6 +4272,11 @@ let scoreboardSaveCallback = null;
     scoreboardSaveCallback = null;
     closeBtn.classList.add("hidden");
     if (cb) cb({ scoreA, scoreB });
+    // Clean slate after save — the next tilt should show the default board,
+    // not the just-scored match's names/scores.
+    if (typeof window.resetScoreboardToDefault === "function") {
+      window.resetScoreboardToDefault();
+    }
   });
 
   const isLandscape = () => screen.orientation ? screen.orientation.type.startsWith("landscape") : window.innerWidth > window.innerHeight;
