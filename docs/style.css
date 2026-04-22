@@ -3407,11 +3407,17 @@ body.mono-mode .popup-ok:hover {
     color: #2ea043;
 }
 
+.swiss-room-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-right: auto;
+}
+
 .swiss-room-badge {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    margin-right: auto;
     padding: 3px 8px;
     border-radius: 999px;
     background: rgba(46, 160, 67, 0.14);
@@ -3420,8 +3426,25 @@ body.mono-mode .popup-ok:hover {
     line-height: 1.2;
 }
 
-.swiss-room-role {
+.swiss-room-badge-edit {
+    background: rgba(46, 160, 67, 0.14);
+    border-color: rgba(46, 160, 67, 0.4);
+}
+
+.swiss-room-badge-view {
+    background: rgba(88, 166, 255, 0.14);
+    border-color: rgba(88, 166, 255, 0.4);
+}
+
+.swiss-room-badge-edit .swiss-room-role {
     color: #2ea043;
+}
+
+.swiss-room-badge-view .swiss-room-role {
+    color: #58a6ff;
+}
+
+.swiss-room-role {
     font-weight: 700;
     letter-spacing: 0.03em;
 }

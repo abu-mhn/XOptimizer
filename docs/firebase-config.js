@@ -16,17 +16,18 @@
 //    {
 //      "rules": {
 //        "swissRooms": {
-//          "$code": {
-//            ".read": true,
-//            ".write": true
-//          }
+//          "$code": { ".read": true, ".write": true }
+//        },
+//        "swissViewCodes": {
+//          "$code": { ".read": true, ".write": true }
 //        }
 //      }
 //    }
 //
-//    (Open read/write on swissRooms only — the rest of the DB stays locked.
-//    Fine for a casual tournament tool; anyone with a room code can read or
-//    write that room. The UI enforces host-only writes on its own.)
+//    (Two open paths: swissRooms holds tournament state keyed by the co-host
+//    code; swissViewCodes is a small lookup mapping participant codes to the
+//    co-host code they reference. The rest of the DB stays locked. The UI
+//    enforces who can score based on which code the joiner used.)
 //
 // If this file is left blank, the Swiss tab still works locally — it just
 // won't sync between devices.

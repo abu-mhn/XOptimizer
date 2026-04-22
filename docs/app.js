@@ -3153,16 +3153,21 @@ document.getElementById("deck-reset")?.addEventListener("click", resetDeck);
 document.getElementById("deck-shuffle")?.addEventListener("click", shuffleDeck);
 
 // ================= SWISS LIVE SYNC (Firebase Realtime DB) =================
-// When a host generates groups, a 6-char room code is created and the full
-// state is mirrored to `swissRooms/{code}`. Anyone who enters that code reads
-// the room live (read-only in the UI). The host device retains write authority
-// via a local flag; the DB rules stay open on `swissRooms` by design.
-const SWISS_ROOM_STORAGE = "beyblade_swiss_room";       // current joined room
-const SWISS_HOST_STORAGE = "beyblade_swiss_host_rooms"; // rooms this device hosts
+// When a host generates groups, TWO room codes are created:
+//   - co-host code: view + edit (mirrors state at `swissRooms/{coHostCode}`)
+//   - participant code: view only (mapped via `swissViewCodes/{viewCode}` -> coHostCode)
+// The room state lives at `swissRooms/{coHostCode}` with `viewCode` as metadata.
+// Anyone who enters the co-host code can score; anyone who enters the
+// participant code can only watch. The host (device that created the room)
+// additionally has authority to reset (wipes remote).
+const SWISS_ROOM_STORAGE = "beyblade_swiss_room";       // current joined room info (JSON)
+const SWISS_HOST_STORAGE = "beyblade_swiss_host_rooms"; // edit codes this device hosts
 
 let swissDb = null;
-let swissRoomCode = null;
-let swissIsHost = false;
+let swissEditCode = null;    // co-host code (primary room key)
+let swissViewCode = null;    // participant code
+let swissIsHost = false;     // created this room (has reset authority)
+let swissCanEdit = false;    // joined via co-host code (or is host) — can score
 let swissRoomRef = null;
 let swissApplyingRemote = false;
 
@@ -3206,12 +3211,18 @@ function isRoomHosted(code) {
   return loadHostedRooms().includes(code);
 }
 
-function saveJoinedRoom(code) {
-  if (code) localStorage.setItem(SWISS_ROOM_STORAGE, code);
+function saveJoinedRoom(info) {
+  if (info) localStorage.setItem(SWISS_ROOM_STORAGE, JSON.stringify(info));
   else localStorage.removeItem(SWISS_ROOM_STORAGE);
 }
 function loadJoinedRoom() {
-  return localStorage.getItem(SWISS_ROOM_STORAGE) || null;
+  try {
+    const raw = localStorage.getItem(SWISS_ROOM_STORAGE);
+    if (!raw) return null;
+    // Back-compat: earlier versions stored just the string code.
+    if (raw[0] !== "{") return { editCode: raw, viewCode: null, role: "edit" };
+    return JSON.parse(raw);
+  } catch (e) { return null; }
 }
 
 function disconnectSwissRoom() {
@@ -3219,33 +3230,74 @@ function disconnectSwissRoom() {
     try { swissRoomRef.off(); } catch (e) {}
   }
   swissRoomRef = null;
-  swissRoomCode = null;
+  swissEditCode = null;
+  swissViewCode = null;
   swissIsHost = false;
+  swissCanEdit = false;
   saveJoinedRoom(null);
 }
 
-function connectSwissRoom(code, asHost) {
+// Strip metadata fields (viewCode) before persisting remote state locally —
+// they aren't part of the tournament model and shouldn't land in loadSwiss.
+function stripRoomMetadata(remote) {
+  if (!remote) return remote;
+  const { viewCode, ...state } = remote;
+  return state;
+}
+
+function resolveRoomCode(code, cb) {
+  const db = initFirebase();
+  if (!db) { cb({ ok: false, reason: "Live sync isn't configured on this build." }); return; }
+  db.ref("swissRooms/" + code).once("value").then(editSnap => {
+    const remote = editSnap.val();
+    if (remote && remote.groups) {
+      cb({ ok: true, editCode: code, viewCode: remote.viewCode || null, role: "edit" });
+      return null;
+    }
+    return db.ref("swissViewCodes/" + code).once("value").then(viewSnap => {
+      const mappedEdit = viewSnap.val();
+      if (typeof mappedEdit === "string" && mappedEdit) {
+        cb({ ok: true, editCode: mappedEdit, viewCode: code, role: "view" });
+      } else {
+        cb({ ok: false, reason: "Room not found. Double-check the code." });
+      }
+    });
+  }).catch(err => {
+    console.warn("Room lookup failed:", err);
+    cb({ ok: false, reason: "Couldn't look up room. Check your connection." });
+  });
+}
+
+function connectSwissRoom(editCode, viewCode, asHost, canEdit) {
   const db = initFirebase();
   if (!db) return { ok: false, reason: "Firebase not configured" };
   if (swissRoomRef) {
     try { swissRoomRef.off(); } catch (e) {}
   }
-  swissRoomCode = code;
+  swissEditCode = editCode;
+  swissViewCode = viewCode || null;
   swissIsHost = !!asHost;
-  swissRoomRef = db.ref("swissRooms/" + code);
+  swissCanEdit = !!canEdit;
+  swissRoomRef = db.ref("swissRooms/" + editCode);
   swissRoomRef.on("value", snap => {
     const remote = snap.val();
     if (remote && remote.groups) {
+      if (remote.viewCode && !swissViewCode) swissViewCode = remote.viewCode;
       swissApplyingRemote = true;
-      localStorage.setItem(SWISS_KEY, JSON.stringify(remote));
+      localStorage.setItem(SWISS_KEY, JSON.stringify(stripRoomMetadata(remote)));
       swissApplyingRemote = false;
       renderSwiss();
     } else if (!remote && swissIsHost) {
-      // Room was wiped remotely (or first-time creation). Push our local state.
+      // Room was wiped remotely (or first-time creation). Push our local state
+      // together with the viewCode metadata and publish the viewer mapping.
       const local = loadSwiss();
-      if (local.groups) {
+      if (local.groups && swissViewCode) {
         swissApplyingRemote = true;
-        swissRoomRef.set(local).finally(() => { swissApplyingRemote = false; });
+        const payload = { ...local, viewCode: swissViewCode };
+        swissRoomRef.set(payload)
+          .then(() => db.ref("swissViewCodes/" + swissViewCode).set(editCode))
+          .catch(e => console.warn("Initial room push failed:", e))
+          .finally(() => { swissApplyingRemote = false; });
       }
     } else if (!remote && !swissIsHost) {
       // Non-host: room was wiped (or doesn't exist yet). Clear local view so
@@ -3258,7 +3310,7 @@ function connectSwissRoom(code, asHost) {
   }, err => {
     console.warn("Swiss room listen error:", err);
   });
-  saveJoinedRoom(code);
+  saveJoinedRoom({ editCode, viewCode: swissViewCode, role: canEdit ? "edit" : "view" });
   return { ok: true };
 }
 
@@ -3268,7 +3320,7 @@ function connectSwissRoom(code, asHost) {
 // concurrently without overwriting each other's work.
 function pushSwissMatchUpdate(matchId, match, state, newMatchIds) {
   if (swissApplyingRemote) return;
-  if (!swissRoomRef) return;
+  if (!swissRoomRef || !swissCanEdit) return;
   const updates = {
     [`matches/${matchId}/scoreA`]: match.scoreA,
     [`matches/${matchId}/scoreB`]: match.scoreB
@@ -3283,10 +3335,12 @@ function pushSwissMatchUpdate(matchId, match, state, newMatchIds) {
 }
 
 function initSwissRoomOnLoad() {
-  const code = loadJoinedRoom();
-  if (!code) return;
+  const info = loadJoinedRoom();
+  if (!info || !info.editCode) return;
   if (!firebaseReady()) return;
-  connectSwissRoom(code, isRoomHosted(code));
+  const asHost = isRoomHosted(info.editCode);
+  const canEdit = asHost || info.role === "edit";
+  connectSwissRoom(info.editCode, info.viewCode || null, asHost, canEdit);
 }
 
 // ================= SWISS TOURNAMENT =================
@@ -3437,13 +3491,18 @@ function isGroupRoundComplete(matches, groupIndex, roundIndex) {
 function resetSwiss() {
   const state = loadSwiss();
   const hasAny = state.groups || Object.keys(state.matches || {}).length > 0;
-  const promptMsg = swissRoomCode && !swissIsHost
+  const inRoom = !!swissEditCode;
+  const promptMsg = inRoom && !swissIsHost
     ? "Leave this live room?"
     : "Clear participants, groups, and all match scores?";
-  if ((hasAny || swissRoomCode) && !confirm(promptMsg)) return;
-  // If host, wipe the remote room so guests see it clear too.
-  if (swissRoomCode && swissIsHost && swissRoomRef) {
-    try { swissRoomRef.set(null); } catch (e) {}
+  if ((hasAny || inRoom) && !confirm(promptMsg)) return;
+  // Host wipes the remote room (including the viewer-code mapping) so every
+  // joined device clears too. Non-hosts just disconnect locally.
+  if (inRoom && swissIsHost && swissRoomRef) {
+    try {
+      swissRoomRef.set(null);
+      if (swissViewCode && swissDb) swissDb.ref("swissViewCodes/" + swissViewCode).set(null);
+    } catch (e) {}
   }
   disconnectSwissRoom();
   // Bypass push-on-persist by writing directly.
@@ -3592,14 +3651,29 @@ function renderSwissGroupStandings(state, gi) {
 }
 
 function renderSwissRoomBadge() {
-  if (!swissRoomCode) return "";
-  const role = swissIsHost ? "Host" : "Live";
-  return `
-    <span class="swiss-room-badge" title="${role} — click the code to copy">
-      <span class="swiss-room-role">${role}</span>
-      <button type="button" class="swiss-room-code" data-room="${swissRoomCode}">${swissRoomCode}</button>
-    </span>
-  `;
+  if (!swissEditCode) return "";
+  const pills = [];
+  // Users who can edit see the Co-host code so they can invite other refs.
+  if (swissCanEdit) {
+    const label = swissIsHost ? "Host" : "Co-host";
+    pills.push(`
+      <span class="swiss-room-badge swiss-room-badge-edit" title="${label} — tap to copy">
+        <span class="swiss-room-role">${label}</span>
+        <button type="button" class="swiss-room-code" data-room="${swissEditCode}">${swissEditCode}</button>
+      </span>
+    `);
+  }
+  // Everyone sees the participant code so they can invite spectators.
+  if (swissViewCode) {
+    pills.push(`
+      <span class="swiss-room-badge swiss-room-badge-view" title="Participant (view only) — tap to copy">
+        <span class="swiss-room-role">View</span>
+        <button type="button" class="swiss-room-code" data-room="${swissViewCode}">${swissViewCode}</button>
+      </span>
+    `);
+  }
+  if (!pills.length) return "";
+  return `<div class="swiss-room-badges">${pills.join("")}</div>`;
 }
 
 function bindSwissRoomBadge(view) {
@@ -3625,15 +3699,15 @@ function renderSwiss() {
 
   const state = loadSwiss();
   const hasGroups = !!state.groups;
-  const inRoom = !!swissRoomCode;
-  const asGuest = inRoom && !swissIsHost;
+  const inRoom = !!swissEditCode;
+  const inRoomNonHost = inRoom && !swissIsHost;
 
   // Hide the setup form once we have a live tournament OR when the user is
-  // connected as a guest (the guest shouldn't be able to generate their own).
-  setup.classList.toggle("hidden", hasGroups || asGuest);
+  // connected to someone else's room (they shouldn't generate their own).
+  setup.classList.toggle("hidden", hasGroups || inRoomNonHost);
 
   if (!hasGroups) {
-    if (asGuest) {
+    if (inRoomNonHost) {
       view.innerHTML = `
         <div class="swiss-toolbar">
           ${renderSwissRoomBadge()}
@@ -3675,7 +3749,7 @@ function renderSwiss() {
     </section>`;
   }).join("");
 
-  const resetTitle = asGuest ? "Leave Room" : "Reset Swiss";
+  const resetTitle = inRoomNonHost ? "Leave Room" : "Reset Swiss";
   view.innerHTML = `
     <div class="swiss-toolbar">
       ${allDone ? `<span class="swiss-complete">Tournament Complete</span>` : ""}
@@ -3690,16 +3764,27 @@ function renderSwiss() {
 
   bindSwissRoomBadge(view);
 
-  // Everyone in the room can score (multi-ref). Host distinction now only
-  // affects the reset button (wipe remote vs leave locally).
-  view.querySelectorAll(".swiss-match-card-play").forEach(el => {
-    const id = el.dataset.match;
-    if (!id) return;
-    el.addEventListener("click", () => startSwissMatch(id));
-    el.addEventListener("keydown", e => {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); startSwissMatch(id); }
+  // Match cards are interactive only for users who can edit (host + co-host).
+  // Participants joined via the view-only code see cards but can't open them.
+  const canEdit = !inRoom || swissCanEdit;
+  if (canEdit) {
+    view.querySelectorAll(".swiss-match-card-play").forEach(el => {
+      const id = el.dataset.match;
+      if (!id) return;
+      el.addEventListener("click", () => startSwissMatch(id));
+      el.addEventListener("keydown", e => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); startSwissMatch(id); }
+      });
     });
-  });
+  } else {
+    view.querySelectorAll(".swiss-match-card-play").forEach(el => {
+      el.classList.remove("swiss-match-card-play");
+      el.removeAttribute("role");
+      el.removeAttribute("tabindex");
+      el.removeAttribute("title");
+      el.removeAttribute("aria-label");
+    });
+  }
   view.querySelectorAll(".swiss-group-tab").forEach(btn => {
     btn.addEventListener("click", () => {
       const gi = Number(btn.dataset.group);
@@ -3765,10 +3850,14 @@ document.getElementById("swiss-generate")?.addEventListener("click", () => {
   disconnectSwissRoom();
   localStorage.setItem(SWISS_KEY, JSON.stringify(next));
   if (firebaseReady()) {
-    const code = generateRoomCode();
-    markRoomHosted(code);
-    connectSwissRoom(code, true);
-    // connectSwissRoom's listener will push the local state because remote is empty.
+    // Two codes: edit (co-host) + view (participant). Ensure they differ.
+    const editCode = generateRoomCode();
+    let viewCode = generateRoomCode();
+    while (viewCode === editCode) viewCode = generateRoomCode();
+    markRoomHosted(editCode);
+    connectSwissRoom(editCode, viewCode, true, true);
+    // connectSwissRoom's listener will push the local state (with viewCode
+    // metadata) and publish the swissViewCodes mapping because remote is empty.
   }
   renderSwiss();
 });
@@ -3783,16 +3872,25 @@ document.getElementById("swiss-join")?.addEventListener("click", () => {
     if (status) status.textContent = "Live sync isn't configured on this build.";
     return;
   }
-  if (status) status.textContent = "Connecting…";
-  // Joining as guest. Clear any local tournament first so remote fully owns the view.
-  localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [] }));
-  const result = connectSwissRoom(code, isRoomHosted(code));
-  if (!result.ok) {
-    if (status) status.textContent = result.reason || "Failed to connect.";
-    return;
-  }
-  if (status) status.textContent = `Joined room ${code}. Waiting for host…`;
-  renderSwiss();
+  if (status) status.textContent = "Looking up room…";
+  resolveRoomCode(code, result => {
+    if (!result.ok) {
+      if (status) status.textContent = result.reason || "Failed to connect.";
+      return;
+    }
+    // Fresh join — remote owns the view, clear any stale local state.
+    localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [] }));
+    const asHost = isRoomHosted(result.editCode);
+    const canEdit = asHost || result.role === "edit";
+    const connected = connectSwissRoom(result.editCode, result.viewCode, asHost, canEdit);
+    if (!connected.ok) {
+      if (status) status.textContent = connected.reason || "Failed to connect.";
+      return;
+    }
+    const label = canEdit ? "co-host" : "participant";
+    if (status) status.textContent = `Joined as ${label}.`;
+    renderSwiss();
+  });
 });
 
 document.getElementById("swiss-reset")?.addEventListener("click", resetSwiss);
