@@ -3517,7 +3517,10 @@ function resetSwiss() {
 }
 
 function startSwissMatch(matchId) {
-  // Anyone in the room can score (multi-ref tournaments). The room code itself
+  // Participants (joined via view-only code) can't score — never open the
+  // match scoreboard for them, even if something bypasses the UI gating.
+  if (swissEditCode && !swissCanEdit) return;
+  // Anyone else in the room can score (multi-ref tournaments). The room code
   // is the access control — only people the host shared it with get in.
   const state = loadSwiss();
   const match = state.matches[matchId];
@@ -4215,6 +4218,18 @@ let scoreboardSaveCallback = null;
     if (!isMobile) {
       alert("Scoring uses the tilt-activated scoreboard — open this page on your phone and rotate to landscape.");
       return;
+    }
+
+    // Safety net: if called for a view-only participant, drop the match
+    // context and fall back to the default standalone scoreboard (no save
+    // callback, no pre-filled names/scores). The tilt-to-open behavior for
+    // the standalone board is unchanged.
+    if (swissEditCode && !swissCanEdit) {
+      nameA = "";
+      nameB = "";
+      onSave = null;
+      initialA = 0;
+      initialB = 0;
     }
 
     if (labelA) labelA.textContent = nameA || "A";
