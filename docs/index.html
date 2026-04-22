@@ -106,10 +106,6 @@
         <label>Bit
           <select name="bit"></select>
         </label>
-        <div class="separator">-- OR Ratchet-Bit --</div>
-        <label>Ratchet-Bit
-          <select name="ratchetBit"></select>
-        </label>
       </fieldset>
 
       <div class="btn-row">
@@ -152,10 +148,6 @@
         </label>
         <label>Bit
           <select name="bit"></select>
-        </label>
-        <div class="separator">-- OR Ratchet-Bit --</div>
-        <label>Ratchet-Bit
-          <select name="ratchetBit"></select>
         </label>
       </fieldset>
 
@@ -203,10 +195,6 @@
         </label>
         <label>Bit
           <select name="bit"></select>
-        </label>
-        <div class="separator">-- OR Ratchet-Bit --</div>
-        <label>Ratchet-Bit
-          <select name="ratchetBit"></select>
         </label>
       </fieldset>
 
@@ -366,37 +354,21 @@
   </footer>
 
   <!-- ================= POPUP ================= -->
-  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-22">
+  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-23">
     <div class="popup-card">
 
       <h2 class="popup-title">What's New</h2>
 
       <ul class="popup-list">
-        <li>New <strong>Deck</strong> tab — build a 3-combo deck, name it, shuffle the order, download the whole deck as a square PNG, or reset it. Tap a part image to open the same preview popup used in the library.</li>
-        <li>Result card has a new <strong>+ cards</strong> button that adds the current combo to the first empty deck slot; a quick thumbs-up confirms the add.</li>
-        <li>Deck part-uniqueness rule: a part can only appear once across all three combos, except for <strong>lock chips</strong> — those can repeat, apart from <strong>Emperor</strong> and <strong>Valkyrie</strong>.</li>
-        <li>Downloaded result PNGs are now <strong>square</strong> (padded with the theme background), ready for Instagram sharing.</li>
-        <li>New <strong>Monochrome</strong> theme under Settings &rarr; Theme.</li>
-        <li>The header and favicon logos now switch cleanly between their light and dark variants to match the active theme.</li>
-        <li>Fixed <strong>0-70</strong>'s height data.</li>
+        <li>The "Choose Bottom Type" popup after selecting a blade is gone — the next bottom field auto-focuses instead.</li>
+        <li><strong>Turbo</strong> and <strong>Operate</strong> now live in the Bit dropdown (not a separate Ratchet-Bit field). To use one, pick <strong>No Ratchet</strong> at the top of the Ratchet dropdown; the Bit list then switches to ratchet-bit items. Otherwise the Bit list stays regular bits only.</li>
+        <li>Picking a different bottom type now swaps the matching field cleanly — e.g., choosing a Ratchet while <strong>No Ratchet</strong> is active flips the Bit list back to regular bits.</li>
       </ul>
 
       <button type="button" class="btn popup-ok">
         Got it
       </button>
 
-    </div>
-  </div>
-
-  <!-- ================= BOTTOM CHOICE POPUP ================= -->
-  <div id="bottom-choice-popup" class="popup-overlay hidden">
-    <div class="popup-card">
-      <button type="button" class="popup-close" data-choice="cancel">&times;</button>
-      <h2 class="popup-title">Choose Bottom Type</h2>
-      <div class="bottom-choice-row">
-        <button type="button" class="btn popup-choice" data-choice="ratchet">Ratchet + Bit</button>
-        <button type="button" class="btn popup-choice" data-choice="ratchetBit">Ratchet-Bit</button>
-      </div>
     </div>
   </div>
 

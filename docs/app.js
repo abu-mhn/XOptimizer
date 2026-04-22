@@ -64,29 +64,58 @@ function spinLogo(dir) {
   return `<img src="assets/spin/${file}" alt="${label}" title="${label}" class="spin-logo">`;
 }
 
+// Sentinel selected in the Ratchet dropdown to signal "use a ratchet-bit bit".
+const NO_RATCHET = "__NO_RATCHET__";
+
+function applyBitFilter(form) {
+  const ratchetSel = form.querySelector('[name="ratchet"]');
+  const bitWrapper = form.querySelector('[name="bit"]')?.nextElementSibling;
+  if (!ratchetSel || !bitWrapper) return;
+  if (ratchetSel.value === NO_RATCHET) {
+    bitWrapper._setFilter(b => !!b.isRatchetBit);
+  } else {
+    bitWrapper._setFilter(b => !b.isRatchetBit);
+  }
+}
+
+// --- Merge ratchetBits into a combined bit pool ---
+// allBits exposes a unified dropdown list; isRatchetBit items already include
+// ratchet-portion stats and their own height, so they skip the ratchet slot.
+function mergeBits() {
+  if (DATA._bitsMerged) return;
+  const rbTagged = (DATA.ratchetBits || []).map(rb => ({
+    ...rb,
+    isRatchetBit: true,
+    _folder: "ratchetBits"
+  }));
+  (DATA.bits || []).forEach(b => { b._folder = "bits"; });
+  DATA.bits = [...(DATA.bits || []), ...rbTagged];
+  DATA._bitsMerged = true;
+}
+mergeBits();
+
 // --- Sort all DATA arrays alphabetically by name ---
 function sortData() {
   Object.keys(DATA).forEach(key => {
+    if (key === "_bitsMerged") return;
     DATA[key].sort((a, b) => a.name.localeCompare(b.name));
   });
 }
 
 // --- Auto-advance flow: map which dropdown to focus after the current one ---
-// "__BOTTOM__" = scroll to Bottom fieldset but let the user choose Ratchet or Ratchet-Bit
+// "__BOTTOM__" = scroll to Bottom fieldset and focus the first enabled field.
 const NEXT_DROPDOWN = {
   "form-standard": {
     blade: "__BOTTOM__",
     ratchet: "bit",
-    bit: null,
-    ratchetBit: null
+    bit: null
   },
   "form-cx": {
     lockChip: "mainBlade",
     mainBlade: "assistBlade",
     assistBlade: "__BOTTOM__",
     ratchet: "bit",
-    bit: null,
-    ratchetBit: null
+    bit: null
   },
   "form-cxExpand": {
     lockChip: "metalBlade",
@@ -94,8 +123,7 @@ const NEXT_DROPDOWN = {
     overBlade: "assistBlade",
     assistBlade: "__BOTTOM__",
     ratchet: "bit",
-    bit: null,
-    ratchetBit: null
+    bit: null
   }
 };
 
@@ -114,8 +142,18 @@ function advanceToNext(sel) {
   if (next == null) return;
 
   if (next === "__BOTTOM__") {
+    // Auto-focus the first enabled bottom field: ratchet, then bit, then ratchet-bit.
     requestAnimationFrame(() => {
-      showBottomChoicePopup(form);
+      const candidates = ["ratchet", "bit"];
+      for (const name of candidates) {
+        const wrapper = form.querySelector(`[name="${name}"]`)?.nextElementSibling;
+        const input = wrapper?.querySelector("input");
+        if (input && !input.disabled) {
+          wrapper.scrollIntoView({ behavior: "smooth", block: "center" });
+          input.focus();
+          return;
+        }
+      }
     });
     return;
   }
@@ -131,64 +169,17 @@ function advanceToNext(sel) {
   });
 }
 
-function showBottomChoicePopup(form) {
-  const popup = document.getElementById("bottom-choice-popup");
-  if (!popup) return;
-
-  const ratchetInput = form.querySelector('[name="ratchet"]')?.nextElementSibling?.querySelector("input");
-  const rbInput = form.querySelector('[name="ratchetBit"]')?.nextElementSibling?.querySelector("input");
-
-  const ratchetBtn = popup.querySelector('[data-choice="ratchet"]');
-  const rbBtn = popup.querySelector('[data-choice="ratchetBit"]');
-
-  // Only disable ratchet button if both ratchet AND bit are disabled
-  const bitInput = form.querySelector('[name="bit"]')?.nextElementSibling?.querySelector("input");
-  if (ratchetBtn) ratchetBtn.disabled = !!ratchetInput?.disabled && !!bitInput?.disabled;
-  if (rbBtn) rbBtn.disabled = !!rbInput?.disabled;
-
-  // Hide the X close button so the only way out is choosing
-  const closeBtn = popup.querySelector(".popup-close");
-  if (closeBtn) closeBtn.style.display = "none";
-
-  popup.classList.remove("hidden");
-
-  const close = () => {
-    popup.classList.add("hidden");
-    if (closeBtn) closeBtn.style.display = "";
-  };
-
-  const onClick = (e) => {
-    const btn = e.target.closest(".popup-choice");
-    if (!btn || btn.disabled) return;
-    const choice = btn.dataset.choice;
-    close();
-    popup.removeEventListener("click", onClick);
-
-    let targetName = choice === "ratchet" ? "ratchet" : "ratchetBit";
-    let wrapper = form.querySelector(`[name="${targetName}"]`)?.nextElementSibling;
-    let input = wrapper?.querySelector("input");
-
-    // If ratchet is disabled (e.g. Bullet Griffon), skip to bit
-    if (choice === "ratchet" && input?.disabled) {
-      targetName = "bit";
-      wrapper = form.querySelector(`[name="${targetName}"]`)?.nextElementSibling;
-      input = wrapper?.querySelector("input");
-    }
-
-    if (!input || input.disabled) return;
-
-    requestAnimationFrame(() => {
-      wrapper.scrollIntoView({ behavior: "smooth", block: "center" });
-      input.focus();
-    });
-  };
-
-  popup.addEventListener("click", onClick);
-}
-
 // --- Searchable dropdown ---
-function makeSearchable(sel, items, labelFn) {
+// `prependChoices`: optional [{ value: string, label: string }] rendered before
+// the real items (e.g. a "No Ratchet" synthetic choice with a sentinel value).
+function makeSearchable(sel, items, labelFn, prependChoices = []) {
   sel.innerHTML = '<option value="">-- Select --</option>';
+  prependChoices.forEach(ch => {
+    const opt = document.createElement("option");
+    opt.value = ch.value;
+    opt.textContent = ch.label;
+    sel.appendChild(opt);
+  });
   items.forEach((item, i) => {
     const opt = document.createElement("option");
     opt.value = i;
@@ -225,6 +216,18 @@ function makeSearchable(sel, items, labelFn) {
     activeIdx = -1;
     const query = filter.toLowerCase();
     let count = 0;
+    prependChoices.forEach(ch => {
+      if (query && !ch.label.toLowerCase().includes(query)) return;
+      const div = document.createElement("div");
+      div.className = "dd-item dd-item-synthetic";
+      div.textContent = ch.label;
+      div.addEventListener("mousedown", e => {
+        e.preventDefault();
+        select(ch.value, ch.label);
+      });
+      list.appendChild(div);
+      count++;
+    });
     items.forEach((item, i) => {
       const label = labelFn(item);
       if (wrapper._filterFn && !wrapper._filterFn(item)) return;
@@ -305,8 +308,18 @@ function makeSearchable(sel, items, labelFn) {
   // Allow clearing
   wrapper._clear = () => { sel.value = ""; input.value = ""; clearBtn.classList.add("hidden"); wrapper._filterFn = null; };
 
-  // Allow programmatic selection
-  wrapper._select = (idx) => { sel.value = idx; input.value = labelFn(items[idx]); clearBtn.classList.remove("hidden"); sel.dispatchEvent(new Event("change")); };
+  // Allow programmatic selection (numeric idx into items, or a prepend-choice value string)
+  wrapper._select = (idx) => {
+    sel.value = idx;
+    if (typeof idx === "number") {
+      input.value = labelFn(items[idx]);
+    } else {
+      const ch = prependChoices.find(c => c.value === idx);
+      input.value = ch ? ch.label : "";
+    }
+    clearBtn.classList.remove("hidden");
+    sel.dispatchEvent(new Event("change"));
+  };
 
   // Allow external filtering
   wrapper._filterFn = null;
@@ -319,21 +332,21 @@ function makeSearchable(sel, items, labelFn) {
 }
 
 function initDropdowns() {
+  const noRatchetChoice = [{ value: NO_RATCHET, label: "No Ratchet" }];
+
   // Standard
   const stdForm = document.getElementById("form-standard");
   makeSearchable(stdForm.querySelector('[name="blade"]'), DATA.blades, b => b.name);
-  makeSearchable(stdForm.querySelector('[name="ratchet"]'), DATA.ratchets, r => r.name);
+  makeSearchable(stdForm.querySelector('[name="ratchet"]'), DATA.ratchets, r => r.name, noRatchetChoice);
   makeSearchable(stdForm.querySelector('[name="bit"]'), DATA.bits, b => b.name);
-  makeSearchable(stdForm.querySelector('[name="ratchetBit"]'), DATA.ratchetBits, rb => rb.name);
 
   // CX
   const cxForm = document.getElementById("form-cx");
   makeSearchable(cxForm.querySelector('[name="lockChip"]'), DATA.lockChips, lc => lc.name);
   makeSearchable(cxForm.querySelector('[name="mainBlade"]'), DATA.mainBlades, mb => mb.name);
   makeSearchable(cxForm.querySelector('[name="assistBlade"]'), DATA.assistBlades, ab => ab.name);
-  makeSearchable(cxForm.querySelector('[name="ratchet"]'), DATA.ratchets, r => r.name);
+  makeSearchable(cxForm.querySelector('[name="ratchet"]'), DATA.ratchets, r => r.name, noRatchetChoice);
   makeSearchable(cxForm.querySelector('[name="bit"]'), DATA.bits, b => b.name);
-  makeSearchable(cxForm.querySelector('[name="ratchetBit"]'), DATA.ratchetBits, rb => rb.name);
 
   // CX Expand
   const cxeForm = document.getElementById("form-cxExpand");
@@ -341,9 +354,8 @@ function initDropdowns() {
   makeSearchable(cxeForm.querySelector('[name="metalBlade"]'), DATA.metalBlades, mb => mb.name);
   makeSearchable(cxeForm.querySelector('[name="overBlade"]'), DATA.overBlades, ob => ob.name);
   makeSearchable(cxeForm.querySelector('[name="assistBlade"]'), DATA.assistBlades, ab => ab.name);
-  makeSearchable(cxeForm.querySelector('[name="ratchet"]'), DATA.ratchets, r => r.name);
+  makeSearchable(cxeForm.querySelector('[name="ratchet"]'), DATA.ratchets, r => r.name, noRatchetChoice);
   makeSearchable(cxeForm.querySelector('[name="bit"]'), DATA.bits, b => b.name);
-  makeSearchable(cxeForm.querySelector('[name="ratchetBit"]'), DATA.ratchetBits, rb => rb.name);
 }
 
 // --- Helper: switch to a calculator sub-mode ---
@@ -386,11 +398,8 @@ function switchToCalcMode(mode) {
       bInput.placeholder = "-- Select --";
     }
 
-    const rbInput = form.querySelector('[name="ratchetBit"]')?.nextElementSibling?.querySelector("input");
-    if (rbInput) {
-      rbInput.disabled = false;
-      rbInput.placeholder = "-- Select --";
-    }
+    // Restore the default "regular bits only" filter on the bit dropdown.
+    applyBitFilter(form);
 
     // ================= hide mode buttons =================
     form.querySelectorAll(".btn-mode").forEach(b => {
@@ -848,7 +857,6 @@ function calcStandard(form) {
   const bladeIdx = form.querySelector('[name="blade"]')?.value;
   const ratchetIdx = form.querySelector('[name="ratchet"]')?.value;
   const bitIdx = form.querySelector('[name="bit"]')?.value;
-  const rbIdx = form.querySelector('[name="ratchetBit"]')?.value;
 
   if (!bladeIdx) {
     return renderResult({
@@ -858,9 +866,12 @@ function calcStandard(form) {
   }
 
   const blade = DATA?.blades?.[bladeIdx];
-  const ratchet = ratchetIdx ? DATA?.ratchets?.[ratchetIdx] : null;
-  const bit = bitIdx ? DATA?.bits?.[bitIdx] : null;
-  const rb = rbIdx ? DATA?.ratchetBits?.[rbIdx] : null;
+  const bitRaw = bitIdx !== "" && bitIdx != null ? DATA?.bits?.[bitIdx] : null;
+  const isRB = !!(bitRaw && bitRaw.isRatchetBit);
+  const isNoRatchet = ratchetIdx === NO_RATCHET;
+  const ratchet = isRB || isNoRatchet ? null : (ratchetIdx ? DATA?.ratchets?.[ratchetIdx] : null);
+  const bit = isRB ? null : bitRaw;
+  const rb = isRB ? bitRaw : null;
 
   if (!blade) {
     return renderResult({
@@ -868,8 +879,6 @@ function calcStandard(form) {
       message: "Blade not found."
     });
   }
-
-  const isRB = !!rb;
 
   // ================= STAT CHECK =================
   function hasZeroStat(...parts) {
@@ -969,12 +978,11 @@ function calcStandard(form) {
     parts: {
       blade: blade.name,
       ratchet: ratchet?.name || null,
-      bit: bit?.name || null,
-      ratchetBit: rb?.name || null
+      bit: (bit?.name) || (rb?.name) || null
     },
     partModes: {
       blade: bladeModes ? blade?._modeIndex ?? null : null,
-      ratchetBit: rbModes ? rb?._modeIndex ?? null : null
+      bit: isRB && rbModes ? rb?._modeIndex ?? null : null
     },
 
     grandTotal: {
@@ -1000,10 +1008,10 @@ function calcStandard(form) {
     { name: blade.name, src: partImgPath("blades", blade.name, bladeModes ? blade._modeIndex : null) },
   ];
   if (isRB && rb) {
-    partImages.push({ name: rb.name, src: partImgPath("ratchetBits", rb.name, rbModes ? rb._modeIndex : null) });
+    partImages.push({ name: rb.name, src: partImgPath(rb._folder || "ratchetBits", rb.name, rbModes ? rb._modeIndex : null) });
   } else {
     if (ratchet) partImages.push({ name: ratchet.name, src: partImgPath("ratchets", ratchet.name) });
-    if (bit) partImages.push({ name: bit.name, src: partImgPath("bits", bit.name) });
+    if (bit) partImages.push({ name: bit.name, src: partImgPath(bit._folder || "bits", bit.name) });
   }
 
   // ================= RESULT =================
@@ -1077,7 +1085,6 @@ function calcCX(form) {
   const abIdx = form.querySelector('[name="assistBlade"]')?.value;
   const rIdx = form.querySelector('[name="ratchet"]')?.value;
   const bIdx = form.querySelector('[name="bit"]')?.value;
-  const rbIdx = form.querySelector('[name="ratchetBit"]')?.value;
 
   if (!lcIdx || !mbIdx || !abIdx) {
     return renderResult({
@@ -1089,9 +1096,12 @@ function calcCX(form) {
   const lc = DATA.lockChips[lcIdx];
   const mb = DATA.mainBlades[mbIdx];
   const ab = DATA.assistBlades[abIdx];
-  const ratchet = rIdx ? DATA.ratchets[rIdx] : null;
-  const bit = bIdx ? DATA.bits[bIdx] : null;
-  const rb = rbIdx ? DATA.ratchetBits[rbIdx] : null;
+  const bitRaw = bIdx !== "" && bIdx != null ? DATA.bits[bIdx] : null;
+  const isRB = !!(bitRaw && bitRaw.isRatchetBit);
+  const isNoRatchet = rIdx === NO_RATCHET;
+  const ratchet = isRB || isNoRatchet ? null : (rIdx ? DATA.ratchets[rIdx] : null);
+  const bit = isRB ? null : bitRaw;
+  const rb = isRB ? bitRaw : null;
 
   if (!lc || !mb || !ab) {
     return renderResult({
@@ -1099,8 +1109,6 @@ function calcCX(form) {
       message: "One or more parts not found."
     });
   }
-
-  const isRB = !!rb;
 
   // ================= MODE =================
   const mbModes = mb?.modes || null;
@@ -1202,13 +1210,12 @@ function calcCX(form) {
       mainBlade: mbA.name,
       assistBlade: abA.name,
       ratchet: ratchet?.name || null,
-      bit: bit?.name || null,
-      ratchetBit: rb?.name || null
+      bit: (bit?.name) || (rb?.name) || null
     },
     partModes: {
       mainBlade: mbModes ? mb?._modeIndex ?? null : null,
       assistBlade: abModes ? ab?._modeIndex ?? null : null,
-      ratchetBit: rbModes ? rb?._modeIndex ?? null : null
+      bit: isRB && rbModes ? rb?._modeIndex ?? null : null
     },
 
     grandTotal: {
@@ -1229,10 +1236,10 @@ function calcCX(form) {
     { name: ab.name, src: partImgPath("assistBlades", ab.name, abModes ? ab._modeIndex : null) },
   ];
   if (isRB && rb) {
-    partImages.push({ name: rb.name, src: partImgPath("ratchetBits", rb.name, rbModes ? rb._modeIndex : null) });
+    partImages.push({ name: rb.name, src: partImgPath(rb._folder || "ratchetBits", rb.name, rbModes ? rb._modeIndex : null) });
   } else {
     if (ratchet) partImages.push({ name: ratchet.name, src: partImgPath("ratchets", ratchet.name) });
-    if (bit) partImages.push({ name: bit.name, src: partImgPath("bits", bit.name) });
+    if (bit) partImages.push({ name: bit.name, src: partImgPath(bit._folder || "bits", bit.name) });
   }
 
   // ================= RESULT =================
@@ -1294,7 +1301,6 @@ function calcCXExpand(form) {
   const abIdx = form.querySelector('[name="assistBlade"]')?.value;
   const rIdx = form.querySelector('[name="ratchet"]')?.value;
   const bIdx = form.querySelector('[name="bit"]')?.value;
-  const rbIdx = form.querySelector('[name="ratchetBit"]')?.value;
 
   if (!lcIdx || !mbIdx || !abIdx) {
     return renderResult({
@@ -1308,11 +1314,12 @@ function calcCXExpand(form) {
   const ob = obIdx ? DATA.overBlades[obIdx] : null;
   const ab = DATA.assistBlades[abIdx];
 
-  const ratchet = rIdx ? DATA.ratchets[rIdx] : null;
-  const bit = bIdx ? DATA.bits[bIdx] : null;
-  const rb = rbIdx ? DATA.ratchetBits[rbIdx] : null;
-
-  const isRB = !!rb;
+  const bitRaw = bIdx !== "" && bIdx != null ? DATA.bits[bIdx] : null;
+  const isRB = !!(bitRaw && bitRaw.isRatchetBit);
+  const isNoRatchet = rIdx === NO_RATCHET;
+  const ratchet = isRB || isNoRatchet ? null : (rIdx ? DATA.ratchets[rIdx] : null);
+  const bit = isRB ? null : bitRaw;
+  const rb = isRB ? bitRaw : null;
 
   if (!lc || !mb || !ab) {
     return renderResult({
@@ -1437,12 +1444,11 @@ function calcCXExpand(form) {
       overBlade: obA?.name || null,
       assistBlade: abA.name,
       ratchet: ratchet?.name || null,
-      bit: bit?.name || null,
-      ratchetBit: rb?.name || null
+      bit: (bit?.name) || (rb?.name) || null
     },
     partModes: {
       assistBlade: abModes ? ab?._modeIndex ?? null : null,
-      ratchetBit: rbModes ? rb?._modeIndex ?? null : null
+      bit: isRB && rbModes ? rb?._modeIndex ?? null : null
     },
 
     top: {
@@ -1479,10 +1485,10 @@ function calcCXExpand(form) {
   if (ob) partImages.push({ name: ob.name, src: partImgPath("overBlades", ob.name, obModes ? (ob._modeIndex || 0) : null) });
   partImages.push({ name: ab.name, src: partImgPath("assistBlades", ab.name, abModes ? (ab._modeIndex || 0) : null) });
   if (isRB && rb) {
-    partImages.push({ name: rb.name, src: partImgPath("ratchetBits", rb.name, rbModes ? (rb._modeIndex || 0) : null) });
+    partImages.push({ name: rb.name, src: partImgPath(rb._folder || "ratchetBits", rb.name, rbModes ? (rb._modeIndex || 0) : null) });
   } else {
     if (ratchet) partImages.push({ name: ratchet.name, src: partImgPath("ratchets", ratchet.name) });
-    if (bit) partImages.push({ name: bit.name, src: partImgPath("bits", bit.name) });
+    if (bit) partImages.push({ name: bit.name, src: partImgPath(bit._folder || "bits", bit.name) });
   }
 
   // ================= RESULT =================
@@ -1549,7 +1555,8 @@ document.addEventListener("click", (e) => {
 
   if (calc === "standard") {
     const blade = DATA.blades?.[form.querySelector('[name="blade"]')?.value];
-    const rb = DATA.ratchetBits?.[form.querySelector('[name="ratchetBit"]')?.value];
+    const bitSelected = DATA.bits?.[form.querySelector('[name="bit"]')?.value];
+    const rb = bitSelected && bitSelected.isRatchetBit ? bitSelected : null;
 
     if (mode === "blade") cycle(blade);
     if (mode === "rb") cycle(rb);
@@ -1558,7 +1565,8 @@ document.addEventListener("click", (e) => {
   } else if (calc === "cx") {
     const mb = DATA.mainBlades?.[form.querySelector('[name="mainBlade"]')?.value];
     const ab = DATA.assistBlades?.[form.querySelector('[name="assistBlade"]')?.value];
-    const rb = DATA.ratchetBits?.[form.querySelector('[name="ratchetBit"]')?.value];
+    const bitSelected = DATA.bits?.[form.querySelector('[name="bit"]')?.value];
+    const rb = bitSelected && bitSelected.isRatchetBit ? bitSelected : null;
 
     if (mode === "mb") cycle(mb);
     if (mode === "ab") cycle(ab);
@@ -1569,7 +1577,8 @@ document.addEventListener("click", (e) => {
     const mb = DATA.metalBlades?.[form.querySelector('[name="metalBlade"]')?.value];
     const ob = DATA.overBlades?.[form.querySelector('[name="overBlade"]')?.value];
     const ab = DATA.assistBlades?.[form.querySelector('[name="assistBlade"]')?.value];
-    const rb = DATA.ratchetBits?.[form.querySelector('[name="ratchetBit"]')?.value];
+    const bitSelected = DATA.bits?.[form.querySelector('[name="bit"]')?.value];
+    const rb = bitSelected && bitSelected.isRatchetBit ? bitSelected : null;
 
     if (mode === "mb") cycle(mb);
     if (mode === "ob") cycle(ob);
@@ -1595,49 +1604,37 @@ initDropdowns();
   const bladeSel = stdForm.querySelector('[name="blade"]');
   const ratchetWrapper = stdForm.querySelector('[name="ratchet"]').nextElementSibling;
   const ratchetInput = ratchetWrapper.querySelector("input");
-  const rbWrapper = stdForm.querySelector('[name="ratchetBit"]').nextElementSibling;
-  const rbInput = rbWrapper.querySelector("input");
+  const bitWrapper = stdForm.querySelector('[name="bit"]').nextElementSibling;
+  const bitInput = bitWrapper.querySelector("input");
 
   bladeSel.addEventListener("change", () => {
     const idx = bladeSel.value;
     const codename = idx !== "" ? DATA.blades[idx].codename : "";
 
     if (codename === "CLOCKMIRAGE") {
-      // Clock Mirage: filter ratchet to *5, disable ratchet-bit
+      // Clock Mirage: filter ratchet to *5; bit list restricted to regular bits
       ratchetWrapper._setFilter(r => r.name.endsWith("5"));
       ratchetInput.disabled = false;
       ratchetInput.placeholder = "-- Select --";
-      rbWrapper._clear();
-      rbInput.disabled = true;
-      rbInput.placeholder = "Not available";
+      bitWrapper._setFilter(b => !b.isRatchetBit);
+      bitInput.disabled = false;
+      bitInput.placeholder = "-- Select --";
     } else if (codename === "BULLETGRIFFON") {
-      // Bullet Griffon: disable ratchet and ratchet-bit
-      ratchetWrapper._clear();
+      // Bullet Griffon: force "No Ratchet"; bit list restricted to ratchet-bits
       ratchetWrapper._filterFn = null;
+      ratchetWrapper._select(NO_RATCHET);
       ratchetInput.disabled = true;
-      ratchetInput.placeholder = "Not available";
-      rbWrapper._clear();
-      rbInput.disabled = true;
-      rbInput.placeholder = "Not available";
+      bitWrapper._setFilter(b => !!b.isRatchetBit);
+      bitInput.disabled = false;
+      bitInput.placeholder = "-- Select --";
     } else {
-      // Default: clear filters, re-enable based on current selections
+      // Default: clear ratchet filter; bit filter driven by ratchet selection.
       ratchetWrapper._filterFn = null;
-
-      const ratchetSel = stdForm.querySelector('[name="ratchet"]');
-      const bitSel = stdForm.querySelector('[name="bit"]');
-      const rbSel = stdForm.querySelector('[name="ratchetBit"]');
-
-      // Only re-enable ratchet if ratchet-bit is not chosen
-      if (!rbSel.value) {
-        ratchetInput.disabled = false;
-        ratchetInput.placeholder = "-- Select --";
-      }
-
-      // Only re-enable ratchet-bit if both ratchet and bit are empty
-      if (!ratchetSel.value && !bitSel.value) {
-        rbInput.disabled = false;
-        rbInput.placeholder = "-- Select --";
-      }
+      ratchetInput.disabled = false;
+      ratchetInput.placeholder = "-- Select --";
+      bitInput.disabled = false;
+      bitInput.placeholder = "-- Select --";
+      applyBitFilter(stdForm);
     }
   });
 })();
@@ -1707,80 +1704,30 @@ function setupModeButton(form, selectName, dataArray) {
   const cxeForm = document.getElementById("form-cxExpand");
 
   setupModeButton(stdForm, "blade", DATA.blades);
-  setupModeButton(stdForm, "ratchetBit", DATA.ratchetBits);
+  setupModeButton(stdForm, "bit", DATA.bits);
 
   setupModeButton(cxForm, "mainBlade", DATA.mainBlades);
   setupModeButton(cxForm, "assistBlade", DATA.assistBlades);
-  setupModeButton(cxForm, "ratchetBit", DATA.ratchetBits);
+  setupModeButton(cxForm, "bit", DATA.bits);
 
   setupModeButton(cxeForm, "assistBlade", DATA.assistBlades);
-  setupModeButton(cxeForm, "ratchetBit", DATA.ratchetBits);
+  setupModeButton(cxeForm, "bit", DATA.bits);
 })();
 
-// --- Ratchet <-> Ratchet-Bit mutual disable ---
+// --- Ratchet -> Bit filter coupling ---
+// Bit dropdown defaults to regular bits. Picking "No Ratchet" (NO_RATCHET sentinel)
+// switches the bit filter to ratchet-bit-flagged items only.
 document.querySelectorAll(".calc-form").forEach(form => {
   const ratchetSel = form.querySelector('[name="ratchet"]');
   const bitSel = form.querySelector('[name="bit"]');
-  const rbSel = form.querySelector('[name="ratchetBit"]');
-  if (!ratchetSel || !rbSel || !bitSel) return;
-
-  const ratchetWrapper = ratchetSel.nextElementSibling;
-  const ratchetInput = ratchetWrapper.querySelector("input");
-  const bitWrapper = bitSel.nextElementSibling;
-  const bitInput = bitWrapper.querySelector("input");
-  const rbWrapper = rbSel.nextElementSibling;
-  const rbInput = rbWrapper.querySelector("input");
-
-  function isBladeRestricted() {
-    const bladeSel = form.querySelector('[name="blade"]');
-    if (!bladeSel) return false;
-    const idx = bladeSel.value;
-    if (idx === "") return false;
-    const cn = DATA.blades[idx].codename;
-    return cn === "CLOCKMIRAGE" || cn === "BULLETGRIFFON";
-  }
+  if (!ratchetSel || !bitSel) return;
 
   ratchetSel.addEventListener("change", () => {
-    if (isBladeRestricted()) return;
-
-    if (ratchetSel.value !== "") {
-      rbWrapper._clear();
-      rbInput.disabled = true;
-      rbInput.placeholder = "Not available";
-    } else if (bitSel.value === "") {
-      rbInput.disabled = false;
-      rbInput.placeholder = "-- Select --";
-    }
+    applyBitFilter(form);
   });
 
-  bitSel.addEventListener("change", () => {
-    if (isBladeRestricted()) return;
-
-    if (bitSel.value !== "") {
-      rbWrapper._clear();
-      rbInput.disabled = true;
-      rbInput.placeholder = "Not available";
-    } else if (ratchetSel.value === "") {
-      rbInput.disabled = false;
-      rbInput.placeholder = "-- Select --";
-    }
-  });
-
-  rbSel.addEventListener("change", () => {
-    if (rbSel.value !== "") {
-      ratchetWrapper._clear();
-      ratchetInput.disabled = true;
-      ratchetInput.placeholder = "Not available";
-      bitWrapper._clear();
-      bitInput.disabled = true;
-      bitInput.placeholder = "Not available";
-    } else {
-      ratchetInput.disabled = false;
-      ratchetInput.placeholder = "-- Select --";
-      bitInput.disabled = false;
-      bitInput.placeholder = "-- Select --";
-    }
-  });
+  // Initial state: enforce the default (regular bits only).
+  applyBitFilter(form);
 });
 
 // --- Reset handlers ---
@@ -1803,11 +1750,8 @@ document.querySelectorAll(".btn-reset").forEach(btn => {
       bInput.placeholder = "-- Select --";
     }
 
-    const rbInput = form.querySelector('[name="ratchetBit"]')?.nextElementSibling?.querySelector("input");
-    if (rbInput) {
-      rbInput.disabled = false;
-      rbInput.placeholder = "-- Select --";
-    }
+    // Restore the default "regular bits only" filter on the bit dropdown.
+    applyBitFilter(form);
 
     form.querySelectorAll(".btn-mode").forEach(b => b.classList.add("hidden"));
 
@@ -1827,16 +1771,13 @@ document.querySelectorAll(".btn-reset").forEach(btn => {
 (function () {
   const COMBO_RULES = {
     "form-standard": {
-      top: ["blade"],
-      bottom: { ratchetBit: ["ratchetBit"], ratchet: ["ratchet", "bit"] }
+      top: ["blade"]
     },
     "form-cx": {
-      top: ["lockChip", "mainBlade", "assistBlade"],
-      bottom: { ratchetBit: ["ratchetBit"], ratchet: ["ratchet", "bit"] }
+      top: ["lockChip", "mainBlade", "assistBlade"]
     },
     "form-cxExpand": {
-      top: ["lockChip", "metalBlade", "assistBlade"],
-      bottom: { ratchetBit: ["ratchetBit"], ratchet: ["ratchet", "bit"] }
+      top: ["lockChip", "metalBlade", "assistBlade"]
     }
   };
 
@@ -1850,24 +1791,12 @@ document.querySelectorAll(".btn-reset").forEach(btn => {
       if (!sel || sel.value === "") return false;
     }
 
-    // Check bottom: either ratchetBit OR (ratchet + bit)
-    const rbSel = form.querySelector('[name="ratchetBit"]');
+    // Bottom: ratchet must be picked (real ratchet OR "No Ratchet" sentinel), and bit must be picked.
     const rSel = form.querySelector('[name="ratchet"]');
     const bSel = form.querySelector('[name="bit"]');
-
-    const hasRB = rbSel && rbSel.value !== "";
-    const hasRatchetBit = rSel && rSel.value !== "" && bSel && bSel.value !== "";
-
-    // Special case: Bullet Griffon only needs blade + bit
-    const bladeSel = form.querySelector('[name="blade"]');
-    if (bladeSel && bladeSel.value !== "") {
-      const cn = DATA.blades?.[bladeSel.value]?.codename;
-      if (cn === "BULLETGRIFFON") {
-        return bSel && bSel.value !== "";
-      }
-    }
-
-    return hasRB || hasRatchetBit;
+    if (!bSel || bSel.value === "") return false;
+    if (!rSel || rSel.value === "") return false;
+    return true;
   }
 
   function updateCalcBtn(form) {
@@ -2086,6 +2015,68 @@ function updateLuckyButtons() {
   });
 }
 
+// ---- Bit-pool helpers for the lucky selectors ----
+function bestIdxByPredicate(arr, predicate, scoreFn, compare) {
+  // compare(newScore, bestScore) should return true when newScore is preferred
+  let bestI = -1, bestS = null;
+  arr.forEach((item, i) => {
+    if (isExclusive(item)) return;
+    if (!predicate(item)) return;
+    const s = scoreFn(item);
+    if (bestI < 0 || compare(s, bestS)) { bestI = i; bestS = s; }
+  });
+  return bestI;
+}
+
+const isNormalBit = b => !b.isRatchetBit;
+const isRBBit = b => !!b.isRatchetBit;
+
+function selectBottomByWeight(form, preferMin) {
+  const cmp = preferMin ? ((a, b) => a < b) : ((a, b) => a > b);
+  const score = preferMin
+    ? (p) => (p.weight == null ? Infinity : p.weight)
+    : (p) => (p.weight || 0);
+
+  const bestRatchet = bestIdxByPredicate(DATA.ratchets, () => true, score, cmp);
+  const bestRegBit = bestIdxByPredicate(DATA.bits, isNormalBit, score, cmp);
+  const bestRBBit = bestIdxByPredicate(DATA.bits, isRBBit, score, cmp);
+
+  const regularTotal = (DATA.ratchets[bestRatchet]?.weight || 0) + (DATA.bits[bestRegBit]?.weight || 0);
+  const rbTotal = DATA.bits[bestRBBit]?.weight || 0;
+
+  const pickRB = preferMin
+    ? (bestRBBit >= 0 && rbTotal < regularTotal)
+    : (bestRBBit >= 0 && rbTotal > regularTotal);
+
+  if (pickRB) {
+    getWrapper(form, "ratchet")._select(NO_RATCHET);
+    getWrapper(form, "bit")._select(bestRBBit);
+  } else {
+    if (bestRatchet >= 0) getWrapper(form, "ratchet")._select(bestRatchet);
+    if (bestRegBit >= 0) getWrapper(form, "bit")._select(bestRegBit);
+  }
+}
+
+function selectBottomRegularByWeight(form, preferMin, ratchetFilter) {
+  // Picks ratchet + regular bit (excludes ratchet-bit-flagged bits).
+  const cmp = preferMin ? ((a, b) => a < b) : ((a, b) => a > b);
+  const score = preferMin
+    ? (p) => (p.weight == null ? Infinity : p.weight)
+    : (p) => (p.weight || 0);
+  const bestRatchet = bestIdxByPredicate(DATA.ratchets, ratchetFilter || (() => true), score, cmp);
+  const bestRegBit = bestIdxByPredicate(DATA.bits, isNormalBit, score, cmp);
+  if (bestRatchet >= 0) getWrapper(form, "ratchet")._select(bestRatchet);
+  if (bestRegBit >= 0) getWrapper(form, "bit")._select(bestRegBit);
+}
+
+function selectHeaviestRBBit(form) {
+  const idx = bestIdxByPredicate(DATA.bits, isRBBit, b => b.weight || 0, (a, b) => a > b);
+  if (idx >= 0) {
+    getWrapper(form, "ratchet")._select(NO_RATCHET);
+    getWrapper(form, "bit")._select(idx);
+  }
+}
+
 function selectMaxWeight(form, mode) {
   if (mode === "standard") {
     const bladeIdx = heaviestIdx(DATA.blades);
@@ -2093,63 +2084,23 @@ function selectMaxWeight(form, mode) {
     const codename = DATA.blades[bladeIdx].codename;
 
     if (codename === "BULLETGRIFFON") {
-      getWrapper(form, "bit")._select(heaviestIdx(DATA.bits));
+      selectHeaviestRBBit(form);
     } else if (codename === "CLOCKMIRAGE") {
-      const valid = DATA.ratchets.map((r, i) => ({ r, i })).filter(x => x.r.name.endsWith("5"));
-      let bestIdx = valid[0].i;
-      let bestW = valid[0].r.weight || 0;
-      valid.forEach(x => { if ((x.r.weight || 0) > bestW) { bestW = x.r.weight || 0; bestIdx = x.i; } });
-      getWrapper(form, "ratchet")._select(bestIdx);
-      getWrapper(form, "bit")._select(heaviestIdx(DATA.bits));
+      selectBottomRegularByWeight(form, false, r => r.name.endsWith("5"));
     } else {
-      const maxRatchetW = Math.max(...DATA.ratchets.map(r => r.weight || 0));
-      const maxBitW = Math.max(...DATA.bits.map(b => b.weight || 0));
-      const maxRBW = DATA.ratchetBits.length > 0
-        ? Math.max(...DATA.ratchetBits.map(rb => rb.weight || 0))
-        : 0;
-
-      if (maxRBW > maxRatchetW + maxBitW) {
-        getWrapper(form, "ratchetBit")._select(heaviestIdx(DATA.ratchetBits));
-      } else {
-        getWrapper(form, "ratchet")._select(heaviestIdx(DATA.ratchets));
-        getWrapper(form, "bit")._select(heaviestIdx(DATA.bits));
-      }
+      selectBottomByWeight(form, false);
     }
   } else if (mode === "cx") {
     getWrapper(form, "lockChip")._select(heaviestIdx(DATA.lockChips));
     getWrapper(form, "mainBlade")._select(heaviestIdx(DATA.mainBlades));
     getWrapper(form, "assistBlade")._select(heaviestIdx(DATA.assistBlades));
-
-    const maxRatchetW = Math.max(...DATA.ratchets.map(r => r.weight || 0));
-    const maxBitW = Math.max(...DATA.bits.map(b => b.weight || 0));
-    const maxRBW = DATA.ratchetBits.length > 0
-      ? Math.max(...DATA.ratchetBits.map(rb => rb.weight || 0))
-      : 0;
-
-    if (maxRBW > maxRatchetW + maxBitW) {
-      getWrapper(form, "ratchetBit")._select(heaviestIdx(DATA.ratchetBits));
-    } else {
-      getWrapper(form, "ratchet")._select(heaviestIdx(DATA.ratchets));
-      getWrapper(form, "bit")._select(heaviestIdx(DATA.bits));
-    }
+    selectBottomByWeight(form, false);
   } else if (mode === "cxExpand") {
     getWrapper(form, "lockChip")._select(heaviestIdx(DATA.lockChips));
     getWrapper(form, "metalBlade")._select(heaviestIdx(DATA.metalBlades));
     getWrapper(form, "overBlade")._select(heaviestIdx(DATA.overBlades));
     getWrapper(form, "assistBlade")._select(heaviestIdx(DATA.assistBlades));
-
-    const maxRatchetW = Math.max(...DATA.ratchets.map(r => r.weight || 0));
-    const maxBitW = Math.max(...DATA.bits.map(b => b.weight || 0));
-    const maxRBW = DATA.ratchetBits.length > 0
-      ? Math.max(...DATA.ratchetBits.map(rb => rb.weight || 0))
-      : 0;
-
-    if (maxRBW > maxRatchetW + maxBitW) {
-      getWrapper(form, "ratchetBit")._select(heaviestIdx(DATA.ratchetBits));
-    } else {
-      getWrapper(form, "ratchet")._select(heaviestIdx(DATA.ratchets));
-      getWrapper(form, "bit")._select(heaviestIdx(DATA.bits));
-    }
+    selectBottomByWeight(form, false);
   }
 }
 
@@ -2160,63 +2111,47 @@ function selectMinWeight(form, mode) {
     const codename = DATA.blades[bladeIdx].codename;
 
     if (codename === "BULLETGRIFFON") {
-      getWrapper(form, "bit")._select(lightestIdx(DATA.bits));
-    } else if (codename === "CLOCKMIRAGE") {
-      const valid = DATA.ratchets.map((r, i) => ({ r, i })).filter(x => x.r.name.endsWith("5"));
-      let bestIdx = valid[0].i;
-      let bestW = valid[0].r.weight || Infinity;
-      valid.forEach(x => { const w = x.r.weight || Infinity; if (w < bestW) { bestW = w; bestIdx = x.i; } });
-      getWrapper(form, "ratchet")._select(bestIdx);
-      getWrapper(form, "bit")._select(lightestIdx(DATA.bits));
-    } else {
-      const minRatchetW = Math.min(...DATA.ratchets.map(r => r.weight || Infinity));
-      const minBitW = Math.min(...DATA.bits.map(b => b.weight || Infinity));
-      const minRBW = DATA.ratchetBits.length > 0
-        ? Math.min(...DATA.ratchetBits.map(rb => rb.weight || Infinity))
-        : Infinity;
-
-      if (minRBW < minRatchetW + minBitW) {
-        getWrapper(form, "ratchetBit")._select(lightestIdx(DATA.ratchetBits));
-      } else {
-        getWrapper(form, "ratchet")._select(lightestIdx(DATA.ratchets));
-        getWrapper(form, "bit")._select(lightestIdx(DATA.bits));
+      const idx = bestIdxByPredicate(DATA.bits, isRBBit, b => b.weight ?? Infinity, (a, b) => a < b);
+      if (idx >= 0) {
+        getWrapper(form, "ratchet")._select(NO_RATCHET);
+        getWrapper(form, "bit")._select(idx);
       }
+    } else if (codename === "CLOCKMIRAGE") {
+      selectBottomRegularByWeight(form, true, r => r.name.endsWith("5"));
+    } else {
+      selectBottomByWeight(form, true);
     }
   } else if (mode === "cx") {
     getWrapper(form, "lockChip")._select(lightestIdx(DATA.lockChips));
     getWrapper(form, "mainBlade")._select(lightestIdx(DATA.mainBlades));
     getWrapper(form, "assistBlade")._select(lightestIdx(DATA.assistBlades));
-
-    const minRatchetW = Math.min(...DATA.ratchets.map(r => r.weight || Infinity));
-    const minBitW = Math.min(...DATA.bits.map(b => b.weight || Infinity));
-    const minRBW = DATA.ratchetBits.length > 0
-      ? Math.min(...DATA.ratchetBits.map(rb => rb.weight || Infinity))
-      : Infinity;
-
-    if (minRBW < minRatchetW + minBitW) {
-      getWrapper(form, "ratchetBit")._select(lightestIdx(DATA.ratchetBits));
-    } else {
-      getWrapper(form, "ratchet")._select(lightestIdx(DATA.ratchets));
-      getWrapper(form, "bit")._select(lightestIdx(DATA.bits));
-    }
+    selectBottomByWeight(form, true);
   } else if (mode === "cxExpand") {
     getWrapper(form, "lockChip")._select(lightestIdx(DATA.lockChips));
     getWrapper(form, "metalBlade")._select(lightestIdx(DATA.metalBlades));
     getWrapper(form, "overBlade")._select(lightestIdx(DATA.overBlades));
     getWrapper(form, "assistBlade")._select(lightestIdx(DATA.assistBlades));
+    selectBottomByWeight(form, true);
+  }
+}
 
-    const minRatchetW = Math.min(...DATA.ratchets.map(r => r.weight || Infinity));
-    const minBitW = Math.min(...DATA.bits.map(b => b.weight || Infinity));
-    const minRBW = DATA.ratchetBits.length > 0
-      ? Math.min(...DATA.ratchetBits.map(rb => rb.weight || Infinity))
-      : Infinity;
+function selectBottomByStat(form, key) {
+  const statOf = (item) => getModeStat(item, key);
+  const cmp = (a, b) => a > b;
 
-    if (minRBW < minRatchetW + minBitW) {
-      getWrapper(form, "ratchetBit")._select(lightestIdx(DATA.ratchetBits));
-    } else {
-      getWrapper(form, "ratchet")._select(lightestIdx(DATA.ratchets));
-      getWrapper(form, "bit")._select(lightestIdx(DATA.bits));
-    }
+  const bestRatchet = bestIdxByPredicate(DATA.ratchets, () => true, statOf, cmp);
+  const bestRegBit = bestIdxByPredicate(DATA.bits, isNormalBit, statOf, cmp);
+  const bestRBBit = bestIdxByPredicate(DATA.bits, isRBBit, statOf, cmp);
+
+  const regularTotal = statOf(DATA.ratchets[bestRatchet] || {}) + statOf(DATA.bits[bestRegBit] || {});
+  const rbTotal = statOf(DATA.bits[bestRBBit] || {});
+
+  if (bestRBBit >= 0 && rbTotal > regularTotal) {
+    getWrapper(form, "ratchet")._select(NO_RATCHET);
+    getWrapper(form, "bit")._select(bestRBBit);
+  } else {
+    if (bestRatchet >= 0) getWrapper(form, "ratchet")._select(bestRatchet);
+    if (bestRegBit >= 0) getWrapper(form, "bit")._select(bestRegBit);
   }
 }
 
@@ -2230,63 +2165,58 @@ function selectMaxStat(form, mode, key) {
     const codename = DATA.blades[bladeIdx].codename;
 
     if (codename === "BULLETGRIFFON") {
-      getWrapper(form, "bit")._select(pickIdx(DATA.bits));
-    } else if (codename === "CLOCKMIRAGE") {
-      const valid = DATA.ratchets.map((r, i) => ({ r, i })).filter(x => x.r.name.endsWith("5"));
-      let bestIdx = valid[0].i;
-      let bestV = statOf(valid[0].r);
-      valid.forEach(x => { const v = statOf(x.r); if (v > bestV) { bestV = v; bestIdx = x.i; } });
-      getWrapper(form, "ratchet")._select(bestIdx);
-      getWrapper(form, "bit")._select(pickIdx(DATA.bits));
-    } else {
-      const maxR = Math.max(...DATA.ratchets.map(statOf));
-      const maxB = Math.max(...DATA.bits.map(statOf));
-      const maxRB = DATA.ratchetBits.length > 0 ? Math.max(...DATA.ratchetBits.map(statOf)) : 0;
-
-      if (maxRB > maxR + maxB) {
-        getWrapper(form, "ratchetBit")._select(pickIdx(DATA.ratchetBits));
-      } else {
-        getWrapper(form, "ratchet")._select(pickIdx(DATA.ratchets));
-        getWrapper(form, "bit")._select(pickIdx(DATA.bits));
+      const idx = bestIdxByPredicate(DATA.bits, isRBBit, statOf, (a, b) => a > b);
+      if (idx >= 0) {
+        getWrapper(form, "ratchet")._select(NO_RATCHET);
+        getWrapper(form, "bit")._select(idx);
       }
+    } else if (codename === "CLOCKMIRAGE") {
+      const bestRatchet = bestIdxByPredicate(DATA.ratchets, r => r.name.endsWith("5"), statOf, (a, b) => a > b);
+      const bestRegBit = bestIdxByPredicate(DATA.bits, isNormalBit, statOf, (a, b) => a > b);
+      if (bestRatchet >= 0) getWrapper(form, "ratchet")._select(bestRatchet);
+      if (bestRegBit >= 0) getWrapper(form, "bit")._select(bestRegBit);
+    } else {
+      selectBottomByStat(form, key);
     }
   } else if (mode === "cx") {
     getWrapper(form, "lockChip")._select(pickIdx(DATA.lockChips));
     getWrapper(form, "mainBlade")._select(pickIdx(DATA.mainBlades));
     getWrapper(form, "assistBlade")._select(pickIdx(DATA.assistBlades));
-
-    const maxR = Math.max(...DATA.ratchets.map(statOf));
-    const maxB = Math.max(...DATA.bits.map(statOf));
-    const maxRB = DATA.ratchetBits.length > 0 ? Math.max(...DATA.ratchetBits.map(statOf)) : 0;
-
-    if (maxRB > maxR + maxB) {
-      getWrapper(form, "ratchetBit")._select(pickIdx(DATA.ratchetBits));
-    } else {
-      getWrapper(form, "ratchet")._select(pickIdx(DATA.ratchets));
-      getWrapper(form, "bit")._select(pickIdx(DATA.bits));
-    }
+    selectBottomByStat(form, key);
   } else if (mode === "cxExpand") {
     getWrapper(form, "lockChip")._select(pickIdx(DATA.lockChips));
     getWrapper(form, "metalBlade")._select(pickIdx(DATA.metalBlades));
     getWrapper(form, "overBlade")._select(pickIdx(DATA.overBlades));
     getWrapper(form, "assistBlade")._select(pickIdx(DATA.assistBlades));
-
-    const maxR = Math.max(...DATA.ratchets.map(statOf));
-    const maxB = Math.max(...DATA.bits.map(statOf));
-    const maxRB = DATA.ratchetBits.length > 0 ? Math.max(...DATA.ratchetBits.map(statOf)) : 0;
-
-    if (maxRB > maxR + maxB) {
-      getWrapper(form, "ratchetBit")._select(pickIdx(DATA.ratchetBits));
-    } else {
-      getWrapper(form, "ratchet")._select(pickIdx(DATA.ratchets));
-      getWrapper(form, "bit")._select(pickIdx(DATA.bits));
-    }
+    selectBottomByStat(form, key);
   }
 }
 
 const selectMaxAtk = (form, mode) => selectMaxStat(form, mode, "atk");
 const selectMaxDef = (form, mode) => selectMaxStat(form, mode, "def");
 const selectMaxSta = (form, mode) => selectMaxStat(form, mode, "sta");
+
+function randIdxFromPredicate(arr, predicate) {
+  const idxs = [];
+  arr.forEach((item, i) => { if (!isExclusive(item) && predicate(item)) idxs.push(i); });
+  if (idxs.length === 0) return -1;
+  return idxs[Math.floor(Math.random() * idxs.length)];
+}
+
+function selectRandomBottom(form) {
+  // 5% chance to pick a ratchet-bit-flagged bit; otherwise regular ratchet + bit.
+  if (Math.random() < 0.05) {
+    const rbIdx = randIdxFromPredicate(DATA.bits, isRBBit);
+    if (rbIdx >= 0) {
+      getWrapper(form, "ratchet")._select(NO_RATCHET);
+      getWrapper(form, "bit")._select(rbIdx);
+      return;
+    }
+  }
+  getWrapper(form, "ratchet")._select(randIdx(DATA.ratchets));
+  const regIdx = randIdxFromPredicate(DATA.bits, isNormalBit);
+  if (regIdx >= 0) getWrapper(form, "bit")._select(regIdx);
+}
 
 function selectRandom(form, mode) {
   if (mode === "standard") {
@@ -2295,40 +2225,30 @@ function selectRandom(form, mode) {
     const codename = DATA.blades[bladeIdx].codename;
 
     if (codename === "BULLETGRIFFON") {
-      getWrapper(form, "bit")._select(randIdx(DATA.bits));
+      const idx = randIdxFromPredicate(DATA.bits, isRBBit);
+      if (idx >= 0) {
+        getWrapper(form, "ratchet")._select(NO_RATCHET);
+        getWrapper(form, "bit")._select(idx);
+      }
     } else if (codename === "CLOCKMIRAGE") {
       const valid = DATA.ratchets.map((r, i) => ({ r, i })).filter(x => x.r.name.endsWith("5"));
       getWrapper(form, "ratchet")._select(valid[Math.floor(Math.random() * valid.length)].i);
-      getWrapper(form, "bit")._select(randIdx(DATA.bits));
+      const regIdx = randIdxFromPredicate(DATA.bits, isNormalBit);
+      if (regIdx >= 0) getWrapper(form, "bit")._select(regIdx);
     } else {
-      if (Math.random() < 0.05 && DATA.ratchetBits.length > 0) {
-        getWrapper(form, "ratchetBit")._select(randIdx(DATA.ratchetBits));
-      } else {
-        getWrapper(form, "ratchet")._select(randIdx(DATA.ratchets));
-        getWrapper(form, "bit")._select(randIdx(DATA.bits));
-      }
+      selectRandomBottom(form);
     }
   } else if (mode === "cx") {
     getWrapper(form, "lockChip")._select(randIdx(DATA.lockChips));
     getWrapper(form, "mainBlade")._select(randIdx(DATA.mainBlades));
     getWrapper(form, "assistBlade")._select(randIdx(DATA.assistBlades));
-    if (Math.random() < 0.05 && DATA.ratchetBits.length > 0) {
-      getWrapper(form, "ratchetBit")._select(randIdx(DATA.ratchetBits));
-    } else {
-      getWrapper(form, "ratchet")._select(randIdx(DATA.ratchets));
-      getWrapper(form, "bit")._select(randIdx(DATA.bits));
-    }
+    selectRandomBottom(form);
   } else if (mode === "cxExpand") {
     getWrapper(form, "lockChip")._select(randIdx(DATA.lockChips));
     getWrapper(form, "metalBlade")._select(randIdx(DATA.metalBlades));
     getWrapper(form, "overBlade")._select(randIdx(DATA.overBlades));
     getWrapper(form, "assistBlade")._select(randIdx(DATA.assistBlades));
-    if (Math.random() < 0.05 && DATA.ratchetBits.length > 0) {
-      getWrapper(form, "ratchetBit")._select(randIdx(DATA.ratchetBits));
-    } else {
-      getWrapper(form, "ratchet")._select(randIdx(DATA.ratchets));
-      getWrapper(form, "bit")._select(randIdx(DATA.bits));
-    }
+    selectRandomBottom(form);
   }
 }
 
@@ -2343,36 +2263,53 @@ function selectMeta(form, mode) {
     return arr.indexOf(chosen);
   };
 
+  // Meta bit = prefer meta-flagged *regular* bit (skip ratchet-bit items so ratchet slot is used).
+  const pickMetaBit = () => {
+    const eligible = DATA.bits.filter(b => !isExclusive(b) && isNormalBit(b));
+    const metas = eligible.filter(b => b.meta === true);
+    const pool = metas.length > 0 ? metas : eligible;
+    if (pool.length === 0) return -1;
+    return DATA.bits.indexOf(pool[Math.floor(Math.random() * pool.length)]);
+  };
+
   if (mode === "standard") {
     const bladeIdx = pickMeta(DATA.blades);
     getWrapper(form, "blade")._select(bladeIdx);
     const codename = DATA.blades[bladeIdx].codename;
 
     if (codename === "BULLETGRIFFON") {
-      getWrapper(form, "bit")._select(pickMeta(DATA.bits));
+      const idx = randIdxFromPredicate(DATA.bits, isRBBit);
+      if (idx >= 0) {
+        getWrapper(form, "ratchet")._select(NO_RATCHET);
+        getWrapper(form, "bit")._select(idx);
+      }
     } else if (codename === "CLOCKMIRAGE") {
       const validMeta = DATA.ratchets.map((r, i) => ({ r, i })).filter(x => x.r.name.endsWith("5") && x.r.meta === true);
       const validAny = DATA.ratchets.map((r, i) => ({ r, i })).filter(x => x.r.name.endsWith("5"));
       const pool = validMeta.length > 0 ? validMeta : validAny;
       getWrapper(form, "ratchet")._select(pool[Math.floor(Math.random() * pool.length)].i);
-      getWrapper(form, "bit")._select(pickMeta(DATA.bits));
+      const bIdx = pickMetaBit();
+      if (bIdx >= 0) getWrapper(form, "bit")._select(bIdx);
     } else {
       getWrapper(form, "ratchet")._select(pickMeta(DATA.ratchets));
-      getWrapper(form, "bit")._select(pickMeta(DATA.bits));
+      const bIdx = pickMetaBit();
+      if (bIdx >= 0) getWrapper(form, "bit")._select(bIdx);
     }
   } else if (mode === "cx") {
     getWrapper(form, "lockChip")._select(heaviestIdx(DATA.lockChips));
     getWrapper(form, "mainBlade")._select(pickMeta(DATA.mainBlades));
     getWrapper(form, "assistBlade")._select(heaviestIdx(DATA.assistBlades));
     getWrapper(form, "ratchet")._select(pickMeta(DATA.ratchets));
-    getWrapper(form, "bit")._select(pickMeta(DATA.bits));
+    const bIdx = pickMetaBit();
+    if (bIdx >= 0) getWrapper(form, "bit")._select(bIdx);
   } else if (mode === "cxExpand") {
     getWrapper(form, "lockChip")._select(heaviestIdx(DATA.lockChips));
     getWrapper(form, "metalBlade")._select(pickMeta(DATA.metalBlades));
     getWrapper(form, "overBlade")._select(heaviestIdx(DATA.overBlades));
     getWrapper(form, "assistBlade")._select(heaviestIdx(DATA.assistBlades));
     getWrapper(form, "ratchet")._select(pickMeta(DATA.ratchets));
-    getWrapper(form, "bit")._select(pickMeta(DATA.bits));
+    const bIdx = pickMetaBit();
+    if (bIdx >= 0) getWrapper(form, "bit")._select(bIdx);
   }
 }
 
@@ -2397,6 +2334,26 @@ function selectComboOfDay(form, mode) {
     const idxs = nonExclusiveIndices(arr);
     return idxs[Math.floor(rng() * idxs.length)];
   };
+  const pickFromPredicate = (arr, predicate) => {
+    const idxs = [];
+    arr.forEach((item, i) => { if (!isExclusive(item) && predicate(item)) idxs.push(i); });
+    if (idxs.length === 0) return -1;
+    return idxs[Math.floor(rng() * idxs.length)];
+  };
+  const pickBottom = (form) => {
+    // 5% chance (seeded) to pick a ratchet-bit bit
+    if (rng() < 0.05) {
+      const rbIdx = pickFromPredicate(DATA.bits, isRBBit);
+      if (rbIdx >= 0) {
+        getWrapper(form, "ratchet")._select(NO_RATCHET);
+        getWrapper(form, "bit")._select(rbIdx);
+        return;
+      }
+    }
+    getWrapper(form, "ratchet")._select(pick(DATA.ratchets));
+    const regIdx = pickFromPredicate(DATA.bits, isNormalBit);
+    if (regIdx >= 0) getWrapper(form, "bit")._select(regIdx);
+  };
 
   if (mode === "standard") {
     const bladeIdx = pick(DATA.blades);
@@ -2404,28 +2361,30 @@ function selectComboOfDay(form, mode) {
     const codename = DATA.blades[bladeIdx].codename;
 
     if (codename === "BULLETGRIFFON") {
-      getWrapper(form, "bit")._select(pick(DATA.bits));
+      const idx = pickFromPredicate(DATA.bits, isRBBit);
+      if (idx >= 0) {
+        getWrapper(form, "ratchet")._select(NO_RATCHET);
+        getWrapper(form, "bit")._select(idx);
+      }
     } else if (codename === "CLOCKMIRAGE") {
       const valid = DATA.ratchets.map((r, i) => ({ r, i })).filter(x => x.r.name.endsWith("5"));
       getWrapper(form, "ratchet")._select(valid[Math.floor(rng() * valid.length)].i);
-      getWrapper(form, "bit")._select(pick(DATA.bits));
+      const regIdx = pickFromPredicate(DATA.bits, isNormalBit);
+      if (regIdx >= 0) getWrapper(form, "bit")._select(regIdx);
     } else {
-      getWrapper(form, "ratchet")._select(pick(DATA.ratchets));
-      getWrapper(form, "bit")._select(pick(DATA.bits));
+      pickBottom(form);
     }
   } else if (mode === "cx") {
     getWrapper(form, "lockChip")._select(pick(DATA.lockChips));
     getWrapper(form, "mainBlade")._select(pick(DATA.mainBlades));
     getWrapper(form, "assistBlade")._select(pick(DATA.assistBlades));
-    getWrapper(form, "ratchet")._select(pick(DATA.ratchets));
-    getWrapper(form, "bit")._select(pick(DATA.bits));
+    pickBottom(form);
   } else if (mode === "cxExpand") {
     getWrapper(form, "lockChip")._select(pick(DATA.lockChips));
     getWrapper(form, "metalBlade")._select(pick(DATA.metalBlades));
     getWrapper(form, "overBlade")._select(pick(DATA.overBlades));
     getWrapper(form, "assistBlade")._select(pick(DATA.assistBlades));
-    getWrapper(form, "ratchet")._select(pick(DATA.ratchets));
-    getWrapper(form, "bit")._select(pick(DATA.bits));
+    pickBottom(form);
   }
 }
 
@@ -2490,8 +2449,7 @@ function initLibrarySearch() {
     ...(DATA.assistBlades || []),
     ...(DATA.ratchets || []),
     ...(DATA.bits || []),
-    ...(DATA.lockChips || []),
-    ...(DATA.ratchetBits || [])
+    ...(DATA.lockChips || [])
   ].filter(i => i && typeof i.name === "string");
 
   // =========================
@@ -2508,10 +2466,11 @@ function initLibrarySearch() {
   // =========================
   function getFolder(item) {
     const name = item.name;
+    if (item._folder) return item._folder;
 
     if (DATA.blades?.some(i => i.name === name)) return "blades";
     if (DATA.lockChips?.some(i => i.name === name)) return "lockChips";
-    if (DATA.ratchetBits?.some(i => i.name === name)) return "ratchetBits";
+    if (DATA.bits?.some(i => i.name === name && i.isRatchetBit)) return "ratchetBits";
     if (DATA.bits?.some(i => i.name === name)) return "bits";
     if (DATA.ratchets?.some(i => i.name === name)) return "ratchets";
     if (DATA.mainBlades?.some(i => i.name === name)) return "mainBlades";
@@ -3311,11 +3270,16 @@ function renderHistory() {
       metalBlade: "metalBlades", overBlade: "overBlades",
       ratchet: "ratchets", bit: "bits", ratchetBit: "ratchetBits"
     };
+    const bitFolderFor = (name) => {
+      const found = DATA.bits?.find(b => b.name === name);
+      return found?._folder || "bits";
+    };
     let partsHtml = "";
     for (const [key, name] of Object.entries(parts)) {
       if (!name || !PART_FOLDER[key]) continue;
       const modeIdx = partModes[key] != null ? partModes[key] : null;
-      const src = partImgPath(PART_FOLDER[key], name, modeIdx);
+      const folder = key === "bit" ? bitFolderFor(name) : PART_FOLDER[key];
+      const src = partImgPath(folder, name, modeIdx);
       partsHtml += `<div class="result-part">
         <div class="result-part-img-box">
           <img src="${src}" alt="${name}" class="result-part-img"
