@@ -1225,12 +1225,12 @@ body.light-mode .result-part-name {
 @media (max-width: 640px) {
     .download-row {
         flex-direction: column;
-        align-items: stretch;
+        align-items: flex-end;
     }
 
     .download-row .btn-download,
     .download-row .btn-add-deck {
-        width: 100%;
+        width: 44px;
         justify-content: center;
     }
 }
