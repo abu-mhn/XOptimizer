@@ -6,8 +6,35 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
 
   <!-- ================= FAVICON ================= -->
-  <link rel="icon" type="image/png" href="assets/icons/XOptimizer.png">
-  <link rel="apple-touch-icon" href="assets/icons/XOptimizer.png">
+  <link id="app-favicon" rel="icon" type="image/png" href="assets/icons/M.webp">
+  <link id="app-apple-icon" rel="apple-touch-icon" href="assets/icons/M.webp">
+  <script>
+    (function () {
+      var img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = function () {
+        var size = 256;
+        var c = document.createElement('canvas');
+        c.width = size;
+        c.height = size;
+        var ctx = c.getContext('2d');
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, size, size);
+        var pad = Math.round(size * 0.1);
+        var box = size - pad * 2;
+        var r = Math.min(box / img.width, box / img.height);
+        var w = img.width * r;
+        var h = img.height * r;
+        ctx.drawImage(img, Math.round((size - w) / 2), Math.round((size - h) / 2), w, h);
+        var href = c.toDataURL('image/png');
+        var fav = document.getElementById('app-favicon');
+        var apl = document.getElementById('app-apple-icon');
+        if (fav) fav.href = href;
+        if (apl) apl.href = href;
+      };
+      img.src = 'assets/icons/M.webp';
+    })();
+  </script>
 
   <!-- Optional theme color -->
   <meta name="theme-color" content="#0a4797">
@@ -19,7 +46,7 @@
 <body>
   <div class="container">
     <header class="app-header">
-      <h1><img src="assets/title/xOptimizer.webp" alt="X-Optimizer" class="title-logo"></h1>
+      <h1><img id="app-title-logo" src="assets/icons/XOptimizerLight.webp" alt="X-Optimizer" class="title-logo"></h1>
     </header>
 
     <!-- ================= TAB MENU ================= -->
@@ -30,6 +57,10 @@
 
       <button class="tab" data-mode="library" aria-label="Library" title="Library">
         <img src="assets/icons/book1.webp" alt="Library">
+      </button>
+
+      <button class="tab" data-mode="deck" aria-label="Deck" title="Deck">
+        <img src="assets/icons/cards.png" alt="Deck">
       </button>
 
       <button class="tab" data-mode="history" aria-label="History" title="History">
@@ -236,6 +267,31 @@
       </fieldset>
     </section>
 
+    <!-- ================= DECK ================= -->
+    <section id="form-deck" class="calc-form hidden">
+      <fieldset>
+        <legend>Deck (3 Slots)</legend>
+        <div class="deck-name-row">
+          <input type="text" id="deck-name" class="deck-name-input" placeholder="Deck name" maxlength="40" autocomplete="off" />
+        </div>
+        <div class="deck-toolbar">
+          <button type="button" id="deck-reset" class="btn btn-reset" aria-label="Reset Deck" title="Reset Deck">
+            <img src="assets/icons/undo.png" alt="Reset"
+                 onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
+          </button>
+          <button type="button" id="deck-shuffle" class="btn btn-shuffle" aria-label="Shuffle Deck" title="Shuffle Deck">
+            <img src="assets/icons/dice.png" alt="Shuffle"
+                 onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x1F3B2;');">
+          </button>
+          <button type="button" id="deck-download" class="btn btn-download" aria-label="Download Deck as PNG" title="Download Deck as PNG">
+            <img src="assets/icons/download.png" alt="Download"
+                 onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x2B07;');">
+          </button>
+        </div>
+        <div id="deck-list"></div>
+      </fieldset>
+    </section>
+
     <!-- ================= SETTINGS ================= -->
     <section id="form-settings" class="calc-form hidden">
       <fieldset>
@@ -253,6 +309,7 @@
               <div class="setting-dropdown-option" data-value="space">Space</div>
               <div class="setting-dropdown-option" data-value="tropical">Tropical</div>
               <div class="setting-dropdown-option" data-value="stormy">Stormy</div>
+              <div class="setting-dropdown-option" data-value="mono">Monochrome</div>
             </div>
           </div>
         </div>
@@ -309,14 +366,19 @@
   </footer>
 
   <!-- ================= POPUP ================= -->
-  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-21">
+  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-22">
     <div class="popup-card">
 
       <h2 class="popup-title">What's New</h2>
 
       <ul class="popup-list">
-        <li><strong>Exclusive parts</strong> are no longer picked by any lucky-button mode (Random, Max/Min Weight, Max ATK/DEF/STA, Meta, Combo of the Day), and the internal <strong>exclusive</strong> flag is hidden on library stat cards.</li>
-        <li>Added new exclusive parts: <strong>Aero Pegasus</strong>, <strong>Wyvern Hover</strong>, <strong>Orochi Cluster</strong>, <strong>Valkyrie</strong> and <strong>Volt</strong></li>
+        <li>New <strong>Deck</strong> tab — build a 3-combo deck, name it, shuffle the order, download the whole deck as a square PNG, or reset it. Tap a part image to open the same preview popup used in the library.</li>
+        <li>Result card has a new <strong>+ cards</strong> button that adds the current combo to the first empty deck slot; a quick thumbs-up confirms the add.</li>
+        <li>Deck part-uniqueness rule: a part can only appear once across all three combos, except for <strong>lock chips</strong> — those can repeat, apart from <strong>Emperor</strong> and <strong>Valkyrie</strong>.</li>
+        <li>Downloaded result PNGs are now <strong>square</strong> (padded with the theme background), ready for Instagram sharing.</li>
+        <li>New <strong>Monochrome</strong> theme under Settings &rarr; Theme.</li>
+        <li>The header and favicon logos now switch cleanly between their light and dark variants to match the active theme.</li>
+        <li>Fixed <strong>0-70</strong>'s height data.</li>
       </ul>
 
       <button type="button" class="btn popup-ok">

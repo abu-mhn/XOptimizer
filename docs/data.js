@@ -187,7 +187,7 @@ const DATA = {
     { atk: 14, def: 8, sta: 8, height: 60, weight: 6.1, name: "6-60", meta: true },
     { atk: 7, def: 11, sta: 12, height: 55, weight: 4.8, name: "4-55" },
     { atk: 14, def: 6, sta: 10, height: 80, weight: 6.9, name: "6-80" },
-    { atk: 3, def: 13, sta: 14, height: 80, weight: 7.0, name: "0-70" },
+    { atk: 3, def: 13, sta: 14, height: 70, weight: 7.0, name: "0-70" },
     { atk: 8, def: 19, sta: 13, height: 85, weight: 10.6, name: "M-85" },
     { atk: 14, def: 7, sta: 9, height: 70, weight: 6.3, name: "6-70" },
     { atk: 12, def: 13, sta: 5, height: 50, weight: 5.9, name: "4-50", meta: true },

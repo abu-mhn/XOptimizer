@@ -488,6 +488,11 @@ document.querySelectorAll(".tab").forEach(tab => {
         renderHistory();
       }
 
+      // ================= DECK =================
+      if (mode === "deck") {
+        renderDeck();
+      }
+
       // ================= HIDE RESULT =================
       document.getElementById("result")?.classList.add("hidden");
     }
@@ -712,12 +717,18 @@ function renderResult(res) {
       <img src="assets/icons/download.png" alt="Download"
            onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x2B07;');">
     </button>
+    <button type="button" class="btn btn-add-deck" aria-label="Add to Deck" title="Add to Deck">
+      <span class="btn-add-deck-plus">+</span>
+      <img src="assets/icons/cards.png" alt="Deck"
+           onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','Deck');">
+    </button>
   </div>`;
 
   el.innerHTML = html;
 
   // Wire up download button
   el.querySelector(".btn-download")?.addEventListener("click", () => downloadResultPNG(el));
+  el.querySelector(".btn-add-deck")?.addEventListener("click", () => addCurrentToDeck());
 }
 
 function downloadResultPNG(el) {
@@ -749,7 +760,7 @@ function downloadResultPNG(el) {
   const footerColor = isTropical ? "#8a6d3b" : isLightLike ? "#656d76" : "#8b949e";
   const footerBorder = isTropical ? "#ffd8a8" : isLightLike ? "#d1d9e0" : "#21262d";
   const strongColor = isTropical ? "#2d3a3a" : isLightLike ? "#1f2328" : "#c9d1d9";
-  const pageBg = isTropical ? "#fff6e6" : cls.contains("light-mode") ? "#f6f8fa" : cls.contains("space-mode") ? "#0b0d1a" : cls.contains("stormy-mode") ? "#1e2330" : "#0d1117";
+  const pageBg = isTropical ? "#fff6e6" : cls.contains("light-mode") ? "#f6f8fa" : cls.contains("space-mode") ? "#0b0d1a" : cls.contains("stormy-mode") ? "#1e2330" : cls.contains("mono-mode") ? "#000000" : "#0d1117";
   const logoSrc = isLightLike ? "assets/icons/revoxNameLight.webp" : "assets/icons/revoxName.webp";
 
   const footer = document.createElement("div");
@@ -785,12 +796,21 @@ function downloadResultPNG(el) {
     if (dlBtn) dlBtn.style.display = "";
     footer.remove();
     restoreParts();
+    const side = Math.max(canvas.width, canvas.height);
+    const square = document.createElement("canvas");
+    square.width = side;
+    square.height = side;
+    const ctx = square.getContext("2d");
+    ctx.fillStyle = pageBg;
+    ctx.fillRect(0, 0, side, side);
+    ctx.drawImage(canvas, Math.floor((side - canvas.width) / 2), Math.floor((side - canvas.height) / 2));
+
     const link = document.createElement("a");
     // Use combo name for filename if available
     const comboEl = el.querySelector(".combo-name, .combo-header");
     const name = comboEl ? comboEl.textContent.trim().replace(/[^a-zA-Z0-9_-]/g, "_").replace(/_+/g, "_") : "result";
     link.download = `${name}.png`;
-    link.href = canvas.toDataURL("image/png");
+    link.href = square.toDataURL("image/png");
     link.click();
   }).catch(() => {
     el.style.position = origPos;
@@ -1995,13 +2015,19 @@ function initSettingDropdown(id, storageKey, defaultVal, onChange) {
 
 // Theme setting
 initSettingDropdown("setting-theme", "theme", "dark", (val) => {
-  document.body.classList.remove("light-mode", "space-mode", "tropical-mode", "stormy-mode");
+  document.body.classList.remove("light-mode", "space-mode", "tropical-mode", "stormy-mode", "mono-mode");
   if (val === "light") document.body.classList.add("light-mode");
   if (val === "space") document.body.classList.add("space-mode");
   if (val === "tropical") document.body.classList.add("tropical-mode");
   if (val === "stormy") document.body.classList.add("stormy-mode");
+  if (val === "mono") document.body.classList.add("mono-mode");
+  const titleLogo = document.getElementById("app-title-logo");
+  if (titleLogo) {
+    const isLightLike = val === "light" || val === "tropical";
+    titleLogo.src = "assets/icons/" + (isLightLike ? "XOptimizerLight.webp" : "XOptimizerDark.webp");
+  }
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = val === "light" ? "#f6f8fa" : val === "space" ? "#0b0d1a" : val === "tropical" ? "#fff6e6" : val === "stormy" ? "#1e2330" : "#0a4797";
+  if (meta) meta.content = val === "light" ? "#f6f8fa" : val === "space" ? "#0b0d1a" : val === "tropical" ? "#fff6e6" : val === "stormy" ? "#1e2330" : val === "mono" ? "#000000" : "#0a4797";
   document.querySelectorAll('img.footer-logo').forEach(img => {
     img.src = (val === "light" || val === "tropical") ? "assets/icons/revoxNameLight.webp" : "assets/icons/revoxName.webp";
   });
@@ -2828,6 +2854,17 @@ function initLibrarySearch() {
     openImagePopup(img.src, name);
   });
 
+  document.getElementById("deck-list")?.addEventListener("click", (e) => {
+    const img = e.target.closest(".result-part-img");
+    if (!img) return;
+
+    e.stopPropagation();
+
+    const part = img.closest(".result-part");
+    const name = part ? part.querySelector(".result-part-name")?.textContent || "" : "";
+    openImagePopup(img.src, name);
+  });
+
   // =========================
   // EVENTS
   // =========================
@@ -2875,6 +2912,267 @@ function saveHistory(mode, comboData) {
 
   localStorage.setItem(key, JSON.stringify(history));
 }
+
+const DECK_KEY = "beyblade_deck";
+const DECK_NAME_KEY = "beyblade_deck_name";
+const DECK_SIZE = 3;
+
+function loadDeckName() {
+  return localStorage.getItem(DECK_NAME_KEY) || "";
+}
+
+function saveDeckName(name) {
+  localStorage.setItem(DECK_NAME_KEY, name || "");
+}
+
+function loadDeck() {
+  let deck = JSON.parse(localStorage.getItem(DECK_KEY) || "null");
+  if (!Array.isArray(deck)) deck = [null, null, null];
+  while (deck.length < DECK_SIZE) deck.push(null);
+  return deck.slice(0, DECK_SIZE);
+}
+
+function persistDeck(deck) {
+  localStorage.setItem(DECK_KEY, JSON.stringify(deck));
+}
+
+const LOCK_CHIP_EXCLUSIVE = new Set(["Emperor", "Valkyrie"]);
+
+function isCountedPart(key, name) {
+  if (!name) return false;
+  if (key === "lockChip") return LOCK_CHIP_EXCLUSIVE.has(name);
+  return true;
+}
+
+function collectDeckPartNames(deck) {
+  const used = new Set();
+  deck.forEach(slot => {
+    if (!slot || !slot.data || !slot.data.parts) return;
+    Object.entries(slot.data.parts).forEach(([key, name]) => {
+      if (isCountedPart(key, name)) used.add(name);
+    });
+  });
+  return used;
+}
+
+function addCurrentToDeck() {
+  const history = JSON.parse(localStorage.getItem("beyblade_history") || "[]");
+  const current = history[0];
+  if (!current) {
+    alert("No combo to add — calculate one first.");
+    return;
+  }
+  const deck = loadDeck();
+  const slot = deck.findIndex(s => s == null);
+  if (slot === -1) {
+    alert("Deck is full. Remove a slot first.");
+    return;
+  }
+
+  const used = collectDeckPartNames(deck);
+  const currentPartEntries = (current.data && current.data.parts) ? Object.entries(current.data.parts) : [];
+  const clash = currentPartEntries.find(([key, name]) => isCountedPart(key, name) && used.has(name));
+  if (clash) {
+    alert(`Can't add — "${clash[1]}" is already used in the deck.`);
+    return;
+  }
+
+  deck[slot] = {
+    mode: current.mode,
+    time: new Date().toISOString(),
+    data: current.data
+  };
+  persistDeck(deck);
+  const btn = document.querySelector(".btn-add-deck");
+  if (btn) {
+    const origHtml = btn.innerHTML;
+    btn.innerHTML = `<img src="assets/icons/thumbs-up.png" alt="Added"
+      onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','Added');">`;
+    btn.disabled = true;
+    setTimeout(() => { btn.innerHTML = origHtml; btn.disabled = false; }, 1200);
+  }
+}
+
+function removeDeckSlot(idx) {
+  const deck = loadDeck();
+  deck[idx] = null;
+  persistDeck(deck);
+  renderDeck();
+}
+
+function renderDeck() {
+  const container = document.getElementById("deck-list");
+  if (!container) return;
+  const nameInput = document.getElementById("deck-name");
+  if (nameInput && nameInput.value !== loadDeckName()) nameInput.value = loadDeckName();
+  const deck = loadDeck();
+  container.innerHTML = "";
+
+  const PART_FOLDER = {
+    blade: "blades", lockChip: "lockChips",
+    mainBlade: "mainBlades", assistBlade: "assistBlades",
+    metalBlade: "metalBlades", overBlade: "overBlades",
+    ratchet: "ratchets", bit: "bits", ratchetBit: "ratchetBits"
+  };
+
+  deck.forEach((item, idx) => {
+    const div = document.createElement("div");
+    div.className = "deck-slot";
+    if (!item) {
+      div.classList.add("deck-slot-empty");
+      div.innerHTML = `<div class="deck-slot-label">Slot ${idx + 1}</div><div class="deck-slot-empty-text">Empty</div>`;
+      container.appendChild(div);
+      return;
+    }
+    const data = item.data || {};
+    const total = data.grandTotal || {};
+    const top = data.top || {};
+    const spinDir = top.spinDirection || top["Spin Direction"] || "R";
+    const atk = total.ATK, def = total.DEF, sta = total.STA;
+    const isFullTBA = atk === "TBA" && def === "TBA" && sta === "TBA";
+    const type = isFullTBA ? "TBA" : getType(Number(atk), Number(def), Number(sta), false);
+
+    const parts = data.parts || {};
+    const partModes = data.partModes || {};
+    let partsHtml = "";
+    for (const [key, name] of Object.entries(parts)) {
+      if (!name || !PART_FOLDER[key]) continue;
+      const modeIdx = partModes[key] != null ? partModes[key] : null;
+      const src = partImgPath(PART_FOLDER[key], name, modeIdx);
+      partsHtml += `<div class="result-part">
+        <div class="result-part-img-box">
+          <img src="${src}" alt="${name}" class="result-part-img"
+               onerror="this.closest('.result-part').style.display='none'">
+        </div>
+        <span class="result-part-name">${name}</span>
+      </div>`;
+    }
+
+    div.innerHTML = `
+      <div class="deck-slot-header">
+        <strong class="deck-slot-label">Slot ${idx + 1}</strong>
+        <button type="button" class="btn-deck-remove" data-slot="${idx}" aria-label="Remove slot ${idx + 1}" title="Remove">&times;</button>
+      </div>
+      <div class="history-header">
+        <strong class="history-name">${data.comboName || "Unknown Combo"}</strong>
+        <span class="history-icons">${typeLogo(type)}${spinLogo(spinDir)}</span>
+      </div>
+      ${partsHtml ? `<div class="result-parts">${partsHtml}</div>` : ""}
+      <div class="deck-slot-stats">
+        <span><b>ATK:</b> ${atk ?? "-"}</span>
+        <span><b>DEF:</b> ${def ?? "-"}</span>
+        <span><b>STA:</b> ${sta ?? "-"}</span>
+        <span><b>Weight:</b> ${total.Weight ?? "-"}</span>
+      </div>
+      <hr/>
+    `;
+    container.appendChild(div);
+  });
+
+  container.querySelectorAll(".btn-deck-remove").forEach(btn => {
+    btn.addEventListener("click", () => removeDeckSlot(Number(btn.dataset.slot)));
+  });
+}
+
+function downloadDeckPNG() {
+  const deckList = document.getElementById("deck-list");
+  if (!deckList) return;
+  const deck = loadDeck();
+  if (deck.every(s => s == null)) {
+    alert("Deck is empty.");
+    return;
+  }
+
+  const cls = document.body.classList;
+  const isLightLike = cls.contains("light-mode") || cls.contains("tropical-mode");
+  const isTropical = cls.contains("tropical-mode");
+  const footerColor = isTropical ? "#8a6d3b" : isLightLike ? "#656d76" : "#8b949e";
+  const footerBorder = isTropical ? "#ffd8a8" : isLightLike ? "#d1d9e0" : "#21262d";
+  const strongColor = isTropical ? "#2d3a3a" : isLightLike ? "#1f2328" : "#c9d1d9";
+  const pageBg = isTropical ? "#fff6e6" : cls.contains("light-mode") ? "#f6f8fa" : cls.contains("space-mode") ? "#0b0d1a" : cls.contains("stormy-mode") ? "#1e2330" : cls.contains("mono-mode") ? "#000000" : "#0d1117";
+  const logoSrc = isLightLike ? "assets/icons/revoxNameLight.webp" : "assets/icons/revoxName.webp";
+
+  const wrap = document.createElement("div");
+  wrap.style.cssText = `position:fixed;left:-9999px;top:0;width:800px;background:${pageBg};padding:24px;color:${strongColor};font-family:inherit;`;
+  const title = document.createElement("div");
+  title.style.cssText = `font-size:20px;font-weight:700;text-align:center;margin-bottom:16px;color:${strongColor};`;
+  const deckName = (loadDeckName() || "").trim();
+  title.textContent = deckName ? `Deck — ${deckName}` : "Deck";
+  wrap.appendChild(title);
+
+  const clone = deckList.cloneNode(true);
+  clone.querySelectorAll(".btn-deck-remove").forEach(b => b.remove());
+  wrap.appendChild(clone);
+
+  const footer = document.createElement("div");
+  footer.style.cssText = `text-align:center;padding:12px 0 8px;font-size:12px;color:${footerColor};border-top:1px solid ${footerBorder};margin-top:12px;`;
+  footer.innerHTML = `
+    <div style="display:flex;justify-content:center;align-items:center;gap:6px;flex-wrap:wrap;width:100%;text-align:center;">
+      <span style="display:flex;align-items:center;gap:4px;">X Optimizer</span>
+      <span style="opacity:0.5;">&bull;</span>
+      <span style="display:flex;align-items:center;gap:4px;">Created by <strong style="color:${strongColor};">RvX Ashwolf</strong></span>
+      <span style="display:flex;align-items:center;gap:4px;width:100%;justify-content:center;margin-top:6px;">Powered by <img src="${logoSrc}" alt="Revox" style="height:40px;width:auto;transform:translateY(-5px);"></span>
+    </div>`;
+  wrap.appendChild(footer);
+
+  document.body.appendChild(wrap);
+
+  html2canvas(wrap, { backgroundColor: pageBg, scale: 2, useCORS: true, width: 800 }).then(canvas => {
+    document.body.removeChild(wrap);
+
+    const side = Math.max(canvas.width, canvas.height);
+    const square = document.createElement("canvas");
+    square.width = side;
+    square.height = side;
+    const ctx = square.getContext("2d");
+    ctx.fillStyle = pageBg;
+    ctx.fillRect(0, 0, side, side);
+    ctx.drawImage(canvas, Math.floor((side - canvas.width) / 2), Math.floor((side - canvas.height) / 2));
+
+    const link = document.createElement("a");
+    const safeName = deckName.replace(/[^a-zA-Z0-9_-]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+    link.download = (safeName || "deck") + ".png";
+    link.href = square.toDataURL("image/png");
+    link.click();
+  }).catch(() => {
+    if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+    alert("Failed to generate deck image.");
+  });
+}
+
+function resetDeck() {
+  const deck = loadDeck();
+  const hasName = (loadDeckName() || "").trim().length > 0;
+  if (deck.every(s => s == null) && !hasName) return;
+  if (!confirm("Clear all deck slots and deck name?")) return;
+  persistDeck([null, null, null]);
+  saveDeckName("");
+  const nameInput = document.getElementById("deck-name");
+  if (nameInput) nameInput.value = "";
+  renderDeck();
+}
+
+function shuffleDeck() {
+  const deck = loadDeck();
+  if (deck.filter(s => s != null).length < 2) return;
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  persistDeck(deck);
+  renderDeck();
+}
+
+document.getElementById("deck-download")?.addEventListener("click", downloadDeckPNG);
+document.getElementById("deck-reset")?.addEventListener("click", resetDeck);
+document.getElementById("deck-shuffle")?.addEventListener("click", shuffleDeck);
+
+(function initDeckName() {
+  const input = document.getElementById("deck-name");
+  if (!input) return;
+  input.value = loadDeckName();
+  input.addEventListener("input", () => saveDeckName(input.value));
+})();
 
 function renderHistory() {
   const container = document.getElementById("history-list");
