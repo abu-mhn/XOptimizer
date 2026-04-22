@@ -2047,7 +2047,7 @@ body.light-mode .part-img {
 
 .scoreboard-btns {
     display: flex;
-    flex-direction: column-reverse;
+    flex-direction: column;
     gap: 28px;
     position: absolute;
     top: 50%;
