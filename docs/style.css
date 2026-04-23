@@ -3967,6 +3967,18 @@ body.light-mode .swiss-group-progress {
     padding: 10px 4px;
 }
 
+.btn-clear-history {
+    display: block;
+    margin: 16px 0 4px auto;
+    font-size: 0.85rem;
+    padding: 6px 14px;
+    opacity: 0.85;
+}
+
+.btn-clear-history:hover {
+    opacity: 1;
+}
+
 .tournament-name-label {
     display: block;
     margin-top: 6px;

@@ -4770,6 +4770,7 @@ function renderTournamentHistory() {
       </article>`;
   }).join("");
   bindSwissRoomBadge(container);
+  appendHistoryClearButton(container, "tournaments");
 }
 
 document.querySelectorAll(".history-sub-tab").forEach(btn => {
@@ -4783,6 +4784,9 @@ document.querySelectorAll(".history-sub-tab").forEach(btn => {
     if (tournaments) tournaments.classList.toggle("hidden", view !== "tournaments");
     if (view === "tournaments") renderTournamentHistory();
     else renderHistory();
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
   });
 });
 
@@ -5078,6 +5082,29 @@ function renderHistory() {
 
     container.appendChild(div);
   });
+
+  appendHistoryClearButton(container, "combos");
+}
+
+function clearCombosHistory() {
+  if (!confirm("Clear your combo history? This can't be undone.")) return;
+  localStorage.removeItem("beyblade_history");
+  renderHistory();
+}
+
+function clearTournamentHistory() {
+  if (!confirm("Clear tournament history? This will remove all saved tournament codes on this device.")) return;
+  localStorage.removeItem(TOURNAMENT_HISTORY_KEY);
+  renderTournamentHistory();
+}
+
+function appendHistoryClearButton(container, kind) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "btn btn-reset btn-clear-history";
+  btn.textContent = kind === "tournaments" ? "Clear Tournament History" : "Clear Combo History";
+  btn.addEventListener("click", kind === "tournaments" ? clearTournamentHistory : clearCombosHistory);
+  container.appendChild(btn);
 }
 
 // ================= SCOREBOARD =================

@@ -17,7 +17,9 @@
       "Bash(node --check /tmp/data_check.js)",
       "Bash(node --check /tmp/app_check.js)",
       "WebFetch(domain:abu-mhn.github.io)",
-      "Bash(grep -E '[0-9]\\\\.webp$')"
+      "Bash(grep -E '[0-9]\\\\.webp$')",
+      "Bash(awk 'NR==4869,/^}$/' c:/Users/admin/Downloads/demo/docs/app.js)",
+      "Bash(awk 'NR>=4869 && /^}$/ {print NR; exit}' c:/Users/admin/Downloads/demo/docs/app.js)"
     ]
   }
 }
