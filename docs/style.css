@@ -3903,6 +3903,45 @@ body.light-mode .swiss-group-progress {
     font-style: italic;
 }
 
+.tournament-history-tags {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.tournament-history-role {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.06);
+    white-space: nowrap;
+}
+
+.tournament-history-role-host {
+    background: rgba(46, 160, 67, 0.16);
+    border-color: rgba(46, 160, 67, 0.45);
+    color: #2ea043;
+}
+
+.tournament-history-role-co-host {
+    background: rgba(210, 153, 34, 0.16);
+    border-color: rgba(210, 153, 34, 0.45);
+    color: #d29922;
+}
+
+.tournament-history-role-view {
+    background: rgba(88, 166, 255, 0.16);
+    border-color: rgba(88, 166, 255, 0.45);
+    color: #58a6ff;
+}
+
 .tournament-history-mode {
     font-size: 0.8rem;
     opacity: 0.7;

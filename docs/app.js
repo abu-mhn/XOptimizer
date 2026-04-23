@@ -3294,10 +3294,28 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit) {
   const isPopulatedRemote = (r) => !!(r && (r.groups || (r.matches && Object.keys(r.matches).length > 0)));
   const isPopulatedLocal = (s) => !!(s && (s.groups || (s.matches && Object.keys(s.matches).length > 0)));
 
+  const role = asHost ? "host" : (canEdit ? "co-host" : "view");
+  const localNow = loadSwiss();
+  saveTournamentHistoryEntry({
+    editCode,
+    viewCode: swissViewCode || null,
+    name: localNow?.tournamentName || "",
+    mode: localNow?.mode || null,
+    role,
+    createdAt: new Date().toISOString()
+  });
+
   swissRoomRef.on("value", snap => {
     const remote = snap.val();
     if (isPopulatedRemote(remote)) {
       if (remote.viewCode && !swissViewCode) swissViewCode = remote.viewCode;
+      saveTournamentHistoryEntry({
+        editCode,
+        viewCode: swissViewCode || null,
+        name: remote.tournamentName || "",
+        mode: remote.mode || null,
+        role
+      });
       swissApplyingRemote = true;
       localStorage.setItem(SWISS_KEY, JSON.stringify(stripRoomMetadata(remote)));
       swissApplyingRemote = false;
@@ -4650,15 +4668,9 @@ function startTournamentFromState(next) {
     while (viewCode === editCode) viewCode = generateRoomCode();
     markRoomHosted(editCode);
     connectSwissRoom(editCode, viewCode, true, true);
-    saveTournamentHistoryEntry({
-      editCode,
-      viewCode,
-      name: next.tournamentName || "",
-      mode: next.mode || "swiss",
-      createdAt: new Date().toISOString()
-    });
-    // connectSwissRoom's listener will push the local state (with viewCode
-    // metadata) and publish the swissViewCodes mapping because remote is empty.
+    // connectSwissRoom saves a tournament history entry and its listener will
+    // push the local state (with viewCode metadata) and publish the
+    // swissViewCodes mapping because remote is empty.
   }
   renderSwiss();
 }
@@ -4674,8 +4686,26 @@ function loadTournamentHistory() {
 function saveTournamentHistoryEntry(entry) {
   if (!entry || !entry.editCode) return;
   let list = loadTournamentHistory();
+  const existing = list.find(e => e.editCode === entry.editCode);
+  const merged = {
+    ...(existing || {}),
+    ...entry,
+    createdAt: existing?.createdAt || entry.createdAt || new Date().toISOString()
+  };
+  // Don't let an empty incoming name/mode overwrite a populated existing one
+  // (happens when a join hits connectSwissRoom before the remote state arrives).
+  if (existing?.name && !merged.name) merged.name = existing.name;
+  if (existing?.mode && !merged.mode) merged.mode = existing.mode;
+  // Skip no-op writes so every Firebase listener tick doesn't churn localStorage.
+  if (existing
+      && existing.name === merged.name
+      && existing.mode === merged.mode
+      && existing.viewCode === merged.viewCode
+      && existing.role === merged.role) {
+    return;
+  }
   list = list.filter(e => e.editCode !== entry.editCode);
-  list.unshift(entry);
+  list.unshift(merged);
   list = list.slice(0, TOURNAMENT_HISTORY_MAX);
   localStorage.setItem(TOURNAMENT_HISTORY_KEY, JSON.stringify(list));
 }
@@ -4685,15 +4715,27 @@ function renderTournamentHistory() {
   if (!container) return;
   const list = loadTournamentHistory();
   if (!list.length) {
-    container.innerHTML = `<p class="tournament-history-empty">No tournaments yet. Hosted tournaments will appear here with their Host and View codes.</p>`;
+    container.innerHTML = `<p class="tournament-history-empty">No tournaments yet. Tournaments you host, co-host, or watch will appear here with their Host and View codes.</p>`;
     return;
   }
-  const modeLabel = m => m === "single-elim" ? "Single Elimination" : "Swiss + Top 8";
+  const modeLabel = m => {
+    if (m === "single-elim") return "Single Elimination";
+    if (m === "swiss") return "Swiss + Top 8";
+    return "";
+  };
+  const roleLabel = r => {
+    if (r === "host") return "Host";
+    if (r === "co-host") return "Co-host";
+    if (r === "view") return "Viewer";
+    return "";
+  };
   container.innerHTML = list.map(e => {
     const hasName = !!(e.name && e.name.trim());
     const displayName = hasName ? escapeHtml(e.name) : "(unnamed tournament)";
     const nameCls = hasName ? "tournament-history-name" : "tournament-history-name is-unnamed";
     const when = e.createdAt ? new Date(e.createdAt).toLocaleString() : "";
+    const mLabel = modeLabel(e.mode);
+    const rLabel = roleLabel(e.role);
     const codes = [];
     if (e.editCode) codes.push(`
       <span class="swiss-room-badge swiss-room-badge-edit" title="Host code — tap to copy">
@@ -4705,11 +4747,14 @@ function renderTournamentHistory() {
         <span class="swiss-room-role">View</span>
         <button type="button" class="swiss-room-code" data-room="${escapeHtml(e.viewCode)}">${escapeHtml(e.viewCode)}</button>
       </span>`);
+    const metaBits = [];
+    if (rLabel) metaBits.push(`<span class="tournament-history-role tournament-history-role-${e.role}">${rLabel}</span>`);
+    if (mLabel) metaBits.push(`<span class="tournament-history-mode">${mLabel}</span>`);
     return `
       <article class="tournament-history-item">
         <header class="tournament-history-header">
           <span class="${nameCls}" title="${escapeHtml(hasName ? e.name : '')}">${displayName}</span>
-          <span class="tournament-history-mode">${modeLabel(e.mode)}</span>
+          <span class="tournament-history-tags">${metaBits.join("")}</span>
         </header>
         <div class="tournament-history-meta">
           ${when ? `<span class="tournament-history-time">${escapeHtml(when)}</span>` : "<span></span>"}
