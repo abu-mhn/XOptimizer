@@ -4757,8 +4757,9 @@ function renderTournamentHistory() {
     const metaBits = [];
     if (rLabel) metaBits.push(`<span class="tournament-history-role tournament-history-role-${e.role}">${rLabel}</span>`);
     if (mLabel) metaBits.push(`<span class="tournament-history-mode">${mLabel}</span>`);
+    const joinKey = e.editCode || e.viewCode || "";
     return `
-      <article class="tournament-history-item">
+      <article class="tournament-history-item" data-join-code="${escapeHtml(joinKey)}" role="button" tabindex="0" title="Show final placements">
         <header class="tournament-history-header">
           <span class="${nameCls}" title="${escapeHtml(hasName ? e.name : '')}">${displayName}</span>
           <span class="tournament-history-tags">${metaBits.join("")}</span>
@@ -4770,6 +4771,23 @@ function renderTournamentHistory() {
       </article>`;
   }).join("");
   bindSwissRoomBadge(container);
+  container.querySelectorAll(".tournament-history-item").forEach(el => {
+    const openIt = () => {
+      const code = el.dataset.joinCode;
+      if (code) showTournamentResultsFromHistory(code);
+    };
+    el.addEventListener("click", e => {
+      // Don't hijack copy-code button clicks.
+      if (e.target.closest(".swiss-room-code")) return;
+      openIt();
+    });
+    el.addEventListener("keydown", e => {
+      if ((e.key === "Enter" || e.key === " ") && !e.target.closest(".swiss-room-code")) {
+        e.preventDefault();
+        openIt();
+      }
+    });
+  });
   appendHistoryClearButton(container, "tournaments");
 }
 
@@ -4803,20 +4821,17 @@ document.getElementById("swiss-generate")?.addEventListener("click", () => {
   });
 });
 
-document.getElementById("swiss-join")?.addEventListener("click", () => {
-  const input = document.getElementById("swiss-join-code");
-  const status = document.getElementById("swiss-join-status");
-  if (!input) return;
-  const code = (input.value || "").trim().toUpperCase();
+function joinSwissByCode(code, { onStatus } = {}) {
+  const setStatus = msg => { if (typeof onStatus === "function") onStatus(msg); };
   if (!code) return;
   if (!firebaseReady()) {
-    if (status) status.textContent = "Live sync isn't configured on this build.";
+    setStatus("Live sync isn't configured on this build.");
     return;
   }
-  if (status) status.textContent = "Looking up room…";
+  setStatus("Looking up room…");
   resolveRoomCode(code, result => {
     if (!result.ok) {
-      if (status) status.textContent = result.reason || "Failed to connect.";
+      setStatus(result.reason || "Failed to connect.");
       return;
     }
     // Fresh join — remote owns the view, clear any stale local state.
@@ -4825,14 +4840,136 @@ document.getElementById("swiss-join")?.addEventListener("click", () => {
     const canEdit = asHost || result.role === "edit";
     const connected = connectSwissRoom(result.editCode, result.viewCode, asHost, canEdit);
     if (!connected.ok) {
-      if (status) status.textContent = connected.reason || "Failed to connect.";
+      setStatus(connected.reason || "Failed to connect.");
       return;
     }
-    const label = canEdit ? "co-host" : "participant";
-    if (status) status.textContent = `Joined as ${label}.`;
+    const label = asHost ? "host" : (canEdit ? "co-host" : "participant");
+    setStatus(`Joined as ${label}.`);
     renderSwiss();
   });
+}
+
+document.getElementById("swiss-join")?.addEventListener("click", () => {
+  const input = document.getElementById("swiss-join-code");
+  const status = document.getElementById("swiss-join-status");
+  if (!input) return;
+  const code = (input.value || "").trim().toUpperCase();
+  joinSwissByCode(code, {
+    onStatus: msg => { if (status) status.textContent = msg; }
+  });
 });
+
+function fetchTournamentState(code, cb) {
+  const db = initFirebase();
+  if (!db) { cb(null); return; }
+  const lookup = key =>
+    db.ref("swissRooms/" + key).once("value").then(snap => snap.val());
+  lookup(code).then(val => {
+    if (val && (val.groups || (val.matches && Object.keys(val.matches).length > 0))) {
+      cb(val);
+      return;
+    }
+    // Not an edit code (or empty). Try resolving as a view code.
+    db.ref("swissViewCodes/" + code).once("value").then(vSnap => {
+      const editCode = vSnap.val();
+      if (!editCode) { cb(null); return; }
+      lookup(editCode).then(cb).catch(() => cb(null));
+    }).catch(() => cb(null));
+  }).catch(() => cb(null));
+}
+
+function placementLabel(n) {
+  if (n === 1) return "1st";
+  if (n === 2) return "2nd";
+  if (n === 3) return "3rd";
+  return `${n}th`;
+}
+
+function computeTournamentPlacements(state) {
+  const matches = state?.matches || {};
+  const matchResult = m => {
+    if (!m || m.scoreA == null || m.scoreB == null || m.scoreA === m.scoreB) return null;
+    const aWon = m.scoreA > m.scoreB;
+    return { winner: aWon ? m.a : m.b, loser: aWon ? m.b : m.a };
+  };
+  const placements = [];
+  const f = matchResult(matches["bracket-f-0"]);
+  if (f) {
+    placements.push({ place: 1, name: f.winner });
+    placements.push({ place: 2, name: f.loser });
+  }
+  const third = matchResult(matches["bracket-3rd-0"]);
+  if (third) {
+    placements.push({ place: 3, name: third.winner });
+    placements.push({ place: 4, name: third.loser });
+  }
+  if (state?.mode === "swiss") {
+    const fifth = matchResult(matches["bracket-5th-0"]);
+    if (fifth) {
+      placements.push({ place: 5, name: fifth.winner });
+      placements.push({ place: 6, name: fifth.loser });
+    }
+    const seventh = matchResult(matches["bracket-7th-0"]);
+    if (seventh) {
+      placements.push({ place: 7, name: seventh.winner });
+      placements.push({ place: 8, name: seventh.loser });
+    }
+  }
+  return placements;
+}
+
+function renderTournamentResultsMarkup(state) {
+  const name = state.tournamentName && state.tournamentName.trim()
+    ? escapeHtml(state.tournamentName)
+    : "(unnamed tournament)";
+  const modeLabel = state.mode === "single-elim" ? "Single Elimination" : "Swiss + Top 8";
+  const header = `
+    <div class="tournament-results-heading">
+      <div class="tournament-results-name">${name}</div>
+      <div class="tournament-results-mode">${escapeHtml(modeLabel)}</div>
+    </div>
+  `;
+  const placements = computeTournamentPlacements(state);
+  if (!placements.length) {
+    return header + `<p class="tournament-results-empty">This tournament hasn't reached the knockout placements yet — come back when the bracket finishes.</p>`;
+  }
+  const rows = placements.map(p => `
+    <div class="tournament-results-row tournament-results-place-${p.place}">
+      <span class="tournament-results-place">${placementLabel(p.place)}</span>
+      <span class="tournament-results-player">${escapeHtml(p.name || "—")}</span>
+    </div>
+  `).join("");
+  return header + `<div class="tournament-results-list">${rows}</div>`;
+}
+
+function showTournamentResultsFromHistory(code) {
+  const popup = document.getElementById("tournament-results-popup");
+  const body = document.getElementById("tournament-results-body");
+  if (!popup || !body) return;
+  body.innerHTML = `<p class="tournament-results-loading">Loading results…</p>`;
+  popup.classList.remove("hidden");
+  if (!firebaseReady()) {
+    body.innerHTML = `<p class="tournament-results-empty">Live sync isn't configured on this build, so results can't be fetched.</p>`;
+    return;
+  }
+  fetchTournamentState(code.toUpperCase(), state => {
+    if (!state) {
+      body.innerHTML = `<p class="tournament-results-empty">Couldn't find this tournament. It may have been cleared.</p>`;
+      return;
+    }
+    body.innerHTML = renderTournamentResultsMarkup(state);
+  });
+}
+
+(function initTournamentResultsPopup() {
+  const popup = document.getElementById("tournament-results-popup");
+  if (!popup) return;
+  const close = () => popup.classList.add("hidden");
+  popup.querySelector("#tournament-results-close")?.addEventListener("click", close);
+  popup.addEventListener("click", e => {
+    if (e.target === popup) close();
+  });
+})();
 
 document.getElementById("swiss-reset")?.addEventListener("click", resetSwiss);
 
@@ -5102,7 +5239,10 @@ function appendHistoryClearButton(container, kind) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "btn btn-reset btn-clear-history";
-  btn.textContent = kind === "tournaments" ? "Clear Tournament History" : "Clear Combo History";
+  const label = kind === "tournaments" ? "Clear Tournament History" : "Clear Combo History";
+  btn.setAttribute("aria-label", label);
+  btn.title = label;
+  btn.innerHTML = `<img src="assets/icons/delete.png" alt="Delete" onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x1F5D1;');">`;
   btn.addEventListener("click", kind === "tournaments" ? clearTournamentHistory : clearCombosHistory);
   container.appendChild(btn);
 }
