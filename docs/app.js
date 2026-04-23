@@ -4269,21 +4269,29 @@ function renderSwiss() {
     ? `<span class="swiss-tournament-name" title="${escapeHtml(state.tournamentName)}">${escapeHtml(state.tournamentName)}</span>`
     : "";
 
+  const nameRowHtml = (tournamentNameHtml || tournamentComplete)
+    ? `<div class="swiss-toolbar-row swiss-toolbar-name-row">
+        ${tournamentNameHtml}
+        ${tournamentComplete ? `<span class="swiss-complete">Tournament Complete</span>` : ""}
+      </div>`
+    : "";
+
   view.innerHTML = `
     <div class="swiss-toolbar">
-      ${tournamentNameHtml}
-      ${tournamentComplete ? `<span class="swiss-complete">Tournament Complete</span>` : ""}
-      ${renderSwissRoomBadge()}
-      ${showStartKnockoutBtn ? `<button type="button" id="swiss-start-bracket" class="btn">Start Knockout</button>` : ""}
-      <div class="swiss-toolbar-actions">
-        ${canEdit ? `<button type="button" id="swiss-edit-participants" class="btn btn-icon-sm" aria-label="Edit participants" title="Edit participants">
-          <img src="assets/icons/pencil.png" alt="Edit"
-               onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#9998;');">
-        </button>` : ""}
-        <button type="button" id="swiss-clear" class="btn btn-reset btn-icon-sm" title="${resetTitle}">
-          <img src="assets/icons/exit-button.png" alt="${resetTitle}"
-               onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
-        </button>
+      ${nameRowHtml}
+      <div class="swiss-toolbar-row swiss-toolbar-info-row">
+        ${renderSwissRoomBadge()}
+        ${showStartKnockoutBtn ? `<button type="button" id="swiss-start-bracket" class="btn">Start Knockout</button>` : ""}
+        <div class="swiss-toolbar-actions">
+          ${canEdit ? `<button type="button" id="swiss-edit-participants" class="btn btn-icon-sm" aria-label="Edit participants" title="Edit participants">
+            <img src="assets/icons/pencil.png" alt="Edit"
+                 onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#9998;');">
+          </button>` : ""}
+          <button type="button" id="swiss-clear" class="btn btn-reset btn-icon-sm" title="${resetTitle}">
+            <img src="assets/icons/exit-button.png" alt="${resetTitle}"
+                 onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
+          </button>
+        </div>
       </div>
     </div>
     ${groupsHtml}

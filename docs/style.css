@@ -3408,11 +3408,26 @@ body.mono-mode .popup-ok:hover {
 
 .swiss-toolbar {
     display: flex;
-    justify-content: flex-end;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.swiss-toolbar-row {
+    display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: 6px;
-    margin-bottom: 12px;
+    min-width: 0;
+}
+
+.swiss-toolbar-name-row {
+    justify-content: flex-start;
+}
+
+.swiss-toolbar-info-row {
+    justify-content: flex-end;
 }
 
 .swiss-round-indicator {
@@ -3948,15 +3963,14 @@ body.light-mode .swiss-group-progress {
 }
 
 .swiss-tournament-name {
-    flex: 1 1 auto;
-    min-width: 0;
-    margin-right: auto;
     font-weight: 700;
-    font-size: 1rem;
+    font-size: 1.05rem;
     letter-spacing: 0.02em;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    max-width: 100%;
+    min-width: 0;
 }
 
 .tournament-mode-choices {
