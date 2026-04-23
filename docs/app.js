@@ -494,7 +494,10 @@ document.querySelectorAll(".tab").forEach(tab => {
 
       // ================= HISTORY =================
       if (mode === "history") {
-        renderHistory();
+        const activeSub = document.querySelector(".history-sub-tab.active");
+        const view = activeSub ? activeSub.dataset.historyView : "combos";
+        if (view === "tournaments") renderTournamentHistory();
+        else renderHistory();
       }
 
       // ================= DECK =================
@@ -1634,11 +1637,11 @@ initDropdowns();
       bitInput.disabled = false;
       bitInput.placeholder = "-- Select --";
     } else if (codename === "BULLETGRIFFON") {
-      // Bullet Griffon: force "No Ratchet"; bit list restricted to ratchet-bits
+      // Bullet Griffon: force "No Ratchet"; bit list restricted to normal bits
       ratchetWrapper._filterFn = null;
       ratchetWrapper._select(NO_RATCHET);
       ratchetInput.disabled = true;
-      bitWrapper._setFilter(b => !!b.isRatchetBit);
+      bitWrapper._setFilter(b => !b.isRatchetBit);
       bitInput.disabled = false;
       bitInput.placeholder = "-- Select --";
     } else {
@@ -3490,7 +3493,7 @@ function appendGroupRound(state, groupIndex) {
   return true;
 }
 
-function generateSwissFromText(text) {
+function generateSwissFromText(text, tournamentName) {
   const names = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
   const seen = new Set();
   const unique = [];
@@ -3511,7 +3514,8 @@ function generateSwissFromText(text) {
     matches: {},
     groupRounds: groups.map(() => 0),
     mode: "swiss",
-    participants: unique
+    participants: unique,
+    tournamentName: (tournamentName || "").trim() || null
   };
   groups.forEach((_, gi) => appendGroupRound(state, gi));
   return state;
@@ -3543,7 +3547,7 @@ function getParticipants(state) {
 // (bracket-r0-*, bracket-r1-*, ...) for pre-final rounds and bracket-f-0
 // for the final. 3rd place match is included when at least 4 participants
 // are present (otherwise there's nothing meaningful to play for 3rd).
-function generateSingleElimFromText(text) {
+function generateSingleElimFromText(text, tournamentName) {
   const names = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
   const seen = new Set();
   const unique = [];
@@ -3570,7 +3574,8 @@ function generateSingleElimFromText(text) {
     mode: "single-elim",
     bracketSize,
     preFinalRounds,
-    participants: unique
+    participants: unique,
+    tournamentName: (tournamentName || "").trim() || null
   };
 
   const emptyBracketMatch = (round, idx) => ({
@@ -4260,8 +4265,13 @@ function renderSwiss() {
   const showStartKnockoutBtn = groupStageDone && !bracketActive && canEdit;
   const resetTitle = inRoomNonHost ? "Leave Room" : "Reset Tournament";
 
+  const tournamentNameHtml = state.tournamentName
+    ? `<span class="swiss-tournament-name" title="${escapeHtml(state.tournamentName)}">${escapeHtml(state.tournamentName)}</span>`
+    : "";
+
   view.innerHTML = `
     <div class="swiss-toolbar">
+      ${tournamentNameHtml}
       ${tournamentComplete ? `<span class="swiss-complete">Tournament Complete</span>` : ""}
       ${renderSwissRoomBadge()}
       ${showStartKnockoutBtn ? `<button type="button" id="swiss-start-bracket" class="btn">Start Knockout</button>` : ""}
@@ -4583,8 +4593,8 @@ function showEditParticipantsPopup() {
     if (!confirm(msg)) return;
     const mode = state.mode === "single-elim" ? "single-elim" : "swiss";
     const next = mode === "single-elim"
-      ? generateSingleElimFromText(unique.join("\n"))
-      : generateSwissFromText(unique.join("\n"));
+      ? generateSingleElimFromText(unique.join("\n"), state.tournamentName)
+      : generateSwissFromText(unique.join("\n"), state.tournamentName);
     if (!next) return; // generator already alerted (e.g. Swiss min participants)
     persistSwiss(next);
     if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
@@ -4599,21 +4609,27 @@ function showEditParticipantsPopup() {
 
 function showTournamentModePopup(onPick) {
   const popup = document.getElementById("tournament-mode-popup");
-  if (!popup) { onPick("swiss"); return; } // popup missing, fall back to swiss
+  if (!popup) { onPick("swiss", ""); return; } // popup missing, fall back to swiss
   const swissBtn = popup.querySelector("#tournament-mode-swiss");
   const singleBtn = popup.querySelector("#tournament-mode-single");
   const cancelBtn = popup.querySelector("#tournament-mode-cancel");
+  const nameInput = popup.querySelector("#tournament-name-input");
+  if (nameInput) nameInput.value = "";
   const close = (choice) => {
     popup.classList.add("hidden");
     swissBtn.onclick = null;
     singleBtn.onclick = null;
     cancelBtn.onclick = null;
-    if (choice) onPick(choice);
+    if (choice) {
+      const name = nameInput ? nameInput.value.trim() : "";
+      onPick(choice, name);
+    }
   };
   swissBtn.onclick = () => close("swiss");
   singleBtn.onclick = () => close("single-elim");
   cancelBtn.onclick = () => close(null);
   popup.classList.remove("hidden");
+  if (nameInput) setTimeout(() => nameInput.focus(), 0);
 }
 
 function startTournamentFromState(next) {
@@ -4626,20 +4642,98 @@ function startTournamentFromState(next) {
     while (viewCode === editCode) viewCode = generateRoomCode();
     markRoomHosted(editCode);
     connectSwissRoom(editCode, viewCode, true, true);
+    saveTournamentHistoryEntry({
+      editCode,
+      viewCode,
+      name: next.tournamentName || "",
+      mode: next.mode || "swiss",
+      createdAt: new Date().toISOString()
+    });
     // connectSwissRoom's listener will push the local state (with viewCode
     // metadata) and publish the swissViewCodes mapping because remote is empty.
   }
   renderSwiss();
 }
 
+const TOURNAMENT_HISTORY_KEY = "beyblade_tournament_history";
+const TOURNAMENT_HISTORY_MAX = 20;
+
+function loadTournamentHistory() {
+  try { return JSON.parse(localStorage.getItem(TOURNAMENT_HISTORY_KEY)) || []; }
+  catch { return []; }
+}
+
+function saveTournamentHistoryEntry(entry) {
+  if (!entry || !entry.editCode) return;
+  let list = loadTournamentHistory();
+  list = list.filter(e => e.editCode !== entry.editCode);
+  list.unshift(entry);
+  list = list.slice(0, TOURNAMENT_HISTORY_MAX);
+  localStorage.setItem(TOURNAMENT_HISTORY_KEY, JSON.stringify(list));
+}
+
+function renderTournamentHistory() {
+  const container = document.getElementById("tournament-history-list");
+  if (!container) return;
+  const list = loadTournamentHistory();
+  if (!list.length) {
+    container.innerHTML = `<p class="tournament-history-empty">No tournaments yet. Hosted tournaments will appear here with their Host and View codes.</p>`;
+    return;
+  }
+  const modeLabel = m => m === "single-elim" ? "Single Elimination" : "Swiss + Top 8";
+  container.innerHTML = list.map(e => {
+    const hasName = !!(e.name && e.name.trim());
+    const displayName = hasName ? escapeHtml(e.name) : "(unnamed tournament)";
+    const nameCls = hasName ? "tournament-history-name" : "tournament-history-name is-unnamed";
+    const when = e.createdAt ? new Date(e.createdAt).toLocaleString() : "";
+    const codes = [];
+    if (e.editCode) codes.push(`
+      <span class="swiss-room-badge swiss-room-badge-edit" title="Host code — tap to copy">
+        <span class="swiss-room-role">Host</span>
+        <button type="button" class="swiss-room-code" data-room="${escapeHtml(e.editCode)}">${escapeHtml(e.editCode)}</button>
+      </span>`);
+    if (e.viewCode) codes.push(`
+      <span class="swiss-room-badge swiss-room-badge-view" title="View code — tap to copy">
+        <span class="swiss-room-role">View</span>
+        <button type="button" class="swiss-room-code" data-room="${escapeHtml(e.viewCode)}">${escapeHtml(e.viewCode)}</button>
+      </span>`);
+    return `
+      <article class="tournament-history-item">
+        <header class="tournament-history-header">
+          <span class="${nameCls}" title="${escapeHtml(hasName ? e.name : '')}">${displayName}</span>
+          <span class="tournament-history-mode">${modeLabel(e.mode)}</span>
+        </header>
+        <div class="tournament-history-meta">
+          ${when ? `<span class="tournament-history-time">${escapeHtml(when)}</span>` : "<span></span>"}
+          <div class="swiss-room-badges">${codes.join("")}</div>
+        </div>
+      </article>`;
+  }).join("");
+  bindSwissRoomBadge(container);
+}
+
+document.querySelectorAll(".history-sub-tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".history-sub-tab").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    const view = btn.dataset.historyView;
+    const combos = document.getElementById("history-panel-combos");
+    const tournaments = document.getElementById("history-panel-tournaments");
+    if (combos) combos.classList.toggle("hidden", view !== "combos");
+    if (tournaments) tournaments.classList.toggle("hidden", view !== "tournaments");
+    if (view === "tournaments") renderTournamentHistory();
+    else renderHistory();
+  });
+});
+
 document.getElementById("swiss-generate")?.addEventListener("click", () => {
   const textarea = document.getElementById("swiss-names");
   if (!textarea) return;
   const namesText = textarea.value;
-  showTournamentModePopup((mode) => {
+  showTournamentModePopup((mode, tournamentName) => {
     const next = mode === "single-elim"
-      ? generateSingleElimFromText(namesText)
-      : generateSwissFromText(namesText);
+      ? generateSingleElimFromText(namesText, tournamentName)
+      : generateSwissFromText(namesText, tournamentName);
     if (!next) return;
     startTournamentFromState(next);
   });

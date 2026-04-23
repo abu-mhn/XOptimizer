@@ -253,10 +253,22 @@
 
     <!-- ================= HISTORY ================= -->
     <section id="form-history" class="calc-form hidden">
-      <fieldset>
-        <legend>History (Last 3 Combos)</legend>
-        <div id="history-list"></div>
-      </fieldset>
+      <div class="history-sub-tabs" id="history-sub-tabs">
+        <button type="button" class="history-sub-tab active" data-history-view="combos">Last 3 Combos</button>
+        <button type="button" class="history-sub-tab" data-history-view="tournaments">Tournaments</button>
+      </div>
+      <div id="history-panel-combos" class="history-panel">
+        <fieldset>
+          <legend>History (Last 3 Combos)</legend>
+          <div id="history-list"></div>
+        </fieldset>
+      </div>
+      <div id="history-panel-tournaments" class="history-panel hidden">
+        <fieldset>
+          <legend>Tournament History</legend>
+          <div id="tournament-history-list"></div>
+        </fieldset>
+      </div>
     </section>
 
     <!-- ================= SWISS ================= -->
@@ -402,6 +414,8 @@
   <div id="tournament-mode-popup" class="popup-overlay hidden">
     <div class="popup-card">
       <h2 class="popup-title">Tournament Format</h2>
+      <label class="tournament-name-label" for="tournament-name-input">Tournament Name <span class="tournament-name-optional">(optional)</span></label>
+      <input id="tournament-name-input" type="text" class="tournament-name-input" placeholder="e.g. Spring Cup 2026" maxlength="80" autocomplete="off" />
       <div class="tournament-mode-choices">
         <button type="button" id="tournament-mode-swiss" class="tournament-mode-btn">
           <span class="tournament-mode-name">Swiss + Top 8</span>
@@ -417,16 +431,16 @@
   </div>
 
   <!-- ================= POPUP ================= -->
-  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-23-edit2">
+  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-23-edit3">
     <div class="popup-card">
 
       <h2 class="popup-title">What's New</h2>
 
       <ul class="popup-list">
-        <li><strong>Edit participants anytime.</strong> New <strong>Edit</strong> button in the tournament toolbar opens a list of every participant. Keep the same total → renames in place (scores, pairings and standings preserved). Add or remove lines → regenerates the tournament from the new list in the same format you started with.</li>
-        <li><strong>Edit button polish.</strong> The Edit button is now a compact <strong>pencil icon</strong> that sits tightly next to the Leave / Reset button on a single line. Tuned per theme — a translucent light panel in <em>Space</em> / <em>Stormy</em> for visibility, and a proper black pencil in <em>Monochrome</em>.</li>
-        <li><strong>Scoreboard Reset moved under "VS".</strong> The <strong>Reset</strong> button now sits directly below the big <em>VS</em> divider in the center of the scoreboard instead of floating at the bottom — always visible, always in thumb reach, no more hunting for it in landscape.</li>
-        <li><strong>Cleaner popup buttons.</strong> Save / Cancel pairs (in the Edit Participants and Tournament Format popups) now render at identical widths and heights, so they read as a clean pair.</li>
+        <li><strong>Name your tournament.</strong> Set a name when picking the format; it shows in the toolbar and is saved with the room.</li>
+        <li><strong>Tournament history.</strong> New sub-tab under History lists every tournament you've hosted with its name and codes — tap a code to copy it.</li>
+        <li><strong>Sticky navigation.</strong> Main tabs and sub-tabs (including the new History sub-tabs) now float at the top with a frosted-glass look as you scroll.</li>
+        <li><strong>Bullet Griffon fix.</strong> Selecting Bullet Griffon now correctly shows normal bits instead of ratchet-bits.</li>
       </ul>
 
       <button type="button" class="btn popup-ok">
