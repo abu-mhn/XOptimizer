@@ -19,7 +19,12 @@
       "WebFetch(domain:abu-mhn.github.io)",
       "Bash(grep -E '[0-9]\\\\.webp$')",
       "Bash(awk 'NR==4869,/^}$/' c:/Users/admin/Downloads/demo/docs/app.js)",
-      "Bash(awk 'NR>=4869 && /^}$/ {print NR; exit}' c:/Users/admin/Downloads/demo/docs/app.js)"
+      "Bash(awk 'NR>=4869 && /^}$/ {print NR; exit}' c:/Users/admin/Downloads/demo/docs/app.js)",
+      "Bash(sed -n '1,525p' /c/Users/admin/Downloads/demo/docs/app.js)",
+      "Read(//tmp/**)",
+      "Bash(sed -n '2875,2886p' /c/Users/admin/Downloads/demo/docs/app.js)",
+      "Bash(sed -n '3820,3822p' /c/Users/admin/Downloads/demo/docs/app.js)",
+      "Bash(grep -v -E '^[0-9]+:\\(function |const |let |var |//|\\\\/\\\\*|\\\\*|document\\\\.addEventListener|\\\\\\(function\\)')"
     ]
   }
 }

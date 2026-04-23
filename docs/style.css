@@ -940,9 +940,10 @@ body.light-mode .result-part-name {
 }
 
 .history-item .result-parts {
-    flex-wrap: wrap;
-    overflow-x: visible;
-    justify-content: center;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    justify-content: safe center;
+    -webkit-overflow-scrolling: touch;
 }
 
 .history-item .result-part {
@@ -1280,6 +1281,83 @@ body.light-mode .result-part-name {
 .btn-add-deck:disabled {
     opacity: 0.7;
     cursor: default;
+}
+
+.deck-selector {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    margin-bottom: 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    padding-bottom: 4px;
+}
+
+.deck-selector::-webkit-scrollbar {
+    height: 6px;
+}
+
+.deck-selector::-webkit-scrollbar-thumb {
+    background: rgba(139, 148, 158, 0.35);
+    border-radius: 3px;
+}
+
+.deck-selector::-webkit-scrollbar-thumb:hover {
+    background: rgba(139, 148, 158, 0.55);
+}
+
+.deck-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid #30363d;
+    background: #161b22;
+    color: #8b949e;
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+    max-width: 180px;
+    flex-shrink: 0;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.deck-pill:hover:not(.active) {
+    background: #21262d;
+    border-color: #484f58;
+    color: #e6edf3;
+}
+
+.deck-pill.active {
+    background: #1a4a8a;
+    border-color: #1a4a8a;
+    color: #fff;
+}
+
+.deck-pill-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.deck-pill-new {
+    color: #8b949e;
+    border-style: dashed;
+}
+
+.deck-pill-new:hover {
+    color: #58a6ff;
+    border-color: #58a6ff;
+}
+
+.deck-pill-plus {
+    font-weight: 700;
+    font-size: 1rem;
+    line-height: 1;
 }
 
 .deck-name-row {
@@ -4823,6 +4901,87 @@ body.mono-mode .tournament-mode-btn:focus-visible {
 
 body.mono-mode .tournament-mode-name {
     color: #ffffff;
+}
+
+/* Deck selector pills — per-theme */
+body.light-mode .deck-pill {
+    border-color: #d1d9e0;
+    background: #ffffff;
+    color: #656d76;
+}
+body.light-mode .deck-pill:hover:not(.active) {
+    background: #e1e4e8;
+    border-color: #afb8c1;
+    color: #1f2328;
+}
+body.light-mode .deck-pill.active {
+    background: #0550ae;
+    border-color: #0550ae;
+    color: #ffffff;
+}
+
+body.space-mode .deck-pill {
+    border-color: #1a1f3d;
+    background: rgba(15, 18, 40, 0.8);
+    color: #7b8cad;
+}
+body.space-mode .deck-pill:hover:not(.active) {
+    background: rgba(26, 35, 126, 0.3);
+    border-color: #3949ab;
+    color: #c8d6e5;
+}
+body.space-mode .deck-pill.active {
+    background: linear-gradient(135deg, #1a237e, #311b92);
+    border-color: #5c6bc0;
+    color: #fff;
+}
+
+body.tropical-mode .deck-pill {
+    border-color: #ffd8a8;
+    background: #ffffff;
+    color: #8a6d3b;
+}
+body.tropical-mode .deck-pill:hover:not(.active) {
+    background: #fff0d6;
+    border-color: #f5b86b;
+    color: #2d3a3a;
+}
+body.tropical-mode .deck-pill.active {
+    background: linear-gradient(135deg, #00b8a9, #0d8a80);
+    border-color: #00b8a9;
+    color: #fff;
+}
+
+body.stormy-mode .deck-pill {
+    border-color: #3a4054;
+    background: rgba(42, 48, 64, 0.8);
+    color: #9098a8;
+}
+body.stormy-mode .deck-pill:hover:not(.active) {
+    background: rgba(74, 144, 226, 0.2);
+    border-color: #5a6278;
+    color: #d5dae4;
+}
+body.stormy-mode .deck-pill.active {
+    background: linear-gradient(135deg, #2c4a7a, #3a6fb0);
+    border-color: #4a90e2;
+    color: #fff;
+}
+
+body.mono-mode .deck-pill {
+    border-color: #2a2a2a;
+    background: #111111;
+    color: #bdbdbd;
+}
+body.mono-mode .deck-pill:hover:not(.active) {
+    background: #1a1a1a;
+    border-color: #4a4a4a;
+    color: #ffffff;
+}
+body.mono-mode .deck-pill.active {
+    background: #ffffff;
+    border-color: #ffffff;
+    color: #000000;
 }
 
 /* Tournament results popup — per-theme row/heading colors */

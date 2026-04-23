@@ -302,6 +302,7 @@
     <section id="form-deck" class="calc-form hidden">
       <fieldset>
         <legend>Deck (3 Slots)</legend>
+        <div class="deck-selector" id="deck-selector"></div>
         <div class="deck-name-row">
           <input type="text" id="deck-name" class="deck-name-input" placeholder="Deck name" maxlength="40" autocomplete="off" />
         </div>
@@ -440,15 +441,15 @@
   </div>
 
   <!-- ================= POPUP ================= -->
-  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-23-edit4">
+  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-23-edit5">
     <div class="popup-card">
 
       <h2 class="popup-title">What's New</h2>
 
       <ul class="popup-list">
-        <li><strong>History tracks every room.</strong> Tournaments you host, co-host, or view all land in your Tournament history with a role tag.</li>
-        <li><strong>Tap a history entry to see the results.</strong> Pops up the final top 8 (Swiss) or top 3 placements without leaving the tab.</li>
-        <li><strong>Clear history easily.</strong> A small delete button at the bottom of each history panel wipes just that list.</li>
+        <li><strong>Multiple decks.</strong> Build as many decks as you need — switch between them from the pill strip at the top of the Deck tab.</li>
+        <li><strong>Smart bracket scroll.</strong> The Top 8 knockout auto-advances column by column — QFs → SFs → Final — so the round you need is always in view.</li>
+        <li><strong>Parts swipe in history.</strong> Long combos no longer wrap — part images scroll horizontally inside each history card.</li>
       </ul>
 
       <button type="button" class="btn popup-ok">
@@ -496,6 +497,13 @@
   <script src="firebase-config.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="data.js"></script>
+  <script src="js/core.js"></script>
+  <script src="js/scoreboard.js"></script>
+  <script src="js/calculator.js"></script>
+  <script src="js/deck.js"></script>
+  <script src="js/library.js"></script>
+  <script src="js/tournament.js"></script>
+  <script src="js/history.js"></script>
   <script src="app.js"></script>
 </body>
 
