@@ -3295,9 +3295,10 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit) {
   const isPopulatedLocal = (s) => !!(s && (s.groups || (s.matches && Object.keys(s.matches).length > 0)));
 
   const role = asHost ? "host" : (canEdit ? "co-host" : "view");
+  const isViewer = role === "view";
   const localNow = loadSwiss();
   saveTournamentHistoryEntry({
-    editCode,
+    editCode: isViewer ? null : editCode,
     viewCode: swissViewCode || null,
     name: localNow?.tournamentName || "",
     mode: localNow?.mode || null,
@@ -3310,7 +3311,7 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit) {
     if (isPopulatedRemote(remote)) {
       if (remote.viewCode && !swissViewCode) swissViewCode = remote.viewCode;
       saveTournamentHistoryEntry({
-        editCode,
+        editCode: isViewer ? null : editCode,
         viewCode: swissViewCode || null,
         name: remote.tournamentName || "",
         mode: remote.mode || null,
@@ -4683,10 +4684,15 @@ function loadTournamentHistory() {
   catch { return []; }
 }
 
+function tournamentHistoryKey(entry) {
+  return entry && (entry.editCode || entry.viewCode) || null;
+}
+
 function saveTournamentHistoryEntry(entry) {
-  if (!entry || !entry.editCode) return;
+  const key = tournamentHistoryKey(entry);
+  if (!key) return;
   let list = loadTournamentHistory();
-  const existing = list.find(e => e.editCode === entry.editCode);
+  const existing = list.find(e => tournamentHistoryKey(e) === key);
   const merged = {
     ...(existing || {}),
     ...entry,
@@ -4700,11 +4706,12 @@ function saveTournamentHistoryEntry(entry) {
   if (existing
       && existing.name === merged.name
       && existing.mode === merged.mode
+      && existing.editCode === merged.editCode
       && existing.viewCode === merged.viewCode
       && existing.role === merged.role) {
     return;
   }
-  list = list.filter(e => e.editCode !== entry.editCode);
+  list = list.filter(e => tournamentHistoryKey(e) !== key);
   list.unshift(merged);
   list = list.slice(0, TOURNAMENT_HISTORY_MAX);
   localStorage.setItem(TOURNAMENT_HISTORY_KEY, JSON.stringify(list));
