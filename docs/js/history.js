@@ -48,11 +48,6 @@ function renderTournamentHistory() {
         <span class="swiss-room-role">Host</span>
         <button type="button" class="swiss-room-code" data-room="${escapeHtml(e.editCode)}">${escapeHtml(e.editCode)}</button>
       </span>`);
-    if (e.viewCode) codes.push(`
-      <span class="swiss-room-badge swiss-room-badge-view" title="View code — tap to copy">
-        <span class="swiss-room-role">View</span>
-        <button type="button" class="swiss-room-code" data-room="${escapeHtml(e.viewCode)}">${escapeHtml(e.viewCode)}</button>
-      </span>`);
     const metaBits = [];
     if (rLabel) metaBits.push(`<span class="tournament-history-role tournament-history-role-${e.role}">${rLabel}</span>`);
     if (mLabel) metaBits.push(`<span class="tournament-history-mode">${mLabel}</span>`);
