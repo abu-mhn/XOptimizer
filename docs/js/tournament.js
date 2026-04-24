@@ -1065,10 +1065,12 @@ function bindSwissRoomBadge(view) {
       if (!code) return;
       const isView = !!btn.closest(".swiss-room-badge-view");
       const intro = isView
-        ? "Watch my Beyblade X tournament on X-Optimizer! Use the View code to spectate:"
-        : "Help co-host my Beyblade X tournament on X-Optimizer! Use the Host code to join as a referee:";
-      const label = isView ? "View code" : "Host code";
-      const payload = `${intro}\n${label}: ${code}\n${SHARE_URL}`;
+        ? "Watch my Beyblade X tournament on X-Optimizer!"
+        : "Help co-host my Beyblade X tournament on X-Optimizer!";
+      const codeLine = isView
+        ? `Use the View code to spectate: ${code}`
+        : `Use the Host code to join as a referee: ${code}`;
+      const payload = `${intro}\n\n${codeLine}\n\n${SHARE_URL}`;
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(payload).then(() => {
           const prev = btn.textContent;

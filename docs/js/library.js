@@ -235,7 +235,7 @@ function initLibrarySearch() {
       currentDir = currentDir === "asc" ? "desc" : "asc";
     } else {
       currentSort = key;
-      currentDir = key === "name" ? "asc" : "desc";
+      currentDir = "asc";
     }
 
     updateSortButtons();
