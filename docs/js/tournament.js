@@ -1058,12 +1058,19 @@ function renderSwissRoomBadge() {
 }
 
 function bindSwissRoomBadge(view) {
+  const SHARE_URL = "https://abu-mhn.github.io/XOptimizer/";
   view.querySelectorAll(".swiss-room-code").forEach(btn => {
     btn.addEventListener("click", () => {
       const code = btn.dataset.room || "";
       if (!code) return;
+      const isView = !!btn.closest(".swiss-room-badge-view");
+      const intro = isView
+        ? "Watch my Beyblade X tournament on X-Optimizer! Use the View code to spectate:"
+        : "Help co-host my Beyblade X tournament on X-Optimizer! Use the Host code to join as a referee:";
+      const label = isView ? "View code" : "Host code";
+      const payload = `${intro}\n${label}: ${code}\n${SHARE_URL}`;
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(code).then(() => {
+        navigator.clipboard.writeText(payload).then(() => {
           const prev = btn.textContent;
           btn.textContent = "Copied!";
           setTimeout(() => { btn.textContent = prev; }, 1200);
