@@ -87,6 +87,7 @@ function initLibrarySearch() {
     const EXCLUDE_KEYS = ["name", "meta", "exclusive"];
 
     Object.entries(obj).forEach(([k, v]) => {
+      if (k.startsWith("_")) return;
       if (EXCLUDE_KEYS.includes(k.toLowerCase())) return;
       if (v === undefined || v === null) return;
 
@@ -248,7 +249,6 @@ function initLibrarySearch() {
     blades: () => DATA.blades || [],
     bits: () => DATA.bits || [],
     ratchets: () => DATA.ratchets || [],
-    ratchetBits: () => DATA.ratchetBits || [],
     assistBlades: () => DATA.assistBlades || [],
     mainBlades: () => DATA.mainBlades || [],
     metalBlades: () => DATA.metalBlades || [],
