@@ -326,9 +326,16 @@ function makeSearchable(sel, items, labelFn, prependChoices = []) {
   wrapper._filterFn = null;
   wrapper._setFilter = (fn) => {
     wrapper._filterFn = fn;
-    sel.value = "";
-    input.value = "";
-    sel.dispatchEvent(new Event("change"));
+    const curIdx = sel.value;
+    const numIdx = Number(curIdx);
+    const curItem = (curIdx !== "" && Number.isInteger(numIdx)) ? items[numIdx] : null;
+    const keep = !!curItem && (!fn || fn(curItem));
+    if (!keep) {
+      sel.value = "";
+      input.value = "";
+      clearBtn.classList.add("hidden");
+      sel.dispatchEvent(new Event("change"));
+    }
   };
 }
 

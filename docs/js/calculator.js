@@ -1788,17 +1788,17 @@ function selectMeta(form, mode) {
       if (bIdx >= 0) getWrapper(form, "bit")._select(bIdx);
     }
   } else if (mode === "cx") {
-    getWrapper(form, "lockChip")._select(heaviestIdx(DATA.lockChips));
+    getWrapper(form, "lockChip")._select(randIdx(DATA.lockChips));
     getWrapper(form, "mainBlade")._select(pickMeta(DATA.mainBlades));
-    getWrapper(form, "assistBlade")._select(heaviestIdx(DATA.assistBlades));
+    getWrapper(form, "assistBlade")._select(randIdx(DATA.assistBlades));
     getWrapper(form, "ratchet")._select(pickMeta(DATA.ratchets));
     const bIdx = pickMetaBit();
     if (bIdx >= 0) getWrapper(form, "bit")._select(bIdx);
   } else if (mode === "cxExpand") {
-    getWrapper(form, "lockChip")._select(heaviestIdx(DATA.lockChips));
+    getWrapper(form, "lockChip")._select(randIdx(DATA.lockChips));
     getWrapper(form, "metalBlade")._select(pickMeta(DATA.metalBlades));
-    getWrapper(form, "overBlade")._select(heaviestIdx(DATA.overBlades));
-    getWrapper(form, "assistBlade")._select(heaviestIdx(DATA.assistBlades));
+    getWrapper(form, "overBlade")._select(randIdx(DATA.overBlades));
+    getWrapper(form, "assistBlade")._select(randIdx(DATA.assistBlades));
     getWrapper(form, "ratchet")._select(pickMeta(DATA.ratchets));
     const bIdx = pickMetaBit();
     if (bIdx >= 0) getWrapper(form, "bit")._select(bIdx);

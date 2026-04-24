@@ -196,8 +196,11 @@ function initLibrarySearch() {
 
   function sortItems(items) {
     return [...items].sort((a, b) => {
-      let cmp;
-      cmp = getStatValue(b, currentSort) - getStatValue(a, currentSort);
+      if (currentSort === "name") {
+        const cmp = (a?.name || "").localeCompare(b?.name || "");
+        return currentDir === "asc" ? cmp : -cmp;
+      }
+      const cmp = getStatValue(b, currentSort) - getStatValue(a, currentSort);
       return currentDir === "desc" ? -cmp : cmp;
     });
   }
@@ -208,11 +211,15 @@ function initLibrarySearch() {
       if (key === currentSort) {
         btn.classList.add("active");
         const arrow = currentDir === "asc" ? " \u25B2" : " \u25BC";
-        btn.textContent = btn.dataset.sort.charAt(0).toUpperCase() + btn.dataset.sort.slice(1) + arrow;
-        if (key === "atk" || key === "def" || key === "sta") btn.textContent = key.toUpperCase() + arrow;
+        const label = (key === "atk" || key === "def" || key === "sta")
+          ? key.toUpperCase()
+          : key.charAt(0).toUpperCase() + key.slice(1);
+        btn.textContent = label + arrow;
       } else {
         btn.classList.remove("active");
-        const label = key === "atk" || key === "def" || key === "sta" ? key.toUpperCase() : key.charAt(0).toUpperCase() + key.slice(1);
+        const label = (key === "atk" || key === "def" || key === "sta")
+          ? key.toUpperCase()
+          : key.charAt(0).toUpperCase() + key.slice(1);
         btn.textContent = label;
       }
     });
@@ -227,10 +234,48 @@ function initLibrarySearch() {
       currentDir = currentDir === "asc" ? "desc" : "asc";
     } else {
       currentSort = key;
-      currentDir = "desc";
+      currentDir = key === "name" ? "asc" : "desc";
     }
 
     updateSortButtons();
+    runSearch();
+  });
+
+  // =========================
+  // GETALL FILTER BUTTONS
+  // =========================
+  const GETALL_MAP = {
+    blades: () => DATA.blades || [],
+    bits: () => DATA.bits || [],
+    ratchets: () => DATA.ratchets || [],
+    ratchetBits: () => DATA.ratchetBits || [],
+    assistBlades: () => DATA.assistBlades || [],
+    mainBlades: () => DATA.mainBlades || [],
+    metalBlades: () => DATA.metalBlades || [],
+    overBlades: () => DATA.overBlades || [],
+    lockChips: () => DATA.lockChips || []
+  };
+
+  const filterBar = document.getElementById("library-filter");
+  let currentGetAll = null;
+
+  function updateFilterButtons() {
+    filterBar?.querySelectorAll(".filter-btn").forEach(b => {
+      b.classList.toggle("active", b.dataset.getall === currentGetAll);
+    });
+  }
+
+  filterBar?.addEventListener("click", (e) => {
+    const btn = e.target.closest(".filter-btn");
+    if (!btn) return;
+    const key = btn.dataset.getall;
+    if (currentGetAll === key) {
+      currentGetAll = null;
+    } else {
+      currentGetAll = key;
+      input.value = "";
+    }
+    updateFilterButtons();
     runSearch();
   });
 
@@ -241,35 +286,19 @@ function initLibrarySearch() {
     const q = input.value.trim().toLowerCase();
     results.innerHTML = "";
 
-    if (!q) {
-      sortBar.classList.add("hidden");
-      return;
-    }
-
     let filtered = [];
     let isGetAll = false;
 
-    if (q.startsWith("@")) {
-      switch (q) {
-        case "@getallbits": filtered = DATA.bits || []; break;
-        case "@getallratchets": filtered = DATA.ratchets || []; break;
-        case "@getallblades": filtered = DATA.blades || []; break;
-        case "@getallratchetbits": filtered = DATA.ratchetBits || []; break;
-        case "@getallassistblades": filtered = DATA.assistBlades || []; break;
-        case "@getallmainblades": filtered = DATA.mainBlades || []; break;
-        case "@getallmetalblades": filtered = DATA.metalBlades || []; break;
-        case "@getalloverblades": filtered = DATA.overBlades || []; break;
-        case "@getalllockchips": filtered = DATA.lockChips || []; break;
-        default:
-          sortBar.classList.add("hidden");
-          results.innerHTML = `<div class="search-item">Unknown command</div>`;
-          return;
-      }
+    if (currentGetAll && GETALL_MAP[currentGetAll]) {
+      filtered = GETALL_MAP[currentGetAll]();
       isGetAll = true;
-    } else {
+    } else if (q) {
       filtered = ALL_PARTS.filter(p =>
         p?.name?.toLowerCase().includes(q)
       );
+    } else {
+      sortBar.classList.add("hidden");
+      return;
     }
 
     if (isGetAll && filtered.length > 0) {
@@ -404,23 +433,13 @@ function initLibrarySearch() {
     }
   });
 
-  input.addEventListener("input", runSearch);
+  input.addEventListener("input", () => {
+    if (input.value && currentGetAll) {
+      currentGetAll = null;
+      updateFilterButtons();
+    }
+    runSearch();
+  });
 }
 
 document.addEventListener("DOMContentLoaded", initLibrarySearch);
-
-const help = document.getElementById("library-help");
-
-help.addEventListener("click", () => {
-  alert(`Search Commands:
-
-@getallblades
-@getallbits
-@getallratchets
-@getallratchetbits
-@getallassistblades
-@getallmainblades
-@getallmetalblades
-@getalloverblades
-@getalllockchips`);
-});
