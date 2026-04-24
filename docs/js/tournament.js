@@ -362,6 +362,22 @@ function appendGroupRound(state, groupIndex) {
   return true;
 }
 
+// Swiss pairs best with even-sized groups (odd-sized groups force a BYE each
+// round). Even totals always rebalance to all-even groups; odd totals leave
+// exactly one unavoidable odd group.
+function balanceSwissGroups(groups) {
+  const oddIndices = [];
+  groups.forEach((g, i) => { if (g.length % 2 === 1) oddIndices.push(i); });
+  while (oddIndices.length >= 2) {
+    const iA = oddIndices.shift();
+    const iB = oddIndices.shift();
+    const [fromIdx, toIdx] = groups[iA].length >= groups[iB].length ? [iA, iB] : [iB, iA];
+    if (groups[fromIdx].length > 0) {
+      groups[toIdx].push(groups[fromIdx].pop());
+    }
+  }
+}
+
 function generateSwissFromText(text, tournamentName, roundCount) {
   const names = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
   const seen = new Set();
@@ -377,6 +393,7 @@ function generateSwissFromText(text, tournamentName, roundCount) {
   const shuffled = shuffleArray(unique);
   const groups = Array.from({ length: SWISS_GROUP_COUNT }, () => []);
   shuffled.forEach((name, i) => { groups[i % SWISS_GROUP_COUNT].push(name); });
+  balanceSwissGroups(groups);
 
   const rc = SWISS_ROUND_OPTIONS.includes(Number(roundCount)) ? Number(roundCount) : SWISS_ROUND_COUNT;
   const state = {
@@ -1609,7 +1626,7 @@ function showEditParticipantsPopup() {
     const mode = state.mode === "single-elim" ? "single-elim" : "swiss";
     const next = mode === "single-elim"
       ? generateSingleElimFromText(unique.join("\n"), state.tournamentName)
-      : generateSwissFromText(unique.join("\n"), state.tournamentName);
+      : generateSwissFromText(unique.join("\n"), state.tournamentName, getRoundCount(state));
     if (!next) return; // generator already alerted (e.g. Swiss min participants)
     persistSwiss(next);
     if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
