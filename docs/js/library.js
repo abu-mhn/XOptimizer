@@ -184,8 +184,8 @@ function initLibrarySearch() {
   // SORT STATE
   // =========================
   const sortBar = document.getElementById("library-sort");
-  let currentSort = "atk";
-  let currentDir = "desc";
+  let currentSort = "name";
+  let currentDir = "asc";
 
   function getStatValue(item, key) {
     const mode = hasModes(item) ? item.modes[item.currentMode ?? 0] : item;
@@ -304,16 +304,25 @@ function initLibrarySearch() {
     if (isGetAll && filtered.length > 0) {
       sortBar.classList.remove("hidden");
 
-      const hasHeight = filtered.some(p => p && p.height != null && p.height !== 0);
-      const heightBtn = sortBar.querySelector('[data-sort="height"]');
-      if (heightBtn) {
-        heightBtn.style.display = hasHeight ? "" : "none";
-        if (!hasHeight && currentSort === "height") {
-          currentSort = "atk";
-          currentDir = "desc";
+      const hasStat = (p, key) => {
+        if (!p) return false;
+        const check = v => v != null && v !== 0 && v !== "TBA";
+        if (check(p[key])) return true;
+        if (Array.isArray(p.modes)) return p.modes.some(m => m && check(m[key]));
+        return false;
+      };
+
+      ["atk", "def", "sta", "height"].forEach(key => {
+        const has = filtered.some(p => hasStat(p, key));
+        const btn = sortBar.querySelector(`[data-sort="${key}"]`);
+        if (!btn) return;
+        btn.style.display = has ? "" : "none";
+        if (!has && currentSort === key) {
+          currentSort = "name";
+          currentDir = "asc";
           updateSortButtons();
         }
-      }
+      });
     } else {
       sortBar.classList.add("hidden");
     }
