@@ -192,16 +192,19 @@ h1 {
     min-height: 36px;
 }
 
-.sub-tab:hover:not(.active) {
+.sub-tab:hover:not(.active),
+.sub-tab:focus-visible {
     background: #21262d;
     border-color: #484f58;
     color: #e6edf3;
+    outline: none;
 }
 
 .sub-tab.active {
     background: #1a4a8a;
     color: #fff;
     border-color: #1a4a8a;
+    font-weight: 600;
 }
 
 .sub-tab img {
@@ -1815,7 +1818,8 @@ body.light-mode .sub-tab.active {
     border-color: #0550ae;
 }
 
-body.light-mode .sub-tab:hover:not(.active) {
+body.light-mode .sub-tab:hover:not(.active),
+body.light-mode .sub-tab:focus-visible {
     background: #e1e4e8;
     border-color: #afb8c1;
     color: #1f2328;
@@ -2384,7 +2388,8 @@ body.space-mode .sub-tab.active {
     border-color: #5c6bc0;
 }
 
-body.space-mode .sub-tab:hover:not(.active) {
+body.space-mode .sub-tab:hover:not(.active),
+body.space-mode .sub-tab:focus-visible {
     background: rgba(26, 35, 126, 0.3);
     border-color: #3949ab;
     color: #c8d6e5;
@@ -2650,26 +2655,13 @@ body.tropical-mode .sub-tab {
 }
 
 body.tropical-mode .sub-tab.active {
+    background: linear-gradient(135deg, #00b8a9, #0d8a80);
     color: #fff;
+    border-color: #00b8a9;
 }
 
-body.tropical-mode .sub-tab.active[data-mode="standard"] {
-    background: linear-gradient(135deg, #2ea043, #238636);
-    border-color: #2ea043;
-}
-
-body.tropical-mode .sub-tab.active[data-mode="cx"] {
-    background: linear-gradient(135deg, #fcc419, #f0b000);
-    border-color: #fcc419;
-    color: #2d3a3a;
-}
-
-body.tropical-mode .sub-tab.active[data-mode="cxExpand"] {
-    background: linear-gradient(135deg, #06b6d4, #0891b2);
-    border-color: #06b6d4;
-}
-
-body.tropical-mode .sub-tab:hover:not(.active) {
+body.tropical-mode .sub-tab:hover:not(.active),
+body.tropical-mode .sub-tab:focus-visible {
     background: #fff0d6;
     border-color: #f5b86b;
     color: #2d3a3a;
@@ -3063,7 +3055,8 @@ body.stormy-mode .sub-tab.active {
     border-color: #4a90e2;
 }
 
-body.stormy-mode .sub-tab:hover:not(.active) {
+body.stormy-mode .sub-tab:hover:not(.active),
+body.stormy-mode .sub-tab:focus-visible {
     background: rgba(74, 144, 226, 0.2);
     border-color: #5a6278;
     color: #d5dae4;
@@ -3318,7 +3311,8 @@ body.mono-mode .sub-tab.active {
 }
 
 body.mono-mode .tab:hover:not(.active),
-body.mono-mode .sub-tab:hover:not(.active) {
+body.mono-mode .sub-tab:hover:not(.active),
+body.mono-mode .sub-tab:focus-visible {
     background: #1a1a1a;
     border-color: #4a4a4a;
     color: #ffffff;
@@ -3586,6 +3580,72 @@ body.mono-mode .popup-ok:hover {
     display: flex;
     gap: 8px;
     margin-top: 10px;
+}
+
+.swiss-rounds {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+.swiss-rounds-label {
+    font-size: 0.9rem;
+    color: inherit;
+}
+
+.swiss-rounds-options {
+    display: inline-flex;
+    gap: 4px;
+}
+
+.swiss-rounds-options-popup {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin: 14px 0 18px;
+}
+
+.swiss-rounds-options-popup .swiss-rounds-btn {
+    min-width: 56px;
+    padding: 12px 16px;
+    font-size: 1.05rem;
+}
+
+.popup-subtitle {
+    margin: 6px 0 4px;
+    font-size: 0.9rem;
+    color: #8b949e;
+    line-height: 1.4;
+}
+
+.swiss-rounds-btn {
+    min-width: 36px;
+    padding: 6px 10px;
+    border: 1px solid #30363d;
+    background: #0d1117;
+    color: #c9d1d9;
+    border-radius: 6px;
+    font: inherit;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.swiss-rounds-btn:hover:not(.active),
+.swiss-rounds-btn:focus-visible {
+    background: #21262d;
+    border-color: #484f58;
+    color: #e6edf3;
+    outline: none;
+}
+
+.swiss-rounds-btn.active {
+    background: #1a4a8a;
+    border-color: #1a4a8a;
+    color: #fff;
+    font-weight: 600;
 }
 
 .swiss-toolbar {
@@ -4005,7 +4065,6 @@ body.light-mode .swiss-group-progress {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 4px;
-    margin-top: 9px;
     margin-bottom: 20px;
     padding: 8px 16px;
     margin-left: -16px;
@@ -4352,6 +4411,11 @@ body.light-mode .swiss-group-progress {
     border-color: #58a6ff;
     background: #161b22;
     outline: none;
+}
+
+.tournament-mode-btn.selected {
+    border-color: #58a6ff;
+    box-shadow: 0 0 0 1px #58a6ff inset;
 }
 
 .tournament-mode-name {

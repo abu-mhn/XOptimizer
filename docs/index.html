@@ -439,6 +439,20 @@
     </div>
   </div>
 
+  <!-- ================= SWISS ROUNDS POPUP ================= -->
+  <div id="swiss-rounds-popup" class="popup-overlay hidden">
+    <div class="popup-card">
+      <h2 class="popup-title">Rounds per Group</h2>
+      <p class="popup-subtitle">How many Swiss rounds should each group play?</p>
+      <div class="swiss-rounds-options swiss-rounds-options-popup">
+        <button type="button" class="swiss-rounds-btn" data-rounds="3">3</button>
+        <button type="button" class="swiss-rounds-btn" data-rounds="4">4</button>
+        <button type="button" class="swiss-rounds-btn" data-rounds="5">5</button>
+      </div>
+      <button type="button" id="swiss-rounds-cancel" class="btn popup-cancel">Cancel</button>
+    </div>
+  </div>
+
   <!-- ================= TOURNAMENT RESULTS POPUP ================= -->
   <div id="tournament-results-popup" class="popup-overlay hidden">
     <div class="popup-card">
@@ -449,17 +463,16 @@
   </div>
 
   <!-- ================= POPUP ================= -->
-  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-24-edit1">
+  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-24-edit2">
     <div class="popup-card">
 
       <h2 class="popup-title">What's New</h2>
 
       <ul class="popup-list">
-        <li><strong>Library filters.</strong> Category buttons replace the old @ commands, plus Name sort.</li>
-        <li><strong>Tab names.</strong> Hover a tab to see its name.</li>
-        <li><strong>Clear fix.</strong> Clearing the blade or ratchet no longer wipes the bit.</li>
-        <li><strong>Share codes.</strong> Copying a tournament code now includes the site URL and a short invite.</li>
-        <li><strong>Meta tweak.</strong> Lock Chip, Over Blade, and Assist Blade in Meta Combo are now random picks.</li>
+        <li><strong>Swiss rounds.</strong> Pick 3, 4, or 5 rounds per group when starting a Swiss tournament.</li>
+        <li><strong>Single-elim fix.</strong> BYE cascades no longer crown a winner before real matches are played.</li>
+        <li><strong>Bracket auto-scroll.</strong> Single elimination advances round-by-round to the Final.</li>
+        <li><strong>History copy.</strong> Tapping a code in Tournament History now copies just the code.</li>
       </ul>
 
       <button type="button" class="btn popup-ok">

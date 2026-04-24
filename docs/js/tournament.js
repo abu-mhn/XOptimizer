@@ -241,9 +241,15 @@ function initSwissRoomOnLoad() {
 // (counts as a win) and rotate which member receives it.
 const SWISS_KEY = "beyblade_swiss";
 const SWISS_GROUP_COUNT = 4;
-const SWISS_ROUND_COUNT = 4;
+const SWISS_ROUND_COUNT = 4; // default / legacy fallback; actual count lives on state.roundCount
+const SWISS_ROUND_OPTIONS = [3, 4, 5];
 const SWISS_MIN_PER_GROUP = 2; // minimum so every group can run at least one match per round
 const SWISS_BRACKET_TOP_N = 2; // top N per group advance to the knockout bracket
+
+function getRoundCount(state) {
+  const n = state && Number(state.roundCount);
+  return SWISS_ROUND_OPTIONS.includes(n) ? n : SWISS_ROUND_COUNT;
+}
 
 function loadSwiss() {
   try {
@@ -346,7 +352,7 @@ function pairSwissRound(members, matches, groupIndex, round) {
 function appendGroupRound(state, groupIndex) {
   const members = state.groups[groupIndex];
   const roundIndex = state.groupRounds[groupIndex] || 0;
-  if (roundIndex >= SWISS_ROUND_COUNT) return false;
+  if (roundIndex >= getRoundCount(state)) return false;
   const ordered = roundIndex === 0
     ? shuffleArray(members)
     : computeStandings(members, state.matches, groupIndex).map(r => r.name);
@@ -356,7 +362,7 @@ function appendGroupRound(state, groupIndex) {
   return true;
 }
 
-function generateSwissFromText(text, tournamentName) {
+function generateSwissFromText(text, tournamentName, roundCount) {
   const names = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
   const seen = new Set();
   const unique = [];
@@ -372,13 +378,15 @@ function generateSwissFromText(text, tournamentName) {
   const groups = Array.from({ length: SWISS_GROUP_COUNT }, () => []);
   shuffled.forEach((name, i) => { groups[i % SWISS_GROUP_COUNT].push(name); });
 
+  const rc = SWISS_ROUND_OPTIONS.includes(Number(roundCount)) ? Number(roundCount) : SWISS_ROUND_COUNT;
   const state = {
     groups,
     matches: {},
     groupRounds: groups.map(() => 0),
     mode: "swiss",
     participants: unique,
-    tournamentName: (tournamentName || "").trim() || null
+    tournamentName: (tournamentName || "").trim() || null,
+    roundCount: rc
   };
   groups.forEach((_, gi) => appendGroupRound(state, gi));
   return state;
@@ -479,20 +487,74 @@ function generateSingleElimFromText(text, tournamentName) {
   return state;
 }
 
+// Returns the match id whose winner feeds the given slot, or null if this
+// slot has no upstream match (R0 slots, or the final in a 2-player bracket).
+// Only covers single-elim rounds — Top-8 Swiss bracket rounds always have
+// every slot populated up front so phantom detection isn't needed there.
+function bracketUpstreamSource(round, bracketIndex, slot, state) {
+  if (typeof round === "number") {
+    if (round === 0) return null;
+    const j = slot === "a" ? bracketIndex * 2 : bracketIndex * 2 + 1;
+    return `bracket-r${round - 1}-${j}`;
+  }
+  if (round === "f" || round === "3rd") {
+    const preFinal = state && typeof state.preFinalRounds === "number" ? state.preFinalRounds : 0;
+    if (preFinal === 0) return null;
+    const j = slot === "a" ? 0 : 1;
+    return `bracket-r${preFinal - 1}-${j}`;
+  }
+  return null;
+}
+
+// A match is "phantom" if no upstream path can ever deliver a player to it.
+// Leaves (R0, or a 2-player final) are phantom iff both slots start null;
+// a non-leaf match is phantom iff both its upstream sources are phantom.
+function computeBracketPhantoms(state) {
+  const phantoms = new Set();
+  const entries = Object.entries(state.matches || {}).filter(([, m]) => m && m.bracket);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    entries.forEach(([id, m]) => {
+      if (phantoms.has(id)) return;
+      const aSrc = bracketUpstreamSource(m.round, m.bracketIndex, "a", state);
+      const bSrc = bracketUpstreamSource(m.round, m.bracketIndex, "b", state);
+      const aDead = aSrc == null
+        ? !(m.a != null && m.a !== "")
+        : phantoms.has(aSrc);
+      const bDead = bSrc == null
+        ? !(m.b != null && m.b !== "")
+        : phantoms.has(bSrc);
+      if (aDead && bDead) {
+        phantoms.add(id);
+        changed = true;
+      }
+    });
+  }
+  return phantoms;
+}
+
 // Walk the bracket and auto-score any match where one slot is a BYE (null).
 // Propagates the non-null player up the bracket. Runs to a fixed point so
 // cascading byes (BYE → BYE → real match) are all handled in one pass.
+// A half-filled match only auto-advances when the empty side's upstream is
+// *phantom* (no live match feeds it) — otherwise we wait for that upstream
+// match to be scored so its winner can fill the slot properly.
 function autoAdvanceByes(state) {
+  const phantoms = computeBracketPhantoms(state);
   let changed = true;
   let iter = 0;
   while (changed && iter < 100) {
     changed = false;
     Object.entries(state.matches).forEach(([id, m]) => {
-      if (!m.bracket) return;
+      if (!m.bracket || phantoms.has(id)) return;
       if (m.scoreA != null || m.scoreB != null) return;
       const hasA = m.a != null && m.a !== "";
       const hasB = m.b != null && m.b !== "";
       if (hasA === hasB) return; // both filled or both empty — skip
+      const emptySlot = hasA ? "b" : "a";
+      const emptySrc = bracketUpstreamSource(m.round, m.bracketIndex, emptySlot, state);
+      if (emptySrc && !phantoms.has(emptySrc)) return; // live upstream — wait for it
       m.bye = true;
       if (hasA) { m.scoreA = 1; m.scoreB = 0; }
       else       { m.scoreA = 0; m.scoreB = 1; }
@@ -611,7 +673,7 @@ function startSwissMatch(matchId) {
       const gi = stored.groupIndex;
       const latestRoundIdx = (s.groupRounds[gi] || 0) - 1;
       if (stored.round === latestRoundIdx && isGroupRoundComplete(s.matches, gi, latestRoundIdx)) {
-        if ((s.groupRounds[gi] || 0) < SWISS_ROUND_COUNT) {
+        if ((s.groupRounds[gi] || 0) < getRoundCount(s)) {
           const before = new Set(Object.keys(s.matches));
           appendGroupRound(s, gi);
           newMatchIds = Object.keys(s.matches).filter(k => !before.has(k));
@@ -764,13 +826,17 @@ function renderSwissGroupStandings(state, gi) {
 }
 
 // Picks the scrollLeft target for a .swiss-rounds-scroll strip. Group strips
-// always snap rightmost (show the newest round). The Swiss top-8 bracket
-// advances column-by-column as each round finishes.
+// always snap rightmost (show the newest round). Bracket strips advance
+// column-by-column as each round finishes — for both the Swiss top-8
+// bracket and the variable-size single-elimination bracket.
 function computeSwissRoundsScrollTarget(scrollEl, state) {
   const isBracketStrip = !!scrollEl.closest(".swiss-bracket");
-  if (!isBracketStrip || !state || state.mode !== "swiss") {
-    return scrollEl.scrollWidth;
+  if (!isBracketStrip || !state) return scrollEl.scrollWidth;
+
+  if (state.mode === "single-elim") {
+    return computeSingleElimScrollTarget(scrollEl, state);
   }
+
   const cols = scrollEl.querySelectorAll(".swiss-round-col");
   if (cols.length < 3) return scrollEl.scrollWidth;
 
@@ -789,6 +855,35 @@ function computeSwissRoundsScrollTarget(scrollEl, state) {
     const scrollRect = scrollEl.getBoundingClientRect();
     const colRect = cols[1].getBoundingClientRect();
     return Math.max(0, scrollEl.scrollLeft + (colRect.left - scrollRect.left));
+  }
+  return scrollEl.scrollWidth;
+}
+
+function computeSingleElimScrollTarget(scrollEl, state) {
+  const cols = scrollEl.querySelectorAll(".swiss-round-col");
+  if (cols.length < 2) return scrollEl.scrollWidth;
+
+  const preFinalRounds = typeof state.preFinalRounds === "number" ? state.preFinalRounds : 0;
+  if (preFinalRounds === 0) return scrollEl.scrollWidth; // 2-player bracket — only the final column
+
+  const phantoms = computeBracketPhantoms(state);
+  const bracketEntries = Object.entries(state.matches || {}).filter(([, m]) => m && m.bracket);
+  const roundDone = (round) => {
+    const ms = bracketEntries.filter(([id, m]) => m.round === round && !phantoms.has(id));
+    if (ms.length === 0) return true; // round has only phantoms — nothing to play, treat as done
+    return ms.every(([, m]) => m.bye || (m.scoreA != null && m.scoreB != null && m.scoreA !== m.scoreB));
+  };
+
+  // Scroll to the leftmost incomplete round; once all pre-final rounds are
+  // done, snap to the rightmost column (Final + 3rd place).
+  for (let r = 0; r < preFinalRounds; r++) {
+    if (!roundDone(r)) {
+      const col = cols[r];
+      if (!col) return scrollEl.scrollWidth;
+      const scrollRect = scrollEl.getBoundingClientRect();
+      const colRect = col.getBoundingClientRect();
+      return Math.max(0, scrollEl.scrollLeft + (colRect.left - scrollRect.left));
+    }
   }
   return scrollEl.scrollWidth;
 }
@@ -1063,14 +1158,19 @@ function bindSwissRoomBadge(view) {
     btn.addEventListener("click", () => {
       const code = btn.dataset.room || "";
       if (!code) return;
-      const isView = !!btn.closest(".swiss-room-badge-view");
-      const intro = isView
-        ? "Watch my Beyblade X tournament on X-Optimizer!"
-        : "Help co-host my Beyblade X tournament on X-Optimizer!";
-      const codeLine = isView
-        ? `Use the View code to spectate: ${code}`
-        : `Use the Host code to join as a referee: ${code}`;
-      const payload = `${intro}\n\n${codeLine}\n\n${SHARE_URL}`;
+      let payload;
+      if (btn.closest(".tournament-history-item")) {
+        payload = code;
+      } else {
+        const isView = !!btn.closest(".swiss-room-badge-view");
+        const intro = isView
+          ? "Watch my Beyblade X tournament on X-Optimizer!"
+          : "Help co-host my Beyblade X tournament on X-Optimizer!";
+        const codeLine = isView
+          ? `Use the View code to spectate: ${code}`
+          : `Use the Host code to join as a referee: ${code}`;
+        payload = `${intro}\n\n${codeLine}\n\n${SHARE_URL}`;
+      }
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(payload).then(() => {
           const prev = btn.textContent;
@@ -1149,7 +1249,7 @@ function renderSwiss() {
     return `<section class="swiss-group">
       <header class="swiss-group-header">
         <span class="swiss-group-title">Group ${String.fromCharCode(65 + gi)}</span>
-        <span class="swiss-group-progress">Round ${roundsGen} / ${SWISS_ROUND_COUNT}</span>
+        <span class="swiss-group-progress">Round ${roundsGen} / ${getRoundCount(state)}</span>
         <div class="swiss-group-tabs">
           <button type="button" class="swiss-group-tab ${mode === "standings" ? "active" : ""}" data-group="${gi}" data-view="standings">Standings</button>
           <button type="button" class="swiss-group-tab ${mode === "matches" ? "active" : ""}" data-group="${gi}" data-view="matches">Matches</button>
@@ -1313,9 +1413,10 @@ function hasSwissBracket(state) {
 
 function isGroupStageComplete(state) {
   if (!state.groups || state.groups.length !== SWISS_GROUP_COUNT) return false;
+  const rc = getRoundCount(state);
   return state.groups.every((_, gi) =>
-    (state.groupRounds[gi] || 0) >= SWISS_ROUND_COUNT &&
-    isGroupRoundComplete(state.matches, gi, SWISS_ROUND_COUNT - 1)
+    (state.groupRounds[gi] || 0) >= rc &&
+    isGroupRoundComplete(state.matches, gi, rc - 1)
   );
 }
 
@@ -1521,25 +1622,55 @@ function showEditParticipantsPopup() {
   };
 }
 
+function showSwissRoundsPopup(onPick) {
+  const popup = document.getElementById("swiss-rounds-popup");
+  if (!popup) { onPick(SWISS_ROUND_COUNT); return; }
+  const options = popup.querySelector(".swiss-rounds-options");
+  const cancelBtn = popup.querySelector("#swiss-rounds-cancel");
+  const close = (rc) => {
+    popup.classList.add("hidden");
+    if (options) options.onclick = null;
+    if (cancelBtn) cancelBtn.onclick = null;
+    if (rc != null) onPick(rc);
+  };
+  if (options) {
+    options.onclick = (e) => {
+      const btn = e.target.closest(".swiss-rounds-btn");
+      if (!btn) return;
+      const n = Number(btn.dataset.rounds);
+      close(SWISS_ROUND_OPTIONS.includes(n) ? n : SWISS_ROUND_COUNT);
+    };
+  }
+  if (cancelBtn) cancelBtn.onclick = () => close(null);
+  popup.classList.remove("hidden");
+}
+
 function showTournamentModePopup(onPick) {
   const popup = document.getElementById("tournament-mode-popup");
-  if (!popup) { onPick("swiss", ""); return; } // popup missing, fall back to swiss
+  if (!popup) { onPick("swiss", "", SWISS_ROUND_COUNT); return; } // popup missing, fall back to swiss
   const swissBtn = popup.querySelector("#tournament-mode-swiss");
   const singleBtn = popup.querySelector("#tournament-mode-single");
   const cancelBtn = popup.querySelector("#tournament-mode-cancel");
   const nameInput = popup.querySelector("#tournament-name-input");
   if (nameInput) nameInput.value = "";
-  const close = (choice) => {
+  const close = (choice, roundCount) => {
     popup.classList.add("hidden");
     swissBtn.onclick = null;
     singleBtn.onclick = null;
     cancelBtn.onclick = null;
     if (choice) {
       const name = nameInput ? nameInput.value.trim() : "";
-      onPick(choice, name);
+      onPick(choice, name, roundCount);
     }
   };
-  swissBtn.onclick = () => close("swiss");
+  swissBtn.onclick = () => {
+    const name = nameInput ? nameInput.value.trim() : "";
+    popup.classList.add("hidden");
+    swissBtn.onclick = null;
+    singleBtn.onclick = null;
+    cancelBtn.onclick = null;
+    showSwissRoundsPopup((rc) => onPick("swiss", name, rc));
+  };
   singleBtn.onclick = () => close("single-elim");
   cancelBtn.onclick = () => close(null);
   popup.classList.remove("hidden");
@@ -1608,10 +1739,10 @@ document.getElementById("swiss-generate")?.addEventListener("click", () => {
   const textarea = document.getElementById("swiss-names");
   if (!textarea) return;
   const namesText = textarea.value;
-  showTournamentModePopup((mode, tournamentName) => {
+  showTournamentModePopup((mode, tournamentName, roundCount) => {
     const next = mode === "single-elim"
       ? generateSingleElimFromText(namesText, tournamentName)
-      : generateSwissFromText(namesText, tournamentName);
+      : generateSwissFromText(namesText, tournamentName, roundCount);
     if (!next) return;
     startTournamentFromState(next);
   });
