@@ -51,7 +51,7 @@ h1 {
 ======================= */
 .mode-tabs {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(7, 1fr);
     gap: 4px;
     margin-bottom: 0;
     position: sticky;
@@ -814,6 +814,44 @@ body.light-mode .result-part-name {
     border-radius: 8px;
     max-height: 200px;
     overflow-y: auto;
+}
+
+.reel-embed {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 4px 0;
+}
+
+.reel-embed iframe.instagram-media,
+.reel-embed blockquote.instagram-media {
+    width: 100% !important;
+    max-width: 360px !important;
+    min-width: 0 !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+/* Theme-aware loading skeleton + iframe frame. The iframe content itself is
+   served by Instagram and can't be retheme'd, but we frame it so it sits
+   inside the app's palette instead of looking like a stark white card. */
+.reel-embed blockquote.instagram-media {
+    background: #161b22 !important;
+    border: 1px solid #30363d !important;
+    box-shadow: none !important;
+    color: #c9d1d9 !important;
+}
+
+.reel-embed blockquote.instagram-media a {
+    color: #58a6ff !important;
+}
+
+.reel-embed iframe.instagram-media {
+    border: 1px solid #30363d !important;
+    border-radius: 6px;
+    background: #161b22;
+    box-shadow: 0 4px 14px -8px rgba(0, 0, 0, 0.5);
 }
 
 .search-item {
@@ -1806,6 +1844,21 @@ body.light-mode .tab:hover:not(.active) {
     color: #1f2328;
 }
 
+body.light-mode .reel-embed blockquote.instagram-media {
+    background: #ffffff !important;
+    border-color: #d1d9e0 !important;
+    color: #1f2328 !important;
+}
+
+body.light-mode .reel-embed blockquote.instagram-media a {
+    color: #0969da !important;
+}
+
+body.light-mode .reel-embed iframe.instagram-media {
+    border-color: #d1d9e0 !important;
+    background: #ffffff;
+}
+
 body.light-mode .sub-tab {
     border-color: #d1d9e0;
     background: #ffffff;
@@ -2415,6 +2468,21 @@ body.space-mode .tab:hover:not(.active) {
     color: #c8d6e5;
 }
 
+body.space-mode .reel-embed blockquote.instagram-media {
+    background: rgba(15, 18, 40, 0.8) !important;
+    border-color: #1a1f3d !important;
+    color: #c8d6e5 !important;
+}
+
+body.space-mode .reel-embed blockquote.instagram-media a {
+    color: #7c8dff !important;
+}
+
+body.space-mode .reel-embed iframe.instagram-media {
+    border-color: #1a1f3d !important;
+    background: rgba(15, 18, 40, 0.6);
+}
+
 body.space-mode .sub-tab {
     border-color: #1a1f3d;
     background: rgba(15, 18, 40, 0.8);
@@ -2692,6 +2760,21 @@ body.tropical-mode .tab:hover:not(.active) {
     background: #ec9a4a;
     border-color: #ec9a4a;
     color: #fff;
+}
+
+body.tropical-mode .reel-embed blockquote.instagram-media {
+    background: #ffffff !important;
+    border-color: #ffd8a8 !important;
+    color: #2d3a3a !important;
+}
+
+body.tropical-mode .reel-embed blockquote.instagram-media a {
+    color: #00b8a9 !important;
+}
+
+body.tropical-mode .reel-embed iframe.instagram-media {
+    border-color: #ffd8a8 !important;
+    background: #ffffff;
 }
 
 body.tropical-mode .sub-tab {
@@ -3096,6 +3179,21 @@ body.stormy-mode .tab:hover:not(.active) {
     color: #d5dae4;
 }
 
+body.stormy-mode .reel-embed blockquote.instagram-media {
+    background: rgba(42, 48, 64, 0.8) !important;
+    border-color: #3a4054 !important;
+    color: #d5dae4 !important;
+}
+
+body.stormy-mode .reel-embed blockquote.instagram-media a {
+    color: #4a90e2 !important;
+}
+
+body.stormy-mode .reel-embed iframe.instagram-media {
+    border-color: #3a4054 !important;
+    background: rgba(42, 48, 64, 0.6);
+}
+
 body.stormy-mode .sub-tab {
     border-color: #3a4054;
     background: rgba(42, 48, 64, 0.8);
@@ -3376,6 +3474,21 @@ body.mono-mode .sub-tab:focus-visible {
     background: #1a1a1a;
     border-color: #4a4a4a;
     color: #ffffff;
+}
+
+body.mono-mode .reel-embed blockquote.instagram-media {
+    background: #111111 !important;
+    border-color: #2a2a2a !important;
+    color: #e6e6e6 !important;
+}
+
+body.mono-mode .reel-embed blockquote.instagram-media a {
+    color: #ffffff !important;
+}
+
+body.mono-mode .reel-embed iframe.instagram-media {
+    border-color: #2a2a2a !important;
+    background: #0b0b0b;
 }
 
 body.mono-mode fieldset {

@@ -67,6 +67,12 @@
         <img src="assets/icons/confrontation.png" alt="Tournament">
       </button>
 
+      <button class="tab" data-mode="reel" aria-label="Reel">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false" style="width: 18px; height: 18px;">
+          <path d="M8 5v14l11-7z"/>
+        </svg>
+      </button>
+
       <button class="tab" data-mode="history" aria-label="History">
         <img src="assets/icons/history1.webp" alt="History">
       </button>
@@ -332,6 +338,14 @@
       </fieldset>
     </section>
 
+    <!-- ================= REEL ================= -->
+    <section id="form-reel" class="calc-form hidden">
+      <fieldset>
+        <legend>Featured Reels</legend>
+        <div id="reel-list" class="reel-embed"></div>
+      </fieldset>
+    </section>
+
     <!-- ================= SETTINGS ================= -->
     <section id="form-settings" class="calc-form hidden">
       <fieldset>
@@ -463,7 +477,7 @@
   </div>
 
   <!-- ================= POPUP ================= -->
-  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-26">
+  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-26-edit1">
     <div class="popup-card">
 
       <h2 class="popup-title">What's New</h2>
@@ -471,6 +485,7 @@
       <ul class="popup-list">
         <li><strong>Countdown button.</strong> The scoreboard now has a play button that runs "Three, Two, One, Go Shoot!" before each match.</li>
         <li><strong>Bullet Griffon fix.</strong> Auto-pickers (Max Weight, Random, Meta, etc.) now pair Bullet Griffon with a normal bit instead of a ratchet-bit.</li>
+        <li><strong>Reel tab.</strong> A new tab between Tournament and History plays featured Instagram reels straight in the app.</li>
       </ul>
 
       <button type="button" class="btn popup-ok">
@@ -518,6 +533,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
   <script src="firebase-config.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script async src="https://www.instagram.com/embed.js"></script>
   <script src="data.js"></script>
   <script src="js/core.js"></script>
   <script src="js/scoreboard.js"></script>
@@ -526,6 +542,7 @@
   <script src="js/library.js"></script>
   <script src="js/tournament.js"></script>
   <script src="js/history.js"></script>
+  <script src="js/reel.js"></script>
   <script src="app.js"></script>
 </body>
 
