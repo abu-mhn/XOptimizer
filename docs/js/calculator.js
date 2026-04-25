@@ -1562,7 +1562,11 @@ function selectBottomRegularByWeight(form, preferMin, ratchetFilter) {
 }
 
 function selectHeaviestRBBit(form) {
-  const idx = bestIdxByPredicate(DATA.bits, isRBBit, b => b.weight || 0, (a, b) => a > b);
+  // Bullet Griffon: forces NO_RATCHET but its bit must be a normal (non-RB)
+  // bit because the blade itself supplies the ratchet portion. Picking an
+  // isRBBit here would produce an invalid combo per the form's filter at
+  // bladeSel.change → bitWrapper._setFilter(b => !b.isRatchetBit).
+  const idx = bestIdxByPredicate(DATA.bits, isNormalBit, b => b.weight || 0, (a, b) => a > b);
   if (idx >= 0) {
     getWrapper(form, "ratchet")._select(NO_RATCHET);
     getWrapper(form, "bit")._select(idx);
@@ -1603,7 +1607,7 @@ function selectMinWeight(form, mode) {
     const codename = DATA.blades[bladeIdx].codename;
 
     if (codename === "BULLETGRIFFON") {
-      const idx = bestIdxByPredicate(DATA.bits, isRBBit, b => b.weight ?? Infinity, (a, b) => a < b);
+      const idx = bestIdxByPredicate(DATA.bits, isNormalBit, b => b.weight ?? Infinity, (a, b) => a < b);
       if (idx >= 0) {
         getWrapper(form, "ratchet")._select(NO_RATCHET);
         getWrapper(form, "bit")._select(idx);
@@ -1657,7 +1661,7 @@ function selectMaxStat(form, mode, key) {
     const codename = DATA.blades[bladeIdx].codename;
 
     if (codename === "BULLETGRIFFON") {
-      const idx = bestIdxByPredicate(DATA.bits, isRBBit, statOf, (a, b) => a > b);
+      const idx = bestIdxByPredicate(DATA.bits, isNormalBit, statOf, (a, b) => a > b);
       if (idx >= 0) {
         getWrapper(form, "ratchet")._select(NO_RATCHET);
         getWrapper(form, "bit")._select(idx);
@@ -1717,7 +1721,7 @@ function selectRandom(form, mode) {
     const codename = DATA.blades[bladeIdx].codename;
 
     if (codename === "BULLETGRIFFON") {
-      const idx = randIdxFromPredicate(DATA.bits, isRBBit);
+      const idx = randIdxFromPredicate(DATA.bits, isNormalBit);
       if (idx >= 0) {
         getWrapper(form, "ratchet")._select(NO_RATCHET);
         getWrapper(form, "bit")._select(idx);
@@ -1770,7 +1774,7 @@ function selectMeta(form, mode) {
     const codename = DATA.blades[bladeIdx].codename;
 
     if (codename === "BULLETGRIFFON") {
-      const idx = randIdxFromPredicate(DATA.bits, isRBBit);
+      const idx = randIdxFromPredicate(DATA.bits, isNormalBit);
       if (idx >= 0) {
         getWrapper(form, "ratchet")._select(NO_RATCHET);
         getWrapper(form, "bit")._select(idx);
@@ -1853,7 +1857,7 @@ function selectComboOfDay(form, mode) {
     const codename = DATA.blades[bladeIdx].codename;
 
     if (codename === "BULLETGRIFFON") {
-      const idx = pickFromPredicate(DATA.bits, isRBBit);
+      const idx = pickFromPredicate(DATA.bits, isNormalBit);
       if (idx >= 0) {
         getWrapper(form, "ratchet")._select(NO_RATCHET);
         getWrapper(form, "bit")._select(idx);

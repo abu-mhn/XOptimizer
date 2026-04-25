@@ -50,6 +50,50 @@ let scoreboardSaveCallback = null;
     Extreme: new Audio("assets/voices/extremeFinish.wav")
   };
 
+  const countdownClips = [
+    new Audio("assets/voices/three.wav"),
+    new Audio("assets/voices/two.wav"),
+    new Audio("assets/voices/one.wav"),
+    new Audio("assets/voices/go shoot.wav")
+  ];
+
+  const playBtn = document.getElementById("scoreboard-play");
+  // Time between the START of consecutive countdown clips. Tight enough to
+  // feel like the real "Three! Two! One! Let it Rip!" cadence even when the
+  // wav files have trailing silence.
+  const COUNTDOWN_STEP_MS = 850;
+  let countdownPlaying = false;
+  let countdownTimers = [];
+  function clearCountdownTimers() {
+    countdownTimers.forEach(t => clearTimeout(t));
+    countdownTimers = [];
+  }
+  function playCountdown() {
+    if (countdownPlaying) return;
+    countdownPlaying = true;
+    if (playBtn) playBtn.classList.add("is-playing");
+    countdownClips.forEach((clip, i) => {
+      const t = setTimeout(() => {
+        clip.currentTime = 0;
+        clip.play().catch(() => {});
+        if (i === countdownClips.length - 1) {
+          // Release the button shortly after the last clip starts so rapid
+          // re-tapping is allowed once the sequence is fully kicked off.
+          const release = setTimeout(() => {
+            countdownPlaying = false;
+            if (playBtn) playBtn.classList.remove("is-playing");
+          }, COUNTDOWN_STEP_MS);
+          countdownTimers.push(release);
+        }
+      }, i * COUNTDOWN_STEP_MS);
+      countdownTimers.push(t);
+    });
+  }
+  playBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    playCountdown();
+  });
+
   overlay.querySelectorAll(".sb-btn").forEach(btn => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
