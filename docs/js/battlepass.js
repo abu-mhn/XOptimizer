@@ -18,7 +18,7 @@ const SCAN_NAME = 'BEYBLADE_TOOL01';
 // access is granted. Add the battlepass GATT service UUID(s) here, otherwise
 // `getPrimaryServices()` will reject.
 const OPTIONAL_SERVICES = [
-  // 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+  '55c40000-f8eb-11ec-b939-0242ac120002',
 ];
 
 // ---------- utils ----------
@@ -176,9 +176,25 @@ class BattlePass {
     BattlePass.service = mainService;
 
     const chars = await mainService.getCharacteristics();
-    // Match Flutter index ordering: characteristics[0] = write, [1] = read.
-    BattlePass.writeChar = chars[0];
-    BattlePass.readChar  = chars[1];
+    // Web Bluetooth's getCharacteristics() doesn't guarantee a consistent
+    // ordering across implementations, so identify by property rather than
+    // index. Write char: write or writeWithoutResponse. Read char: notify
+    // (or indicate as a fallback).
+    let writeChar = null;
+    let readChar  = null;
+    for (const c of chars) {
+      const p = c.properties;
+      if (!writeChar && (p.write || p.writeWithoutResponse)) writeChar = c;
+      if (!readChar && (p.notify || p.indicate))             readChar  = c;
+    }
+    if (!writeChar || !readChar) {
+      throw new Error(
+        `Unable to identify GATT characteristics ` +
+        `(found ${chars.length}, write=${!!writeChar}, read=${!!readChar})`
+      );
+    }
+    BattlePass.writeChar = writeChar;
+    BattlePass.readChar  = readChar;
 
     BattlePass.readBuffer = [];
     BattlePass._onValue = (e) => {
@@ -229,15 +245,18 @@ class BattlePass {
     }
   }
 
-  static async getHeader() {
+  static async getHeader({ timeoutMs } = {}) {
     if (!BattlePass.device || !BattlePass.readChar || !BattlePass.writeChar) return null;
 
+    // Discard any stale/unsolicited notifications (e.g. a connect-time packet)
+    // so the `length !== 1` wait condition below isn't fooled by leftover data.
+    BattlePass.readBuffer = [];
     await BattlePass._write(HEADER_BYTE);
 
     try {
       await waitWhile(
         () => BattlePass.readBuffer.length !== 1 && BattlePass.isConnected,
-        { timeoutMessage: 'Timed Out While getting Header Info' },
+        { timeoutMessage: 'Timed Out While getting Header Info', timeoutMs },
       );
     } catch (e) {
       BattlePass.readBuffer = [];
@@ -260,9 +279,18 @@ class BattlePass {
   }
 
   static async getLaunchData() {
+    // The header request must precede each data request — the device appears
+    // to use it as a position-reset for the data response. Skipping it (e.g.
+    // by reusing a previously-fetched header) caused getLaunchData to return
+    // only the newest record instead of the full list.
     const header = await BattlePass.getHeader();
     if (!header) return null;
 
+    // Discard any stragglers (late header echo, unsolicited push) that landed
+    // between the inner getHeader returning and us issuing the data write.
+    // Without this, a stray notif gets concatenated onto the launches string
+    // and parses as a phantom record.
+    BattlePass.readBuffer = [];
     await BattlePass._write(GET_DATA_BYTE);
 
     try {
@@ -310,6 +338,7 @@ class BattlePass {
   }
 
   static async clearData() {
+    BattlePass.readBuffer = [];
     await BattlePass._write(CLEAR_DATA_BYTE);
 
     try {

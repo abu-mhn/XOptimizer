@@ -834,39 +834,6 @@ body.light-mode .result-part-name {
     margin-bottom: 14px;
 }
 
-.bp-advanced {
-    background: #161b22;
-    border: 1px solid #30363d;
-    border-radius: 6px;
-    padding: 8px 12px;
-    margin-bottom: 12px;
-}
-
-.bp-advanced > summary {
-    cursor: pointer;
-    font-size: .9rem;
-    color: #58a6ff;
-    user-select: none;
-    padding: 4px 0;
-}
-
-.bp-advanced[open] > summary {
-    margin-bottom: 8px;
-}
-
-.bp-uuids {
-    width: 100%;
-    background: #0d1117;
-    border: 1px solid #30363d;
-    border-radius: 6px;
-    color: #e6edf3;
-    padding: 8px 10px;
-    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-    font-size: .85rem;
-    resize: vertical;
-    min-height: 60px;
-}
-
 .bp-actions {
     display: flex;
     gap: 10px;
@@ -897,6 +864,17 @@ body.light-mode .result-part-name {
 .bp-status.bp-ok {
     border-color: #238636;
     color: #7ee787;
+}
+
+.bp-status.bp-busy {
+    border-color: #1f6feb;
+    color: #58a6ff;
+    animation: bp-status-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes bp-status-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(88, 166, 255, 0); }
+    50%      { box-shadow: 0 0 0 4px rgba(88, 166, 255, 0.18); }
 }
 
 .bp-results {
@@ -963,6 +941,18 @@ body.light-mode .result-part-name {
 .bp-launch span:last-child {
     font-weight: 600;
     color: #58a6ff;
+}
+
+.bp-launch .bp-loading {
+    color: #6e7681;
+    font-style: italic;
+    font-weight: 400;
+    animation: bp-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes bp-pulse {
+    0%, 100% { opacity: 0.4; }
+    50%      { opacity: 1; }
 }
 
 .reel-embed iframe.instagram-media,

@@ -358,19 +358,12 @@
         <legend>Battle Pass</legend>
         <p class="bp-help">Connect to a <strong>BEYBLADE_TOOL01</strong> launcher over Bluetooth to read your launch data. Requires Chrome or Edge over HTTPS.</p>
 
-        <details class="bp-advanced">
-          <summary>Service UUIDs</summary>
-          <p class="bp-help">Web Bluetooth requires every GATT service UUID to be declared before connecting. The default below is the Nordic UART service (a likely match for this device's protocol). If your device exposes a different service, paste its UUID here — one per line. Saved automatically.</p>
-          <textarea id="bp-uuids" class="bp-uuids" rows="3" spellcheck="false" autocomplete="off" placeholder="6e400001-b5a3-f393-e0a9-e50e24dcca9e"></textarea>
-        </details>
-
         <div class="bp-actions">
           <button type="button" id="bp-connect" class="btn">Connect</button>
           <button type="button" id="bp-disconnect" class="btn btn-reset" disabled>Disconnect</button>
         </div>
         <div id="bp-status" class="bp-status">Not connected.</div>
         <div class="bp-actions">
-          <button type="button" id="bp-read" class="btn" disabled>Read Launch Data</button>
           <button type="button" id="bp-clear" class="btn btn-reset" disabled>Clear Data</button>
         </div>
         <div id="bp-results" class="bp-results"></div>
@@ -508,15 +501,13 @@
   </div>
 
   <!-- ================= POPUP ================= -->
-  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-26-edit2">
+  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-27">
     <div class="popup-card">
 
       <h2 class="popup-title">What's New</h2>
 
       <ul class="popup-list">
-        <li><strong>Buzz Bey.</strong> New tab between Tournament and History — featured Beyblade reels right inside the app.</li>
-        <li><strong>Countdown button.</strong> The scoreboard now has a play button that runs "Three, Two, One, Go Shoot!" before each match.</li>
-        <li><strong>Bullet Griffon fix.</strong> Auto-pickers (Max Weight, Random, Meta, etc.) now pair Bullet Griffon with a normal bit instead of a ratchet-bit.</li>
+        <li><strong>Battle Pass.</strong> New tab to connect your BEYBLADE_TOOL01 launcher over Bluetooth and read launch speeds live.</li>
       </ul>
 
       <button type="button" class="btn popup-ok">
