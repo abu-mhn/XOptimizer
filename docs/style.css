@@ -51,7 +51,7 @@ h1 {
 ======================= */
 .mode-tabs {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(8, 1fr);
     gap: 4px;
     margin-bottom: 0;
     position: sticky;
@@ -822,6 +822,114 @@ body.light-mode .result-part-name {
     align-items: center;
     gap: 16px;
     padding: 4px 0;
+}
+
+/* =======================
+   BATTLE PASS
+======================= */
+.bp-help {
+    color: #8b949e;
+    font-size: .9rem;
+    line-height: 1.45;
+    margin-bottom: 14px;
+}
+
+.bp-actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.bp-actions .btn {
+    flex: 1;
+    padding: 10px 14px;
+}
+
+.bp-status {
+    font-size: .9rem;
+    color: #c9d1d9;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    word-break: break-word;
+}
+
+.bp-status.bp-error {
+    border-color: #da3633;
+    color: #ff7b72;
+}
+
+.bp-status.bp-ok {
+    border-color: #238636;
+    color: #7ee787;
+}
+
+.bp-results {
+    margin-top: 8px;
+}
+
+.bp-summary {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.bp-summary > div {
+    display: flex;
+    flex-direction: column;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 10px 12px;
+}
+
+.bp-label {
+    font-size: .75rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #8b949e;
+    margin-bottom: 4px;
+}
+
+.bp-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #e6edf3;
+}
+
+.bp-launches {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 6px;
+    max-height: 360px;
+    overflow-y: auto;
+    padding: 4px;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    background: #0d1117;
+}
+
+.bp-launch {
+    display: flex;
+    justify-content: space-between;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: .9rem;
+    color: #c9d1d9;
+}
+
+.bp-launch span:first-child {
+    color: #8b949e;
+}
+
+.bp-launch span:last-child {
+    font-weight: 600;
+    color: #58a6ff;
 }
 
 .reel-embed iframe.instagram-media,
