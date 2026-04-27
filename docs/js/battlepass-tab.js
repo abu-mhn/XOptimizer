@@ -191,6 +191,7 @@ import {
           // waiting for the slow full-data fetch (~150ms per notification).
           // Only do this when we already have a baseline (lastLaunchCount >= 0)
           // and the count moved forward — otherwise let the real fetch render.
+          let didOptimistic = false;
           if (lastLaunchCount >= 0 && header.launchCount > lastLaunchCount) {
             const delta = header.launchCount - lastLaunchCount;
             renderLaunchData({
@@ -198,10 +199,14 @@ import {
               launches: [...lastLaunches, ...Array(delta).fill(null)],
             });
             setStatus(`new launch detected — fetching speed…`);
+            didOptimistic = true;
           }
 
           try {
-            await fetchAndRender(header);
+            // Only engage the progressive watcher when we showed an optimistic
+            // UI — otherwise it would manufacture a phantom "loading…" row
+            // (e.g. right after Clear Data, when there's no real baseline).
+            await fetchAndRender(didOptimistic ? header : null);
           } catch (_) {
             // try again next iteration
           }

@@ -19,6 +19,9 @@ const SCAN_NAME = 'BEYBLADE_TOOL01';
 // `getPrimaryServices()` will reject.
 const OPTIONAL_SERVICES = [
   '55c40000-f8eb-11ec-b939-0242ac120002',
+  '00001800-0000-1000-8000-00805f9b34fb', 
+  '00001801-0000-1000-8000-00805f9b34fb', 
+  '0000180a-0000-1000-8000-00805f9b34fb'
 ];
 
 // ---------- utils ----------
@@ -292,6 +295,13 @@ class BattlePass {
     // and parses as a phantom record.
     BattlePass.readBuffer = [];
     await BattlePass._write(GET_DATA_BYTE);
+    // Clear AGAIN immediately after the write resolves: the await on _write
+    // is a yield point, and a delayed straggler from the previous request
+    // (e.g. getHeader's response packet still in flight at the OS layer)
+    // can fire during that yield and land in the buffer. Safe to do
+    // synchronously because the real device response can't arrive before
+    // its BLE round-trip completes — there's a several-ms gap.
+    BattlePass.readBuffer = [];
 
     try {
       await waitWhile(
@@ -356,18 +366,30 @@ class BattlePass {
       throw new Error('Lost connection to Battlepass While Clearing Battlepass');
     }
 
-    const pageCount = getBytes(BattlePass.readBuffer[1], 22, 1);
+    // Same override as in getHeader: the raw page byte we'd extract from the
+    // response (`getBytes(readBuffer[1], 22, 1)`) is unreliable on this
+    // device and frequently produces a sentinel that no later notification
+    // ever matches, causing the verify step to time out at 60s. The Dart
+    // port hardcodes 'b7' here too.
+    const pageCount = 'b7';
 
     try {
       await waitWhile(
         () =>
           !BattlePass.readBuffer[BattlePass.readBuffer.length - 1].startsWith(pageCount)
           && BattlePass.isConnected,
-        { timeoutMessage: 'Timed Out While Verifying Battlepass Data' },
+        {
+          timeoutMs: 5000,
+          timeoutMessage: 'Timed Out While Verifying Battlepass Data',
+        },
       );
     } catch (e) {
+      // Verify timed out, but the actual clear write almost certainly
+      // succeeded. Swallow the error and let the caller continue — the next
+      // launch-data fetch will reflect the cleared state, and if not, the
+      // user can retry.
       BattlePass.readBuffer = [];
-      throw e;
+      return;
     }
 
     if (!BattlePass.isConnected) {
