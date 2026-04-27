@@ -10,6 +10,35 @@ import { BattlePass, BattlePassFactory } from './battlepass.js';
   const clearBtn      = document.getElementById('bp-clear');
   const statusEl      = document.getElementById('bp-status');
   const resultsEl     = document.getElementById('bp-results');
+  const uuidsEl       = document.getElementById('bp-uuids');
+
+  // Nordic UART service — the protocol in battlepass.js (single-byte writes,
+  // notify-back stream) is consistent with NUS, so it's a sensible default
+  // guess. Override via the UUID textarea if your device exposes something else.
+  const DEFAULT_UUIDS = ['6e400001-b5a3-f393-e0a9-e50e24dcca9e'];
+  const STORAGE_KEY   = 'bp-service-uuids';
+
+  function loadUuids() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return DEFAULT_UUIDS.slice();
+  }
+
+  function saveUuids(list) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); } catch (_) {}
+  }
+
+  function parseUuids(text) {
+    return (text || '')
+      .split(/[\s,]+/)
+      .map(s => s.trim().toLowerCase())
+      .filter(Boolean);
+  }
+
+  uuidsEl.value = loadUuids().join('\n');
+  uuidsEl.addEventListener('input', () => saveUuids(parseUuids(uuidsEl.value)));
 
   let device = null;
 
@@ -48,9 +77,14 @@ import { BattlePass, BattlePassFactory } from './battlepass.js';
       setStatus('Web Bluetooth is not supported in this browser. Use Chrome or Edge over HTTPS.', 'error');
       return;
     }
+    const uuids = parseUuids(uuidsEl.value);
+    if (uuids.length === 0) {
+      setStatus('Add at least one service UUID under "Service UUIDs" before connecting.', 'error');
+      return;
+    }
     setStatus('Scanning for BEYBLADE_TOOL01…');
     try {
-      device = await BattlePassFactory.scanForBattlePass();
+      device = await BattlePassFactory.scanForBattlePass({ optionalServices: uuids });
       setStatus(`Found ${device.name || 'device'} (${device.battlepassID}). Connecting…`);
       await BattlePassFactory.connectToBattlePass(device);
       watchDisconnect();
@@ -59,7 +93,12 @@ import { BattlePass, BattlePassFactory } from './battlepass.js';
     } catch (err) {
       device = null;
       setConnectedUI(false);
-      setStatus(`Error: ${err && err.message ? err.message : err}`, 'error');
+      const msg = err && err.message ? err.message : String(err);
+      if (/not allowed to access any service/i.test(msg)) {
+        setStatus('Connected, but the declared service UUIDs don\'t match this device. Use a BLE scanner (e.g. nRF Connect) to find the device\'s service UUID and paste it under "Service UUIDs".', 'error');
+      } else {
+        setStatus(`Error: ${msg}`, 'error');
+      }
     }
   });
 

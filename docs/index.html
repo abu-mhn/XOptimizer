@@ -357,6 +357,13 @@
       <fieldset>
         <legend>Battle Pass</legend>
         <p class="bp-help">Connect to a <strong>BEYBLADE_TOOL01</strong> launcher over Bluetooth to read your launch data. Requires Chrome or Edge over HTTPS.</p>
+
+        <details class="bp-advanced">
+          <summary>Service UUIDs</summary>
+          <p class="bp-help">Web Bluetooth requires every GATT service UUID to be declared before connecting. The default below is the Nordic UART service (a likely match for this device's protocol). If your device exposes a different service, paste its UUID here — one per line. Saved automatically.</p>
+          <textarea id="bp-uuids" class="bp-uuids" rows="3" spellcheck="false" autocomplete="off" placeholder="6e400001-b5a3-f393-e0a9-e50e24dcca9e"></textarea>
+        </details>
+
         <div class="bp-actions">
           <button type="button" id="bp-connect" class="btn">Connect</button>
           <button type="button" id="bp-disconnect" class="btn btn-reset" disabled>Disconnect</button>
