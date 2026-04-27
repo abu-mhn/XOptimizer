@@ -1,29 +1,50 @@
-// docs/js/reel.js - Featured reels (Instagram embeds)
-// To feature a new reel, paste its permalink at the top of REEL_PERMALINKS.
-// Newest first — they render in array order down the Reel tab.
-const REEL_PERMALINKS = [
-  "https://www.instagram.com/reel/DXhNBrxE8Ib/",
-  "https://www.instagram.com/reel/DXiPSOiAWzo/"
+// docs/js/reel.js - Featured YouTube channels via uploads-playlist embed
+//
+// Each entry below renders as an embedded YouTube player playing through
+// the channel's uploads, newest first. New videos appear automatically —
+// no API key, no fetching, no CORS proxy, no rate limits.
+//
+// Each entry can be:
+//   - 'UCxxxxxxx…' — raw channel ID, auto-converted to its uploads
+//                    playlist (UC → UU). Find via View Page Source on
+//                    the channel page and search for "channelId".
+//   - 'UUxxxxxxx…' — uploads-playlist ID (used as-is).
+//   - 'PLxxxxxxx…' — any custom playlist ID (used as-is).
+const CHANNELS = [
+  'UCI8cFZdZyHiGjI7D019hcIA',
+  'UCCdmOS3wtcy5G2jHf-vmAYA',
+  'UC0gVQLsw6xXIl8SJEwuvVlQ'
 ];
 
 (function () {
-  const container = document.getElementById("reel-list");
+  const container = document.getElementById('reel-list');
   if (!container) return;
 
-  container.innerHTML = REEL_PERMALINKS.map(url => `
-    <blockquote
-      class="instagram-media"
-      data-instgrm-captioned
-      data-instgrm-permalink="${url}"
-      data-instgrm-version="14"
-      style="background:#FFF; border:0; border-radius:3px; box-shadow:0 0 1px 0 rgba(0,0,0,0.5),0 1px 10px 0 rgba(0,0,0,0.15); margin: 1px auto; max-width:540px; min-width:326px; padding:0; width:99.375%;">
-      <a href="${url}" target="_blank" rel="noopener" style="color:#3897f0; padding:16px; text-decoration:none; display:block; text-align:center;">View this post on Instagram</a>
-    </blockquote>
-  `).join("");
-
-  // If embed.js already loaded, kick processing now. Otherwise it auto-scans
-  // when it loads and picks up these blockquotes.
-  if (window.instgrm && window.instgrm.Embeds && typeof window.instgrm.Embeds.process === "function") {
-    window.instgrm.Embeds.process();
+  if (CHANNELS.length === 0) {
+    container.innerHTML = '<p class="reel-empty">No channels configured. Add channel IDs to <code>CHANNELS</code> in <code>js/reel.js</code>.</p>';
+    return;
   }
+
+  function embedUrl(entry) {
+    // UC… channel ID → UU… uploads playlist (every channel has one).
+    // YouTube's playlist embed expects a playlist ID, not a channel ID,
+    // so we convert. Other prefixes (UU, PL, …) are used as-is.
+    const id = /^UC[A-Za-z0-9_-]{22}$/.test(entry) ? 'UU' + entry.slice(2) : entry;
+    const url = `https://www.youtube.com/embed/videoseries?list=${encodeURIComponent(id)}`;
+    console.log('[reel] entry:', entry, '→ url:', url);
+    return url;
+  }
+
+  container.innerHTML = CHANNELS.map(entry => `
+    <div class="reel-video">
+      <iframe
+        src="${embedUrl(entry)}"
+        title="Featured uploads"
+        frameborder="0"
+        allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        referrerpolicy="strict-origin-when-cross-origin"
+        allowfullscreen
+        loading="lazy"></iframe>
+    </div>
+  `).join('');
 })();

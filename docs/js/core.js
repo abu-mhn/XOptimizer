@@ -518,17 +518,6 @@ document.querySelectorAll(".tab").forEach(tab => {
         renderSwiss();
       }
 
-      // ================= REEL =================
-      if (mode === "reel") {
-        // Embed.js auto-processes blockquotes on load, but if the script
-        // arrived before the section was visible (or the user revisits), nudge
-        // it to (re)render. Safe to call multiple times.
-        if (window.instgrm && window.instgrm.Embeds && typeof window.instgrm.Embeds.process === "function") {
-          window.instgrm.Embeds.process();
-        }
-      }
-
-
       // ================= HIDE RESULT =================
       document.getElementById("result")?.classList.add("hidden");
     }
