@@ -348,7 +348,14 @@
     <section id="form-reel" class="calc-form hidden">
       <fieldset>
         <legend>Buzz Bey</legend>
-        <div id="reel-list" class="reel-embed"></div>
+        <div class="reel-sub-tabs" id="reel-sub-tabs">
+          <button type="button" class="reel-sub-tab active" data-reel-region="local">Local</button>
+          <button type="button" class="reel-sub-tab" data-reel-region="international">International</button>
+          <button type="button" class="reel-sub-tab" data-reel-region="japan">Japan</button>
+        </div>
+        <div id="reel-list-local" class="reel-embed reel-panel"></div>
+        <div id="reel-list-international" class="reel-embed reel-panel hidden"></div>
+        <div id="reel-list-japan" class="reel-embed reel-panel hidden"></div>
       </fieldset>
     </section>
 
@@ -502,7 +509,7 @@
   </div>
 
   <!-- ================= POPUP ================= -->
-  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-27-edit2">
+  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-28">
     <div class="popup-card">
 
       <h2 class="popup-title">What's New</h2>
@@ -510,6 +517,7 @@
       <ul class="popup-list">
         <li><strong>Battle Pass.</strong> Connect a BEYBLADE_TOOL01 launcher over Bluetooth to read your launch speeds live.</li>
         <li><strong>Buzz Bey on YouTube.</strong> Featured videos now auto-update from creator channels — new uploads appear without an app refresh.</li>
+        <li><strong>Local / International / Japan.</strong> Buzz Bey is split into three regional sub-tabs so you can browse creators by region.</li>
         <li><strong>iPhone support.</strong> Use the <a href="https://apps.apple.com/app/bluefy-web-ble-browser/id1492822055" target="_blank" rel="noopener">Bluefy</a> browser — Safari and Chrome iOS don't support Web Bluetooth.</li>
       </ul>
 

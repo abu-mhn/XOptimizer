@@ -824,6 +824,48 @@ body.light-mode .result-part-name {
     padding: 4px 0;
 }
 
+.reel-sub-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    margin-bottom: 16px;
+}
+
+.reel-sub-tab {
+    padding: 8px;
+    min-height: 36px;
+    border-radius: 6px;
+    border: 1px solid #30363d;
+    background: #161b22;
+    color: #8b949e;
+    font: inherit;
+    font-size: .85rem;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.reel-sub-tab:hover:not(.active),
+.reel-sub-tab:focus-visible {
+    background: #21262d;
+    border-color: #484f58;
+    color: #e6edf3;
+    outline: none;
+}
+
+.reel-sub-tab.active {
+    background: #1a4a8a;
+    color: #fff;
+    border-color: #1a4a8a;
+    font-weight: 600;
+}
+
+.reel-panel.hidden {
+    display: none;
+}
+
 .reel-video {
     width: 100%;
     max-width: 540px;
@@ -5152,23 +5194,42 @@ body.mono-mode .scoreboard-close:hover {
 ======================= */
 
 /* ----- LIGHT ----- */
-body.light-mode .history-sub-tab {
+body.light-mode .history-sub-tab,
+body.light-mode .reel-sub-tab {
     border-color: #d1d9e0;
     background: #ffffff;
     color: #656d76;
 }
 
 body.light-mode .history-sub-tab:hover:not(.active),
-body.light-mode .history-sub-tab:focus-visible {
+body.light-mode .history-sub-tab:focus-visible,
+body.light-mode .reel-sub-tab:hover:not(.active),
+body.light-mode .reel-sub-tab:focus-visible {
     background: #e1e4e8;
     border-color: #afb8c1;
     color: #1f2328;
 }
 
-body.light-mode .history-sub-tab.active {
+body.light-mode .history-sub-tab.active,
+body.light-mode .reel-sub-tab.active {
     background: #0550ae;
     color: #ffffff;
     border-color: #0550ae;
+}
+
+body.light-mode .reel-video {
+    background: #ffffff;
+    border-color: #d1d9e0;
+}
+
+body.light-mode .reel-empty {
+    color: #656d76;
+}
+
+body.light-mode .reel-empty code {
+    background: #f6f8fa;
+    border-color: #d1d9e0;
+    color: #24292f;
 }
 
 body.light-mode .tournament-history-item {
@@ -5206,23 +5267,42 @@ body.light-mode .tournament-mode-name {
 }
 
 /* ----- SPACE ----- */
-body.space-mode .history-sub-tab {
+body.space-mode .history-sub-tab,
+body.space-mode .reel-sub-tab {
     border-color: #1a1f3d;
     background: rgba(15, 18, 40, 0.8);
     color: #7b8cad;
 }
 
 body.space-mode .history-sub-tab:hover:not(.active),
-body.space-mode .history-sub-tab:focus-visible {
+body.space-mode .history-sub-tab:focus-visible,
+body.space-mode .reel-sub-tab:hover:not(.active),
+body.space-mode .reel-sub-tab:focus-visible {
     background: rgba(26, 35, 126, 0.3);
     border-color: #3949ab;
     color: #c8d6e5;
 }
 
-body.space-mode .history-sub-tab.active {
+body.space-mode .history-sub-tab.active,
+body.space-mode .reel-sub-tab.active {
     background: linear-gradient(135deg, #1a237e, #311b92);
     color: #fff;
     border-color: #5c6bc0;
+}
+
+body.space-mode .reel-video {
+    background: rgba(15, 18, 40, 0.8);
+    border-color: #1a1f3d;
+}
+
+body.space-mode .reel-empty {
+    color: #7b8cad;
+}
+
+body.space-mode .reel-empty code {
+    background: rgba(26, 35, 126, 0.3);
+    border-color: #1a1f3d;
+    color: #b8c5e0;
 }
 
 body.space-mode .tournament-history-item {
@@ -5260,23 +5340,42 @@ body.space-mode .tournament-mode-name {
 }
 
 /* ----- TROPICAL ----- */
-body.tropical-mode .history-sub-tab {
+body.tropical-mode .history-sub-tab,
+body.tropical-mode .reel-sub-tab {
     border-color: #ffd8a8;
     background: #ffffff;
     color: #8a6d3b;
 }
 
 body.tropical-mode .history-sub-tab:hover:not(.active),
-body.tropical-mode .history-sub-tab:focus-visible {
+body.tropical-mode .history-sub-tab:focus-visible,
+body.tropical-mode .reel-sub-tab:hover:not(.active),
+body.tropical-mode .reel-sub-tab:focus-visible {
     background: #fff0d6;
     border-color: #f5b86b;
     color: #2d3a3a;
 }
 
-body.tropical-mode .history-sub-tab.active {
+body.tropical-mode .history-sub-tab.active,
+body.tropical-mode .reel-sub-tab.active {
     background: linear-gradient(135deg, #00b8a9, #0d8a80);
     color: #fff;
     border-color: #00b8a9;
+}
+
+body.tropical-mode .reel-video {
+    background: #ffffff;
+    border-color: #ffd8a8;
+}
+
+body.tropical-mode .reel-empty {
+    color: #8a6d3b;
+}
+
+body.tropical-mode .reel-empty code {
+    background: #fff0d6;
+    border-color: #ffd8a8;
+    color: #6b4f1f;
 }
 
 body.tropical-mode .tournament-history-item {
@@ -5314,23 +5413,42 @@ body.tropical-mode .tournament-mode-name {
 }
 
 /* ----- STORMY ----- */
-body.stormy-mode .history-sub-tab {
+body.stormy-mode .history-sub-tab,
+body.stormy-mode .reel-sub-tab {
     border-color: #3a4054;
     background: rgba(42, 48, 64, 0.8);
     color: #9098a8;
 }
 
 body.stormy-mode .history-sub-tab:hover:not(.active),
-body.stormy-mode .history-sub-tab:focus-visible {
+body.stormy-mode .history-sub-tab:focus-visible,
+body.stormy-mode .reel-sub-tab:hover:not(.active),
+body.stormy-mode .reel-sub-tab:focus-visible {
     background: rgba(74, 144, 226, 0.2);
     border-color: #5a6278;
     color: #d5dae4;
 }
 
-body.stormy-mode .history-sub-tab.active {
+body.stormy-mode .history-sub-tab.active,
+body.stormy-mode .reel-sub-tab.active {
     background: linear-gradient(135deg, #2c4a7a, #3a6fb0);
     color: #fff;
     border-color: #4a90e2;
+}
+
+body.stormy-mode .reel-video {
+    background: rgba(42, 48, 64, 0.8);
+    border-color: #3a4054;
+}
+
+body.stormy-mode .reel-empty {
+    color: #9098a8;
+}
+
+body.stormy-mode .reel-empty code {
+    background: rgba(74, 144, 226, 0.2);
+    border-color: #3a4054;
+    color: #b8c5e0;
 }
 
 body.stormy-mode .tournament-history-item {
@@ -5368,23 +5486,42 @@ body.stormy-mode .tournament-mode-name {
 }
 
 /* ----- MONO ----- */
-body.mono-mode .history-sub-tab {
+body.mono-mode .history-sub-tab,
+body.mono-mode .reel-sub-tab {
     background: #111111;
     border-color: #2a2a2a;
     color: #bdbdbd;
 }
 
 body.mono-mode .history-sub-tab:hover:not(.active),
-body.mono-mode .history-sub-tab:focus-visible {
+body.mono-mode .history-sub-tab:focus-visible,
+body.mono-mode .reel-sub-tab:hover:not(.active),
+body.mono-mode .reel-sub-tab:focus-visible {
     background: #1a1a1a;
     border-color: #4a4a4a;
     color: #ffffff;
 }
 
-body.mono-mode .history-sub-tab.active {
+body.mono-mode .history-sub-tab.active,
+body.mono-mode .reel-sub-tab.active {
     background: #ffffff;
     color: #000000;
     border-color: #ffffff;
+}
+
+body.mono-mode .reel-video {
+    background: #0b0b0b;
+    border-color: #2a2a2a;
+}
+
+body.mono-mode .reel-empty {
+    color: #bdbdbd;
+}
+
+body.mono-mode .reel-empty code {
+    background: #1a1a1a;
+    border-color: #2a2a2a;
+    color: #ffffff;
 }
 
 body.mono-mode .tournament-history-item {
