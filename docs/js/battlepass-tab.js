@@ -145,22 +145,16 @@ import {
       if (!data) return;
       lastLaunchCount = data.header.launchCount;
 
-      const valid = validSpeeds(data.launches, data.header.maxLaunchSpeed);
-      const value = valid.length ? valid[valid.length - 1] : undefined;
-
-      if (value !== undefined) {
-        sessionLaunches.push(value);
-        saveCache();
-      }
+      // Sync the cache with the device's full filtered buffer. The cache
+      // exists purely to persist the list across page reloads — it doesn't
+      // accumulate independently of the device.
+      sessionLaunches = validSpeeds(data.launches, data.header.maxLaunchSpeed);
+      saveCache();
       lastRaw = data.raw;
       renderLaunchData({ header: data.header, launches: sessionLaunches });
 
       const n = sessionLaunches.length;
       setStatus(`${n} launch${n === 1 ? '' : 'es'} recorded.`, 'ok');
-
-      if (data.launches.length > 0) {
-        try { await BattlePass.clearData(); } catch (_) {}
-      }
     } finally {
       if (watcher) clearInterval(watcher);
     }
