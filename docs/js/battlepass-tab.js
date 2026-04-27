@@ -238,9 +238,19 @@ import {
     }, { once: true });
   }
 
+  // iOS / iPadOS gets a tailored unsupported-browser message because the
+  // limitation is Apple's WebKit (no Web Bluetooth in any iOS browser); we
+  // point them at Bluefy specifically instead of generic "use Chrome".
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
   connectBtn.addEventListener('click', async () => {
     if (!('bluetooth' in navigator)) {
-      setStatus('Web Bluetooth is not supported in this browser. Use Chrome or Edge over HTTPS.', 'error');
+      if (isIOS) {
+        setStatus('iOS Safari and Chrome iOS don\'t support Web Bluetooth. Install the Bluefy browser from the App Store and open this page there.', 'error');
+      } else {
+        setStatus('Web Bluetooth is not supported in this browser. Use Chrome or Edge over HTTPS.', 'error');
+      }
       return;
     }
     setStatus('Scanning for BEYBLADE_TOOL01…');
