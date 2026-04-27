@@ -19,13 +19,31 @@ import {
   // we just retry on the next iteration.
   const HEADER_TIMEOUT_MS = 1500;
 
+  // Accumulated history across this browser session — each successful fetch
+  // appends the new launch's speed. Persists to localStorage so a reload
+  // doesn't lose the list, since we auto-clear the device buffer.
+  const CACHE_KEY = 'bp:session-launches';
+  function loadCache() {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) return arr.filter(v => typeof v === 'number');
+      }
+    } catch (_) {}
+    return [];
+  }
+  function saveCache() {
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(sessionLaunches)); } catch (_) {}
+  }
+
   let device          = null;
   let pollRunning     = false;   // true while the read loop is active
   let pollStop        = false;   // signal the loop to exit
   let inFlight        = false;   // serializes loop reads vs. user-initiated ops (Clear)
   let lastRaw         = null;
   let lastLaunchCount = -1;
-  let lastLaunches    = [];      // last fully-fetched launches array, for optimistic re-renders
+  let sessionLaunches = loadCache();   // accumulated history (visible list)
 
   function setStatus(msg, kind) {
     statusEl.textContent = msg;
@@ -51,25 +69,25 @@ import {
     ));
   }
 
-  // `launches` may contain `null` entries — these render as a "loading…"
-  // placeholder while the slow full-data fetch is in flight. Min/Avg/Max
-  // ignore placeholder entries so the stats reflect known values only.
+  // Renders summary tiles + a numbered list of all launches in this session.
+  // `launches` is the full session history; entries are numbers, with a
+  // single trailing `null` allowed as the in-flight loading placeholder.
   function renderLaunchData(data) {
     const { header, launches } = data;
-    const count = launches.length;
-    const real  = launches.filter(v => v !== null);
-    const max = real.length ? Math.max(...real) : 0;
-    const min = real.length ? Math.min(...real) : 0;
-    const avg = real.length ? real.reduce((a, b) => a + b, 0) / real.length : 0;
+    const real  = launches.filter(v => typeof v === 'number');
+    const count = real.length;
+    const max = count ? Math.max(...real) : 0;
+    const min = count ? Math.min(...real) : 0;
+    const avg = count ? real.reduce((a, b) => a + b, 0) / count : 0;
 
     const summary = `
       <div class="bp-summary">
         <div><span class="bp-label">Lifetime peak speed</span><span class="bp-value">${escapeHtml(header.maxLaunchSpeed)}</span></div>
         <div><span class="bp-label">Lifetime launches</span><span class="bp-value">${escapeHtml(header.launchCount)}</span></div>
-        <div><span class="bp-label">In buffer</span><span class="bp-value">${count}</span></div>
-        <div><span class="bp-label">Min / Avg / Max (buffer)</span><span class="bp-value">${min} / ${avg.toFixed(1)} / ${max}</span></div>
+        <div><span class="bp-label">Recorded</span><span class="bp-value">${count}</span></div>
+        <div><span class="bp-label">Min / Avg / Max</span><span class="bp-value">${min} / ${avg.toFixed(1)} / ${max}</span></div>
       </div>`;
-    const list = count
+    const list = launches.length
       ? `<div class="bp-launches">${launches.map((v, i) =>
           v === null
             ? `<div class="bp-launch"><span>#${i + 1}</span><span class="bp-loading">loading…</span></div>`
@@ -92,41 +110,33 @@ import {
   }
 
   async function fetchAndRender(optimisticHeader) {
-    // If no optimistic UI was set up (e.g. seed read on connect), still show
-    // an explicit "fetching" status so the user knows BLE work is in progress
-    // and doesn't think the UI is stuck.
     if (!optimisticHeader) {
       setStatus('Fetching launch data…');
     }
 
-    // If the caller already showed an optimistic UI based on `optimisticHeader`,
-    // start a buffer watcher that progressively fills in the placeholder rows
-    // as notifications land — instead of waiting for the full fetch to return.
+    // Filter out parser garbage. A real launch can't exceed the device's
+    // lifetime peak, so anything above that is provably bogus and safe to
+    // drop (e.g. timestamp/index fields the chunked parser sometimes
+    // surfaces alongside real speeds).
+    const validSpeeds = (launches, maxSpeed) =>
+      launches.filter(v => typeof v === 'number' && v > 0 && v <= maxSpeed);
+
+    // Progressive watcher: as data notifications stream in, show the most
+    // recent valid partial value as a placeholder at the end of the list.
     let watcher = null;
     let lastSeenLen = -1;
     if (optimisticHeader) {
-      const cached   = lastLaunches.slice();
-      const expected = cached.length + (optimisticHeader.launchCount - lastLaunchCount);
       watcher = setInterval(() => {
         const partial = peekPartialLaunches();
         if (partial.length === lastSeenLen) return;
         lastSeenLen = partial.length;
-        // Build the display: at each slot, prefer the freshly-received value,
-        // fall back to the cached value from the previous full read, then null.
-        // Without this, while partial is still empty, the existing rows would
-        // all flicker to "loading…" — which is what the user just hit.
-        const display = [];
-        for (let i = 0; i < expected; i++) {
-          if (i < partial.length)      display.push(partial[i]);
-          else if (i < cached.length)  display.push(cached[i]);
-          else                         display.push(null);
-        }
-        renderLaunchData({ header: optimisticHeader, launches: display });
-        // Live progress in the status bar so the user can see notifications
-        // arriving even before any value flips from "loading…" to a number.
-        if (partial.length < expected) {
-          setStatus(`Fetching launch data… ${partial.length}/${expected}`);
-        }
+        const valid = validSpeeds(partial, optimisticHeader.maxLaunchSpeed);
+        const tail  = valid.length ? valid[valid.length - 1] : null;
+        renderLaunchData({
+          header: optimisticHeader,
+          launches: [...sessionLaunches, tail],
+        });
+        setStatus('Fetching launch data…');
       }, 60);
     }
 
@@ -134,13 +144,23 @@ import {
       const data = await BattlePass.getLaunchData();
       if (!data) return;
       lastLaunchCount = data.header.launchCount;
-      lastLaunches    = data.launches.slice();
-      if (data.raw !== lastRaw) {
-        lastRaw = data.raw;
-        renderLaunchData(data);
+
+      const valid = validSpeeds(data.launches, data.header.maxLaunchSpeed);
+      const value = valid.length ? valid[valid.length - 1] : undefined;
+
+      if (value !== undefined) {
+        sessionLaunches.push(value);
+        saveCache();
       }
-      const count = data.launches.length;
-      setStatus(`${count} launch${count === 1 ? '' : 'es'} recorded.`, 'ok');
+      lastRaw = data.raw;
+      renderLaunchData({ header: data.header, launches: sessionLaunches });
+
+      const n = sessionLaunches.length;
+      setStatus(`${n} launch${n === 1 ? '' : 'es'} recorded.`, 'ok');
+
+      if (data.launches.length > 0) {
+        try { await BattlePass.clearData(); } catch (_) {}
+      }
     } finally {
       if (watcher) clearInterval(watcher);
     }
@@ -185,18 +205,14 @@ import {
             }
           }
 
-          // Optimistic render: append `delta` placeholder rows to the last
-          // known launches list and update the lifetime tiles immediately,
-          // so the user sees feedback within ~one BLE round-trip instead of
-          // waiting for the slow full-data fetch (~150ms per notification).
-          // Only do this when we already have a baseline (lastLaunchCount >= 0)
-          // and the count moved forward — otherwise let the real fetch render.
+          // Optimistic render: append a single "loading…" placeholder to the
+          // existing session list so the user sees a new row appear within
+          // ~one BLE round-trip, even before the heavier data fetch returns.
           let didOptimistic = false;
           if (lastLaunchCount >= 0 && header.launchCount > lastLaunchCount) {
-            const delta = header.launchCount - lastLaunchCount;
             renderLaunchData({
               header,
-              launches: [...lastLaunches, ...Array(delta).fill(null)],
+              launches: [...sessionLaunches, null],
             });
             setStatus(`new launch detected — fetching speed…`);
             didOptimistic = true;
@@ -236,7 +252,6 @@ import {
       device          = null;
       lastRaw         = null;
       lastLaunchCount = -1;
-      lastLaunches    = [];
       stopPolling();
       setConnectedUI(false);
       setStatus('Battle Pass disconnected.', 'error');
@@ -300,7 +315,6 @@ import {
       device          = null;
       lastRaw         = null;
       lastLaunchCount = -1;
-      lastLaunches    = [];
       setConnectedUI(false);
     }
   });
@@ -326,7 +340,8 @@ import {
       resultsEl.innerHTML = '';
       lastRaw         = null;
       lastLaunchCount = -1;
-      lastLaunches    = [];
+      sessionLaunches = [];
+      saveCache();
       setStatus('Data cleared.', 'ok');
     } catch (err) {
       setStatus(`Error: ${err && err.message ? err.message : err}`, 'error');

@@ -897,6 +897,12 @@ body.light-mode .result-part-name {
     padding: 10px 12px;
 }
 
+.bp-launch-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #58a6ff;
+}
+
 .bp-label {
     font-size: .75rem;
     text-transform: uppercase;

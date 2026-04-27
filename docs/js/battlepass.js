@@ -306,7 +306,10 @@ class BattlePass {
     try {
       await waitWhile(
         () => BattlePass.readBuffer.length === 0 && BattlePass.isConnected,
-        { timeoutMessage: 'Timed Out While Getting First Launch Data' },
+        {
+          timeoutMs: 2000,
+          timeoutMessage: 'Timed Out While Getting First Launch Data',
+        },
       );
     } catch (e) {
       BattlePass.readBuffer = [];
@@ -324,6 +327,7 @@ class BattlePass {
           !BattlePass.readBuffer[BattlePass.readBuffer.length - 1].startsWith(header.pageCount)
           && BattlePass.isConnected,
         {
+          timeoutMs: 5000,
           timeoutMessage:
             `{ "error": "Timed Out While Getting Launch Data", "stack": ${JSON.stringify(BattlePass.readBuffer)} }`,
         },
@@ -354,11 +358,17 @@ class BattlePass {
     try {
       await waitWhile(
         () => BattlePass.readBuffer.length < 2 && BattlePass.isConnected,
-        { timeoutMessage: 'Timed Out While Clearing Battlepass' },
+        {
+          timeoutMs: 3000,
+          timeoutMessage: 'Timed Out While Clearing Battlepass',
+        },
       );
     } catch (e) {
+      // Non-fatal: the clear write was already sent over BLE; the device's
+      // ack just didn't arrive in time. Buffer state is uncertain, so wipe
+      // it before returning so the next op starts clean.
       BattlePass.readBuffer = [];
-      throw e;
+      return;
     }
 
     if (!BattlePass.isConnected) {
