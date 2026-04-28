@@ -516,6 +516,10 @@ document.querySelectorAll(".tab").forEach(tab => {
       // ================= SWISS =================
       if (mode === "swiss") {
         renderSwiss();
+        const activeTournamentSub = document.querySelector(".tournament-sub-tab.active");
+        if (activeTournamentSub?.dataset.tournamentView === "ranking") {
+          renderTournamentRanking();
+        }
       }
 
       // ================= HIDE RESULT =================

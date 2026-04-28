@@ -2031,7 +2031,8 @@ body.light-mode {
 
 body.light-mode .mode-tabs,
 body.light-mode .sub-tabs,
-body.light-mode .history-sub-tabs {
+body.light-mode .history-sub-tabs,
+body.light-mode .tournament-sub-tabs {
     background: rgba(246, 248, 250, 0.85);
     border-bottom-color: #d1d9e0;
     box-shadow: 0 6px 14px -8px rgba(15, 20, 30, 0.18);
@@ -2655,7 +2656,8 @@ body.space-mode {
 
 body.space-mode .mode-tabs,
 body.space-mode .sub-tabs,
-body.space-mode .history-sub-tabs {
+body.space-mode .history-sub-tabs,
+body.space-mode .tournament-sub-tabs {
     background: rgba(11, 13, 26, 0.85);
     border-bottom-color: #1a1f3d;
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.55);
@@ -2949,7 +2951,8 @@ body.tropical-mode {
 
 body.tropical-mode .mode-tabs,
 body.tropical-mode .sub-tabs,
-body.tropical-mode .history-sub-tabs {
+body.tropical-mode .history-sub-tabs,
+body.tropical-mode .tournament-sub-tabs {
     background: rgba(255, 246, 230, 0.85);
     border-bottom-color: #ffd8a8;
     box-shadow: 0 6px 14px -8px rgba(140, 90, 40, 0.18);
@@ -3362,7 +3365,8 @@ body.stormy-mode {
 
 body.stormy-mode .mode-tabs,
 body.stormy-mode .sub-tabs,
-body.stormy-mode .history-sub-tabs {
+body.stormy-mode .history-sub-tabs,
+body.stormy-mode .tournament-sub-tabs {
     background: rgba(30, 35, 48, 0.85);
     border-bottom-color: #3a4054;
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.55);
@@ -3655,7 +3659,8 @@ body.mono-mode {
 
 body.mono-mode .mode-tabs,
 body.mono-mode .sub-tabs,
-body.mono-mode .history-sub-tabs {
+body.mono-mode .history-sub-tabs,
+body.mono-mode .tournament-sub-tabs {
     background: rgba(0, 0, 0, 0.88);
     border-bottom-color: #2a2a2a;
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.7);
@@ -4453,7 +4458,8 @@ body.light-mode .swiss-group-progress {
     text-align: center;
 }
 
-.history-sub-tabs {
+.history-sub-tabs,
+.tournament-sub-tabs {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 4px;
@@ -4470,7 +4476,8 @@ body.light-mode .swiss-group-progress {
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.5);
 }
 
-.history-sub-tab {
+.history-sub-tab,
+.tournament-sub-tab {
     padding: 8px;
     min-height: 36px;
     border-radius: 6px;
@@ -4487,21 +4494,25 @@ body.light-mode .swiss-group-progress {
 }
 
 .history-sub-tab:hover:not(.active),
-.history-sub-tab:focus-visible {
+.history-sub-tab:focus-visible,
+.tournament-sub-tab:hover:not(.active),
+.tournament-sub-tab:focus-visible {
     background: #21262d;
     border-color: #484f58;
     color: #e6edf3;
     outline: none;
 }
 
-.history-sub-tab.active {
+.history-sub-tab.active,
+.tournament-sub-tab.active {
     background: #1a4a8a;
     color: #fff;
     border-color: #1a4a8a;
     font-weight: 600;
 }
 
-.history-panel.hidden {
+.history-panel.hidden,
+.tournament-panel.hidden {
     display: none;
 }
 
@@ -4706,6 +4717,14 @@ body.light-mode .swiss-group-progress {
     opacity: 0.75;
     padding: 10px 4px;
     text-align: center;
+}
+
+.tournament-ranking-points {
+    flex: 0 0 auto;
+    font-weight: 600;
+    font-size: 0.85rem;
+    opacity: 0.85;
+    padding-left: 8px;
 }
 
 .btn-clear-history {
@@ -5195,7 +5214,8 @@ body.mono-mode .scoreboard-close:hover {
 
 /* ----- LIGHT ----- */
 body.light-mode .history-sub-tab,
-body.light-mode .reel-sub-tab {
+body.light-mode .reel-sub-tab,
+body.light-mode .tournament-sub-tab {
     border-color: #d1d9e0;
     background: #ffffff;
     color: #656d76;
@@ -5204,14 +5224,17 @@ body.light-mode .reel-sub-tab {
 body.light-mode .history-sub-tab:hover:not(.active),
 body.light-mode .history-sub-tab:focus-visible,
 body.light-mode .reel-sub-tab:hover:not(.active),
-body.light-mode .reel-sub-tab:focus-visible {
+body.light-mode .reel-sub-tab:focus-visible,
+body.light-mode .tournament-sub-tab:hover:not(.active),
+body.light-mode .tournament-sub-tab:focus-visible {
     background: #e1e4e8;
     border-color: #afb8c1;
     color: #1f2328;
 }
 
 body.light-mode .history-sub-tab.active,
-body.light-mode .reel-sub-tab.active {
+body.light-mode .reel-sub-tab.active,
+body.light-mode .tournament-sub-tab.active {
     background: #0550ae;
     color: #ffffff;
     border-color: #0550ae;
@@ -5268,7 +5291,8 @@ body.light-mode .tournament-mode-name {
 
 /* ----- SPACE ----- */
 body.space-mode .history-sub-tab,
-body.space-mode .reel-sub-tab {
+body.space-mode .reel-sub-tab,
+body.space-mode .tournament-sub-tab {
     border-color: #1a1f3d;
     background: rgba(15, 18, 40, 0.8);
     color: #7b8cad;
@@ -5277,14 +5301,17 @@ body.space-mode .reel-sub-tab {
 body.space-mode .history-sub-tab:hover:not(.active),
 body.space-mode .history-sub-tab:focus-visible,
 body.space-mode .reel-sub-tab:hover:not(.active),
-body.space-mode .reel-sub-tab:focus-visible {
+body.space-mode .reel-sub-tab:focus-visible,
+body.space-mode .tournament-sub-tab:hover:not(.active),
+body.space-mode .tournament-sub-tab:focus-visible {
     background: rgba(26, 35, 126, 0.3);
     border-color: #3949ab;
     color: #c8d6e5;
 }
 
 body.space-mode .history-sub-tab.active,
-body.space-mode .reel-sub-tab.active {
+body.space-mode .reel-sub-tab.active,
+body.space-mode .tournament-sub-tab.active {
     background: linear-gradient(135deg, #1a237e, #311b92);
     color: #fff;
     border-color: #5c6bc0;
@@ -5341,7 +5368,8 @@ body.space-mode .tournament-mode-name {
 
 /* ----- TROPICAL ----- */
 body.tropical-mode .history-sub-tab,
-body.tropical-mode .reel-sub-tab {
+body.tropical-mode .reel-sub-tab,
+body.tropical-mode .tournament-sub-tab {
     border-color: #ffd8a8;
     background: #ffffff;
     color: #8a6d3b;
@@ -5350,14 +5378,17 @@ body.tropical-mode .reel-sub-tab {
 body.tropical-mode .history-sub-tab:hover:not(.active),
 body.tropical-mode .history-sub-tab:focus-visible,
 body.tropical-mode .reel-sub-tab:hover:not(.active),
-body.tropical-mode .reel-sub-tab:focus-visible {
+body.tropical-mode .reel-sub-tab:focus-visible,
+body.tropical-mode .tournament-sub-tab:hover:not(.active),
+body.tropical-mode .tournament-sub-tab:focus-visible {
     background: #fff0d6;
     border-color: #f5b86b;
     color: #2d3a3a;
 }
 
 body.tropical-mode .history-sub-tab.active,
-body.tropical-mode .reel-sub-tab.active {
+body.tropical-mode .reel-sub-tab.active,
+body.tropical-mode .tournament-sub-tab.active {
     background: linear-gradient(135deg, #00b8a9, #0d8a80);
     color: #fff;
     border-color: #00b8a9;
@@ -5414,7 +5445,8 @@ body.tropical-mode .tournament-mode-name {
 
 /* ----- STORMY ----- */
 body.stormy-mode .history-sub-tab,
-body.stormy-mode .reel-sub-tab {
+body.stormy-mode .reel-sub-tab,
+body.stormy-mode .tournament-sub-tab {
     border-color: #3a4054;
     background: rgba(42, 48, 64, 0.8);
     color: #9098a8;
@@ -5423,14 +5455,17 @@ body.stormy-mode .reel-sub-tab {
 body.stormy-mode .history-sub-tab:hover:not(.active),
 body.stormy-mode .history-sub-tab:focus-visible,
 body.stormy-mode .reel-sub-tab:hover:not(.active),
-body.stormy-mode .reel-sub-tab:focus-visible {
+body.stormy-mode .reel-sub-tab:focus-visible,
+body.stormy-mode .tournament-sub-tab:hover:not(.active),
+body.stormy-mode .tournament-sub-tab:focus-visible {
     background: rgba(74, 144, 226, 0.2);
     border-color: #5a6278;
     color: #d5dae4;
 }
 
 body.stormy-mode .history-sub-tab.active,
-body.stormy-mode .reel-sub-tab.active {
+body.stormy-mode .reel-sub-tab.active,
+body.stormy-mode .tournament-sub-tab.active {
     background: linear-gradient(135deg, #2c4a7a, #3a6fb0);
     color: #fff;
     border-color: #4a90e2;
@@ -5487,7 +5522,8 @@ body.stormy-mode .tournament-mode-name {
 
 /* ----- MONO ----- */
 body.mono-mode .history-sub-tab,
-body.mono-mode .reel-sub-tab {
+body.mono-mode .reel-sub-tab,
+body.mono-mode .tournament-sub-tab {
     background: #111111;
     border-color: #2a2a2a;
     color: #bdbdbd;
@@ -5496,14 +5532,17 @@ body.mono-mode .reel-sub-tab {
 body.mono-mode .history-sub-tab:hover:not(.active),
 body.mono-mode .history-sub-tab:focus-visible,
 body.mono-mode .reel-sub-tab:hover:not(.active),
-body.mono-mode .reel-sub-tab:focus-visible {
+body.mono-mode .reel-sub-tab:focus-visible,
+body.mono-mode .tournament-sub-tab:hover:not(.active),
+body.mono-mode .tournament-sub-tab:focus-visible {
     background: #1a1a1a;
     border-color: #4a4a4a;
     color: #ffffff;
 }
 
 body.mono-mode .history-sub-tab.active,
-body.mono-mode .reel-sub-tab.active {
+body.mono-mode .reel-sub-tab.active,
+body.mono-mode .tournament-sub-tab.active {
     background: #ffffff;
     color: #000000;
     border-color: #ffffff;

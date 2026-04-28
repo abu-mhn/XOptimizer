@@ -293,29 +293,41 @@
 
     <!-- ================= SWISS ================= -->
     <section id="form-swiss" class="calc-form hidden">
-      <fieldset>
-        <legend>Tournament</legend>
-        <div id="swiss-setup">
-          <label class="swiss-label">Participants (one name per line)</label>
-          <textarea id="swiss-names" class="swiss-names" rows="8" placeholder="Alice&#10;Bob&#10;Carol&#10;..."></textarea>
-          <div class="swiss-actions">
-            <button type="button" id="swiss-generate" class="btn">Generate Groups</button>
-            <button type="button" id="swiss-reset" class="btn btn-reset" aria-label="Reset Tournament" title="Reset Tournament">
-              <img src="assets/icons/undo.png" alt="Reset"
-                   onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
-            </button>
-          </div>
-          <div class="swiss-join">
-            <span class="swiss-or">— or watch a live tournament —</span>
-            <div class="swiss-join-row">
-              <input type="text" id="swiss-join-code" class="swiss-join-input" placeholder="Room code" maxlength="8" autocomplete="off" spellcheck="false" />
-              <button type="button" id="swiss-join" class="btn">Join</button>
+      <div class="tournament-sub-tabs" id="tournament-sub-tabs">
+        <button type="button" class="tournament-sub-tab active" data-tournament-view="hosting">Hosting</button>
+        <button type="button" class="tournament-sub-tab" data-tournament-view="ranking">Ranking</button>
+      </div>
+      <div id="tournament-panel-hosting" class="tournament-panel">
+        <fieldset>
+          <legend>Tournament</legend>
+          <div id="swiss-setup">
+            <label class="swiss-label">Participants (one name per line)</label>
+            <textarea id="swiss-names" class="swiss-names" rows="8" placeholder="Alice&#10;Bob&#10;Carol&#10;..."></textarea>
+            <div class="swiss-actions">
+              <button type="button" id="swiss-generate" class="btn">Generate Groups</button>
+              <button type="button" id="swiss-reset" class="btn btn-reset" aria-label="Reset Tournament" title="Reset Tournament">
+                <img src="assets/icons/undo.png" alt="Reset"
+                     onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
+              </button>
             </div>
-            <div id="swiss-join-status" class="swiss-join-status"></div>
+            <div class="swiss-join">
+              <span class="swiss-or">— or watch a live tournament —</span>
+              <div class="swiss-join-row">
+                <input type="text" id="swiss-join-code" class="swiss-join-input" placeholder="Room code" maxlength="8" autocomplete="off" spellcheck="false" />
+                <button type="button" id="swiss-join" class="btn">Join</button>
+              </div>
+              <div id="swiss-join-status" class="swiss-join-status"></div>
+            </div>
           </div>
-        </div>
-        <div id="swiss-view"></div>
-      </fieldset>
+          <div id="swiss-view"></div>
+        </fieldset>
+      </div>
+      <div id="tournament-panel-ranking" class="tournament-panel hidden">
+        <fieldset>
+          <legend>Ranking</legend>
+          <div id="tournament-ranking-list"></div>
+        </fieldset>
+      </div>
     </section>
 
     <!-- ================= DECK ================= -->
@@ -515,10 +527,8 @@
       <h2 class="popup-title">What's New</h2>
 
       <ul class="popup-list">
-        <li><strong>Battle Pass.</strong> Connect a BEYBLADE_TOOL01 launcher over Bluetooth to read your launch speeds live.</li>
-        <li><strong>Buzz Bey on YouTube.</strong> Featured videos now auto-update from creator channels — new uploads appear without an app refresh.</li>
-        <li><strong>Local / International / Japan.</strong> Buzz Bey is split into three regional sub-tabs so you can browse creators by region.</li>
-        <li><strong>iPhone support.</strong> Use the <a href="https://apps.apple.com/app/bluefy-web-ble-browser/id1492822055" target="_blank" rel="noopener">Bluefy</a> browser — Safari and Chrome iOS don't support Web Bluetooth.</li>
+        <li><strong>Tournament sub-tabs.</strong> The Tournament tab is now split into <em>Hosting</em> (run or join a tournament) and <em>Ranking</em>.</li>
+        <li><strong>Global ranking.</strong> Finish an online tournament and earn leaderboard points: 1st = +5, 2nd = +3, 3rd = +1. Same names merge across tournaments.</li>
       </ul>
 
       <button type="button" class="btn popup-ok">

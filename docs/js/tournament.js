@@ -165,6 +165,7 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit) {
       localStorage.setItem(SWISS_KEY, JSON.stringify(stripRoomMetadata(remote)));
       swissApplyingRemote = false;
       renderSwiss();
+      syncTournamentRankingAwards(remote);
     } else if (!remote && swissIsHost) {
       // Room was wiped remotely (or first-time creation). Push our local state
       // together with the viewCode metadata and publish the viewer mapping.
@@ -1945,3 +1946,109 @@ if (screen.orientation && typeof screen.orientation.addEventListener === "functi
 }
 document.addEventListener("fullscreenchange", scheduleSwissScrollRestore);
 document.addEventListener("webkitfullscreenchange", scheduleSwissScrollRestore);
+
+(function initTournamentSubTabs() {
+  const tabs = document.querySelectorAll(".tournament-sub-tab");
+  if (!tabs.length) return;
+  const panels = document.querySelectorAll(".tournament-panel");
+  tabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      const view = tab.dataset.tournamentView;
+      tabs.forEach(t => t.classList.toggle("active", t === tab));
+      panels.forEach(p => p.classList.toggle("hidden", p.id !== "tournament-panel-" + view));
+      if (view === "ranking") renderTournamentRanking();
+    });
+  });
+})();
+
+const TOURNAMENT_RANKING_POINTS = { 1: 5, 2: 3, 3: 1 };
+
+// Firebase keys can't contain ".", "#", "$", "/", "[", "]". Normalize so
+// "Alice" and "alice" merge into a single leaderboard entry.
+function rankingKey(name) {
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[.#$/\[\]]/g, "_");
+}
+
+// Atomically add `points` to /ranking/{key}.points. Stores the freshest cased
+// version of the name so the leaderboard shows a real spelling, not the key.
+function bumpGlobalRanking(name, points) {
+  if (!points) return;
+  const db = initFirebase();
+  if (!db) return;
+  const key = rankingKey(name);
+  if (!key) return;
+  db.ref("ranking/" + key).transaction(curr => ({
+    name: (name || "").trim() || (curr && curr.name) || key,
+    points: ((curr && curr.points) || 0) + points
+  }));
+}
+
+// Claim the per-room placement slot via transaction so concurrent hosts
+// can't double-award. Only the client whose transaction commits bumps
+// the global ranking. Once awarded, later score edits never re-award.
+function awardPlacementIfNew(place, name, points) {
+  if (!swissRoomRef || !points) return;
+  const cleanName = (name || "").trim();
+  if (!cleanName) return;
+  const slotRef = swissRoomRef.child("awarded/place" + place);
+  slotRef.transaction(
+    prev => prev != null ? undefined : { name: cleanName, points },
+    (err, committed) => {
+      if (err || !committed) return;
+      bumpGlobalRanking(cleanName, points);
+    }
+  );
+}
+
+function syncTournamentRankingAwards(state) {
+  if (!swissCanEdit || !swissRoomRef) return;
+  for (const p of computeTournamentPlacements(state)) {
+    const pts = TOURNAMENT_RANKING_POINTS[p.place];
+    if (!pts) continue;
+    awardPlacementIfNew(p.place, p.name, pts);
+  }
+}
+
+function renderTournamentRanking() {
+  const container = document.getElementById("tournament-ranking-list");
+  if (!container) return;
+  if (!firebaseReady()) {
+    container.innerHTML = `<p class="tournament-results-empty">Live sync isn't configured on this build, so the global ranking can't be loaded.</p>`;
+    return;
+  }
+  container.innerHTML = `<p class="tournament-results-loading">Loading rankings…</p>`;
+  const db = initFirebase();
+  db.ref("ranking").once("value")
+    .then(snap => {
+      const data = snap.val() || {};
+      const list = Object.entries(data)
+        .map(([key, v]) => ({
+          name: (v && v.name) || key,
+          points: (v && Number(v.points)) || 0
+        }))
+        .filter(r => r.points > 0)
+        .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
+      if (!list.length) {
+        container.innerHTML = `<p class="tournament-results-empty">No tournament results yet. Finish an online tournament to start earning ranking points (1st = +5, 2nd = +3, 3rd = +1). Same names merge across tournaments.</p>`;
+        return;
+      }
+      const rows = list.map((r, i) => {
+        const placeMod = i < 3 ? ` tournament-results-place-${i + 1}` : "";
+        return `
+          <div class="tournament-results-row tournament-ranking-row${placeMod}">
+            <span class="tournament-results-place">#${i + 1}</span>
+            <span class="tournament-results-player">${escapeHtml(r.name)}</span>
+            <span class="tournament-ranking-points">${r.points} pt${r.points === 1 ? "" : "s"}</span>
+          </div>
+        `;
+      }).join("");
+      container.innerHTML = `<div class="tournament-results-list">${rows}</div>`;
+    })
+    .catch(err => {
+      console.warn("Ranking load failed:", err);
+      container.innerHTML = `<p class="tournament-results-empty">Couldn't load the ranking right now.</p>`;
+    });
+}
