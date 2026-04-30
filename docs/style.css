@@ -4476,6 +4476,10 @@ body.light-mode .swiss-group-progress {
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.5);
 }
 
+.tournament-sub-tabs {
+    grid-template-columns: repeat(3, 1fr);
+}
+
 .history-sub-tab,
 .tournament-sub-tab {
     padding: 8px;
@@ -4727,6 +4731,115 @@ body.light-mode .swiss-group-progress {
     padding-left: 8px;
 }
 
+.revox-admin-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.revox-admin-status {
+    font-size: 0.8rem;
+    opacity: 0.75;
+}
+
+.revox-admin-status.is-ok {
+    color: #56d364;
+    opacity: 1;
+}
+
+.revox-admin-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+    align-items: center;
+}
+
+.revox-admin-form .revox-input,
+.revox-admin-form .setting-dropdown-btn,
+.revox-admin-form .btn {
+    height: 38px;
+    box-sizing: border-box;
+    padding-top: 0;
+    padding-bottom: 0;
+    line-height: 1;
+    flex: none;
+}
+
+#revox-add-name {
+    flex: 1 1 160px;
+    min-width: 0;
+}
+
+.revox-admin-form .btn {
+    padding-left: 18px;
+    padding-right: 18px;
+}
+
+.revox-input {
+    box-sizing: border-box;
+    padding: 8px 10px;
+    font-size: 0.9rem;
+    border-radius: 6px;
+    border: 1px solid #30363d;
+    background: #0d1117;
+    color: #e6edf3;
+    font-family: inherit;
+}
+
+.revox-input:focus {
+    outline: none;
+    border-color: #58a6ff;
+}
+
+#revox-add-name {
+    flex: 1 1 160px;
+    min-width: 0;
+}
+
+.revox-points-dropdown {
+    flex: 0 0 auto;
+}
+
+.revox-points-dropdown .setting-dropdown-btn {
+    min-width: 100px;
+    padding: 8px 12px;
+}
+
+.revox-row-actions {
+    flex: 0 0 auto;
+    display: inline-flex;
+    gap: 4px;
+    margin-left: 6px;
+}
+
+.revox-row-btn {
+    appearance: none;
+    border: 1px solid #30363d;
+    background: #161b22;
+    color: #e6edf3;
+    font: inherit;
+    font-size: 0.75rem;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.revox-row-btn:hover {
+    background: #21262d;
+}
+
+.revox-row-btn-delete {
+    color: #ff6b6b;
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+}
+
 .btn-clear-history {
     display: inline-flex;
     align-items: center;
@@ -4781,6 +4894,22 @@ body.light-mode .swiss-group-progress {
     outline: none;
     border-color: #58a6ff;
     background: #0d1117;
+}
+
+.tournament-password-status {
+    min-height: 1.1em;
+    margin-top: 6px;
+    margin-bottom: 4px;
+    font-size: 0.8rem;
+    color: #ff6b6b;
+}
+
+.tournament-password-status.is-ok {
+    color: #56d364;
+}
+
+#wrong-password-popup {
+    z-index: 210;
 }
 
 .swiss-tournament-name {

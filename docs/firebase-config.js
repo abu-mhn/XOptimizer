@@ -41,6 +41,29 @@ window.FIREBASE_CONFIG = {
   appId: "1:724993646395:web:9f31108cf0225bd169211e"
 };
 
+// Host password rotates daily and is derived in tournament.js.
+
+// SHA-256 of the Revox-admin password. Unlocks add/edit/delete on the
+// Revox member ranking tab. Default password is "revoxadmin".
+//
+// To change: in any browser console, run
+//   crypto.subtle.digest("SHA-256", new TextEncoder().encode("YOUR_PASSWORD"))
+//     .then(b => console.log([...new Uint8Array(b)].map(x => x.toString(16).padStart(2,"0")).join("")));
+// then paste the resulting hex string below.
+window.TOURNAMENT_REVOX_ADMIN_SHA256 =
+  "e466afc350e05dc5a73887167512284874e477041b7c728aa586a0e012080339";
+
+// NOTE: Realtime Database rules need a `revoxRanking` entry alongside the
+// existing `ranking` block. Replace the rules in Firebase Console with:
+//   {
+//     "rules": {
+//       "swissRooms":     { "$code": { ".read": true, ".write": true } },
+//       "swissViewCodes": { "$code": { ".read": true, ".write": true } },
+//       "ranking":        { ".read": true, "$name": { ".write": true } },
+//       "revoxRanking":   { ".read": true, "$name": { ".write": true } }
+//     }
+//   }
+
 
 // // Import the functions you need from the SDKs you need
 // import { initializeApp } from "firebase/app";

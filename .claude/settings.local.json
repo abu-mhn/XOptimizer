@@ -24,7 +24,9 @@
       "Read(//tmp/**)",
       "Bash(sed -n '2875,2886p' /c/Users/admin/Downloads/demo/docs/app.js)",
       "Bash(sed -n '3820,3822p' /c/Users/admin/Downloads/demo/docs/app.js)",
-      "Bash(grep -v -E '^[0-9]+:\\(function |const |let |var |//|\\\\/\\\\*|\\\\*|document\\\\.addEventListener|\\\\\\(function\\)')"
+      "Bash(grep -v -E '^[0-9]+:\\(function |const |let |var |//|\\\\/\\\\*|\\\\*|document\\\\.addEventListener|\\\\\\(function\\)')",
+      "Bash(python -c \"import hashlib; print\\(hashlib.sha256\\(b'revox'\\).hexdigest\\(\\)\\)\")",
+      "Bash(python -c \"import hashlib; print\\(hashlib.sha256\\(b'revoxadmin'\\).hexdigest\\(\\)\\)\")"
     ]
   }
 }

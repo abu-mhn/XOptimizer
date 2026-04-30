@@ -296,6 +296,7 @@
       <div class="tournament-sub-tabs" id="tournament-sub-tabs">
         <button type="button" class="tournament-sub-tab active" data-tournament-view="hosting">Hosting</button>
         <button type="button" class="tournament-sub-tab" data-tournament-view="ranking">Ranking</button>
+        <button type="button" class="tournament-sub-tab" data-tournament-view="revox">Revox</button>
       </div>
       <div id="tournament-panel-hosting" class="tournament-panel">
         <fieldset>
@@ -326,6 +327,35 @@
         <fieldset>
           <legend>Ranking</legend>
           <div id="tournament-ranking-list"></div>
+        </fieldset>
+      </div>
+      <div id="tournament-panel-revox" class="tournament-panel hidden">
+        <fieldset>
+          <legend>Revox Members</legend>
+          <div class="revox-admin-bar">
+            <button type="button" id="revox-admin-login" class="btn btn-sm">Admin Login</button>
+            <button type="button" id="revox-admin-logout" class="btn btn-sm btn-reset hidden">Log Out</button>
+            <span id="revox-admin-status" class="revox-admin-status"></span>
+          </div>
+          <div id="revox-admin-form" class="revox-admin-form hidden">
+            <input type="text" id="revox-add-name" class="revox-input" placeholder="Member name" maxlength="60" autocomplete="off" list="revox-name-options" />
+            <datalist id="revox-name-options"></datalist>
+            <div class="setting-dropdown revox-points-dropdown" id="revox-add-points">
+              <button type="button" class="setting-dropdown-btn" data-value="">
+                <span class="setting-dropdown-text">Points</span>
+                <span class="setting-dropdown-arrow">&#9662;</span>
+              </button>
+              <div class="setting-dropdown-menu hidden">
+                <div class="setting-dropdown-option" data-value="5">5</div>
+                <div class="setting-dropdown-option" data-value="4">4</div>
+                <div class="setting-dropdown-option" data-value="3">3</div>
+                <div class="setting-dropdown-option" data-value="2">2</div>
+                <div class="setting-dropdown-option" data-value="1">1</div>
+              </div>
+            </div>
+            <button type="button" id="revox-add-btn" class="btn btn-sm">Add</button>
+          </div>
+          <div id="revox-ranking-list"></div>
         </fieldset>
       </div>
     </section>
@@ -483,6 +513,9 @@
       <h2 class="popup-title">Tournament Format</h2>
       <label class="tournament-name-label" for="tournament-name-input">Tournament Name <span class="tournament-name-optional">(optional)</span></label>
       <input id="tournament-name-input" type="text" class="tournament-name-input" placeholder="e.g. Spring Cup 2026" maxlength="80" autocomplete="off" />
+      <label class="tournament-name-label" for="tournament-password-input">Host Password <span class="tournament-name-optional">(leave blank to host without ranking)</span></label>
+      <input id="tournament-password-input" type="password" class="tournament-name-input" placeholder="Optional" maxlength="80" autocomplete="off" />
+      <div id="tournament-password-status" class="tournament-password-status"></div>
       <div class="tournament-mode-choices">
         <button type="button" id="tournament-mode-swiss" class="tournament-mode-btn">
           <span class="tournament-mode-name">Swiss + Top 8</span>
@@ -494,6 +527,29 @@
         </button>
       </div>
       <button type="button" id="tournament-mode-cancel" class="btn popup-cancel">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ================= REVOX ADMIN LOGIN POPUP ================= -->
+  <div id="revox-admin-popup" class="popup-overlay hidden">
+    <div class="popup-card">
+      <h2 class="popup-title">Admin Login</h2>
+      <label class="tournament-name-label" for="revox-admin-input">Admin Password</label>
+      <input id="revox-admin-input" type="password" class="tournament-name-input" placeholder="Enter admin password" maxlength="80" autocomplete="off" />
+      <div id="revox-admin-popup-status" class="tournament-password-status"></div>
+      <div class="popup-actions">
+        <button type="button" id="revox-admin-confirm" class="btn">Log In</button>
+        <button type="button" id="revox-admin-cancel" class="btn popup-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= WRONG PASSWORD POPUP ================= -->
+  <div id="wrong-password-popup" class="popup-overlay hidden">
+    <div class="popup-card">
+      <h2 class="popup-title">Wrong Password</h2>
+      <p class="popup-text">The password you entered is incorrect. Please try again.</p>
+      <button type="button" id="wrong-password-ok" class="btn popup-cancel">OK</button>
     </div>
   </div>
 
@@ -521,14 +577,16 @@
   </div>
 
   <!-- ================= POPUP ================= -->
-  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-28">
+  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-30">
     <div class="popup-card">
 
       <h2 class="popup-title">What's New</h2>
 
       <ul class="popup-list">
-        <li><strong>Tournament sub-tabs.</strong> The Tournament tab is now split into <em>Hosting</em> (run or join a tournament) and <em>Ranking</em>.</li>
-        <li><strong>Global ranking.</strong> Finish an online tournament and earn leaderboard points: 1st = +5, 2nd = +3, 3rd = +1. Same names merge across tournaments.</li>
+        <li><strong>Revox Members ranking.</strong> New Tournament sub-tab with an admin-curated leaderboard, separate from the main ranking.</li>
+        <li><strong>New points scheme.</strong> 1st = +5, 2nd = +4, 3rd = +3, top 8 = +2, participation = +1.</li>
+        <li><strong>Host password.</strong> Hosting now requires a password — leave it blank to host an unranked tournament.</li>
+        <li><strong>Bye cascade fix.</strong> Single-elim brackets with byes now auto-advance the lone player straight through to the next round.</li>
       </ul>
 
       <button type="button" class="btn popup-ok">

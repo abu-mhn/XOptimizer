@@ -517,9 +517,9 @@ document.querySelectorAll(".tab").forEach(tab => {
       if (mode === "swiss") {
         renderSwiss();
         const activeTournamentSub = document.querySelector(".tournament-sub-tab.active");
-        if (activeTournamentSub?.dataset.tournamentView === "ranking") {
-          renderTournamentRanking();
-        }
+        const view = activeTournamentSub?.dataset.tournamentView;
+        if (view === "ranking") renderTournamentRanking();
+        if (view === "revox") renderRevoxRanking();
       }
 
       // ================= HIDE RESULT =================

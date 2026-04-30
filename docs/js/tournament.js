@@ -558,7 +558,10 @@ function computeBracketPhantoms(state) {
 // A half-filled match only auto-advances when the empty side's upstream is
 // *phantom* (no live match feeds it) — otherwise we wait for that upstream
 // match to be scored so its winner can fill the slot properly.
-function autoAdvanceByes(state) {
+//
+// If `updates` is provided, each mutated leaf path is recorded there so the
+// caller can sync the diff to Firebase (used by the live-scoring path).
+function autoAdvanceByes(state, updates) {
   const phantoms = computeBracketPhantoms(state);
   let changed = true;
   let iter = 0;
@@ -572,15 +575,33 @@ function autoAdvanceByes(state) {
       if (hasA === hasB) return; // both filled or both empty — skip
       const emptySlot = hasA ? "b" : "a";
       const emptySrc = bracketUpstreamSource(m.round, m.bracketIndex, emptySlot, state);
-      if (emptySrc && !phantoms.has(emptySrc)) return; // live upstream — wait for it
+      if (emptySrc && !phantoms.has(emptySrc)) {
+        // Live upstream — but if it's already a bye AND we're its loser-feed
+        // (e.g. 3rd-place fed by a bye SF), the source has no loser to deliver
+        // and this slot is effectively dead. Otherwise wait for it to score.
+        const upstream = state.matches[emptySrc];
+        const upstreamProp = upstream && getBracketPropagation(upstream.round, upstream.bracketIndex, state);
+        const isLoserFeed = !!(upstreamProp && upstreamProp.loser
+          && upstreamProp.loser.toId === id
+          && upstreamProp.loser.slot === emptySlot);
+        if (!(upstream && upstream.bye && isLoserFeed)) return;
+      }
       m.bye = true;
       if (hasA) { m.scoreA = 1; m.scoreB = 0; }
       else       { m.scoreA = 0; m.scoreB = 1; }
+      if (updates) {
+        updates[`matches/${id}/bye`] = true;
+        updates[`matches/${id}/scoreA`] = m.scoreA;
+        updates[`matches/${id}/scoreB`] = m.scoreB;
+      }
       const prop = getBracketPropagation(m.round, m.bracketIndex, state);
       if (prop && prop.winner) {
         const winner = hasA ? m.a : m.b;
         const target = state.matches[prop.winner.toId];
-        if (target) target[prop.winner.slot] = winner;
+        if (target) {
+          target[prop.winner.slot] = winner;
+          if (updates) updates[`matches/${prop.winner.toId}/${prop.winner.slot}`] = winner;
+        }
       }
       changed = true;
     });
@@ -717,11 +738,11 @@ function startSwissMatch(matchId) {
     let extraUpdates = null;
     if (stored.bracket) {
       const prop = getBracketPropagation(stored.round, stored.bracketIndex, s);
+      extraUpdates = {};
       if (prop) {
         let winner = null, loser = null;
         if (scoreA > scoreB) { winner = stored.a; loser = stored.b; }
         else if (scoreB > scoreA) { winner = stored.b; loser = stored.a; }
-        extraUpdates = {};
         if (prop.winner && s.matches[prop.winner.toId]) {
           s.matches[prop.winner.toId][prop.winner.slot] = winner;
           extraUpdates[`matches/${prop.winner.toId}/${prop.winner.slot}`] = winner;
@@ -731,6 +752,11 @@ function startSwissMatch(matchId) {
           extraUpdates[`matches/${prop.loser.toId}/${prop.loser.slot}`] = loser;
         }
       }
+      // After propagation, a downstream slot whose sibling upstream is a
+      // phantom (BYE-vs-BYE) may now be a half-filled bye — auto-advance
+      // it so the lone real player skips ahead. Cascades up the bracket.
+      autoAdvanceByes(s, extraUpdates);
+      if (Object.keys(extraUpdates).length === 0) extraUpdates = null;
     }
 
     persistSwiss(s);
@@ -1663,6 +1689,99 @@ function showSwissRoundsPopup(onPick) {
   popup.classList.remove("hidden");
 }
 
+// Daily host password derivation. Rotates per local date.
+function computeDailyHostPassword() {
+  const dateSeededRng = (seed) => {
+    let h = seed;
+    return () => {
+      h = Math.imul(h ^ (h >>> 16), 2246822507);
+      h = Math.imul(h ^ (h >>> 13), 3266489909);
+      h ^= h >>> 16;
+      return (h >>> 0) / 4294967296;
+    };
+  };
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}-standard`;
+  let seed = 0;
+  for (let i = 0; i < dateStr.length; i++) seed = ((seed << 5) - seed + dateStr.charCodeAt(i)) | 0;
+  const rng = dateSeededRng(seed);
+  const pickIdx = (arr) => {
+    const idxs = nonExclusiveIndices(arr);
+    return idxs[Math.floor(rng() * idxs.length)];
+  };
+  const pickIdxBy = (arr, predicate) => {
+    const idxs = [];
+    arr.forEach((item, i) => { if (!isExclusive(item) && predicate(item)) idxs.push(i); });
+    if (idxs.length === 0) return -1;
+    return idxs[Math.floor(rng() * idxs.length)];
+  };
+  const bladeIdx = pickIdx(DATA.blades);
+  const blade = DATA.blades[bladeIdx];
+  let ratchetName = "NORATCHET";
+  let bitCode = "";
+  if (blade.codename === "BULLETGRIFFON") {
+    const idx = pickIdxBy(DATA.bits, isNormalBit);
+    if (idx >= 0) bitCode = DATA.bits[idx].codename;
+  } else if (blade.codename === "CLOCKMIRAGE") {
+    const valid = DATA.ratchets.map((r, i) => ({ r, i })).filter(x => x.r.name.endsWith("5"));
+    const choice = valid[Math.floor(rng() * valid.length)];
+    if (choice) ratchetName = choice.r.name;
+    const idx = pickIdxBy(DATA.bits, isNormalBit);
+    if (idx >= 0) bitCode = DATA.bits[idx].codename;
+  } else {
+    // pickBottom equivalent: 5% RB-bit chance, else normal ratchet+bit.
+    // The original falls through to the normal path if no RB bit exists,
+    // consuming 2 extra rng() calls — preserve that to keep determinism.
+    let done = false;
+    if (rng() < 0.05) {
+      const rbIdx = pickIdxBy(DATA.bits, isRBBit);
+      if (rbIdx >= 0) {
+        bitCode = DATA.bits[rbIdx].codename;
+        done = true;
+      }
+    }
+    if (!done) {
+      const ratchIdx = pickIdx(DATA.ratchets);
+      if (ratchIdx != null && DATA.ratchets[ratchIdx]) ratchetName = DATA.ratchets[ratchIdx].name;
+      const idx = pickIdxBy(DATA.bits, isNormalBit);
+      if (idx >= 0) bitCode = DATA.bits[idx].codename;
+    }
+  }
+  return `${blade.codename}-${ratchetName}-${bitCode}`;
+}
+
+function normalizePassword(s) {
+  return String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+async function verifyHostPassword(password) {
+  if (!password) return false;
+  try {
+    return normalizePassword(password) === normalizePassword(computeDailyHostPassword());
+  } catch {
+    return false;
+  }
+}
+
+function showWrongPasswordPopup() {
+  const popup = document.getElementById("wrong-password-popup");
+  if (!popup) return;
+  popup.classList.remove("hidden");
+  const ok = popup.querySelector("#wrong-password-ok");
+  const close = () => {
+    popup.classList.add("hidden");
+    ok?.removeEventListener("click", close);
+    popup.removeEventListener("click", onBackdrop);
+    document.removeEventListener("keydown", onKey);
+  };
+  const onBackdrop = (e) => { if (e.target === popup) close(); };
+  const onKey = (e) => { if (e.key === "Escape" || e.key === "Enter") close(); };
+  ok?.addEventListener("click", close);
+  popup.addEventListener("click", onBackdrop);
+  document.addEventListener("keydown", onKey);
+  setTimeout(() => ok?.focus(), 0);
+}
+
 function showTournamentModePopup(onPick) {
   const popup = document.getElementById("tournament-mode-popup");
   if (!popup) { onPick("swiss", "", SWISS_ROUND_COUNT); return; } // popup missing, fall back to swiss
@@ -1670,27 +1789,52 @@ function showTournamentModePopup(onPick) {
   const singleBtn = popup.querySelector("#tournament-mode-single");
   const cancelBtn = popup.querySelector("#tournament-mode-cancel");
   const nameInput = popup.querySelector("#tournament-name-input");
+  const passwordInput = popup.querySelector("#tournament-password-input");
+  const statusEl = popup.querySelector("#tournament-password-status");
   if (nameInput) nameInput.value = "";
-  const close = (choice, roundCount) => {
+  if (passwordInput) passwordInput.value = "";
+  if (statusEl) { statusEl.textContent = ""; statusEl.classList.remove("is-ok"); }
+  const setStatus = (msg, ok) => {
+    if (!statusEl) return;
+    statusEl.textContent = msg || "";
+    statusEl.classList.toggle("is-ok", !!ok);
+  };
+  const setBusy = (busy) => {
+    swissBtn.disabled = busy;
+    singleBtn.disabled = busy;
+  };
+  const teardown = () => {
     popup.classList.add("hidden");
     swissBtn.onclick = null;
     singleBtn.onclick = null;
     cancelBtn.onclick = null;
-    if (choice) {
-      const name = nameInput ? nameInput.value.trim() : "";
-      onPick(choice, name, roundCount);
+    setBusy(false);
+  };
+  const gated = (afterPass) => async () => {
+    const password = passwordInput ? passwordInput.value : "";
+    if (!password) {
+      // Empty password = host an unranked tournament (no ranking writes).
+      afterPass(false);
+      return;
     }
+    setStatus("Checking…"); setBusy(true);
+    const ok = await verifyHostPassword(password);
+    setBusy(false);
+    if (!ok) { setStatus("Wrong password."); passwordInput?.select(); showWrongPasswordPopup(); return; }
+    setStatus("Password accepted.", true);
+    afterPass(true);
   };
-  swissBtn.onclick = () => {
+  swissBtn.onclick = gated((ranked) => {
     const name = nameInput ? nameInput.value.trim() : "";
-    popup.classList.add("hidden");
-    swissBtn.onclick = null;
-    singleBtn.onclick = null;
-    cancelBtn.onclick = null;
-    showSwissRoundsPopup((rc) => onPick("swiss", name, rc));
-  };
-  singleBtn.onclick = () => close("single-elim");
-  cancelBtn.onclick = () => close(null);
+    teardown();
+    showSwissRoundsPopup((rc) => onPick("swiss", name, rc, ranked));
+  });
+  singleBtn.onclick = gated((ranked) => {
+    const name = nameInput ? nameInput.value.trim() : "";
+    teardown();
+    onPick("single-elim", name, undefined, ranked);
+  });
+  cancelBtn.onclick = () => teardown();
   popup.classList.remove("hidden");
   if (nameInput) setTimeout(() => nameInput.focus(), 0);
 }
@@ -1757,11 +1901,12 @@ document.getElementById("swiss-generate")?.addEventListener("click", () => {
   const textarea = document.getElementById("swiss-names");
   if (!textarea) return;
   const namesText = textarea.value;
-  showTournamentModePopup((mode, tournamentName, roundCount) => {
+  showTournamentModePopup((mode, tournamentName, roundCount, ranked) => {
     const next = mode === "single-elim"
       ? generateSingleElimFromText(namesText, tournamentName)
       : generateSwissFromText(namesText, tournamentName, roundCount);
     if (!next) return;
+    next.ranked = !!ranked;
     startTournamentFromState(next);
   });
 });
@@ -1957,11 +2102,10 @@ document.addEventListener("webkitfullscreenchange", scheduleSwissScrollRestore);
       tabs.forEach(t => t.classList.toggle("active", t === tab));
       panels.forEach(p => p.classList.toggle("hidden", p.id !== "tournament-panel-" + view));
       if (view === "ranking") renderTournamentRanking();
+      if (view === "revox") renderRevoxRanking();
     });
   });
 })();
-
-const TOURNAMENT_RANKING_POINTS = { 1: 5, 2: 3, 3: 1 };
 
 // Firebase keys can't contain ".", "#", "$", "/", "[", "]". Normalize so
 // "Alice" and "alice" merge into a single leaderboard entry.
@@ -1986,14 +2130,15 @@ function bumpGlobalRanking(name, points) {
   }));
 }
 
-// Claim the per-room placement slot via transaction so concurrent hosts
-// can't double-award. Only the client whose transaction commits bumps
-// the global ranking. Once awarded, later score edits never re-award.
-function awardPlacementIfNew(place, name, points) {
+// Claim the per-room per-player slot via transaction so concurrent hosts
+// can't double-award and later state ticks never re-award the same player.
+function awardPlayerIfNew(name, points) {
   if (!swissRoomRef || !points) return;
   const cleanName = (name || "").trim();
   if (!cleanName) return;
-  const slotRef = swissRoomRef.child("awarded/place" + place);
+  const key = rankingKey(cleanName);
+  if (!key) return;
+  const slotRef = swissRoomRef.child("awarded/players/" + key);
   slotRef.transaction(
     prev => prev != null ? undefined : { name: cleanName, points },
     (err, committed) => {
@@ -2003,13 +2148,78 @@ function awardPlacementIfNew(place, name, points) {
   );
 }
 
+// Tournament is "decided" once the final is played AND (if a 3rd-place
+// match exists) it's also played. Triggers the single award pass.
+function tournamentIsDecided(state) {
+  const matches = state?.matches || {};
+  const isDecided = m => m && m.scoreA != null && m.scoreB != null && m.scoreA !== m.scoreB;
+  if (!isDecided(matches["bracket-f-0"])) return false;
+  if (matches["bracket-3rd-0"] && !isDecided(matches["bracket-3rd-0"])) return false;
+  return true;
+}
+
+// Returns { name: points } for every participant, applying the points scheme:
+//   1st = 5, 2nd = 4, 3rd = 3, top 8 (4th–8th) = 2, anyone else = 1.
+function computeTournamentRankingAwards(state) {
+  const matches = state?.matches || {};
+  const matchResult = m => {
+    if (!m || m.scoreA == null || m.scoreB == null || m.scoreA === m.scoreB) return null;
+    const aWon = m.scoreA > m.scoreB;
+    return { winner: aWon ? m.a : m.b, loser: aWon ? m.b : m.a };
+  };
+  const awards = {};
+  const set = (name, pts) => {
+    if (!name || !pts) return;
+    if (awards[name] == null || pts > awards[name]) awards[name] = pts;
+  };
+  // Podium
+  const f = matchResult(matches["bracket-f-0"]);
+  if (f) { set(f.winner, 5); set(f.loser, 4); }
+  const third = matchResult(matches["bracket-3rd-0"]);
+  if (third) { set(third.winner, 3); set(third.loser, 2); }
+  // Top 8 = anyone in the knockout bracket. For Swiss this is everyone in
+  // any `bracket-*` match; for Single Elim it's the QF round and beyond
+  // (or every participant if the bracket is small enough that QFs == R0).
+  const topEight = new Set();
+  if (state?.mode === "swiss") {
+    Object.values(matches).forEach(m => {
+      if (m && m.bracket) {
+        if (m.a) topEight.add(m.a);
+        if (m.b) topEight.add(m.b);
+      }
+    });
+  } else if (state?.mode === "single-elim") {
+    const preFinal = state.preFinalRounds || 0;
+    if (preFinal <= 2) {
+      // Bracket size ≤ 8 → every real participant is top 8.
+      getParticipants(state).forEach(n => { if (n) topEight.add(n); });
+    } else {
+      const qfRound = preFinal - 2;
+      Object.values(matches).forEach(m => {
+        if (!m || !m.bracket) return;
+        const inQfOrLater = (typeof m.round === "number" && m.round >= qfRound)
+          || m.round === "f" || m.round === "3rd";
+        if (inQfOrLater) {
+          if (m.a) topEight.add(m.a);
+          if (m.b) topEight.add(m.b);
+        }
+      });
+    }
+  }
+  topEight.forEach(name => set(name, 2));
+  // Everyone else who participated → +1.
+  getParticipants(state).forEach(name => {
+    if (name && awards[name] == null) awards[name] = 1;
+  });
+  return awards;
+}
+
 function syncTournamentRankingAwards(state) {
   if (!swissCanEdit || !swissRoomRef) return;
-  for (const p of computeTournamentPlacements(state)) {
-    const pts = TOURNAMENT_RANKING_POINTS[p.place];
-    if (!pts) continue;
-    awardPlacementIfNew(p.place, p.name, pts);
-  }
+  if (state?.ranked !== true) return; // unranked tournament → skip ranking writes
+  if (!tournamentIsDecided(state)) return; // wait until final + 3rd-place are settled
+  const awards = computeTournamentRankingAwards(state);
+  Object.entries(awards).forEach(([name, points]) => awardPlayerIfNew(name, points));
 }
 
 function renderTournamentRanking() {
@@ -2032,7 +2242,7 @@ function renderTournamentRanking() {
         .filter(r => r.points > 0)
         .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
       if (!list.length) {
-        container.innerHTML = `<p class="tournament-results-empty">No tournament results yet. Finish an online tournament to start earning ranking points (1st = +5, 2nd = +3, 3rd = +1). Same names merge across tournaments.</p>`;
+        container.innerHTML = `<p class="tournament-results-empty">No tournament results yet. Finish an online tournament to start earning ranking points (1st = +5, 2nd = +4, 3rd = +3, top 8 = +2, participation = +1). Same names merge across tournaments.</p>`;
         return;
       }
       const rows = list.map((r, i) => {
@@ -2052,3 +2262,248 @@ function renderTournamentRanking() {
       container.innerHTML = `<p class="tournament-results-empty">Couldn't load the ranking right now.</p>`;
     });
 }
+
+// ===================== REVOX MEMBER RANKING (admin-curated) =====================
+// Manually-managed leaderboard, separate from tournament-driven /ranking.
+// Anyone can read; only an admin (gated by a static SHA-256 password) can write.
+
+const REVOX_ADMIN_SESSION_KEY = "beyblade_revox_admin";
+
+function isRevoxAdminUnlocked() {
+  try { return sessionStorage.getItem(REVOX_ADMIN_SESSION_KEY) === "1"; }
+  catch { return false; }
+}
+
+function setRevoxAdminUnlocked(yes) {
+  try {
+    if (yes) sessionStorage.setItem(REVOX_ADMIN_SESSION_KEY, "1");
+    else sessionStorage.removeItem(REVOX_ADMIN_SESSION_KEY);
+  } catch {}
+}
+
+async function verifyRevoxAdminPassword(password) {
+  const expected = (window.TOURNAMENT_REVOX_ADMIN_SHA256 || "").toLowerCase();
+  if (!expected || !password) return false;
+  try {
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(password));
+    const got = [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+    return got === expected;
+  } catch { return false; }
+}
+
+// Adds points to an entry. If the same name (after key normalization)
+// already exists, the new points are added to the existing total. Uses a
+// transaction so concurrent admin writes can't lose updates.
+function addRevoxEntry(name, points) {
+  const db = initFirebase();
+  if (!db) return Promise.reject(new Error("firebase not configured"));
+  const cleanName = String(name || "").trim();
+  const pts = Number(points);
+  if (!cleanName || !Number.isFinite(pts)) return Promise.reject(new Error("bad input"));
+  const key = rankingKey(cleanName);
+  if (!key) return Promise.reject(new Error("bad name"));
+  return db.ref("revoxRanking/" + key).transaction(curr => ({
+    name: (curr && curr.name) || cleanName,
+    points: ((curr && Number(curr.points)) || 0) + pts
+  }));
+}
+
+function updateRevoxEntryPoints(key, points) {
+  const db = initFirebase();
+  if (!db || !key) return Promise.reject(new Error("bad input"));
+  const pts = Number(points);
+  if (!Number.isFinite(pts)) return Promise.reject(new Error("bad points"));
+  return db.ref("revoxRanking/" + key + "/points").set(pts);
+}
+
+function deleteRevoxEntry(key) {
+  const db = initFirebase();
+  if (!db || !key) return Promise.reject(new Error("bad input"));
+  return db.ref("revoxRanking/" + key).remove();
+}
+
+function renderRevoxRanking() {
+  const container = document.getElementById("revox-ranking-list");
+  if (!container) return;
+  updateRevoxAdminUI();
+  if (!firebaseReady()) {
+    container.innerHTML = `<p class="tournament-results-empty">Live sync isn't configured on this build.</p>`;
+    return;
+  }
+  container.innerHTML = `<p class="tournament-results-loading">Loading members…</p>`;
+  const db = initFirebase();
+  db.ref("revoxRanking").once("value")
+    .then(snap => {
+      const data = snap.val() || {};
+      const list = Object.entries(data)
+        .map(([key, v]) => ({
+          key,
+          name: (v && v.name) || key,
+          points: (v && Number(v.points)) || 0
+        }))
+        .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
+      // Populate the Add-form datalist with existing names so admins can
+      // pick from a dropdown instead of retyping (and risking a typo that
+      // would create a duplicate-looking entry until key-normalization).
+      const datalist = document.getElementById("revox-name-options");
+      if (datalist) {
+        datalist.innerHTML = list
+          .slice()
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map(r => `<option value="${escapeHtml(r.name)}"></option>`)
+          .join("");
+      }
+      const isAdmin = isRevoxAdminUnlocked();
+      if (!list.length) {
+        container.innerHTML = `<p class="tournament-results-empty">No Revox members yet.${isAdmin ? " Use the form above to add one." : ""}</p>`;
+        return;
+      }
+      const rows = list.map((r, i) => {
+        const placeMod = i < 3 ? ` tournament-results-place-${i + 1}` : "";
+        const adminBtns = isAdmin ? `
+          <span class="revox-row-actions">
+            <button type="button" class="revox-row-btn" data-revox-edit="${escapeHtml(r.key)}" data-revox-name="${escapeHtml(r.name)}" data-revox-points="${r.points}">Edit</button>
+            <button type="button" class="revox-row-btn revox-row-btn-delete" data-revox-delete="${escapeHtml(r.key)}" data-revox-name="${escapeHtml(r.name)}">Delete</button>
+          </span>` : "";
+        return `
+          <div class="tournament-results-row tournament-ranking-row${placeMod}">
+            <span class="tournament-results-place">#${i + 1}</span>
+            <span class="tournament-results-player">${escapeHtml(r.name)}</span>
+            <span class="tournament-ranking-points">${r.points} pt${r.points === 1 ? "" : "s"}</span>
+            ${adminBtns}
+          </div>
+        `;
+      }).join("");
+      container.innerHTML = `<div class="tournament-results-list">${rows}</div>`;
+      // Wire row buttons (admin only).
+      if (isAdmin) {
+        container.querySelectorAll("[data-revox-edit]").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const key = btn.dataset.revoxEdit;
+            const curr = btn.dataset.revoxPoints;
+            const next = prompt(`New points for ${btn.dataset.revoxName}:`, curr);
+            if (next == null) return;
+            const n = Number(next);
+            if (!Number.isFinite(n)) { alert("Points must be a number."); return; }
+            updateRevoxEntryPoints(key, n).then(renderRevoxRanking)
+              .catch(e => alert("Update failed: " + (e?.message || e)));
+          });
+        });
+        container.querySelectorAll("[data-revox-delete]").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const key = btn.dataset.revoxDelete;
+            if (!confirm(`Remove ${btn.dataset.revoxName} from the ranking?`)) return;
+            deleteRevoxEntry(key).then(renderRevoxRanking)
+              .catch(e => alert("Delete failed: " + (e?.message || e)));
+          });
+        });
+      }
+    })
+    .catch(err => {
+      console.warn("Revox ranking load failed:", err);
+      container.innerHTML = `<p class="tournament-results-empty">Couldn't load the Revox ranking right now.</p>`;
+    });
+}
+
+function updateRevoxAdminUI() {
+  const isAdmin = isRevoxAdminUnlocked();
+  document.getElementById("revox-admin-login")?.classList.toggle("hidden", isAdmin);
+  document.getElementById("revox-admin-logout")?.classList.toggle("hidden", !isAdmin);
+  document.getElementById("revox-admin-form")?.classList.toggle("hidden", !isAdmin);
+  const status = document.getElementById("revox-admin-status");
+  if (status) {
+    status.textContent = isAdmin ? "Admin mode" : "";
+    status.classList.toggle("is-ok", isAdmin);
+  }
+}
+
+function showRevoxAdminPopup() {
+  const popup = document.getElementById("revox-admin-popup");
+  if (!popup) return;
+  const input = popup.querySelector("#revox-admin-input");
+  const status = popup.querySelector("#revox-admin-popup-status");
+  const confirmBtn = popup.querySelector("#revox-admin-confirm");
+  const cancelBtn = popup.querySelector("#revox-admin-cancel");
+  if (input) input.value = "";
+  if (status) { status.textContent = ""; status.classList.remove("is-ok"); }
+  popup.classList.remove("hidden");
+  setTimeout(() => input?.focus(), 0);
+  const close = () => {
+    popup.classList.add("hidden");
+    confirmBtn.onclick = null;
+    cancelBtn.onclick = null;
+    input?.removeEventListener("keydown", onKey);
+  };
+  const onKey = e => { if (e.key === "Enter") confirmBtn.click(); if (e.key === "Escape") close(); };
+  input?.addEventListener("keydown", onKey);
+  confirmBtn.onclick = async () => {
+    const pw = input ? input.value : "";
+    if (!pw) { if (status) status.textContent = "Password required."; return; }
+    confirmBtn.disabled = true;
+    const ok = await verifyRevoxAdminPassword(pw);
+    confirmBtn.disabled = false;
+    if (!ok) { if (status) status.textContent = "Wrong password."; input?.select(); return; }
+    setRevoxAdminUnlocked(true);
+    close();
+    renderRevoxRanking();
+  };
+  cancelBtn.onclick = () => close();
+}
+
+(function initRevoxAdminControls() {
+  document.getElementById("revox-admin-login")?.addEventListener("click", showRevoxAdminPopup);
+  document.getElementById("revox-admin-logout")?.addEventListener("click", () => {
+    setRevoxAdminUnlocked(false);
+    renderRevoxRanking();
+  });
+  // Wire the custom themed Points dropdown (matches the Settings dropdown
+  // pattern used elsewhere in the app — guaranteed visible across themes).
+  const pointsDropdown = document.getElementById("revox-add-points");
+  if (pointsDropdown) {
+    const btn = pointsDropdown.querySelector(".setting-dropdown-btn");
+    const text = pointsDropdown.querySelector(".setting-dropdown-text");
+    const menu = pointsDropdown.querySelector(".setting-dropdown-menu");
+    const opts = pointsDropdown.querySelectorAll(".setting-dropdown-option");
+    btn?.addEventListener("click", e => {
+      e.stopPropagation();
+      menu?.classList.toggle("hidden");
+    });
+    opts.forEach(opt => {
+      opt.addEventListener("click", () => {
+        const v = opt.dataset.value;
+        if (btn) { btn.dataset.value = v; }
+        if (text) text.textContent = v;
+        opts.forEach(o => o.classList.toggle("active", o === opt));
+        menu?.classList.add("hidden");
+      });
+    });
+    document.addEventListener("click", e => {
+      if (!pointsDropdown.contains(e.target)) menu?.classList.add("hidden");
+    });
+  }
+
+  const resetPointsDropdown = () => {
+    if (!pointsDropdown) return;
+    const btn = pointsDropdown.querySelector(".setting-dropdown-btn");
+    const text = pointsDropdown.querySelector(".setting-dropdown-text");
+    if (btn) btn.dataset.value = "";
+    if (text) text.textContent = "Points";
+    pointsDropdown.querySelectorAll(".setting-dropdown-option").forEach(o => o.classList.remove("active"));
+  };
+
+  document.getElementById("revox-add-btn")?.addEventListener("click", () => {
+    if (!isRevoxAdminUnlocked()) return;
+    const nameEl = document.getElementById("revox-add-name");
+    const name = (nameEl?.value || "").trim();
+    const ptsRaw = pointsDropdown?.querySelector(".setting-dropdown-btn")?.dataset.value || "";
+    if (!name) { alert("Enter a name."); return; }
+    if (!ptsRaw) { alert("Pick a points value."); return; }
+    const pts = Number(ptsRaw);
+    if (!Number.isFinite(pts)) { alert("Points must be a number."); return; }
+    addRevoxEntry(name, pts).then(() => {
+      if (nameEl) nameEl.value = "";
+      resetPointsDropdown();
+      renderRevoxRanking();
+    }).catch(e => alert("Add failed: " + (e?.message || e)));
+  });
+})();
