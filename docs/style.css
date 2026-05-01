@@ -2494,6 +2494,12 @@ body.light-mode .part-img {
     z-index: 3;
 }
 
+.scoreboard-swap {
+    padding: 6px 10px;
+    font-size: 1rem;
+    line-height: 1;
+}
+
 .scoreboard-reset:hover {
     background: #30363d;
     color: #e6edf3;
@@ -4729,6 +4735,29 @@ body.light-mode .swiss-group-progress {
     font-size: 0.85rem;
     opacity: 0.85;
     padding-left: 8px;
+}
+
+.swiss-final-standings {
+    margin-top: 16px;
+}
+
+.swiss-final-row {
+    gap: 10px;
+}
+
+.swiss-final-group {
+    flex: 0 0 auto;
+    font-size: 0.78rem;
+    opacity: 0.65;
+    letter-spacing: 0.04em;
+}
+
+.swiss-final-record {
+    flex: 0 0 auto;
+    font-weight: 600;
+    font-size: 0.85rem;
+    opacity: 0.85;
+    padding-left: 4px;
 }
 
 .revox-admin-bar {

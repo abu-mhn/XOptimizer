@@ -51,11 +51,35 @@ let scoreboardSaveCallback = null;
   };
 
   const countdownClips = [
-    new Audio("assets/voices/three.wav"),
-    new Audio("assets/voices/two.wav"),
-    new Audio("assets/voices/one.wav"),
-    new Audio("assets/voices/go shoot.wav")
+    new Audio("assets/voices/3.wav"),
+    new Audio("assets/voices/2.wav"),
+    new Audio("assets/voices/1.wav"),
+    new Audio("assets/voices/goShoot.wav")
   ];
+
+  // Boost the countdown clips above their source volume. HTMLAudio.volume
+  // caps at 1.0, so we route them through a Web Audio GainNode set >1 to
+  // amplify. Initialised lazily on the first play tap (user gesture, so
+  // iOS/Safari will let AudioContext start).
+  const COUNTDOWN_GAIN = 2.0;
+  let audioCtx = null;
+  function ensureCountdownAmplifier() {
+    if (audioCtx) return;
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return; // unsupported — clips just play at native volume
+    try {
+      audioCtx = new Ctx();
+      const gain = audioCtx.createGain();
+      gain.gain.value = COUNTDOWN_GAIN;
+      gain.connect(audioCtx.destination);
+      countdownClips.forEach(clip => {
+        try {
+          const src = audioCtx.createMediaElementSource(clip);
+          src.connect(gain);
+        } catch (e) { /* already wired or CORS — skip */ }
+      });
+    } catch (e) { audioCtx = null; }
+  }
 
   const playBtn = document.getElementById("scoreboard-play");
   // Time between the START of consecutive countdown clips. Tight enough to
@@ -91,6 +115,10 @@ let scoreboardSaveCallback = null;
   }
   playBtn?.addEventListener("click", (e) => {
     e.stopPropagation();
+    ensureCountdownAmplifier();
+    if (audioCtx && audioCtx.state === "suspended") {
+      audioCtx.resume().catch(() => {});
+    }
     playCountdown();
   });
 
@@ -116,6 +144,25 @@ let scoreboardSaveCallback = null;
     updateDisplay();
   });
 
+  // True when the visible left/right have been swapped from the original
+  // m.a/m.b. We re-swap on save so the callback receives scores keyed to the
+  // ORIGINAL player order (avoids mis-attributing scores after a visual flip).
+  let swapped = false;
+  const swapBtn = document.getElementById("scoreboard-swap");
+  swapBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const tmpScore = scoreA;
+    scoreA = scoreB;
+    scoreB = tmpScore;
+    if (labelA && labelB) {
+      const tmpLabel = labelA.textContent;
+      labelA.textContent = labelB.textContent;
+      labelB.textContent = tmpLabel;
+    }
+    swapped = !swapped;
+    updateDisplay();
+  });
+
   // Set when the user taps check to save — the scoreboard keeps the just-
   // scored names/scores on screen, and only resets to the default board once
   // the user tilts back to portrait (see handleOrientation below).
@@ -125,7 +172,13 @@ let scoreboardSaveCallback = null;
     const cb = scoreboardSaveCallback;
     scoreboardSaveCallback = null;
     closeBtn.classList.add("hidden");
-    if (cb) cb({ scoreA, scoreB });
+    if (cb) {
+      // Re-key to original m.a/m.b order if the user swapped sides.
+      const out = swapped
+        ? { scoreA: scoreB, scoreB: scoreA }
+        : { scoreA, scoreB };
+      cb(out);
+    }
     pendingResetOnPortrait = true;
   });
 
@@ -149,6 +202,7 @@ let scoreboardSaveCallback = null;
     if (labelB) labelB.textContent = "B";
     scoreA = 0;
     scoreB = 0;
+    swapped = false;
     updateDisplay();
     closeBtn?.classList.add("hidden");
   };
@@ -177,6 +231,7 @@ let scoreboardSaveCallback = null;
     if (labelB) labelB.textContent = nameB || "B";
     scoreA = typeof initialA === "number" ? initialA : 0;
     scoreB = typeof initialB === "number" ? initialB : 0;
+    swapped = false;
     updateDisplay();
     scoreboardSaveCallback = typeof onSave === "function" ? onSave : null;
     closeBtn?.classList.toggle("hidden", !scoreboardSaveCallback);

@@ -723,8 +723,9 @@ function startSwissMatch(matchId) {
     // Auto-generate the top-8 knockout bracket the moment every group's
     // final round completes, so no one has to hunt for a "Start" button.
     // Only fires once — the hasSwissBracket guard makes this idempotent for
-    // late edits that don't change group completion.
-    if (!stored.bracket && isGroupStageComplete(s) && !hasSwissBracket(s)) {
+    // late edits that don't change group completion. Skipped for swiss-only
+    // mode, which ends after the group stage with no knockout.
+    if (s.mode !== "swiss-only" && !stored.bracket && isGroupStageComplete(s) && !hasSwissBracket(s)) {
       const bracketMatches = buildBracketMatches(s);
       Object.assign(s.matches, bracketMatches);
       newMatchIds = (newMatchIds || []).concat(Object.keys(bracketMatches));
@@ -1280,7 +1281,8 @@ function renderSwiss() {
     ? ["bracket-f-0"].concat(state.matches["bracket-3rd-0"] ? ["bracket-3rd-0"] : [])
     : ["bracket-f-0", "bracket-3rd-0", "bracket-5th-0", "bracket-7th-0"];
   const allPlacementsDone = bracketActive && placementIds.every(id => isMatchDecided(state.matches[id]));
-  const tournamentComplete = bracketActive && allPlacementsDone;
+  const isSwissOnly = state.mode === "swiss-only";
+  const tournamentComplete = isSwissOnly ? groupStageDone : (bracketActive && allPlacementsDone);
   const canEdit = !inRoom || swissCanEdit;
 
   const groupsHtml = hasGroups ? state.groups.map((members, gi) => {
@@ -1338,6 +1340,7 @@ function renderSwiss() {
     </div>
     ${groupsHtml}
     ${bracketHtml}
+    ${isSwissOnly && groupStageDone ? renderCombinedSwissStandings(state) : ""}
   `;
 
   // Auto-scroll each rounds strip after render. Group strips snap to the
@@ -1390,6 +1393,51 @@ function renderSwiss() {
     });
   });
   view.querySelector("#swiss-clear")?.addEventListener("click", resetSwiss);
+}
+
+// Combined cross-group standings for swiss-only mode. Each group's stats
+// are computed independently (so medianBuchholz uses each player's actual
+// opponents), then all players are flattened and re-sorted by the same
+// comparator used per-group: wins → points scored → points diff → MB → name.
+function computeCombinedSwissStandings(state) {
+  if (!state || !Array.isArray(state.groups)) return [];
+  const all = [];
+  state.groups.forEach((members, gi) => {
+    const standings = computeStandings(members, state.matches, gi);
+    standings.forEach(s => all.push({ ...s, groupIndex: gi }));
+  });
+  return all.sort((a, b) =>
+    (b.wins - a.wins) ||
+    (b.pointsScored - a.pointsScored) ||
+    (b.pointsDiff - a.pointsDiff) ||
+    (b.medianBuchholz - a.medianBuchholz) ||
+    a.name.localeCompare(b.name)
+  );
+}
+
+function renderCombinedSwissStandings(state) {
+  const standings = computeCombinedSwissStandings(state);
+  if (!standings.length) return "";
+  const groupLetter = i => String.fromCharCode(65 + i); // 0 → A, 1 → B, ...
+  const rows = standings.map((s, i) => {
+    const place = i + 1;
+    const placeMod = place <= 3 ? ` tournament-results-place-${place}` : "";
+    const record = `${s.wins}-${s.losses}${s.draws ? `-${s.draws}` : ""}`;
+    return `
+      <div class="tournament-results-row swiss-final-row${placeMod}">
+        <span class="tournament-results-place">${placementLabel(place)}</span>
+        <span class="tournament-results-player">${escapeHtml(s.name)}</span>
+        <span class="swiss-final-group">Group ${groupLetter(s.groupIndex)}</span>
+        <span class="swiss-final-record">${record}</span>
+      </div>
+    `;
+  }).join("");
+  return `
+    <fieldset class="swiss-final-standings">
+      <legend>Final Standings</legend>
+      <div class="tournament-results-list">${rows}</div>
+    </fieldset>
+  `;
 }
 
 function computeStandings(members, matches, groupIndex) {
@@ -1650,11 +1698,14 @@ function showEditParticipantsPopup() {
     const msg = `Participant count changes from ${current.length} to ${unique.length}. ` +
                 `This will regenerate the tournament — all current matches and scores will be lost. Continue?`;
     if (!confirm(msg)) return;
-    const mode = state.mode === "single-elim" ? "single-elim" : "swiss";
+    const mode = state.mode === "single-elim" ? "single-elim"
+      : state.mode === "swiss-only" ? "swiss-only" : "swiss";
     const next = mode === "single-elim"
       ? generateSingleElimFromText(unique.join("\n"), state.tournamentName)
       : generateSwissFromText(unique.join("\n"), state.tournamentName, getRoundCount(state));
     if (!next) return; // generator already alerted (e.g. Swiss min participants)
+    if (mode === "swiss-only") next.mode = "swiss-only";
+    if (typeof state.ranked === "boolean") next.ranked = state.ranked;
     persistSwiss(next);
     if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
       const payload = { ...next };
@@ -1786,6 +1837,7 @@ function showTournamentModePopup(onPick) {
   const popup = document.getElementById("tournament-mode-popup");
   if (!popup) { onPick("swiss", "", SWISS_ROUND_COUNT); return; } // popup missing, fall back to swiss
   const swissBtn = popup.querySelector("#tournament-mode-swiss");
+  const swissOnlyBtn = popup.querySelector("#tournament-mode-swiss-only");
   const singleBtn = popup.querySelector("#tournament-mode-single");
   const cancelBtn = popup.querySelector("#tournament-mode-cancel");
   const nameInput = popup.querySelector("#tournament-name-input");
@@ -1801,11 +1853,13 @@ function showTournamentModePopup(onPick) {
   };
   const setBusy = (busy) => {
     swissBtn.disabled = busy;
+    if (swissOnlyBtn) swissOnlyBtn.disabled = busy;
     singleBtn.disabled = busy;
   };
   const teardown = () => {
     popup.classList.add("hidden");
     swissBtn.onclick = null;
+    if (swissOnlyBtn) swissOnlyBtn.onclick = null;
     singleBtn.onclick = null;
     cancelBtn.onclick = null;
     setBusy(false);
@@ -1828,6 +1882,11 @@ function showTournamentModePopup(onPick) {
     const name = nameInput ? nameInput.value.trim() : "";
     teardown();
     showSwissRoundsPopup((rc) => onPick("swiss", name, rc, ranked));
+  });
+  if (swissOnlyBtn) swissOnlyBtn.onclick = gated((ranked) => {
+    const name = nameInput ? nameInput.value.trim() : "";
+    teardown();
+    showSwissRoundsPopup((rc) => onPick("swiss-only", name, rc, ranked));
   });
   singleBtn.onclick = gated((ranked) => {
     const name = nameInput ? nameInput.value.trim() : "";
@@ -1906,6 +1965,7 @@ document.getElementById("swiss-generate")?.addEventListener("click", () => {
       ? generateSingleElimFromText(namesText, tournamentName)
       : generateSwissFromText(namesText, tournamentName, roundCount);
     if (!next) return;
+    if (mode === "swiss-only") next.mode = "swiss-only"; // gate the auto Top-8 bracket
     next.ranked = !!ranked;
     startTournamentFromState(next);
   });
@@ -2012,13 +2072,37 @@ function renderTournamentResultsMarkup(state) {
   const name = state.tournamentName && state.tournamentName.trim()
     ? escapeHtml(state.tournamentName)
     : "(unnamed tournament)";
-  const modeLabel = state.mode === "single-elim" ? "Single Elimination" : "Swiss + Top 8";
+  const modeLabel = state.mode === "single-elim" ? "Single Elimination"
+    : state.mode === "swiss-only" ? "Swiss" : "Swiss + Top 8";
   const header = `
     <div class="tournament-results-heading">
       <div class="tournament-results-name">${name}</div>
       <div class="tournament-results-mode">${escapeHtml(modeLabel)}</div>
     </div>
   `;
+  // Swiss-only mode never produces knockout placements — its result is the
+  // combined cross-group standings instead.
+  if (state.mode === "swiss-only") {
+    const standings = computeCombinedSwissStandings(state);
+    if (!standings.length) {
+      return header + `<p class="tournament-results-empty">This tournament hasn't started yet — come back once group rounds are played.</p>`;
+    }
+    const groupLetter = i => String.fromCharCode(65 + i);
+    const rows = standings.map((s, i) => {
+      const place = i + 1;
+      const placeMod = place <= 3 ? ` tournament-results-place-${place}` : "";
+      const record = `${s.wins}-${s.losses}${s.draws ? `-${s.draws}` : ""}`;
+      return `
+        <div class="tournament-results-row swiss-final-row${placeMod}">
+          <span class="tournament-results-place">${placementLabel(place)}</span>
+          <span class="tournament-results-player">${escapeHtml(s.name || "—")}</span>
+          <span class="swiss-final-group">Group ${groupLetter(s.groupIndex)}</span>
+          <span class="swiss-final-record">${record}</span>
+        </div>
+      `;
+    }).join("");
+    return header + `<div class="tournament-results-list">${rows}</div>`;
+  }
   const placements = computeTournamentPlacements(state);
   if (!placements.length) {
     return header + `<p class="tournament-results-empty">This tournament hasn't reached the knockout placements yet — come back when the bracket finishes.</p>`;

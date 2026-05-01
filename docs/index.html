@@ -521,6 +521,10 @@
           <span class="tournament-mode-name">Swiss + Top 8</span>
           <span class="tournament-mode-desc">4 groups, Swiss rounds, top 2 per group advance into the knockout bracket.</span>
         </button>
+        <button type="button" id="tournament-mode-swiss-only" class="tournament-mode-btn">
+          <span class="tournament-mode-name">Swiss</span>
+          <span class="tournament-mode-desc">4 groups, Swiss rounds — no knockout bracket. Final standings come from group records, combined across all groups.</span>
+        </button>
         <button type="button" id="tournament-mode-single" class="tournament-mode-btn">
           <span class="tournament-mode-name">Single Elimination</span>
           <span class="tournament-mode-desc">Any number of players, direct knockout — no group stage. Bracket auto-sizes to the next power of 2; empty slots become BYEs that auto-advance.</span>
@@ -577,16 +581,15 @@
   </div>
 
   <!-- ================= POPUP ================= -->
-  <div id="update-popup" class="popup-overlay hidden" data-version="2026-04-30">
+  <div id="update-popup" class="popup-overlay hidden" data-version="2026-05-01">
     <div class="popup-card">
 
       <h2 class="popup-title">What's New</h2>
 
       <ul class="popup-list">
-        <li><strong>Revox Members ranking.</strong> New Tournament sub-tab with an admin-curated leaderboard, separate from the main ranking.</li>
-        <li><strong>New points scheme.</strong> 1st = +5, 2nd = +4, 3rd = +3, top 8 = +2, participation = +1.</li>
-        <li><strong>Host password.</strong> Hosting now requires a password — leave it blank to host an unranked tournament.</li>
-        <li><strong>Bye cascade fix.</strong> Single-elim brackets with byes now auto-advance the lone player straight through to the next round.</li>
+        <li><strong>Swiss format.</strong> New tournament option — 4 groups, Swiss rounds, no knockout. Final standings combine all groups into one ranked list (1st to last).</li>
+        <li><strong>Scoreboard swap.</strong> New ⇆ button on the scoreboard divider flips the two players' sides without losing scores.</li>
+        <li><strong>Louder countdown.</strong> The 3 · 2 · 1 · Go Shoot! callouts are amplified so they cut through tournament noise.</li>
       </ul>
 
       <button type="button" class="btn popup-ok">
@@ -614,6 +617,7 @@
     <div class="scoreboard-divider">
       <span class="scoreboard-vs">VS</span>
       <button type="button" class="scoreboard-play" id="scoreboard-play" title="3 · 2 · 1 · Go Shoot!" aria-label="Play countdown">▶</button>
+      <button type="button" class="scoreboard-reset scoreboard-swap" id="scoreboard-swap" title="Swap sides" aria-label="Swap player sides">&#8646;</button>
       <button class="scoreboard-reset" id="scoreboard-reset" title="Reset Scoreboard">Reset</button>
     </div>
     <div class="scoreboard-side scoreboard-right" id="scoreboard-right">
