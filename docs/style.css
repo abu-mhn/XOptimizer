@@ -906,6 +906,9 @@ body.light-mode .result-part-name {
     font-size: .9rem;
     line-height: 1.45;
     margin-bottom: 14px;
+    text-align: justify;
+    hyphens: auto;
+    -webkit-hyphens: auto;
 }
 
 .bp-actions {
