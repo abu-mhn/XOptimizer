@@ -121,14 +121,14 @@ const DATA = {
     { atk: 25, def: 10, sta: 5, weight: 29.4, spindirection: "R", name: "Blitz", codename: "BLITZ", meta: true },
     { atk: 10, def: 20, sta: 10, weight: 27.7, spindirection: "R", name: "Fortress", codename: "FORTRESS", meta: true },
     { atk: 10, def: 10, sta: 29, weight: 27.4, spindirection: "R", name: "Rage", codename: "RAGE", meta: true },
-    { atk: 12, def: 8, sta: 7, weight: 27.8, spindirection: "R", name: "Delta", codename: "DELTA" },
+    { atk: 15, def: 15, sta: 10, weight: 27.8, spindirection: "R", name: "Delta", codename: "DELTA" },
   ],
 
   overBlades: [
     { atk: 10, def: 5, sta: 5, weight: 3.8, spindirection: "R", name: "Break", codename: "B" },
     { atk: 5, def: 10, sta: 5, weight: 3.4, spindirection: "R", name: "Guard", codename: "G" },
     { atk: 5, def: 5, sta: 10, weight: 3.7, spindirection: "R", name: "Flow", codename: "F" },
-    { atk: 9, def: 8, sta: 7, weight: 3.4, spindirection: "R", name: "Peak", codename: "P" },
+    { atk: 8, def: 7, sta: 5, weight: 3.5, spindirection: "R", name: "Peak", codename: "P" },
   ],
 
   assistBlades: [
@@ -156,9 +156,9 @@ const DATA = {
     { atk: 17, def: 17, sta: 11, weight: 7.8, height: 50, spindirection: "R", name: "Heavy", codename: "H" },
     { atk: 22, def: 15, sta: 3, weight: 6.6, height: 80, spindirection: "R", name: "Zillion", codename: "Z" },
     { atk: 10, def: 5, sta: 25, weight: 6.1, height: 70, spindirection: "R", name: "Erase", codename: "E" },
-    { atk: 10, def: 25, sta: 5, weight: 5.4, height: 70, spindirection: "R", name: "Vertical", codename: "V" },
+    { atk: 10, def: 25, sta: 5, weight: 5.3, height: 60, spindirection: "R", name: "Vertical", codename: "V" },
     { atk: 30, def: 5, sta: 5, weight: 4.9, height: 50, spindirection: "R", name: "Knuckle", codename: "K" },
-    { atk: 19, def: 16, sta: 14, weight: 4.5, height: 50, spindirection: "R", name: "Odd", codename: "O" },
+    { atk: 17, def: 10, sta: 13, weight: 4.5, height: 70, spindirection: "R", name: "Odd", codename: "O" },
   ],
 
   ratchets: [

@@ -507,6 +507,118 @@
     </div>
   </div>
 
+  <!-- ================= BEY CHECK POPUP ================= -->
+  <div id="bey-check-popup" class="popup-overlay hidden">
+    <div class="popup-card bey-check-card">
+      <h2 class="popup-title">Bey Check</h2>
+      <p class="popup-text bey-check-subtitle" id="bey-check-subtitle"></p>
+      <div class="bey-check-tabs" id="bey-check-tabs">
+        <button type="button" class="bey-check-tab active" data-side="a"></button>
+        <button type="button" class="bey-check-tab" data-side="b"></button>
+      </div>
+      <div class="bey-check-slots" id="bey-check-slots"></div>
+      <div id="bey-check-status" class="swiss-join-status"></div>
+      <div class="popup-actions bey-check-actions">
+        <button type="button" id="bey-check-score" class="btn">Score Match</button>
+        <button type="button" id="bey-check-cancel" class="btn popup-cancel">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= BEY CHECK SLOT POPUP (combo builder) ================= -->
+  <div id="bey-check-slot-popup" class="popup-overlay hidden">
+    <div class="popup-card bey-check-slot-card">
+      <h2 class="popup-title">Build Combo</h2>
+      <p class="popup-text bey-check-slot-subtitle" id="bey-check-slot-subtitle"></p>
+
+      <div class="bey-check-mode-tabs" role="tablist">
+        <button type="button" class="bey-check-mode-tab active" data-mode="standard" role="tab">Standard</button>
+        <button type="button" class="bey-check-mode-tab" data-mode="cx" role="tab">CX</button>
+        <button type="button" class="bey-check-mode-tab" data-mode="cxExpand" role="tab">CX Expand</button>
+      </div>
+
+      <form id="bey-check-form-standard" class="bey-check-mode-form" data-mode="standard" onsubmit="return false;">
+        <fieldset>
+          <legend>Top</legend>
+          <label>Blade
+            <select name="blade"></select>
+          </label>
+        </fieldset>
+        <fieldset>
+          <legend>Bottom</legend>
+          <label>Ratchet
+            <select name="ratchet"></select>
+          </label>
+          <label>Bit
+            <select name="bit"></select>
+          </label>
+        </fieldset>
+      </form>
+
+      <form id="bey-check-form-cx" class="bey-check-mode-form hidden" data-mode="cx" onsubmit="return false;">
+        <fieldset>
+          <legend>Top</legend>
+          <div class="inline-group">
+            <label>Lock Chip
+              <select name="lockChip"></select>
+            </label>
+            <label>Main Blade
+              <select name="mainBlade"></select>
+            </label>
+            <label>Assist Blade
+              <select name="assistBlade"></select>
+            </label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Bottom</legend>
+          <label>Ratchet
+            <select name="ratchet"></select>
+          </label>
+          <label>Bit
+            <select name="bit"></select>
+          </label>
+        </fieldset>
+      </form>
+
+      <form id="bey-check-form-cxExpand" class="bey-check-mode-form hidden" data-mode="cxExpand" onsubmit="return false;">
+        <fieldset>
+          <legend>Top</legend>
+          <div class="inline-group">
+            <label>Lock Chip
+              <select name="lockChip"></select>
+            </label>
+            <label>Metal Blade
+              <select name="metalBlade"></select>
+            </label>
+            <label>Over Blade
+              <select name="overBlade"></select>
+            </label>
+            <label>Assist Blade
+              <select name="assistBlade"></select>
+            </label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Bottom</legend>
+          <label>Ratchet
+            <select name="ratchet"></select>
+          </label>
+          <label>Bit
+            <select name="bit"></select>
+          </label>
+        </fieldset>
+      </form>
+
+      <div id="bey-check-slot-status" class="bey-check-slot-status"></div>
+      <div class="popup-actions bey-check-slot-actions">
+        <button type="button" id="bey-check-slot-save" class="btn">Save</button>
+        <button type="button" id="bey-check-slot-clear" class="btn btn-reset">Clear</button>
+        <button type="button" id="bey-check-slot-cancel" class="btn popup-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= TOURNAMENT FORMAT POPUP ================= -->
   <div id="tournament-mode-popup" class="popup-overlay hidden">
     <div class="popup-card">
@@ -581,15 +693,16 @@
   </div>
 
   <!-- ================= POPUP ================= -->
-  <div id="update-popup" class="popup-overlay hidden" data-version="2026-05-01">
+  <div id="update-popup" class="popup-overlay hidden" data-version="2026-05-06">
     <div class="popup-card">
 
       <h2 class="popup-title">What's New</h2>
 
       <ul class="popup-list">
-        <li><strong>Swiss format.</strong> New tournament option — 4 groups, Swiss rounds, no knockout. Final standings combine all groups into one ranked list (1st to last).</li>
-        <li><strong>Scoreboard swap.</strong> New ⇆ button on the scoreboard divider flips the two players' sides without losing scores.</li>
-        <li><strong>Louder countdown.</strong> The 3 · 2 · 1 · Go Shoot! callouts are amplified so they cut through tournament noise.</li>
+        <li><strong>Bey Check.</strong> Hosts and co-hosts can tap a match to record each participant's 3-slot deck. Build combos with the same Standard / CX / CX Expand selectors as the calculator, with one-of-each-part enforcement.</li>
+        <li><strong>Decks carry forward.</strong> When a participant plays their next match, their last deck pre-loads automatically so you don't re-enter it every round. Edits still apply per-match.</li>
+        <li><strong>Live deck sync.</strong> Each slot save pushes straight to Firebase as you build, so co-hosts see decks update in real time. Visible "Saving…" / "Saved ✓" status confirms the write.</li>
+        <li><strong>Parts Usage charts.</strong> When the tournament finishes, the bottom of the bracket view (and the history results popup) shows pie charts of which blades, ratchets, bits, and assist parts the field actually brought.</li>
       </ul>
 
       <button type="button" class="btn popup-ok">

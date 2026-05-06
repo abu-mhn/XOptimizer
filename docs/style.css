@@ -740,6 +740,317 @@ body.light-mode .result-part-name {
     font-weight: 600;
 }
 
+/* Bey Check popup */
+.bey-check-card {
+    max-width: min(520px, 100%);
+}
+
+.bey-check-subtitle {
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.bey-check-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.bey-check-tab {
+    flex: 1;
+    padding: 8px 10px;
+    background: #21262d;
+    color: #c9d1d9;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: clamp(.85rem, 2.6vw, .95rem);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bey-check-tab.active {
+    background: #1f6feb;
+    border-color: #1f6feb;
+    color: #fff;
+}
+
+.bey-check-slots {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.bey-check-slot {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 10px 12px;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    color: #e6edf3;
+    font: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: border-color .12s ease, background .12s ease;
+}
+
+.bey-check-slot:hover,
+.bey-check-slot:focus-visible {
+    border-color: #1f6feb;
+    background: #11161d;
+    outline: none;
+}
+
+.bey-check-slot-label {
+    font-size: .8rem;
+    color: #8b949e;
+    font-weight: 600;
+}
+
+.bey-check-slot-summary {
+    font-size: .9rem;
+    color: #c9d1d9;
+    word-break: break-word;
+}
+
+.bey-check-slot-empty .bey-check-slot-summary {
+    color: #6e7681;
+    font-style: italic;
+}
+
+.bey-check-slot-parts {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    margin-top: 4px;
+    overflow-x: auto;
+    justify-content: safe center;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+
+.bey-check-slot-parts::-webkit-scrollbar {
+    height: 4px;
+}
+
+.bey-check-slot-parts::-webkit-scrollbar-thumb {
+    background: #30363d;
+    border-radius: 2px;
+}
+
+.bey-check-part {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    width: 56px;
+    flex: 0 0 auto;
+}
+
+.bey-check-part-img-box {
+    width: 56px;
+    height: 56px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.bey-check-part-img {
+    max-width: 90%;
+    max-height: 90%;
+    object-fit: contain;
+}
+
+.bey-check-part-name {
+    font-size: .72rem;
+    color: #8b949e;
+    text-align: center;
+    line-height: 1.2;
+    word-break: break-word;
+}
+
+.bey-check-actions {
+    flex-wrap: wrap;
+}
+
+#bey-check-status {
+    margin-bottom: 8px;
+    font-size: .85rem;
+    min-height: 1.2em;
+}
+
+#bey-check-status.is-pending {
+    color: #d29922;
+}
+
+#bey-check-status.is-ok {
+    color: #3fb950;
+}
+
+#bey-check-status.is-err {
+    color: #f85149;
+}
+
+/* Combo builder sub-popup — stacks above the bey check popup */
+#bey-check-slot-popup {
+    z-index: 210;
+}
+
+.bey-check-slot-card {
+    max-width: min(520px, 100%);
+}
+
+.bey-check-slot-subtitle {
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.bey-check-mode-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.bey-check-mode-tab {
+    flex: 1;
+    padding: 8px 6px;
+    background: #21262d;
+    color: #c9d1d9;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: clamp(.8rem, 2.4vw, .9rem);
+}
+
+.bey-check-mode-tab.active {
+    background: #1f6feb;
+    border-color: #1f6feb;
+    color: #fff;
+}
+
+.bey-check-mode-form {
+    margin-bottom: 10px;
+}
+
+.bey-check-mode-form.hidden {
+    display: none;
+}
+
+.bey-check-mode-form fieldset {
+    margin-bottom: 10px;
+}
+
+.bey-check-mode-form label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: .85rem;
+}
+
+.bey-check-mode-form .inline-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.bey-check-slot-actions {
+    flex-wrap: wrap;
+}
+
+.bey-check-slot-status {
+    min-height: 1.2em;
+    margin-bottom: 8px;
+    font-size: .85rem;
+    color: #f85149;
+}
+
+/* Parts Usage charts (shown when tournament is complete) */
+.part-usage-fieldset {
+    margin-top: 16px;
+}
+
+.part-usage-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 12px;
+}
+
+.part-usage-card {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+
+.part-usage-title {
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #58a6ff;
+    font-size: .9rem;
+}
+
+.part-usage-body {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.part-usage-pie {
+    width: 110px;
+    height: 110px;
+    flex-shrink: 0;
+}
+
+.part-usage-legend {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    flex: 1;
+    font-size: .78rem;
+    min-width: 0;
+}
+
+.part-usage-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.part-usage-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+.part-usage-name {
+    flex: 1;
+    color: #c9d1d9;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.part-usage-pct {
+    color: #8b949e;
+    flex-shrink: 0;
+}
+
+.part-usage-count {
+    color: #6e7681;
+}
+
 /* Lock the Ratchet / Ratchet-Bit chooser to viewport center (mobile-safe) */
 #bottom-choice-popup {
     position: fixed;

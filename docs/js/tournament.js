@@ -1341,6 +1341,7 @@ function renderSwiss() {
     ${groupsHtml}
     ${bracketHtml}
     ${isSwissOnly && groupStageDone ? renderCombinedSwissStandings(state) : ""}
+    ${tournamentComplete ? renderPartUsageCharts(state) : ""}
   `;
 
   // Auto-scroll each rounds strip after render. Group strips snap to the
@@ -1371,9 +1372,9 @@ function renderSwiss() {
     view.querySelectorAll(".swiss-match-card-play").forEach(el => {
       const id = el.dataset.match;
       if (!id) return;
-      el.addEventListener("click", () => startSwissMatch(id));
+      el.addEventListener("click", () => showBeyCheckPopup(id));
       el.addEventListener("keydown", e => {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); startSwissMatch(id); }
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); showBeyCheckPopup(id); }
       });
     });
   } else {
@@ -1645,6 +1646,738 @@ function applyParticipantRenames(state, oldNames, newNames) {
     if (m && m.b && (m.b in renames)) m.b = renames[m.b];
   });
   return true;
+}
+
+// Bey check popup: when host/co-host taps a match, build each participant's
+// 3-slot deck and persist on the match record so every device in the room
+// can review what each player brought. Each slot supports the three combo
+// lines from the calculator (Standard / CX / CX Expand). The actual match
+// scoring stays untouched — a "Score Match" button in the parent popup is
+// what hands off to startSwissMatch.
+const BEY_CHECK_DECK_SIZE = 3;
+const BEY_CHECK_MODES = ["standard", "cx", "cxExpand"];
+const BEY_CHECK_FIELDS = {
+  standard: ["blade", "ratchet", "bit"],
+  cx: ["lockChip", "mainBlade", "assistBlade", "ratchet", "bit"],
+  cxExpand: ["lockChip", "metalBlade", "overBlade", "assistBlade", "ratchet", "bit"]
+};
+const BEY_CHECK_DATA_BY_FIELD = {
+  blade: "blades",
+  lockChip: "lockChips",
+  mainBlade: "mainBlades",
+  metalBlade: "metalBlades",
+  overBlade: "overBlades",
+  assistBlade: "assistBlades",
+  ratchet: "ratchets",
+  bit: "bits"
+};
+
+function getBeyCheckPartList(field) {
+  const key = BEY_CHECK_DATA_BY_FIELD[field];
+  return (key && DATA && Array.isArray(DATA[key])) ? DATA[key] : [];
+}
+
+function emptyBeyCheckSlot() {
+  return { mode: "standard", parts: {} };
+}
+
+function emptyBeyCheckDeck() {
+  const slots = [];
+  for (let i = 0; i < BEY_CHECK_DECK_SIZE; i++) slots.push(emptyBeyCheckSlot());
+  return slots;
+}
+
+function normalizeBeyCheckSlot(raw) {
+  if (!raw || typeof raw !== "object") return emptyBeyCheckSlot();
+  // Legacy {blade, ratchet, bit} → new shape with mode "standard".
+  if (!("mode" in raw) && ("blade" in raw || "ratchet" in raw || "bit" in raw)) {
+    const parts = {};
+    ["blade", "ratchet", "bit"].forEach(f => {
+      if (typeof raw[f] === "string" && raw[f]) parts[f] = raw[f];
+    });
+    return { mode: "standard", parts };
+  }
+  const mode = BEY_CHECK_MODES.includes(raw.mode) ? raw.mode : "standard";
+  const parts = {};
+  if (raw.parts && typeof raw.parts === "object") {
+    BEY_CHECK_FIELDS[mode].forEach(f => {
+      const v = raw.parts[f];
+      if (typeof v === "string" && v) parts[f] = v;
+    });
+  }
+  return { mode, parts };
+}
+
+function normalizeBeyCheckDeck(raw) {
+  const out = emptyBeyCheckDeck();
+  // Firebase may round-trip a sparse array as an object keyed by numeric
+  // strings, so accept either shape.
+  if (!raw || typeof raw !== "object") return out;
+  for (let i = 0; i < BEY_CHECK_DECK_SIZE; i++) {
+    if (raw[i]) out[i] = normalizeBeyCheckSlot(raw[i]);
+  }
+  return out;
+}
+
+function isBeyCheckSlotEmpty(slot) {
+  if (!slot || !slot.parts) return true;
+  return Object.values(slot.parts).every(v => !v);
+}
+
+function isBeyCheckDeckEmpty(deck) {
+  return !Array.isArray(deck) || deck.every(isBeyCheckSlotEmpty);
+}
+
+// Aggregate part usage across the tournament. Counts each participant's
+// most recent saved deck once (via findLatestDeckForParticipant) so that a
+// player who plays many matches with the same deck doesn't dominate the
+// chart proportionally to their match count.
+const BEY_CHECK_FIELD_LABEL = {
+  blade: "Blades",
+  lockChip: "Lock Chips",
+  mainBlade: "Main Blades",
+  metalBlade: "Metal Blades",
+  overBlade: "Over Blades",
+  assistBlade: "Assist Blades",
+  ratchet: "Ratchets",
+  bit: "Bits"
+};
+const BEY_CHECK_FIELD_ORDER = [
+  "blade", "lockChip", "mainBlade", "metalBlade",
+  "overBlade", "assistBlade", "ratchet", "bit"
+];
+
+function aggregatePartUsage(state) {
+  const usage = {};
+  const participants = getParticipants(state);
+  for (const name of participants) {
+    if (!name) continue;
+    const deck = findLatestDeckForParticipant(state, name, null);
+    if (!deck) continue;
+    deck.forEach(slot => {
+      if (!slot || !slot.parts) return;
+      Object.entries(slot.parts).forEach(([field, partName]) => {
+        if (!partName || partName === NO_RATCHET) return;
+        if (!usage[field]) usage[field] = {};
+        usage[field][partName] = (usage[field][partName] || 0) + 1;
+      });
+    });
+  }
+  return usage;
+}
+
+function partUsageColor(i, total) {
+  const hue = Math.round((i * 360) / Math.max(total, 1));
+  return `hsl(${hue}, 65%, 55%)`;
+}
+
+function renderPartUsagePie(label, counts) {
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const total = entries.reduce((s, [, c]) => s + c, 0);
+  if (total === 0) return "";
+  const cx = 70, cy = 70, r = 60;
+  let cumulative = 0;
+  const slices = entries.map(([, count], i) => {
+    const startAngle = (cumulative / total) * 2 * Math.PI;
+    cumulative += count;
+    const endAngle = (cumulative / total) * 2 * Math.PI;
+    const x1 = cx + r * Math.sin(startAngle);
+    const y1 = cy - r * Math.cos(startAngle);
+    const x2 = cx + r * Math.sin(endAngle);
+    const y2 = cy - r * Math.cos(endAngle);
+    const large = endAngle - startAngle > Math.PI ? 1 : 0;
+    const color = partUsageColor(i, entries.length);
+    // Single-slice pie: a full circle path (zero-length arc isn't drawn).
+    const path = entries.length === 1
+      ? `M ${cx - r} ${cy} A ${r} ${r} 0 1 1 ${cx + r} ${cy} A ${r} ${r} 0 1 1 ${cx - r} ${cy} Z`
+      : `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`;
+    return `<path d="${path}" fill="${color}" stroke="#0d1117" stroke-width="1"/>`;
+  }).join("");
+  const legend = entries.map(([name, count], i) => {
+    const pct = ((count / total) * 100).toFixed(1);
+    const color = partUsageColor(i, entries.length);
+    return `<li class="part-usage-legend-item">
+      <span class="part-usage-swatch" style="background:${color}"></span>
+      <span class="part-usage-name">${escapeHtml(name)}</span>
+      <span class="part-usage-pct">${pct}% <span class="part-usage-count">(${count})</span></span>
+    </li>`;
+  }).join("");
+  return `
+    <section class="part-usage-card">
+      <header class="part-usage-title">${escapeHtml(label)}</header>
+      <div class="part-usage-body">
+        <svg viewBox="0 0 140 140" class="part-usage-pie" aria-hidden="true">${slices}</svg>
+        <ul class="part-usage-legend">${legend}</ul>
+      </div>
+    </section>
+  `;
+}
+
+function renderPartUsageCharts(state) {
+  const usage = aggregatePartUsage(state);
+  const fields = BEY_CHECK_FIELD_ORDER.filter(f => usage[f] && Object.keys(usage[f]).length);
+  if (!fields.length) return "";
+  const charts = fields
+    .map(f => renderPartUsagePie(BEY_CHECK_FIELD_LABEL[f] || f, usage[f]))
+    .join("");
+  return `<fieldset class="part-usage-fieldset">
+    <legend>Parts Usage</legend>
+    <div class="part-usage-grid">${charts}</div>
+  </fieldset>`;
+}
+
+// Mirrors the deck builder's "one of each part per deck" rule (deck.js).
+// Lock chips repeat freely except for the exclusive ones (Emperor, Valkyrie).
+// NO_RATCHET is a sentinel, not a real part — it can repeat across slots.
+function isBeyCheckCountedPart(field, name) {
+  if (!name || name === NO_RATCHET) return false;
+  if (field === "lockChip") {
+    return typeof LOCK_CHIP_EXCLUSIVE !== "undefined" && LOCK_CHIP_EXCLUSIVE.has(name);
+  }
+  return true;
+}
+
+// Returns { name, slotIdx } for the first part in `newSlot` that's already
+// used in another slot of `deck` (excluding `excludeIdx`), or null if clean.
+function findBeyCheckPartConflict(newSlot, deck, excludeIdx) {
+  if (!newSlot || !newSlot.parts || !Array.isArray(deck)) return null;
+  const newEntries = Object.entries(newSlot.parts)
+    .filter(([f, n]) => isBeyCheckCountedPart(f, n));
+  for (let i = 0; i < deck.length; i++) {
+    if (i === excludeIdx) continue;
+    const other = deck[i];
+    if (!other || !other.parts) continue;
+    for (const [field, name] of newEntries) {
+      for (const [otherField, otherName] of Object.entries(other.parts)) {
+        if (!isBeyCheckCountedPart(otherField, otherName)) continue;
+        if (otherName === name) return { name, slotIdx: i };
+      }
+    }
+  }
+  return null;
+}
+
+// Find the most recently saved deck for a participant across the tournament,
+// excluding the current match. Used to carry decks forward to the next match
+// without making the host re-enter them. "Most recent" = reverse insertion
+// order in state.matches, which mirrors the round-by-round generation flow
+// (R1 → R2 → … → bracket).
+function findLatestDeckForParticipant(state, name, excludeMatchId) {
+  if (!name || !state || !state.matches) return null;
+  const entries = Object.entries(state.matches);
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const [matchId, match] = entries[i];
+    if (matchId === excludeMatchId) continue;
+    if (!match || !match.decks) continue;
+    let raw = null;
+    if (match.a === name) raw = match.decks.a;
+    else if (match.b === name) raw = match.decks.b;
+    if (!raw) continue;
+    const deck = normalizeBeyCheckDeck(raw);
+    if (!isBeyCheckDeckEmpty(deck)) return deck;
+  }
+  return null;
+}
+
+const BEY_CHECK_FIELD_FOLDER = {
+  blade: "blades",
+  lockChip: "lockChips",
+  mainBlade: "mainBlades",
+  metalBlade: "metalBlades",
+  overBlade: "overBlades",
+  assistBlade: "assistBlades",
+  ratchet: "ratchets",
+  bit: "bits"
+};
+
+// Resolve the asset folder for a part. Bits are special: after mergeBits()
+// runs in core.js, DATA.bits contains both normal bits and ratchet-bits, and
+// each item carries its own _folder ("bits" vs "ratchetBits") — so picking
+// the right path means looking the item up rather than using the field map.
+// Parts with modes (e.g. Scorpio Spear, Turbo, Operate) have mode-suffixed
+// image filenames (Name0.webp, Name1.webp …); fall back to the item's
+// currentMode (default 0) so the image actually loads.
+function beyCheckPartImg(field, name) {
+  if (!name || name === NO_RATCHET) return null;
+  const arr = getBeyCheckPartList(field);
+  const item = arr && arr.find(it => it.name === name);
+  const folder = (item && item._folder) || BEY_CHECK_FIELD_FOLDER[field];
+  if (!folder) return null;
+  const hasModes = item && Array.isArray(item.modes) && item.modes.length > 0;
+  const modeIdx = hasModes ? (typeof item.currentMode === "number" ? item.currentMode : 0) : null;
+  return partImgPath(folder, name, modeIdx);
+}
+
+function renderBeyCheckSlotParts(slot) {
+  const mode = (slot && BEY_CHECK_MODES.includes(slot.mode)) ? slot.mode : "standard";
+  const parts = (slot && slot.parts) || {};
+  return BEY_CHECK_FIELDS[mode]
+    .filter(f => parts[f] && parts[f] !== NO_RATCHET)
+    .map(f => {
+      const name = parts[f];
+      const src = beyCheckPartImg(f, name);
+      const imgHtml = src
+        ? `<img src="${src}" alt="${escapeHtml(name)}" class="bey-check-part-img" onerror="this.style.display='none'">`
+        : "";
+      return `
+        <div class="bey-check-part">
+          <div class="bey-check-part-img-box">${imgHtml}</div>
+          <span class="bey-check-part-name">${escapeHtml(name)}</span>
+        </div>`;
+    })
+    .join("");
+}
+
+function renderBeyCheckSlot(slotIdx, slot) {
+  const empty = isBeyCheckSlotEmpty(slot);
+  const modeLabel = !empty && slot && slot.mode === "cx" ? " · CX"
+    : !empty && slot && slot.mode === "cxExpand" ? " · CX Expand"
+    : "";
+  const body = empty
+    ? `<div class="bey-check-slot-summary">Empty — tap to build</div>`
+    : `<div class="bey-check-slot-parts">${renderBeyCheckSlotParts(slot)}</div>`;
+  return `
+    <button type="button" class="bey-check-slot${empty ? " bey-check-slot-empty" : ""}" data-slot="${slotIdx}">
+      <div class="bey-check-slot-label">Slot ${slotIdx + 1}${modeLabel}</div>
+      ${body}
+    </button>
+  `;
+}
+
+// Wire the calculator-style searchable dropdowns (makeSearchable + the
+// ratchet→bit filter coupling) onto the popup's three mode forms once. Run
+// at module load — the popup elements live in index.html so they exist as
+// soon as this script executes.
+(function initBeyCheckSlotForms() {
+  if (typeof makeSearchable !== "function") return;
+  const noRatchetChoice = [{ value: NO_RATCHET, label: "No Ratchet" }];
+
+  const stdForm = document.getElementById("bey-check-form-standard");
+  if (stdForm) {
+    makeSearchable(stdForm.querySelector('[name="blade"]'), DATA.blades, b => b.name);
+    makeSearchable(stdForm.querySelector('[name="ratchet"]'), DATA.ratchets, r => r.name, noRatchetChoice);
+    makeSearchable(stdForm.querySelector('[name="bit"]'), DATA.bits, b => b.name);
+  }
+
+  const cxForm = document.getElementById("bey-check-form-cx");
+  if (cxForm) {
+    makeSearchable(cxForm.querySelector('[name="lockChip"]'), DATA.lockChips, lc => lc.name);
+    makeSearchable(cxForm.querySelector('[name="mainBlade"]'), DATA.mainBlades, mb => mb.name);
+    makeSearchable(cxForm.querySelector('[name="assistBlade"]'), DATA.assistBlades, ab => ab.name);
+    makeSearchable(cxForm.querySelector('[name="ratchet"]'), DATA.ratchets, r => r.name, noRatchetChoice);
+    makeSearchable(cxForm.querySelector('[name="bit"]'), DATA.bits, b => b.name);
+  }
+
+  const cxeForm = document.getElementById("bey-check-form-cxExpand");
+  if (cxeForm) {
+    makeSearchable(cxeForm.querySelector('[name="lockChip"]'), DATA.lockChips, lc => lc.name);
+    makeSearchable(cxeForm.querySelector('[name="metalBlade"]'), DATA.metalBlades, mb => mb.name);
+    makeSearchable(cxeForm.querySelector('[name="overBlade"]'), DATA.overBlades, ob => ob.name);
+    makeSearchable(cxeForm.querySelector('[name="assistBlade"]'), DATA.assistBlades, ab => ab.name);
+    makeSearchable(cxeForm.querySelector('[name="ratchet"]'), DATA.ratchets, r => r.name, noRatchetChoice);
+    makeSearchable(cxeForm.querySelector('[name="bit"]'), DATA.bits, b => b.name);
+  }
+
+  // Picking "No Ratchet" flips the bit list to ratchet-bits, mirroring the
+  // calculator. Standard form additionally honors Bullet Griffon (forced no
+  // ratchet, normal-bit only) so it matches the calculator's blade rules.
+  ["bey-check-form-standard", "bey-check-form-cx", "bey-check-form-cxExpand"].forEach(id => {
+    const form = document.getElementById(id);
+    if (!form) return;
+    const ratchetSel = form.querySelector('[name="ratchet"]');
+    if (ratchetSel) {
+      ratchetSel.addEventListener("change", () => applyBitFilter(form));
+      applyBitFilter(form);
+    }
+    // Auto-advance to the next field after a real selection. Skipped during
+    // restoreBeyCheckForm and skipped when the value clears (filter rejection
+    // or user wiping a field).
+    form.querySelectorAll("select").forEach(sel => {
+      sel.addEventListener("change", () => {
+        if (beyCheckSuppressAdvance) return;
+        if (!sel.value) return;
+        advanceBeyCheckField(sel);
+      });
+    });
+  });
+
+  if (stdForm) {
+    const bladeSel = stdForm.querySelector('[name="blade"]');
+    const ratchetWrapper = stdForm.querySelector('[name="ratchet"]').nextElementSibling;
+    const ratchetInput = ratchetWrapper && ratchetWrapper.querySelector("input");
+    const bitWrapper = stdForm.querySelector('[name="bit"]').nextElementSibling;
+    const bitInput = bitWrapper && bitWrapper.querySelector("input");
+    bladeSel?.addEventListener("change", () => {
+      const idx = bladeSel.value;
+      const codename = idx !== "" && DATA.blades[idx] ? DATA.blades[idx].codename : "";
+      if (codename === "BULLETGRIFFON") {
+        if (ratchetWrapper) {
+          ratchetWrapper._filterFn = null;
+          ratchetWrapper._select(NO_RATCHET);
+          if (ratchetInput) ratchetInput.disabled = true;
+        }
+        if (bitWrapper) bitWrapper._setFilter(b => !b.isRatchetBit);
+        if (bitInput) bitInput.disabled = false;
+      } else if (codename === "CLOCKMIRAGE") {
+        if (ratchetWrapper) {
+          ratchetWrapper._setFilter(r => r.name.endsWith("5"));
+          if (ratchetInput) { ratchetInput.disabled = false; ratchetInput.placeholder = "-- Select --"; }
+        }
+        if (bitWrapper) bitWrapper._setFilter(b => !b.isRatchetBit);
+        if (bitInput) { bitInput.disabled = false; bitInput.placeholder = "-- Select --"; }
+      } else {
+        if (ratchetWrapper) {
+          ratchetWrapper._filterFn = null;
+          if (ratchetInput) { ratchetInput.disabled = false; ratchetInput.placeholder = "-- Select --"; }
+        }
+        if (bitInput) { bitInput.disabled = false; bitInput.placeholder = "-- Select --"; }
+        applyBitFilter(stdForm);
+      }
+    });
+  }
+})();
+
+// Per-form field order for auto-advance in the bey check slot popup.
+// Mirrors the calculator's NEXT_DROPDOWN, but jumps directly to the next
+// field (no __BOTTOM__ scrolling intermediate — the slot popup is short).
+const BEY_CHECK_NEXT_FIELD = {
+  "bey-check-form-standard": { blade: "ratchet", ratchet: "bit", bit: null },
+  "bey-check-form-cx": {
+    lockChip: "mainBlade", mainBlade: "assistBlade", assistBlade: "ratchet",
+    ratchet: "bit", bit: null
+  },
+  "bey-check-form-cxExpand": {
+    lockChip: "metalBlade", metalBlade: "overBlade", overBlade: "assistBlade",
+    assistBlade: "ratchet", ratchet: "bit", bit: null
+  }
+};
+
+// Suppresses auto-advance during restoreBeyCheckForm so pre-loaded values
+// don't fight each other for focus. User-initiated changes still advance.
+let beyCheckSuppressAdvance = false;
+
+function advanceBeyCheckField(sel) {
+  const form = sel.closest("form");
+  if (!form) return;
+  const map = BEY_CHECK_NEXT_FIELD[form.id];
+  if (!map) return;
+  const nextName = map[sel.getAttribute("name")];
+  if (!nextName) return;
+  const wrapper = form.querySelector(`[name="${nextName}"]`)?.nextElementSibling;
+  const input = wrapper && wrapper.querySelector("input");
+  if (!input || input.disabled) return;
+  // rAF: let the dropdown's own close() and DOM updates settle before
+  // scrolling/focusing. block: "center" works against the popup card's
+  // own overflow-y: auto, so the popup scrolls — not the page.
+  requestAnimationFrame(() => {
+    wrapper.scrollIntoView({ behavior: "smooth", block: "center" });
+    input.focus();
+  });
+}
+
+function clearBeyCheckForm(form) {
+  if (!form) return;
+  form.querySelectorAll(".search-dropdown").forEach(w => { if (w._clear) w._clear(); });
+  // Re-enable any dropdown that the BG/CM rules may have disabled.
+  form.querySelectorAll(".search-dropdown input").forEach(input => {
+    input.disabled = false;
+    input.placeholder = "-- Select --";
+  });
+  applyBitFilter(form);
+}
+
+function restoreBeyCheckForm(form, slot) {
+  if (!form) return;
+  clearBeyCheckForm(form);
+  const fields = BEY_CHECK_FIELDS[slot.mode] || [];
+  // Order matters: write blade/lockChip first so any change-driven rules
+  // (Bullet Griffon, ratchet→bit filter) settle before we set ratchet/bit.
+  const order = ["blade", "lockChip", "mainBlade", "metalBlade", "overBlade", "assistBlade", "ratchet", "bit"]
+    .filter(f => fields.includes(f));
+  beyCheckSuppressAdvance = true;
+  try {
+    order.forEach(name => {
+      const sel = form.querySelector(`[name="${name}"]`);
+      if (!sel) return;
+      const wrapper = sel.nextElementSibling;
+      if (!wrapper || typeof wrapper._select !== "function") return;
+      const value = slot.parts && slot.parts[name];
+      if (!value) return;
+      if (value === NO_RATCHET) { wrapper._select(NO_RATCHET); return; }
+      const arr = getBeyCheckPartList(name);
+      const idx = arr.findIndex(it => it.name === value);
+      if (idx >= 0) wrapper._select(idx);
+    });
+  } finally {
+    beyCheckSuppressAdvance = false;
+  }
+}
+
+function readBeyCheckForm(form, mode) {
+  const parts = {};
+  if (!form) return { mode, parts };
+  BEY_CHECK_FIELDS[mode].forEach(name => {
+    const sel = form.querySelector(`[name="${name}"]`);
+    if (!sel) return;
+    const val = sel.value;
+
+    // Primary path: the search dropdown set sel.value = item index when the
+    // user clicked an option.
+    if (val !== "" && val != null) {
+      if (val === NO_RATCHET) { parts[name] = NO_RATCHET; return; }
+      const arr = getBeyCheckPartList(name);
+      const idx = Number(val);
+      if (Number.isInteger(idx) && arr[idx]) { parts[name] = arr[idx].name; return; }
+    }
+
+    // Fallback: the user typed a name into the searchable input but the
+    // option didn't latch on the underlying <select> (can happen on mobile
+    // if Save is tapped before the option's mousedown registers). Match the
+    // typed text against item names so the save isn't silently dropped.
+    const wrapper = sel.nextElementSibling;
+    const input = wrapper && wrapper.querySelector("input");
+    const text = input && input.value && input.value.trim();
+    if (!text) return;
+    if (text.toLowerCase() === "no ratchet") { parts[name] = NO_RATCHET; return; }
+    const arr = getBeyCheckPartList(name);
+    const match = arr.find(it => it.name.toLowerCase() === text.toLowerCase());
+    if (match) parts[name] = match.name;
+  });
+  return { mode, parts };
+}
+
+// Combo-builder sub-popup. Opens on top of the bey check popup; on Save it
+// hands the working draft back to the caller via onSave(slot). Edits stay
+// local to the draft until Save — Cancel discards. `deck` is the full 3-slot
+// deck for the active side, used to detect duplicate parts at save time.
+function showBeyCheckSlotPopup(slotIdx, slot, deck, onSave) {
+  const popup = document.getElementById("bey-check-slot-popup");
+  if (!popup) return;
+  const subtitle = popup.querySelector("#bey-check-slot-subtitle");
+  const tabs = popup.querySelectorAll(".bey-check-mode-tab");
+  const forms = popup.querySelectorAll(".bey-check-mode-form");
+  const statusEl = popup.querySelector("#bey-check-slot-status");
+  const saveBtn = popup.querySelector("#bey-check-slot-save");
+  const clearBtn = popup.querySelector("#bey-check-slot-clear");
+  const cancelBtn = popup.querySelector("#bey-check-slot-cancel");
+
+  if (subtitle) subtitle.textContent = `Slot ${slotIdx + 1}`;
+  if (statusEl) statusEl.textContent = "";
+
+  let activeMode = BEY_CHECK_MODES.includes(slot.mode) ? slot.mode : "standard";
+
+  const showMode = (mode) => {
+    activeMode = mode;
+    tabs.forEach(t => t.classList.toggle("active", t.dataset.mode === mode));
+    forms.forEach(f => f.classList.toggle("hidden", f.dataset.mode !== mode));
+  };
+
+  // Reset every form so leftovers from a previous open don't bleed in,
+  // then restore the saved slot into its matching mode form.
+  forms.forEach(f => clearBeyCheckForm(f));
+  const targetForm = popup.querySelector(`.bey-check-mode-form[data-mode="${activeMode}"]`);
+  restoreBeyCheckForm(targetForm, slot);
+  showMode(activeMode);
+
+  tabs.forEach(t => {
+    t.onclick = () => {
+      // Switching modes wipes the working draft for the new mode — the user
+      // is picking a different combo line, not editing the same parts.
+      const next = t.dataset.mode;
+      const nextForm = popup.querySelector(`.bey-check-mode-form[data-mode="${next}"]`);
+      clearBeyCheckForm(nextForm);
+      showMode(next);
+    };
+  });
+
+  popup.classList.remove("hidden");
+
+  const close = () => {
+    popup.classList.add("hidden");
+    saveBtn.onclick = null;
+    clearBtn.onclick = null;
+    cancelBtn.onclick = null;
+    tabs.forEach(t => { t.onclick = null; });
+  };
+
+  cancelBtn.onclick = close;
+  saveBtn.onclick = () => {
+    const form = popup.querySelector(`.bey-check-mode-form[data-mode="${activeMode}"]`);
+    const next = readBeyCheckForm(form, activeMode);
+    const conflict = findBeyCheckPartConflict(next, deck, slotIdx);
+    if (conflict) {
+      if (statusEl) {
+        statusEl.textContent = `"${conflict.name}" is already used in Slot ${conflict.slotIdx + 1}.`;
+      }
+      return;
+    }
+    onSave(next);
+    close();
+  };
+  clearBtn.onclick = () => {
+    // Clearing can never introduce a duplicate.
+    if (statusEl) statusEl.textContent = "";
+    onSave({ mode: activeMode, parts: {} });
+    close();
+  };
+}
+
+function showBeyCheckPopup(matchId) {
+  const popup = document.getElementById("bey-check-popup");
+  if (!popup) return;
+  if (swissEditCode && !swissCanEdit) return; // viewers don't get bey check
+
+  const state = loadSwiss();
+  const match = state.matches[matchId];
+  if (!match) return;
+  if (match.bye) {
+    alert(`${match.a} has a BYE this round.`);
+    return;
+  }
+  if (!match.b) {
+    // Bracket slot not yet filled — fall back to the original behavior so
+    // the host can still go live / score whatever is there.
+    startSwissMatch(matchId);
+    return;
+  }
+
+  const subtitle = popup.querySelector("#bey-check-subtitle");
+  const tabs = popup.querySelectorAll(".bey-check-tab");
+  const slotsHost = popup.querySelector("#bey-check-slots");
+  const status = popup.querySelector("#bey-check-status");
+  const scoreBtn = popup.querySelector("#bey-check-score");
+  const cancelBtn = popup.querySelector("#bey-check-cancel");
+
+  if (subtitle) subtitle.textContent = `${match.a} vs ${match.b}`;
+  tabs.forEach(t => {
+    if (t.dataset.side === "a") t.textContent = match.a;
+    else if (t.dataset.side === "b") t.textContent = match.b;
+    t.classList.toggle("active", t.dataset.side === "a");
+  });
+  if (status) status.textContent = "";
+
+  const decks = {
+    a: normalizeBeyCheckDeck(match.decks && match.decks.a),
+    b: normalizeBeyCheckDeck(match.decks && match.decks.b)
+  };
+  // Carry-forward: if this match has no deck saved for a participant yet,
+  // pull their most recent deck from a previous match. The host can still
+  // edit any slot — the inherited combos are just a starting point.
+  let carriedOver = false;
+  if (isBeyCheckDeckEmpty(decks.a) && match.a) {
+    const prev = findLatestDeckForParticipant(state, match.a, matchId);
+    if (prev) { decks.a = prev; carriedOver = true; }
+  }
+  if (isBeyCheckDeckEmpty(decks.b) && match.b) {
+    const prev = findLatestDeckForParticipant(state, match.b, matchId);
+    if (prev) { decks.b = prev; carriedOver = true; }
+  }
+  let activeSide = "a";
+
+  const setStatus = (msg, kind) => {
+    if (!status) return;
+    status.textContent = msg || "";
+    status.classList.remove("is-ok", "is-err", "is-pending");
+    if (kind) status.classList.add(`is-${kind}`);
+  };
+
+  // Push the full decks subtree for this match. Direct user action, so we
+  // don't gate on swissApplyingRemote (that flag exists to prevent echo
+  // loops on listener-driven writes — bey check is user-driven). Surfaces
+  // success / failure visibly so it's obvious whether Firebase received it.
+  const pushDecksToFirebase = () => {
+    if (!swissRoomRef) {
+      setStatus("Saved locally — no live room to sync.", "ok");
+      return;
+    }
+    if (!swissCanEdit) {
+      setStatus("View-only — can't write.", "err");
+      return;
+    }
+    setStatus("Saving…", "pending");
+    swissRoomRef.update({
+      [`matches/${matchId}/decks`]: { a: decks.a, b: decks.b }
+    }).then(() => {
+      setStatus("Saved to Firebase ✓", "ok");
+      setTimeout(() => setStatus(""), 1500);
+    }).catch(e => {
+      console.warn("Bey check push failed:", e);
+      setStatus("Save failed: " + (e && e.message ? e.message : e), "err");
+    });
+  };
+
+  const persistDecks = () => {
+    const s = loadSwiss();
+    if (!s.matches[matchId]) return;
+    s.matches[matchId].decks = { a: decks.a, b: decks.b };
+    persistSwiss(s);
+    pushDecksToFirebase();
+  };
+
+  const renderSlots = () => {
+    const deck = decks[activeSide];
+    slotsHost.innerHTML = deck.map((s, i) => renderBeyCheckSlot(i, s)).join("");
+    slotsHost.querySelectorAll(".bey-check-slot").forEach(el => {
+      el.addEventListener("click", () => {
+        const slotIdx = Number(el.dataset.slot);
+        const sideAtOpen = activeSide;
+        showBeyCheckSlotPopup(slotIdx, decks[sideAtOpen][slotIdx], decks[sideAtOpen], (next) => {
+          decks[sideAtOpen][slotIdx] = next;
+          if (sideAtOpen === activeSide) renderSlots();
+          persistDecks();
+        });
+      });
+    });
+  };
+  renderSlots();
+
+  tabs.forEach(t => {
+    t.onclick = () => {
+      activeSide = t.dataset.side;
+      tabs.forEach(o => o.classList.toggle("active", o === t));
+      renderSlots();
+    };
+  });
+
+  popup.classList.remove("hidden");
+
+  if (carriedOver) {
+    // Write the inherited decks to this match's record so other devices
+    // see them too, then surface a brief notice in the status line.
+    const s = loadSwiss();
+    if (s.matches[matchId]) {
+      s.matches[matchId].decks = { a: decks.a, b: decks.b };
+      persistSwiss(s);
+    }
+    if (swissRoomRef && swissCanEdit) {
+      setStatus("Carried decks from previous match…", "pending");
+      swissRoomRef.update({
+        [`matches/${matchId}/decks`]: { a: decks.a, b: decks.b }
+      }).then(() => {
+        setStatus("Loaded last deck ✓", "ok");
+        setTimeout(() => setStatus(""), 1800);
+      }).catch(e => {
+        console.warn("Bey check carry-over push failed:", e);
+        setStatus("Carry-over save failed: " + (e && e.message ? e.message : e), "err");
+      });
+    } else {
+      setStatus("Loaded last deck (local only).", "ok");
+      setTimeout(() => setStatus(""), 1800);
+    }
+  }
+
+  const close = () => {
+    popup.classList.add("hidden");
+    scoreBtn.onclick = null;
+    cancelBtn.onclick = null;
+    tabs.forEach(t => { t.onclick = null; });
+  };
+
+  cancelBtn.onclick = close;
+  scoreBtn.onclick = () => {
+    close();
+    startSwissMatch(matchId);
+  };
 }
 
 function showEditParticipantsPopup() {
@@ -2080,12 +2813,16 @@ function renderTournamentResultsMarkup(state) {
       <div class="tournament-results-mode">${escapeHtml(modeLabel)}</div>
     </div>
   `;
+  // Append the parts-usage pie charts whenever any deck data exists in this
+  // tournament — useful in the history popup even before final placements.
+  const partsCharts = renderPartUsageCharts(state);
+
   // Swiss-only mode never produces knockout placements — its result is the
   // combined cross-group standings instead.
   if (state.mode === "swiss-only") {
     const standings = computeCombinedSwissStandings(state);
     if (!standings.length) {
-      return header + `<p class="tournament-results-empty">This tournament hasn't started yet — come back once group rounds are played.</p>`;
+      return header + `<p class="tournament-results-empty">This tournament hasn't started yet — come back once group rounds are played.</p>` + partsCharts;
     }
     const groupLetter = i => String.fromCharCode(65 + i);
     const rows = standings.map((s, i) => {
@@ -2101,11 +2838,11 @@ function renderTournamentResultsMarkup(state) {
         </div>
       `;
     }).join("");
-    return header + `<div class="tournament-results-list">${rows}</div>`;
+    return header + `<div class="tournament-results-list">${rows}</div>` + partsCharts;
   }
   const placements = computeTournamentPlacements(state);
   if (!placements.length) {
-    return header + `<p class="tournament-results-empty">This tournament hasn't reached the knockout placements yet — come back when the bracket finishes.</p>`;
+    return header + `<p class="tournament-results-empty">This tournament hasn't reached the knockout placements yet — come back when the bracket finishes.</p>` + partsCharts;
   }
   const rows = placements.map(p => `
     <div class="tournament-results-row tournament-results-place-${p.place}">
@@ -2113,7 +2850,7 @@ function renderTournamentResultsMarkup(state) {
       <span class="tournament-results-player">${escapeHtml(p.name || "—")}</span>
     </div>
   `).join("");
-  return header + `<div class="tournament-results-list">${rows}</div>`;
+  return header + `<div class="tournament-results-list">${rows}</div>` + partsCharts;
 }
 
 function showTournamentResultsFromHistory(code) {
