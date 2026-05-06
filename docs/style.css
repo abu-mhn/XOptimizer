@@ -5267,6 +5267,31 @@ body.light-mode .swiss-group-progress {
     min-width: 0;
 }
 
+button.swiss-tournament-name-editable {
+    background: transparent;
+    border: 1px dashed transparent;
+    color: inherit;
+    padding: 2px 6px;
+    margin: -2px -6px;
+    border-radius: 4px;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+}
+
+button.swiss-tournament-name-editable:hover,
+button.swiss-tournament-name-editable:focus-visible {
+    border-color: #30363d;
+    background: #161b22;
+    outline: none;
+}
+
+.swiss-tournament-name-empty {
+    color: #6e7681;
+    font-style: italic;
+    font-weight: 500;
+}
+
 .tournament-mode-choices {
     display: flex;
     flex-direction: column;

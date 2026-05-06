@@ -493,6 +493,19 @@
     </div>
   </footer>
 
+  <!-- ================= EDIT TOURNAMENT NAME POPUP ================= -->
+  <div id="edit-tournament-name-popup" class="popup-overlay hidden">
+    <div class="popup-card">
+      <h2 class="popup-title">Tournament Name</h2>
+      <p class="popup-text">Leave blank to remove the name.</p>
+      <input id="edit-tournament-name-input" type="text" class="tournament-name-input" placeholder="e.g. Spring Cup 2026" maxlength="80" autocomplete="off" />
+      <div class="popup-actions">
+        <button type="button" id="edit-tournament-name-save" class="btn">Save</button>
+        <button type="button" id="edit-tournament-name-cancel" class="btn popup-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= EDIT PARTICIPANTS POPUP ================= -->
   <div id="edit-participants-popup" class="popup-overlay hidden">
     <div class="popup-card">
@@ -699,10 +712,10 @@
       <h2 class="popup-title">What's New</h2>
 
       <ul class="popup-list">
-        <li><strong>Bey Check.</strong> Hosts and co-hosts can tap a match to record each participant's 3-slot deck. Build combos with the same Standard / CX / CX Expand selectors as the calculator, with one-of-each-part enforcement.</li>
-        <li><strong>Decks carry forward.</strong> When a participant plays their next match, their last deck pre-loads automatically so you don't re-enter it every round. Edits still apply per-match.</li>
-        <li><strong>Live deck sync.</strong> Each slot save pushes straight to Firebase as you build, so co-hosts see decks update in real time. Visible "Saving…" / "Saved ✓" status confirms the write.</li>
-        <li><strong>Parts Usage charts.</strong> When the tournament finishes, the bottom of the bracket view (and the history results popup) shows pie charts of which blades, ratchets, bits, and assist parts the field actually brought.</li>
+        <li><strong>Bey Check.</strong> Tap a match to record each player's deck — auto-saves and carries forward to their next match.</li>
+        <li><strong>Parts Usage charts.</strong> Pie charts at the end show which parts the field actually brought.</li>
+        <li><strong>Single Elim top 8.</strong> 5th- and 7th-place matches now play out for 8+ player brackets.</li>
+        <li><strong>Rename anytime.</strong> Tap the tournament name in the toolbar to edit it.</li>
       </ul>
 
       <button type="button" class="btn popup-ok">

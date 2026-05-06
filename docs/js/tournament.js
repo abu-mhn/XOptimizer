@@ -499,6 +499,15 @@ function generateSingleElimFromText(text, tournamentName) {
     if (unique.length >= 4) {
       state.matches["bracket-3rd-0"] = emptyBracketMatch("3rd", 0);
     }
+    // Top-8: QF losers feed two consolation QFs which in turn feed the
+    // 5th- and 7th-place matches. Mirrors Swiss + Top 8. Requires a real
+    // QF round (bracketSize ≥ 8 → preFinalRounds ≥ 2).
+    if (preFinalRounds >= 2) {
+      state.matches["bracket-cqf-0"] = emptyBracketMatch("cqf", 0);
+      state.matches["bracket-cqf-1"] = emptyBracketMatch("cqf", 1);
+      state.matches["bracket-5th-0"] = emptyBracketMatch("5th", 0);
+      state.matches["bracket-7th-0"] = emptyBracketMatch("7th", 0);
+    }
   }
 
   autoAdvanceByes(state);
@@ -1065,6 +1074,10 @@ function renderSingleElimBracket(state) {
   const preFinalRounds = typeof state.preFinalRounds === "number" ? state.preFinalRounds : 0;
   const finalMatch = state.matches["bracket-f-0"];
   const thirdMatch = state.matches["bracket-3rd-0"];
+  const fifthMatch = state.matches["bracket-5th-0"];
+  const seventhMatch = state.matches["bracket-7th-0"];
+  const cqf0 = state.matches["bracket-cqf-0"];
+  const cqf1 = state.matches["bracket-cqf-1"];
 
   // Pre-final round columns
   const columnHtml = [];
@@ -1085,7 +1098,20 @@ function renderSingleElimBracket(state) {
     `);
   }
 
-  // Final column — the Final plus (optionally) the 3rd place match.
+  // Consolation column — only when the bracket has a quarterfinal round.
+  if (cqf0 || cqf1) {
+    const cqfCards = [];
+    if (cqf0) cqfCards.push(renderSwissBracketCard("C1", "bracket-cqf-0", cqf0));
+    if (cqf1) cqfCards.push(renderSwissBracketCard("C2", "bracket-cqf-1", cqf1));
+    columnHtml.push(`
+      <div class="swiss-round-col">
+        <div class="swiss-round-title">Consolation</div>
+        <div class="swiss-match-list">${cqfCards.join("")}</div>
+      </div>
+    `);
+  }
+
+  // Final column — Final, plus 3rd / 5th / 7th place matches when present.
   const finalColParts = [];
   finalColParts.push(`<div class="swiss-round-title">Final</div>`);
   finalColParts.push(`<div class="swiss-match-list">${finalMatch ? renderSwissBracketCard("F", "bracket-f-0", finalMatch) : ""}</div>`);
@@ -1093,13 +1119,21 @@ function renderSingleElimBracket(state) {
     finalColParts.push(`<div class="swiss-round-subtitle">3rd Place</div>`);
     finalColParts.push(`<div class="swiss-match-list">${renderSwissBracketCard("3rd", "bracket-3rd-0", thirdMatch)}</div>`);
   }
+  if (fifthMatch) {
+    finalColParts.push(`<div class="swiss-round-subtitle">5th Place</div>`);
+    finalColParts.push(`<div class="swiss-match-list">${renderSwissBracketCard("5th", "bracket-5th-0", fifthMatch)}</div>`);
+  }
+  if (seventhMatch) {
+    finalColParts.push(`<div class="swiss-round-subtitle">7th Place</div>`);
+    finalColParts.push(`<div class="swiss-match-list">${renderSwissBracketCard("7th", "bracket-7th-0", seventhMatch)}</div>`);
+  }
   columnHtml.push(`<div class="swiss-round-col">${finalColParts.join("")}</div>`);
 
   const topRankings = renderSwissTop8({
     final: finalMatch ? { id: "bracket-f-0", m: finalMatch } : null,
     third: thirdMatch ? { id: "bracket-3rd-0", m: thirdMatch } : null,
-    fifth: null,
-    seventh: null
+    fifth: fifthMatch ? { id: "bracket-5th-0", m: fifthMatch } : null,
+    seventh: seventhMatch ? { id: "bracket-7th-0", m: seventhMatch } : null
   });
 
   return `
@@ -1278,7 +1312,10 @@ function renderSwiss() {
   // Final and (if present) the 3rd place match.
   const isSingleElim = state.mode === "single-elim";
   const placementIds = isSingleElim
-    ? ["bracket-f-0"].concat(state.matches["bracket-3rd-0"] ? ["bracket-3rd-0"] : [])
+    ? ["bracket-f-0"]
+        .concat(state.matches["bracket-3rd-0"] ? ["bracket-3rd-0"] : [])
+        .concat(state.matches["bracket-5th-0"] ? ["bracket-5th-0"] : [])
+        .concat(state.matches["bracket-7th-0"] ? ["bracket-7th-0"] : [])
     : ["bracket-f-0", "bracket-3rd-0", "bracket-5th-0", "bracket-7th-0"];
   const allPlacementsDone = bracketActive && placementIds.every(id => isMatchDecided(state.matches[id]));
   const isSwissOnly = state.mode === "swiss-only";
@@ -1309,9 +1346,17 @@ function renderSwiss() {
   const showStartKnockoutBtn = groupStageDone && !bracketActive && canEdit;
   const resetTitle = inRoomNonHost ? "Leave Room" : "Reset Tournament";
 
-  const tournamentNameHtml = state.tournamentName
-    ? `<span class="swiss-tournament-name" title="${escapeHtml(state.tournamentName)}">${escapeHtml(state.tournamentName)}</span>`
-    : "";
+  // Hosts and co-hosts can rename via a popup; viewers see a static label.
+  const nameValue = state.tournamentName || "";
+  let tournamentNameHtml = "";
+  if (canEdit) {
+    const placeholder = "+ Add tournament name";
+    const label = nameValue || placeholder;
+    const cls = "swiss-tournament-name swiss-tournament-name-editable" + (nameValue ? "" : " swiss-tournament-name-empty");
+    tournamentNameHtml = `<button type="button" class="${cls}" id="swiss-edit-name" title="Tap to rename">${escapeHtml(label)}</button>`;
+  } else if (nameValue) {
+    tournamentNameHtml = `<span class="swiss-tournament-name" title="${escapeHtml(nameValue)}">${escapeHtml(nameValue)}</span>`;
+  }
 
   const nameRowHtml = (tournamentNameHtml || tournamentComplete)
     ? `<div class="swiss-toolbar-row swiss-toolbar-name-row">
@@ -1365,6 +1410,7 @@ function renderSwiss() {
   bindSwissRoomBadge(view);
   view.querySelector("#swiss-start-bracket")?.addEventListener("click", startSwissBracket);
   view.querySelector("#swiss-edit-participants")?.addEventListener("click", showEditParticipantsPopup);
+  view.querySelector("#swiss-edit-name")?.addEventListener("click", showEditTournamentNamePopup);
 
   // Match cards are interactive only for users who can edit (host + co-host).
   // Participants joined via the view-only code see cards but can't open them.
@@ -1542,12 +1588,22 @@ function getBracketPropagation(round, bracketIndex, state) {
   if (typeof round === "number") {
     const preFinal = state && typeof state.preFinalRounds === "number" ? state.preFinalRounds : 0;
     const isSemi = round === preFinal - 1;
+    const isQuarter = round === preFinal - 2;
     const slot = bracketIndex % 2 === 0 ? "a" : "b";
     if (isSemi) {
       const has3rd = !!(state && state.matches && state.matches["bracket-3rd-0"]);
       return {
         winner: { toId: "bracket-f-0", slot },
         loser:  has3rd ? { toId: "bracket-3rd-0", slot } : null
+      };
+    }
+    if (isQuarter) {
+      // Top-8: QF losers feed bracket-cqf-{floor(qfIdx/2)}. QFs 0,1 → CQF0;
+      // QFs 2,3 → CQF1. The slot inside the CQF mirrors the QF index parity.
+      const hasCqf = !!(state && state.matches && state.matches["bracket-cqf-0"]);
+      return {
+        winner: { toId: `bracket-r${round + 1}-${Math.floor(bracketIndex / 2)}`, slot },
+        loser:  hasCqf ? { toId: `bracket-cqf-${Math.floor(bracketIndex / 2)}`, slot } : null
       };
     }
     return {
@@ -2380,6 +2436,49 @@ function showBeyCheckPopup(matchId) {
   };
 }
 
+function showEditTournamentNamePopup() {
+  const popup = document.getElementById("edit-tournament-name-popup");
+  if (!popup) return;
+  const input = popup.querySelector("#edit-tournament-name-input");
+  const saveBtn = popup.querySelector("#edit-tournament-name-save");
+  const cancelBtn = popup.querySelector("#edit-tournament-name-cancel");
+  const state = loadSwiss();
+  if (input) input.value = state.tournamentName || "";
+  popup.classList.remove("hidden");
+  setTimeout(() => { input?.focus(); input?.select(); }, 0);
+
+  const close = () => {
+    popup.classList.add("hidden");
+    saveBtn.onclick = null;
+    cancelBtn.onclick = null;
+    if (input) input.onkeydown = null;
+  };
+
+  const save = () => {
+    const next = (input?.value || "").trim();
+    const s = loadSwiss();
+    const current = s.tournamentName || "";
+    if (next === current) { close(); return; }
+    s.tournamentName = next || null;
+    persistSwiss(s);
+    if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
+      swissRoomRef.update({ tournamentName: next || null })
+        .catch(e => console.warn("Tournament name push failed:", e));
+    }
+    renderSwiss();
+    close();
+  };
+
+  cancelBtn.onclick = close;
+  saveBtn.onclick = save;
+  if (input) {
+    input.onkeydown = (e) => {
+      if (e.key === "Enter") { e.preventDefault(); save(); }
+      else if (e.key === "Escape") { e.preventDefault(); close(); }
+    };
+  }
+}
+
 function showEditParticipantsPopup() {
   const popup = document.getElementById("edit-participants-popup");
   if (!popup) return;
@@ -2786,7 +2885,7 @@ function computeTournamentPlacements(state) {
     placements.push({ place: 3, name: third.winner });
     placements.push({ place: 4, name: third.loser });
   }
-  if (state?.mode === "swiss") {
+  if (state?.mode === "swiss" || state?.mode === "single-elim") {
     const fifth = matchResult(matches["bracket-5th-0"]);
     if (fifth) {
       placements.push({ place: 5, name: fifth.winner });
