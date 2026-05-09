@@ -241,15 +241,28 @@ function initSwissRoomOnLoad() {
 // (by current wins, avoiding rematches). Odd-count groups push one BYE per round
 // (counts as a win) and rotate which member receives it.
 const SWISS_KEY = "beyblade_swiss";
-const SWISS_GROUP_COUNT = 4;
+const SWISS_GROUP_COUNT_DEFAULT = 4; // legacy fallback when state.groupCount is missing
+const SWISS_GROUP_OPTIONS = [2, 4];  // selectable group counts; both feed an 8-player Top-8 bracket (top 4/2 per group)
 const SWISS_ROUND_COUNT = 4; // default / legacy fallback; actual count lives on state.roundCount
 const SWISS_ROUND_OPTIONS = [3, 4, 5];
 const SWISS_MIN_PER_GROUP = 2; // minimum so every group can run at least one match per round
-const SWISS_BRACKET_TOP_N = 2; // top N per group advance to the knockout bracket
+const SWISS_BRACKET_SIZE = 8;  // Top-8 bracket; top-N per group derives from groupCount
 
 function getRoundCount(state) {
   const n = state && Number(state.roundCount);
   return SWISS_ROUND_OPTIONS.includes(n) ? n : SWISS_ROUND_COUNT;
+}
+
+function getGroupCount(state) {
+  const n = state && Number(state.groupCount);
+  if (SWISS_GROUP_OPTIONS.includes(n)) return n;
+  // Old states won't carry groupCount — infer from the actual groups array,
+  // and fall back to the legacy default when the tournament hasn't been
+  // generated yet.
+  if (state && Array.isArray(state.groups) && state.groups.length > 0) {
+    return state.groups.length;
+  }
+  return SWISS_GROUP_COUNT_DEFAULT;
 }
 
 function loadSwiss() {
@@ -327,16 +340,18 @@ function pairSwissRound(members, matches, groupIndex, round) {
     pairs.push({ a: byeMember, b: null, bye: true });
   }
 
-  while (queue.length >= 2) {
-    const a = queue.shift();
-    let partnerIdx = -1;
-    for (let i = 0; i < queue.length; i++) {
-      if (!played.has(pairKey(a, queue[i]))) { partnerIdx = i; break; }
-    }
-    if (partnerIdx === -1) partnerIdx = 0; // fallback: rematch rather than strand
-    const b = queue.splice(partnerIdx, 1)[0];
-    pairs.push({ a, b, bye: false });
-  }
+  // Pair the (now even) queue while minimizing rematches. A simple greedy
+  // pass — pair the top of the queue with the first unplayed opponent —
+  // can force avoidable rematches downstream (e.g. queue [A,B,C,D,E,F]
+  // with A-B, C-D, E-F already played: greedy pairs A-C and B-D, then
+  // strands E vs F as a rematch when A-C/B-E/D-F was achievable). The
+  // search below picks the pairing with the fewest rematches; ties are
+  // broken in favour of opponents earlier in the standings-sorted queue,
+  // so the top of the table still meets the closest-ranked opponent it
+  // hasn't faced.
+  solveSwissPairing(queue, played).forEach(p => {
+    pairs.push({ a: p.a, b: p.b, bye: false });
+  });
 
   return pairs.map((p, i) => ({
     id: `g${groupIndex}-r${round}-m${i}`,
@@ -348,6 +363,53 @@ function pairSwissRound(members, matches, groupIndex, round) {
     scoreB: null,
     bye: p.bye
   }));
+}
+
+// Backtracking search over partner choices for the front of the queue.
+// Realistic Swiss group sizes here cap well below the point where the
+// search explodes (T(8) = 105 leaves, T(14) ≈ 135K — both fine in JS),
+// and we early-out the moment we hit a zero-rematch full pairing. For
+// pathologically large groups we fall back to the original greedy.
+function solveSwissPairing(queue, played) {
+  if (queue.length <= 1) return [];
+  if (queue.length > 14) return greedySwissPairing(queue, played);
+
+  function search(remaining) {
+    if (remaining.length === 0) return { pairs: [], rematches: 0 };
+    const a = remaining[0];
+    const rest = remaining.slice(1);
+    let best = null;
+    for (let i = 0; i < rest.length; i++) {
+      const b = rest[i];
+      const cost = played.has(pairKey(a, b)) ? 1 : 0;
+      const nextRest = rest.slice(0, i).concat(rest.slice(i + 1));
+      const sub = search(nextRest);
+      const total = cost + sub.rematches;
+      if (best === null || total < best.rematches) {
+        best = { pairs: [{ a, b }, ...sub.pairs], rematches: total };
+        if (total === 0) break;
+      }
+    }
+    return best;
+  }
+
+  return search(queue).pairs;
+}
+
+function greedySwissPairing(queue, played) {
+  const remaining = queue.slice();
+  const pairs = [];
+  while (remaining.length >= 2) {
+    const a = remaining.shift();
+    let partnerIdx = -1;
+    for (let i = 0; i < remaining.length; i++) {
+      if (!played.has(pairKey(a, remaining[i]))) { partnerIdx = i; break; }
+    }
+    if (partnerIdx === -1) partnerIdx = 0;
+    const b = remaining.splice(partnerIdx, 1)[0];
+    pairs.push({ a, b });
+  }
+  return pairs;
 }
 
 function appendGroupRound(state, groupIndex) {
@@ -379,21 +441,33 @@ function balanceSwissGroups(groups) {
   }
 }
 
-function generateSwissFromText(text, tournamentName, roundCount) {
+function generateSwissFromText(text, tournamentName, roundCount, groupCount) {
   const names = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
   const seen = new Set();
   const unique = [];
   names.forEach(n => { if (!seen.has(n.toLowerCase())) { seen.add(n.toLowerCase()); unique.push(n); } });
 
-  const minTotal = SWISS_GROUP_COUNT * SWISS_MIN_PER_GROUP;
+  const gc = SWISS_GROUP_OPTIONS.includes(Number(groupCount))
+    ? Number(groupCount)
+    : SWISS_GROUP_COUNT_DEFAULT;
+
+  const minTotal = gc * SWISS_MIN_PER_GROUP;
   if (unique.length < minTotal) {
-    alert(`Need at least ${minTotal} participants (${SWISS_MIN_PER_GROUP} per group × ${SWISS_GROUP_COUNT} groups).`);
+    alert(`Need at least ${minTotal} participants (${SWISS_MIN_PER_GROUP} per group × ${gc} groups).`);
+    return null;
+  }
+  // The Top-8 bracket needs at least one feeder per slot (top-N per group),
+  // so the smaller-group config (2 groups → top 4 each) requires more
+  // participants per group up front.
+  const minPerGroupForBracket = Math.ceil(SWISS_BRACKET_SIZE / gc);
+  if (unique.length < gc * minPerGroupForBracket) {
+    alert(`Need at least ${gc * minPerGroupForBracket} participants for ${gc} groups (top ${minPerGroupForBracket} from each feed the Top-8 bracket).`);
     return null;
   }
 
   const shuffled = shuffleArray(unique);
-  const groups = Array.from({ length: SWISS_GROUP_COUNT }, () => []);
-  shuffled.forEach((name, i) => { groups[i % SWISS_GROUP_COUNT].push(name); });
+  const groups = Array.from({ length: gc }, () => []);
+  shuffled.forEach((name, i) => { groups[i % gc].push(name); });
   balanceSwissGroups(groups);
 
   const rc = SWISS_ROUND_OPTIONS.includes(Number(roundCount)) ? Number(roundCount) : SWISS_ROUND_COUNT;
@@ -404,7 +478,8 @@ function generateSwissFromText(text, tournamentName, roundCount) {
     mode: "swiss",
     participants: unique,
     tournamentName: (tournamentName || "").trim() || null,
-    roundCount: rc
+    roundCount: rc,
+    groupCount: gc
   };
   groups.forEach((_, gi) => appendGroupRound(state, gi));
   return state;
@@ -514,21 +589,49 @@ function generateSingleElimFromText(text, tournamentName) {
   return state;
 }
 
-// Returns the match id whose winner feeds the given slot, or null if this
-// slot has no upstream match (R0 slots, or the final in a 2-player bracket).
-// Only covers single-elim rounds — Top-8 Swiss bracket rounds always have
-// every slot populated up front so phantom detection isn't needed there.
+// Returns the match id whose winner OR loser feeds the given slot, or null
+// if this slot has no upstream match (R0 slots, or the final in a 2-player
+// bracket). The winner-vs-loser distinction doesn't matter to the callers
+// (phantom detection and the auto-advance live-upstream check) — they only
+// care whether *something* live still feeds the slot.
 function bracketUpstreamSource(round, bracketIndex, slot, state) {
   if (typeof round === "number") {
     if (round === 0) return null;
     const j = slot === "a" ? bracketIndex * 2 : bracketIndex * 2 + 1;
     return `bracket-r${round - 1}-${j}`;
   }
+  const matches = (state && state.matches) || {};
+  // Swiss top-8 bracket: QF is the leaf, SF/CQF feed off QF, F/3rd feed off
+  // SF, 5th/7th feed off CQF. Slot parity inside each downstream match
+  // mirrors bracketIndex parity (see getBracketPropagation).
+  if (matches["bracket-qf-0"]) {
+    if (round === "sf" || round === "cqf") {
+      const j = bracketIndex * 2 + (slot === "a" ? 0 : 1);
+      return `bracket-qf-${j}`;
+    }
+    if (round === "f" || round === "3rd") {
+      return `bracket-sf-${slot === "a" ? 0 : 1}`;
+    }
+    if (round === "5th" || round === "7th") {
+      return `bracket-cqf-${slot === "a" ? 0 : 1}`;
+    }
+    return null;
+  }
+  // Single-elim placement rounds — fed by the last numeric round, except
+  // CQF which is fed by the QF round (preFinal-2) loser side.
+  const preFinal = state && typeof state.preFinalRounds === "number" ? state.preFinalRounds : 0;
   if (round === "f" || round === "3rd") {
-    const preFinal = state && typeof state.preFinalRounds === "number" ? state.preFinalRounds : 0;
     if (preFinal === 0) return null;
     const j = slot === "a" ? 0 : 1;
     return `bracket-r${preFinal - 1}-${j}`;
+  }
+  if (round === "cqf") {
+    if (preFinal < 2) return null;
+    const j = bracketIndex * 2 + (slot === "a" ? 0 : 1);
+    return `bracket-r${preFinal - 2}-${j}`;
+  }
+  if (round === "5th" || round === "7th") {
+    return `bracket-cqf-${slot === "a" ? 0 : 1}`;
   }
   return null;
 }
@@ -1551,7 +1654,7 @@ function hasSwissBracket(state) {
 }
 
 function isGroupStageComplete(state) {
-  if (!state.groups || state.groups.length !== SWISS_GROUP_COUNT) return false;
+  if (!state.groups || state.groups.length === 0) return false;
   const rc = getRoundCount(state);
   return state.groups.every((_, gi) =>
     (state.groupRounds[gi] || 0) >= rc &&
@@ -1615,17 +1718,37 @@ function getBracketPropagation(round, bracketIndex, state) {
 }
 
 function bracketSeedingFromStandings(state) {
+  // Top-N per group is whatever fills the 8-slot bracket: 4 groups → top 2,
+  // 2 groups → top 4. The cross-seed pattern keeps each group's #1 on a
+  // different half of the bracket so top seeds can only meet later.
+  const groupCount = getGroupCount(state);
+  const topN = SWISS_BRACKET_SIZE / groupCount;
   const top = state.groups.map((members, gi) => {
     const st = computeStandings(members, state.matches, gi);
-    return { first: (st[0] && st[0].name) || null, second: (st[1] && st[1].name) || null };
+    return Array.from({ length: topN }, (_, i) => (st[i] && st[i].name) || null);
   });
-  const [A, B, C, D] = top;
-  return [
-    [A.first, B.second],
-    [C.first, D.second],
-    [B.first, A.second],
-    [D.first, C.second]
-  ];
+
+  if (groupCount === 4) {
+    const [A, B, C, D] = top;
+    return [
+      [A[0], B[1]],
+      [C[0], D[1]],
+      [B[0], A[1]],
+      [D[0], C[1]]
+    ];
+  }
+  if (groupCount === 2) {
+    // Standard 8-team cross-seed within a 2-group split: A1/B1 sit on
+    // opposite halves, the rest interleave so QFs are always cross-group.
+    const [A, B] = top;
+    return [
+      [A[0], B[3]],
+      [B[1], A[2]],
+      [B[0], A[3]],
+      [A[1], B[2]]
+    ];
+  }
+  return [];
 }
 
 function buildBracketMatches(state) {
@@ -2534,7 +2657,7 @@ function showEditParticipantsPopup() {
       : state.mode === "swiss-only" ? "swiss-only" : "swiss";
     const next = mode === "single-elim"
       ? generateSingleElimFromText(unique.join("\n"), state.tournamentName)
-      : generateSwissFromText(unique.join("\n"), state.tournamentName, getRoundCount(state));
+      : generateSwissFromText(unique.join("\n"), state.tournamentName, getRoundCount(state), getGroupCount(state));
     if (!next) return; // generator already alerted (e.g. Swiss min participants)
     if (mode === "swiss-only") next.mode = "swiss-only";
     if (typeof state.ranked === "boolean") next.ranked = state.ranked;
@@ -2566,6 +2689,29 @@ function showSwissRoundsPopup(onPick) {
       if (!btn) return;
       const n = Number(btn.dataset.rounds);
       close(SWISS_ROUND_OPTIONS.includes(n) ? n : SWISS_ROUND_COUNT);
+    };
+  }
+  if (cancelBtn) cancelBtn.onclick = () => close(null);
+  popup.classList.remove("hidden");
+}
+
+function showSwissGroupsPopup(onPick) {
+  const popup = document.getElementById("swiss-groups-popup");
+  if (!popup) { onPick(SWISS_GROUP_COUNT_DEFAULT); return; }
+  const options = popup.querySelector(".swiss-groups-options");
+  const cancelBtn = popup.querySelector("#swiss-groups-cancel");
+  const close = (gc) => {
+    popup.classList.add("hidden");
+    if (options) options.onclick = null;
+    if (cancelBtn) cancelBtn.onclick = null;
+    if (gc != null) onPick(gc);
+  };
+  if (options) {
+    options.onclick = (e) => {
+      const btn = e.target.closest(".swiss-groups-btn");
+      if (!btn) return;
+      const n = Number(btn.dataset.groups);
+      close(SWISS_GROUP_OPTIONS.includes(n) ? n : SWISS_GROUP_COUNT_DEFAULT);
     };
   }
   if (cancelBtn) cancelBtn.onclick = () => close(null);
@@ -2713,17 +2859,21 @@ function showTournamentModePopup(onPick) {
   swissBtn.onclick = gated((ranked) => {
     const name = nameInput ? nameInput.value.trim() : "";
     teardown();
-    showSwissRoundsPopup((rc) => onPick("swiss", name, rc, ranked));
+    showSwissRoundsPopup((rc) => {
+      showSwissGroupsPopup((gc) => onPick("swiss", name, rc, ranked, gc));
+    });
   });
   if (swissOnlyBtn) swissOnlyBtn.onclick = gated((ranked) => {
     const name = nameInput ? nameInput.value.trim() : "";
     teardown();
-    showSwissRoundsPopup((rc) => onPick("swiss-only", name, rc, ranked));
+    showSwissRoundsPopup((rc) => {
+      showSwissGroupsPopup((gc) => onPick("swiss-only", name, rc, ranked, gc));
+    });
   });
   singleBtn.onclick = gated((ranked) => {
     const name = nameInput ? nameInput.value.trim() : "";
     teardown();
-    onPick("single-elim", name, undefined, ranked);
+    onPick("single-elim", name, undefined, ranked, undefined);
   });
   cancelBtn.onclick = () => teardown();
   popup.classList.remove("hidden");
@@ -2792,10 +2942,10 @@ document.getElementById("swiss-generate")?.addEventListener("click", () => {
   const textarea = document.getElementById("swiss-names");
   if (!textarea) return;
   const namesText = textarea.value;
-  showTournamentModePopup((mode, tournamentName, roundCount, ranked) => {
+  showTournamentModePopup((mode, tournamentName, roundCount, ranked, groupCount) => {
     const next = mode === "single-elim"
       ? generateSingleElimFromText(namesText, tournamentName)
-      : generateSwissFromText(namesText, tournamentName, roundCount);
+      : generateSwissFromText(namesText, tournamentName, roundCount, groupCount);
     if (!next) return;
     if (mode === "swiss-only") next.mode = "swiss-only"; // gate the auto Top-8 bracket
     next.ranked = !!ranked;

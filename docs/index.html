@@ -696,6 +696,19 @@
     </div>
   </div>
 
+  <!-- ================= SWISS GROUPS POPUP ================= -->
+  <div id="swiss-groups-popup" class="popup-overlay hidden">
+    <div class="popup-card">
+      <h2 class="popup-title">Number of Groups</h2>
+      <p class="popup-subtitle">Split participants into how many Swiss groups? Top finishers from each group feed the Top-8 bracket.</p>
+      <div class="swiss-groups-options swiss-rounds-options-popup">
+        <button type="button" class="swiss-groups-btn swiss-rounds-btn" data-groups="2">2</button>
+        <button type="button" class="swiss-groups-btn swiss-rounds-btn" data-groups="4">4</button>
+      </div>
+      <button type="button" id="swiss-groups-cancel" class="btn popup-cancel">Cancel</button>
+    </div>
+  </div>
+
   <!-- ================= TOURNAMENT RESULTS POPUP ================= -->
   <div id="tournament-results-popup" class="popup-overlay hidden">
     <div class="popup-card">
@@ -706,16 +719,15 @@
   </div>
 
   <!-- ================= POPUP ================= -->
-  <div id="update-popup" class="popup-overlay hidden" data-version="2026-05-06">
+  <div id="update-popup" class="popup-overlay hidden" data-version="2026-05-10">
     <div class="popup-card">
 
       <h2 class="popup-title">What's New</h2>
 
       <ul class="popup-list">
-        <li><strong>Bey Check.</strong> Tap a match to record each player's deck — auto-saves and carries forward to their next match.</li>
-        <li><strong>Parts Usage charts.</strong> Pie charts at the end show which parts the field actually brought.</li>
-        <li><strong>Single Elim top 8.</strong> 5th- and 7th-place matches now play out for 8+ player brackets.</li>
-        <li><strong>Rename anytime.</strong> Tap the tournament name in the toolbar to edit it.</li>
+        <li><strong>Pick your group count.</strong> Swiss and Swiss + Top 8 now let you choose 2 or 4 groups — top finishers from each still feed the 8-player bracket.</li>
+        <li><strong>Smarter rematch avoidance.</strong> Swiss pairings now backtrack to avoid rematches the old greedy logic would have forced unnecessarily.</li>
+        <li><strong>Top-8 bracket fix.</strong> After Swiss, the bracket no longer auto-completes itself when only quarterfinals have been scored — semis and final wait for real results.</li>
       </ul>
 
       <button type="button" class="btn popup-ok">
