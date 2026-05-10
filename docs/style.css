@@ -2822,6 +2822,16 @@ body.light-mode .part-img {
     line-height: 1;
 }
 
+.scoreboard-round {
+    line-height: 1;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #c9d1d9;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
 .scoreboard-reset {
     background: #21262d;
     color: #8b949e;

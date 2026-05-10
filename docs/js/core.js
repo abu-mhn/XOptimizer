@@ -447,93 +447,47 @@ document.querySelectorAll(".sub-tab").forEach(tab => {
   });
 });
 
-// --- Mode tabs ---
-document.querySelectorAll(".tab").forEach(tab => {
-  tab.addEventListener("click", () => {
+// --- Per-page tab init (multi-page mode) ---
+// Tabs are now anchor links — clicking them does a real page navigation, so
+// the in-page show/hide router is gone. Instead we read which tab the
+// current page hosts (from `.tab.active` set in the HTML) and fire that
+// tab's render. Wait for DOMContentLoaded because the per-tab render
+// functions (renderDeck, renderSwiss, renderHistory, renderTournamentRanking,
+// etc.) live in scripts that load *after* core.js — they don't exist yet
+// when this file finishes parsing.
+document.addEventListener("DOMContentLoaded", function initActiveTabRender() {
+  const activeTab = document.querySelector(".tab.active");
+  if (!activeTab) return;
+  const mode = activeTab.dataset.mode;
 
-    // ================= ACTIVE TAB =================
-    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-    tab.classList.add("active");
+  if (mode === "calculator") {
+    const activeSubTab = subTabs?.querySelector(".sub-tab.active");
+    const subMode = activeSubTab ? activeSubTab.dataset.mode : "standard";
+    switchToCalcMode(subMode);
+    return;
+  }
 
-    const mode = tab.dataset.mode;
-
-    if (mode === "calculator") {
-      // Show sub-tabs and activate the current sub-tab's form
-      subTabs.classList.remove("hidden");
-      const activeSubTab = subTabs.querySelector(".sub-tab.active");
-      const subMode = activeSubTab ? activeSubTab.dataset.mode : "standard";
-      switchToCalcMode(subMode);
-    } else {
-      // Hide sub-tabs for non-calculator tabs
-      subTabs.classList.add("hidden");
-
-      // ================= SWITCH FORM =================
-      document.querySelectorAll(".calc-form").forEach(f => f.classList.add("hidden"));
-
-      const form = document.getElementById("form-" + mode);
-
-      if (form) {
-        form.classList.remove("hidden");
-
-        // ================= RESET FORM =================
-        form.querySelectorAll("select, input").forEach(el => {
-          if (el.tagName === "SELECT") {
-            el.selectedIndex = 0;
-          } else {
-            el.value = "";
-          }
-        });
-
-        // ================= dropdown clear =================
-        form.querySelectorAll(".search-dropdown").forEach(w => {
-          if (w._clear) w._clear();
-        });
-      }
-
-      // ================= RESET SEARCH =================
-      const searchInput = document.getElementById("library-search");
-      const searchResults = document.getElementById("library-results");
-
-      if (searchInput) searchInput.value = "";
-      if (searchResults) searchResults.innerHTML = "";
-
-      const sortBar = document.getElementById("library-sort");
-      if (sortBar) sortBar.classList.add("hidden");
-
-      // ================= HISTORY =================
-      if (mode === "history") {
-        const activeSub = document.querySelector(".history-sub-tab.active");
-        const view = activeSub ? activeSub.dataset.historyView : "combos";
-        if (view === "tournaments") renderTournamentHistory();
-        else renderHistory();
-      }
-
-      // ================= DECK =================
-      if (mode === "deck") {
-        renderDeck();
-      }
-
-      // ================= SWISS =================
-      if (mode === "swiss") {
-        renderSwiss();
-        const activeTournamentSub = document.querySelector(".tournament-sub-tab.active");
-        const view = activeTournamentSub?.dataset.tournamentView;
-        if (view === "ranking") renderTournamentRanking();
-        if (view === "revox") renderRevoxRanking();
-      }
-
-      // ================= HIDE RESULT =================
-      document.getElementById("result")?.classList.add("hidden");
+  if (mode === "history") {
+    const activeSub = document.querySelector(".history-sub-tab.active");
+    const view = activeSub ? activeSub.dataset.historyView : "combos";
+    if (view === "tournaments") {
+      if (typeof renderTournamentHistory === "function") renderTournamentHistory();
+    } else if (typeof renderHistory === "function") {
+      renderHistory();
     }
+  }
 
-    // 🔽 AUTO SCROLL TO TOP ON TAB SWITCH
-    requestAnimationFrame(() => {
-      window.scrollTo({
-        top: 0,
-        behavior: "smooth"
-      });
-    });
-  });
+  if (mode === "deck") {
+    if (typeof renderDeck === "function") renderDeck();
+  }
+
+  if (mode === "swiss") {
+    if (typeof renderSwiss === "function") renderSwiss();
+    const activeTournamentSub = document.querySelector(".tournament-sub-tab.active");
+    const view = activeTournamentSub?.dataset.tournamentView;
+    if (view === "ranking" && typeof renderTournamentRanking === "function") renderTournamentRanking();
+    if (view === "revox" && typeof renderRevoxRanking === "function") renderRevoxRanking();
+  }
 });
 
 function escapeHtml(s) {

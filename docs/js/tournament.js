@@ -1447,22 +1447,15 @@ function renderSwissTop8Bracket(state) {
 function renderSwissRoomBadge() {
   if (!swissEditCode) return "";
   const pills = [];
-  // Users who can edit see the Co-host code so they can invite other refs.
+  // Only the Host code is shown — viewers and participants now join via
+  // the Open Tournaments lobby (Rooms list), so the View code isn't
+  // something users need to type or copy by hand.
   if (swissCanEdit) {
     const label = swissIsHost ? "Host" : "Co-host";
     pills.push(`
       <span class="swiss-room-badge swiss-room-badge-edit" title="${label} — tap to copy">
         <span class="swiss-room-role">${label}</span>
         <button type="button" class="swiss-room-code" data-room="${swissEditCode}">${swissEditCode}</button>
-      </span>
-    `);
-  }
-  // Everyone sees the participant code so they can invite spectators.
-  if (swissViewCode) {
-    pills.push(`
-      <span class="swiss-room-badge swiss-room-badge-view" title="Participant (view only) — tap to copy">
-        <span class="swiss-room-role">View</span>
-        <button type="button" class="swiss-room-code" data-room="${swissViewCode}">${swissViewCode}</button>
       </span>
     `);
   }
@@ -1480,14 +1473,9 @@ function bindSwissRoomBadge(view) {
       if (btn.closest(".tournament-history-item")) {
         payload = code;
       } else {
-        const isView = !!btn.closest(".swiss-room-badge-view");
-        const intro = isView
-          ? "Watch my Beyblade X tournament on X-Optimizer!"
-          : "Help co-host my Beyblade X tournament on X-Optimizer!";
-        const codeLine = isView
-          ? `Use the View code to spectate: ${code}`
-          : `Use the Host code to join as a referee: ${code}`;
-        payload = `${intro}\n\n${codeLine}\n\n${SHARE_URL}`;
+        // Only the Host code is surfaced now — viewers/participants join
+        // via the Open Tournaments lobby, not by typing a code.
+        payload = `Help co-host my Beyblade X tournament on X-Optimizer!\n\nUse the Host code to join as a referee: ${code}\n\n${SHARE_URL}`;
       }
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(payload).then(() => {
@@ -1748,7 +1736,7 @@ function renderSwissRegisteringMarkup(state) {
           ${removeBtn}
         </li>`;
       }).join("")
-    : `<li class="swiss-reg-empty">No one has registered yet. Share the View code so players can sign up via the Room tab.</li>`;
+    : `<li class="swiss-reg-empty">No one has registered yet. Players can find this tournament under Open Tournaments and sign up there.</li>`;
 
   const startBtnHtml = canEdit
     ? `<button type="button" id="swiss-reg-start" class="btn swiss-reg-start" ${enoughRegistrants ? "" : "disabled"}>
@@ -3463,8 +3451,6 @@ function showTournamentResultsFromHistory(code) {
     if (e.target === popup) close();
   });
 })();
-
-document.getElementById("swiss-reset")?.addEventListener("click", resetSwiss);
 
 // Re-join a previously connected room on page load.
 window.addEventListener("load", initSwissRoomOnLoad);

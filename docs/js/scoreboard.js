@@ -6,6 +6,10 @@ let scoreboardSaveCallback = null;
 (function () {
   let scoreA = 0;
   let scoreB = 0;
+  // Round indicator. Each scoring button press counts; every 3 presses
+  // (across both sides combined) advances the displayed round.
+  let scorePresses = 0;
+  const PRESSES_PER_ROUND = 3;
 
   const overlay = document.getElementById("scoreboard-overlay");
   const scoreAEl = document.getElementById("score-a");
@@ -16,12 +20,24 @@ let scoreboardSaveCallback = null;
   const closeBtn = document.getElementById("scoreboard-close");
   const leftSide = document.getElementById("scoreboard-left");
   const rightSide = document.getElementById("scoreboard-right");
+  const roundEl = document.getElementById("scoreboard-round");
 
   if (!overlay) return;
+
+  function ordinal(n) {
+    const s = ["th", "st", "nd", "rd"];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  }
+
+  function currentRound() {
+    return Math.floor(scorePresses / PRESSES_PER_ROUND) + 1;
+  }
 
   function updateDisplay() {
     scoreAEl.textContent = scoreA;
     scoreBEl.textContent = scoreB;
+    if (roundEl) roundEl.textContent = `${ordinal(currentRound())} Round`;
   }
 
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -129,6 +145,7 @@ let scoreboardSaveCallback = null;
       const delta = parseInt(btn.dataset.delta, 10);
       if (side === "a") { scoreA = Math.max(0, scoreA + delta); }
       else { scoreB = Math.max(0, scoreB + delta); }
+      scorePresses += 1;
       updateDisplay();
       const sound = finishSounds[btn.textContent.trim()];
       if (sound) {
@@ -141,6 +158,7 @@ let scoreboardSaveCallback = null;
   resetBtn.addEventListener("click", () => {
     scoreA = 0;
     scoreB = 0;
+    scorePresses = 0;
     updateDisplay();
   });
 
@@ -202,6 +220,7 @@ let scoreboardSaveCallback = null;
     if (labelB) labelB.textContent = "B";
     scoreA = 0;
     scoreB = 0;
+    scorePresses = 0;
     swapped = false;
     updateDisplay();
     closeBtn?.classList.add("hidden");
@@ -231,6 +250,7 @@ let scoreboardSaveCallback = null;
     if (labelB) labelB.textContent = nameB || "B";
     scoreA = typeof initialA === "number" ? initialA : 0;
     scoreB = typeof initialB === "number" ? initialB : 0;
+    scorePresses = 0;
     swapped = false;
     updateDisplay();
     scoreboardSaveCallback = typeof onSave === "function" ? onSave : null;
