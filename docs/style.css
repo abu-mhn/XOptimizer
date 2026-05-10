@@ -4597,6 +4597,26 @@ body.mono-mode .popup-ok:hover {
     filter: brightness(0) invert(1);
 }
 
+/* Share button icon — always white-filtered so it tracks the button's
+   white text color across every theme. The selector specificity
+   (.swiss-toolbar .btn.swiss-share-btn img → 0,3,1) and the body-prefixed
+   variant beat the global `body.light-mode .btn img { filter: none; }`
+   rule, which would otherwise leave the share icon naturally-coloured
+   and invisible on the light-mode green button. */
+.swiss-toolbar .btn.swiss-share-btn img,
+body.light-mode .swiss-toolbar .swiss-share-btn img,
+body.space-mode .swiss-toolbar .swiss-share-btn img,
+body.tropical-mode .swiss-toolbar .swiss-share-btn img,
+body.stormy-mode .swiss-toolbar .swiss-share-btn img {
+    filter: brightness(0) invert(1);
+}
+
+/* Mono-mode flips .btn to a white background with black text — flip the
+   share icon to black so it matches the surrounding text colour. */
+body.mono-mode .swiss-toolbar .swiss-share-btn img {
+    filter: brightness(0);
+}
+
 .swiss-group {
     margin-top: 16px;
     background: #161b22;
@@ -4700,6 +4720,13 @@ body.light-mode .swiss-group-progress {
     border-radius: 6px;
     background: rgba(110, 118, 129, 0.15);
 }
+.swiss-reg-heading-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+}
 .swiss-reg-heading {
     margin: 0;
     font-size: 1rem;
@@ -4773,8 +4800,29 @@ body.light-mode .swiss-group-progress {
 }
 .swiss-reg-actions {
     display: flex;
-    justify-content: flex-end;
+    justify-content: stretch;
     align-items: center;
+}
+.swiss-reg-actions .btn {
+    flex: 1;
+}
+.swiss-reg-self {
+    background: transparent;
+    border: 1px solid rgba(110, 118, 129, 0.4);
+    color: #c9d1d9;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+.swiss-reg-self:hover,
+.swiss-reg-self:focus-visible {
+    background: rgba(110, 118, 129, 0.18);
+    border-color: rgba(110, 118, 129, 0.65);
+    outline: none;
 }
 .swiss-reg-start {
     min-width: 180px;
