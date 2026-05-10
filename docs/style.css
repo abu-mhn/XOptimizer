@@ -2147,6 +2147,26 @@ body.light-mode .result-part-name {
     filter: brightness(0) invert(1);
 }
 
+.btn-copy {
+    background: #d29922;
+    flex: 0 0 auto;
+    padding: 6px 8px;
+    font-size: 0;
+    gap: 0;
+    line-height: 0;
+}
+
+.btn-copy:hover {
+    background: #e3a82e;
+}
+
+.btn-copy img {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+}
+
 .btn-row {
     display: flex;
     gap: 10px;
@@ -2488,6 +2508,15 @@ body.light-mode .btn-download {
 
 body.light-mode .btn-download:hover {
     background: #5ea3f0;
+}
+
+body.light-mode .btn-copy {
+    background: #f0c468;
+    color: #1f2328;
+}
+
+body.light-mode .btn-copy:hover {
+    background: #e6b14d;
 }
 
 body.light-mode .btn-mode {
@@ -3417,6 +3446,15 @@ body.tropical-mode .btn-download:hover {
     background: #0891b2;
 }
 
+body.tropical-mode .btn-copy {
+    background: #f59e0b;
+    color: #fff;
+}
+
+body.tropical-mode .btn-copy:hover {
+    background: #d97706;
+}
+
 body.tropical-mode .popup-ok {
     background: #00b8a9;
     color: #fff;
@@ -4104,6 +4142,15 @@ body.mono-mode .btn-download:hover {
     background: #d0d0d0;
 }
 
+body.mono-mode .btn-copy {
+    background: #ffffff;
+    color: #000000;
+}
+
+body.mono-mode .btn-copy:hover {
+    background: #d0d0d0;
+}
+
 body.mono-mode .btn-add-deck {
     background: #ffffff;
     color: #000000;
@@ -4134,7 +4181,9 @@ body.mono-mode .deck-toolbar .btn-shuffle img {
 
 body.mono-mode .btn-row .calc-btn:not(:disabled) img,
 body.mono-mode .deck-toolbar .btn-download img,
-body.mono-mode .btn-download img {
+body.mono-mode .btn-download img,
+body.mono-mode .deck-toolbar .btn-copy img,
+body.mono-mode .btn-copy img {
     filter: brightness(0);
 }
 
@@ -4606,6 +4655,211 @@ body.light-mode .swiss-group-progress {
 .swiss-empty {
     padding: 12px;
     color: #8b949e;
+    font-style: italic;
+}
+
+/* ===== Registration phase (host side) ===== */
+.swiss-registering {
+    padding: 14px;
+    display: grid;
+    gap: 14px;
+}
+.swiss-reg-pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    background: rgba(245, 158, 11, 0.18);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    margin-left: 8px;
+}
+.swiss-reg-format {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: #c9d1d9;
+}
+.swiss-reg-format-mode {
+    font-weight: 600;
+    color: #f0f6fc;
+}
+.swiss-reg-format-bit {
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(110, 118, 129, 0.15);
+}
+.swiss-reg-heading {
+    margin: 0;
+    font-size: 1rem;
+    color: #f0f6fc;
+}
+.swiss-reg-count {
+    color: #8b949e;
+    font-weight: 400;
+    font-size: 0.85em;
+}
+.swiss-reg-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+}
+.swiss-reg-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: rgba(110, 118, 129, 0.08);
+    border-radius: 8px;
+}
+.swiss-reg-num {
+    color: #8b949e;
+    font-variant-numeric: tabular-nums;
+    min-width: 1.5em;
+    text-align: right;
+}
+.swiss-reg-name {
+    flex: 1;
+    color: #f0f6fc;
+}
+.swiss-reg-deck-badge {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(63, 185, 80, 0.18);
+    color: #3fb950;
+    border: 1px solid rgba(63, 185, 80, 0.35);
+}
+.swiss-reg-deck-badge-missing {
+    background: rgba(248, 81, 73, 0.15);
+    color: #f85149;
+    border-color: rgba(248, 81, 73, 0.35);
+}
+.swiss-reg-remove {
+    background: transparent;
+    border: none;
+    color: #f85149;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+.swiss-reg-remove:hover,
+.swiss-reg-remove:focus-visible {
+    background: rgba(248, 81, 73, 0.12);
+    outline: none;
+}
+.swiss-reg-empty {
+    padding: 16px;
+    border-radius: 8px;
+    background: rgba(110, 118, 129, 0.08);
+    color: #8b949e;
+    font-style: italic;
+    text-align: center;
+}
+.swiss-reg-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+}
+.swiss-reg-start {
+    min-width: 180px;
+}
+.swiss-reg-start[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.swiss-reg-waiting {
+    color: #8b949e;
+    font-style: italic;
+}
+
+/* ===== Open Tournaments section (inside Hosting) ===== */
+.swiss-rooms-section {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px dashed rgba(110, 118, 129, 0.35);
+}
+.swiss-rooms-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+.swiss-rooms-heading {
+    margin: 0;
+    font-size: 1rem;
+    color: #f0f6fc;
+}
+.swiss-rooms-hint {
+    color: #8b949e;
+    font-size: 0.85rem;
+    margin: 0 0 10px;
+}
+.swiss-rooms-list {
+    display: grid;
+    gap: 8px;
+    margin-top: 6px;
+}
+.swiss-rooms-empty {
+    color: #8b949e;
+    font-style: italic;
+    margin: 0;
+}
+.swiss-room-card {
+    text-align: left;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid rgba(110, 118, 129, 0.3);
+    border-radius: 8px;
+    background: rgba(110, 118, 129, 0.08);
+    color: #f0f6fc;
+    cursor: pointer;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "name mode" "meta meta";
+    gap: 4px 12px;
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+.swiss-room-card:hover,
+.swiss-room-card:focus-visible {
+    background: rgba(110, 118, 129, 0.18);
+    border-color: rgba(110, 118, 129, 0.55);
+    outline: none;
+}
+.swiss-room-card-name { grid-area: name; font-weight: 600; }
+.swiss-room-card-mode {
+    grid-area: mode;
+    font-size: 0.78rem;
+    color: #f59e0b;
+    align-self: center;
+}
+.swiss-room-card-meta {
+    grid-area: meta;
+    font-size: 0.78rem;
+    color: #8b949e;
+}
+
+/* Registration popup deck hint */
+.register-deck-hint {
+    margin: 8px 0 4px;
+    color: #8b949e;
+    font-size: 0.85rem;
+}
+.register-deck-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin: 8px 0 4px;
+}
+.swiss-hint {
+    margin: 4px 0 6px;
+    color: #8b949e;
+    font-size: 0.8rem;
     font-style: italic;
 }
 

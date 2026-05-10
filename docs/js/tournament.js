@@ -19,6 +19,7 @@ let swissRoomRef = null;
 let swissApplyingRemote = false;
 let swissLiveMatchId = null; // which match (if any) this device is currently live on
 let swissScrollPositions = []; // horizontal scrollLeft of each rounds-scroll strip (groups then bracket)
+let swissSetupWasVisible = false; // tracks setup-form visibility so we only re-fetch open rooms on the hidden→visible edge
 
 function initFirebase() {
   if (swissDb) return swissDb;
@@ -78,6 +79,9 @@ function disconnectSwissRoom() {
   if (swissRoomRef) {
     try { swissRoomRef.off(); } catch (e) {}
   }
+  // Drop any armed onDisconnect cleanup for the lobby index — we're leaving
+  // the room cleanly, not crashing, so we don't want it to fire later.
+  cancelOpenIndexDisconnect();
   swissRoomRef = null;
   swissEditCode = null;
   swissViewCode = null;
@@ -105,7 +109,7 @@ function resolveRoomCode(code, cb) {
   if (!db) { cb({ ok: false, reason: "Live sync isn't configured on this build." }); return; }
   db.ref("swissRooms/" + code).once("value").then(editSnap => {
     const remote = editSnap.val();
-    const populated = !!(remote && (remote.groups || (remote.matches && Object.keys(remote.matches).length > 0)));
+    const populated = !!(remote && (remote.groups || (remote.matches && Object.keys(remote.matches).length > 0) || remote.phase === "registering"));
     if (populated) {
       cb({ ok: true, editCode: code, viewCode: remote.viewCode || null, role: "edit" });
       return null;
@@ -135,8 +139,8 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit) {
   swissIsHost = !!asHost;
   swissCanEdit = !!canEdit;
   swissRoomRef = db.ref("swissRooms/" + editCode);
-  const isPopulatedRemote = (r) => !!(r && (r.groups || (r.matches && Object.keys(r.matches).length > 0)));
-  const isPopulatedLocal = (s) => !!(s && (s.groups || (s.matches && Object.keys(s.matches).length > 0)));
+  const isPopulatedRemote = (r) => !!(r && (r.groups || (r.matches && Object.keys(r.matches).length > 0) || r.phase === "registering"));
+  const isPopulatedLocal = (s) => !!(s && (s.groups || (s.matches && Object.keys(s.matches).length > 0) || s.phase === "registering"));
 
   const role = asHost ? "host" : (canEdit ? "co-host" : "view");
   const isViewer = role === "view";
@@ -166,6 +170,13 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit) {
       swissApplyingRemote = false;
       renderSwiss();
       syncTournamentRankingAwards(remote);
+      // Mirror the open-tournaments index while the room is in registering
+      // phase so the lobby's registrant counts stay live. Removal is handled
+      // explicitly by start / reset to avoid re-deleting on every score push
+      // once the tournament is running.
+      if (swissIsHost && remote.phase === "registering") {
+        publishOpenRoomIndex(editCode, remote);
+      }
     } else if (!remote && swissIsHost) {
       // Room was wiped remotely (or first-time creation). Push our local state
       // together with the viewCode metadata and publish the viewer mapping.
@@ -175,6 +186,9 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit) {
         const payload = { ...local, viewCode: swissViewCode };
         swissRoomRef.set(payload)
           .then(() => db.ref("swissViewCodes/" + swissViewCode).set(editCode))
+          .then(() => {
+            if (local.phase === "registering") publishOpenRoomIndex(editCode, local);
+          })
           .catch(e => console.warn("Initial room push failed:", e))
           .finally(() => { swissApplyingRemote = false; });
       }
@@ -191,6 +205,74 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit) {
   });
   saveJoinedRoom({ editCode, viewCode: swissViewCode, role: canEdit ? "edit" : "view" });
   return { ok: true };
+}
+
+// Public lobby index. Hosts publish a small summary record at
+// `openTournaments/{editCode}` whenever a room is in the "registering" phase
+// so the Room tab can list them; the entry is removed the moment the host
+// starts the tournament (no more new signups) or resets it.
+//
+// We also wire Firebase's onDisconnect() to auto-remove the entry if the
+// host's tab closes mid-registration without clicking Start/Reset — that
+// way abandoned rooms don't pile up in the lobby. The currently-armed code
+// is tracked so we can cancel the handler when leaving cleanly (otherwise
+// it would re-fire pointlessly on the next disconnect).
+let swissOpenIndexDisconnectCode = null;
+
+function publishOpenRoomIndex(editCode, state) {
+  const db = initFirebase();
+  if (!db || !editCode || !state) return;
+  const summary = {
+    editCode,
+    viewCode: swissViewCode || null,
+    name: state.tournamentName || "",
+    mode: state.mode || "swiss",
+    roundCount: state.roundCount || null,
+    groupCount: state.groupCount || null,
+    registrantCount: Object.keys(state.registrants || {}).length,
+    createdAt: state.createdAt || new Date().toISOString()
+  };
+  db.ref("openTournaments/" + editCode).set(summary)
+    .catch(e => console.warn("Open room index push failed:", e));
+  armOpenIndexDisconnect(editCode);
+}
+
+function removeOpenRoomIndex(editCode) {
+  const db = initFirebase();
+  if (!db || !editCode) return;
+  db.ref("openTournaments/" + editCode).set(null)
+    .catch(e => console.warn("Open room index remove failed:", e));
+  // Explicit removal — also cancel the auto-disconnect cleanup so it doesn't
+  // fire later trying to delete an already-gone entry.
+  if (swissOpenIndexDisconnectCode === editCode) {
+    cancelOpenIndexDisconnect();
+  }
+}
+
+function armOpenIndexDisconnect(editCode) {
+  if (!editCode || swissOpenIndexDisconnectCode === editCode) return;
+  const db = initFirebase();
+  if (!db) return;
+  // Replace any previously-armed handler so we don't leak stale ones across
+  // hosts switching between rooms in a single session.
+  if (swissOpenIndexDisconnectCode) {
+    try { db.ref("openTournaments/" + swissOpenIndexDisconnectCode).onDisconnect().cancel(); } catch (e) {}
+  }
+  try {
+    db.ref("openTournaments/" + editCode).onDisconnect().remove();
+    swissOpenIndexDisconnectCode = editCode;
+  } catch (e) {
+    console.warn("Open room onDisconnect arm failed:", e);
+  }
+}
+
+function cancelOpenIndexDisconnect() {
+  if (!swissOpenIndexDisconnectCode) return;
+  const db = initFirebase();
+  if (db) {
+    try { db.ref("openTournaments/" + swissOpenIndexDisconnectCode).onDisconnect().cancel(); } catch (e) {}
+  }
+  swissOpenIndexDisconnectCode = null;
 }
 
 // Targeted update for a single score save (optionally with new matches +
@@ -265,22 +347,69 @@ function getGroupCount(state) {
   return SWISS_GROUP_COUNT_DEFAULT;
 }
 
+// Registration-phase helpers. A tournament with `phase: "registering"` is
+// open to self-signups via the Room tab; once the host clicks Start the
+// phase flips to "running" and the existing generators take over.
+function isRegisteringPhase(state) {
+  return !!(state && state.phase === "registering");
+}
+
+function generateRegistrantId() {
+  return `r_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function listRegistrants(state) {
+  const reg = (state && state.registrants) || {};
+  return Object.entries(reg).map(([id, r]) => ({
+    id,
+    name: (r && r.name) || "",
+    deck: normalizeBeyCheckDeck(r && r.deck)
+  }));
+}
+
+function findRegistrantByName(state, name) {
+  if (!state || !state.registrants || !name) return null;
+  const target = String(name).trim().toLowerCase();
+  if (!target) return null;
+  for (const [id, r] of Object.entries(state.registrants)) {
+    if (r && typeof r.name === "string" && r.name.trim().toLowerCase() === target) {
+      return { id, ...r };
+    }
+  }
+  return null;
+}
+
+// Pull a participant's authoritative deck from the registrants map. Used by
+// the Bey Check popup to pre-fill matches with what the player registered
+// rather than re-asking the judge each round.
+function getRegisteredDeckForParticipant(state, name) {
+  const r = findRegistrantByName(state, name);
+  if (!r) return null;
+  const deck = normalizeBeyCheckDeck(r.deck);
+  return isBeyCheckDeckEmpty(deck) ? null : deck;
+}
+
 function loadSwiss() {
   try {
     const raw = JSON.parse(localStorage.getItem(SWISS_KEY) || "null");
     const hasGroups = raw && Array.isArray(raw.groups);
     const hasMatches = raw && raw.matches && Object.keys(raw.matches).length > 0;
-    if (raw && (hasGroups || hasMatches || raw.mode === "single-elim")) {
+    const isRegistering = raw && raw.phase === "registering";
+    if (raw && (hasGroups || hasMatches || raw.mode === "single-elim" || isRegistering)) {
       if (!raw.matches) raw.matches = {};
       // Migrate legacy global `roundsGenerated` into the per-group array.
       if (!Array.isArray(raw.groupRounds)) {
         const fill = typeof raw.roundsGenerated === "number" ? raw.roundsGenerated : 0;
         raw.groupRounds = hasGroups ? raw.groups.map(() => fill) : [];
       }
+      // Pre-registration fields. Older states default to "running" so anything
+      // already in flight keeps its current behaviour without migration.
+      if (!raw.phase) raw.phase = "running";
+      if (!raw.registrants || typeof raw.registrants !== "object") raw.registrants = {};
       return raw;
     }
   } catch (e) {}
-  return { groups: null, matches: {}, groupRounds: [] };
+  return { groups: null, matches: {}, groupRounds: [], phase: "running", registrants: {} };
 }
 
 function persistSwiss(state) {
@@ -729,29 +858,36 @@ function isGroupRoundComplete(matches, groupIndex, roundIndex) {
 
 function resetSwiss() {
   const state = loadSwiss();
-  const hasAny = state.groups || Object.keys(state.matches || {}).length > 0;
+  const hasAny = state.groups || Object.keys(state.matches || {}).length > 0 || isRegisteringPhase(state);
   const inRoom = !!swissEditCode;
   const promptMsg = inRoom && !swissIsHost
     ? "Leave this live room?"
     : "Clear participants, groups, and all match scores?";
   if ((hasAny || inRoom) && !confirm(promptMsg)) return;
-  // Host wipes the remote room (including the viewer-code mapping) so every
-  // joined device clears too. Non-hosts just disconnect locally.
-  if (inRoom && swissIsHost && swissRoomRef) {
-    try {
-      swissRoomRef.set(null);
-      if (swissViewCode && swissDb) swissDb.ref("swissViewCodes/" + swissViewCode).set(null);
-    } catch (e) {}
-  }
+
+  // Capture codes BEFORE disconnecting (disconnectSwissRoom clears them).
+  const wasHost = swissIsHost;
+  const codeForRemote = swissEditCode;
+  const viewCodeForRemote = swissViewCode;
+  const dbHandle = swissDb;
+
+  // Detach the listener and clear local state FIRST, then wipe remote.
+  // Otherwise the host's own listener would fire on the wipe, see
+  // `!remote && swissIsHost && isPopulatedLocal(local)`, and re-push the
+  // room (re-publishing the lobby index) before our explicit remove
+  // settles — the lobby entry would resurrect.
   disconnectSwissRoom();
   // Bypass push-on-persist by writing directly.
-  localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [] }));
-  const textarea = document.getElementById("swiss-names");
-  if (textarea) textarea.value = "";
-  const joinInput = document.getElementById("swiss-join-code");
-  if (joinInput) joinInput.value = "";
-  const joinStatus = document.getElementById("swiss-join-status");
-  if (joinStatus) joinStatus.textContent = "";
+  localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [], phase: "running", registrants: {} }));
+
+  if (wasHost && codeForRemote && dbHandle) {
+    try {
+      dbHandle.ref("swissRooms/" + codeForRemote).set(null);
+      if (viewCodeForRemote) dbHandle.ref("swissViewCodes/" + viewCodeForRemote).set(null);
+      removeOpenRoomIndex(codeForRemote);
+    } catch (e) {}
+  }
+
   renderSwiss();
 }
 
@@ -1381,13 +1517,31 @@ function renderSwiss() {
   const state = loadSwiss();
   const hasGroups = !!state.groups;
   const bracketActive = hasSwissBracket(state);
-  const hasTournament = hasGroups || bracketActive;
+  const isRegistering = isRegisteringPhase(state);
+  const hasTournament = hasGroups || bracketActive || isRegistering;
   const inRoom = !!swissEditCode;
   const inRoomNonHost = inRoom && !swissIsHost;
 
   // Hide the setup form once we have a live tournament OR when the user is
   // connected to someone else's room (they shouldn't generate their own).
-  setup.classList.toggle("hidden", hasTournament || inRoomNonHost);
+  const setupShouldHide = hasTournament || inRoomNonHost;
+  setup.classList.toggle("hidden", setupShouldHide);
+  // Refresh the open-tournaments list whenever the setup transitions to
+  // visible (initial page load with no active tournament, host reset,
+  // viewer leaving a room). The flag handles both the first-render case
+  // and avoids re-firing on every subsequent render while it stays open.
+  const setupNowVisible = !setupShouldHide;
+  if (setupNowVisible && !swissSetupWasVisible) {
+    refreshOpenTournamentRooms();
+  }
+  swissSetupWasVisible = setupNowVisible;
+
+  if (isRegistering) {
+    view.innerHTML = renderSwissRegisteringMarkup(state);
+    bindSwissRegisteringHandlers(view, state);
+    bindSwissRoomBadge(view);
+    return;
+  }
 
   if (!hasTournament) {
     if (inRoomNonHost) {
@@ -1543,6 +1697,178 @@ function renderSwiss() {
     });
   });
   view.querySelector("#swiss-clear")?.addEventListener("click", resetSwiss);
+}
+
+// Registration-phase render. Same toolbar shape as the running view (so the
+// room codes / leave button stay where users expect them), but the body is
+// the registrants list and a host-only Start button. Match-deck pre-fill
+// later in the tournament reads from these registrants directly.
+function renderSwissRegisteringMarkup(state) {
+  const isHost = swissIsHost;
+  const canEdit = isHost; // only the host can remove signups or start
+  const registrants = listRegistrants(state).sort((a, b) =>
+    (a.name || "").localeCompare(b.name || "")
+  );
+  const minTotal = swissRegistrationMinimum(state);
+  const enoughRegistrants = registrants.length >= minTotal;
+
+  const modeLabel = state.mode === "single-elim" ? "Single Elimination"
+    : state.mode === "swiss-only" ? "Swiss"
+    : "Swiss + Top 8";
+  const formatBits = [`<span class="swiss-reg-format-mode">${modeLabel}</span>`];
+  if (state.mode !== "single-elim") {
+    formatBits.push(`<span class="swiss-reg-format-bit">${getGroupCount(state)} groups</span>`);
+    formatBits.push(`<span class="swiss-reg-format-bit">${getRoundCount(state)} rounds</span>`);
+  }
+
+  const nameValue = state.tournamentName || "";
+  let nameHtml = "";
+  if (canEdit) {
+    const placeholder = "+ Add tournament name";
+    const label = nameValue || placeholder;
+    const cls = "swiss-tournament-name swiss-tournament-name-editable" + (nameValue ? "" : " swiss-tournament-name-empty");
+    nameHtml = `<button type="button" class="${cls}" id="swiss-edit-name" title="Tap to rename">${escapeHtml(label)}</button>`;
+  } else if (nameValue) {
+    nameHtml = `<span class="swiss-tournament-name">${escapeHtml(nameValue)}</span>`;
+  }
+
+  const registrantRows = registrants.length
+    ? registrants.map((r, i) => {
+        const removeBtn = canEdit
+          ? `<button type="button" class="swiss-reg-remove" data-reg-id="${escapeHtml(r.id)}" title="Remove ${escapeHtml(r.name)}" aria-label="Remove ${escapeHtml(r.name)}">&times;</button>`
+          : "";
+        const deckHasContent = !isBeyCheckDeckEmpty(r.deck);
+        const deckBadge = deckHasContent
+          ? `<span class="swiss-reg-deck-badge">Deck ✓</span>`
+          : `<span class="swiss-reg-deck-badge swiss-reg-deck-badge-missing">No deck</span>`;
+        return `<li class="swiss-reg-row">
+          <span class="swiss-reg-num">${i + 1}</span>
+          <span class="swiss-reg-name">${escapeHtml(r.name || "(unnamed)")}</span>
+          ${deckBadge}
+          ${removeBtn}
+        </li>`;
+      }).join("")
+    : `<li class="swiss-reg-empty">No one has registered yet. Share the View code so players can sign up via the Room tab.</li>`;
+
+  const startBtnHtml = canEdit
+    ? `<button type="button" id="swiss-reg-start" class="btn swiss-reg-start" ${enoughRegistrants ? "" : "disabled"}>
+         ${enoughRegistrants ? "Start Tournament" : `Need ${minTotal - registrants.length} more`}
+       </button>`
+    : `<div class="swiss-reg-waiting">Waiting for the host to start the tournament…</div>`;
+
+  return `
+    <div class="swiss-toolbar">
+      <div class="swiss-toolbar-row swiss-toolbar-name-row">
+        ${nameHtml}
+        <span class="swiss-reg-pill">Registration open</span>
+      </div>
+      <div class="swiss-toolbar-row swiss-toolbar-info-row">
+        ${renderSwissRoomBadge()}
+        <div class="swiss-toolbar-actions">
+          <button type="button" id="swiss-clear" class="btn btn-reset btn-icon-sm" title="${isHost ? "Reset Tournament" : "Leave Room"}">
+            <img src="assets/icons/exit-button.png" alt="Leave"
+                 onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
+          </button>
+        </div>
+      </div>
+    </div>
+    <section class="swiss-registering">
+      <div class="swiss-reg-format">${formatBits.join("")}</div>
+      <h3 class="swiss-reg-heading">Registrants <span class="swiss-reg-count">(${registrants.length}${minTotal ? ` / ${minTotal} min` : ""})</span></h3>
+      <ul class="swiss-reg-list">${registrantRows}</ul>
+      <div class="swiss-reg-actions">${startBtnHtml}</div>
+    </section>
+  `;
+}
+
+function bindSwissRegisteringHandlers(view, state) {
+  view.querySelector("#swiss-edit-name")?.addEventListener("click", showEditTournamentNamePopup);
+  view.querySelector("#swiss-clear")?.addEventListener("click", resetSwiss);
+  view.querySelector("#swiss-reg-start")?.addEventListener("click", startRegisteringTournament);
+  view.querySelectorAll(".swiss-reg-remove").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.regId;
+      if (!id) return;
+      removeRegistrant(id);
+    });
+  });
+}
+
+// Minimum registrants needed before Start can fire. Mirrors the same checks
+// the underlying generators apply, so the host can never click Start and
+// then get an alert from the generator.
+function swissRegistrationMinimum(state) {
+  if (!state) return 0;
+  if (state.mode === "single-elim") return 2;
+  // Swiss / Swiss + Top 8: need enough per group for SWISS_MIN_PER_GROUP and
+  // enough total for the bracket's top-N slots.
+  const gc = getGroupCount(state);
+  const minPerGroupForBracket = state.mode === "swiss-only"
+    ? SWISS_MIN_PER_GROUP
+    : Math.ceil(SWISS_BRACKET_SIZE / gc);
+  return gc * Math.max(SWISS_MIN_PER_GROUP, minPerGroupForBracket);
+}
+
+function removeRegistrant(id) {
+  if (!id) return;
+  const s = loadSwiss();
+  if (!s.registrants || !s.registrants[id]) return;
+  delete s.registrants[id];
+  persistSwiss(s);
+  if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
+    const updates = { [`registrants/${id}`]: null };
+    swissRoomRef.update(updates).catch(e => console.warn("Registrant remove push failed:", e));
+    if (s.phase === "registering" && swissEditCode) publishOpenRoomIndex(swissEditCode, s);
+  }
+  renderSwiss();
+}
+
+// Host-side Start: lock the registrant list, run the existing generators
+// from the registered names, copy registrants forward into the running
+// state, flip phase to "running", and remove the open-tournaments index.
+function startRegisteringTournament() {
+  if (!swissIsHost) return;
+  const state = loadSwiss();
+  if (!isRegisteringPhase(state)) return;
+  const registrants = listRegistrants(state);
+  const minTotal = swissRegistrationMinimum(state);
+  if (registrants.length < minTotal) {
+    alert(`Need at least ${minTotal} registrants to start (${registrants.length} so far).`);
+    return;
+  }
+  const missingDecks = registrants.filter(r => isBeyCheckDeckEmpty(r.deck)).map(r => r.name || "(unnamed)");
+  if (missingDecks.length) {
+    const proceed = confirm(`These registrants haven't submitted a deck yet:\n\n${missingDecks.join("\n")}\n\nStart anyway? (Their decks will be empty until the judge fills them in.)`);
+    if (!proceed) return;
+  }
+  const names = registrants.map(r => (r.name || "").trim()).filter(Boolean);
+  if (names.length < minTotal) {
+    alert("Some registrants are missing a name.");
+    return;
+  }
+  const namesText = names.join("\n");
+  const generated = state.mode === "single-elim"
+    ? generateSingleElimFromText(namesText, state.tournamentName)
+    : generateSwissFromText(namesText, state.tournamentName, getRoundCount(state), getGroupCount(state));
+  if (!generated) return; // generator already alerted
+  // Carry forward registrants + metadata; flip phase to running.
+  generated.registrants = state.registrants;
+  generated.phase = "running";
+  generated.ranked = state.ranked;
+  if (state.mode === "swiss-only") generated.mode = "swiss-only";
+  if (state.createdAt) generated.createdAt = state.createdAt;
+  persistSwiss(generated);
+
+  if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
+    const payload = { ...generated };
+    if (swissViewCode) payload.viewCode = swissViewCode;
+    swissApplyingRemote = true;
+    swissRoomRef.set(payload)
+      .catch(e => console.warn("Start tournament push failed:", e))
+      .finally(() => { swissApplyingRemote = false; });
+  }
+  if (swissEditCode) removeOpenRoomIndex(swissEditCode);
+  renderSwiss();
 }
 
 // Combined cross-group standings for swiss-only mode. Each group's stats
@@ -2439,17 +2765,27 @@ function showBeyCheckPopup(matchId) {
     a: normalizeBeyCheckDeck(match.decks && match.decks.a),
     b: normalizeBeyCheckDeck(match.decks && match.decks.b)
   };
-  // Carry-forward: if this match has no deck saved for a participant yet,
-  // pull their most recent deck from a previous match. The host can still
-  // edit any slot — the inherited combos are just a starting point.
+  // Pre-fill priority: 1) what's already saved on this match (judge override
+  // from earlier), 2) what the player registered up front, 3) carry-forward
+  // from their most recent previous match. (3) is the legacy path for
+  // tournaments started before self-registration existed.
   let carriedOver = false;
+  let registeredFill = false;
   if (isBeyCheckDeckEmpty(decks.a) && match.a) {
-    const prev = findLatestDeckForParticipant(state, match.a, matchId);
-    if (prev) { decks.a = prev; carriedOver = true; }
+    const reg = getRegisteredDeckForParticipant(state, match.a);
+    if (reg) { decks.a = reg; registeredFill = true; }
+    else {
+      const prev = findLatestDeckForParticipant(state, match.a, matchId);
+      if (prev) { decks.a = prev; carriedOver = true; }
+    }
   }
   if (isBeyCheckDeckEmpty(decks.b) && match.b) {
-    const prev = findLatestDeckForParticipant(state, match.b, matchId);
-    if (prev) { decks.b = prev; carriedOver = true; }
+    const reg = getRegisteredDeckForParticipant(state, match.b);
+    if (reg) { decks.b = reg; registeredFill = true; }
+    else {
+      const prev = findLatestDeckForParticipant(state, match.b, matchId);
+      if (prev) { decks.b = prev; carriedOver = true; }
+    }
   }
   let activeSide = "a";
 
@@ -2520,25 +2856,35 @@ function showBeyCheckPopup(matchId) {
 
   popup.classList.remove("hidden");
 
-  if (carriedOver) {
+  if (carriedOver || registeredFill) {
     // Write the inherited decks to this match's record so other devices
-    // see them too, then surface a brief notice in the status line.
+    // see them too, then surface a brief notice in the status line. The
+    // registered-deck path also shows a persistent warning that edits
+    // here only affect this single match — they don't change the
+    // participant's registered deck.
     const s = loadSwiss();
     if (s.matches[matchId]) {
       s.matches[matchId].decks = { a: decks.a, b: decks.b };
       persistSwiss(s);
     }
+    const sourceLabel = registeredFill ? "registered deck" : "previous match";
     if (swissRoomRef && swissCanEdit) {
-      setStatus("Carried decks from previous match…", "pending");
+      setStatus(`Loading from ${sourceLabel}…`, "pending");
       swissRoomRef.update({
         [`matches/${matchId}/decks`]: { a: decks.a, b: decks.b }
       }).then(() => {
-        setStatus("Loaded last deck ✓", "ok");
-        setTimeout(() => setStatus(""), 1800);
+        if (registeredFill) {
+          setStatus("Loaded registered deck — edits apply to this match only.", "ok");
+        } else {
+          setStatus("Loaded last deck ✓", "ok");
+          setTimeout(() => setStatus(""), 1800);
+        }
       }).catch(e => {
         console.warn("Bey check carry-over push failed:", e);
-        setStatus("Carry-over save failed: " + (e && e.message ? e.message : e), "err");
+        setStatus("Save failed: " + (e && e.message ? e.message : e), "err");
       });
+    } else if (registeredFill) {
+      setStatus("Loaded registered deck — edits apply to this match only.", "ok");
     } else {
       setStatus("Loaded last deck (local only).", "ok");
       setTimeout(() => setStatus(""), 1800);
@@ -2939,57 +3285,44 @@ function saveTournamentHistoryEntry(entry) {
 }
 
 document.getElementById("swiss-generate")?.addEventListener("click", () => {
-  const textarea = document.getElementById("swiss-names");
-  if (!textarea) return;
-  const namesText = textarea.value;
   showTournamentModePopup((mode, tournamentName, roundCount, ranked, groupCount) => {
-    const next = mode === "single-elim"
-      ? generateSingleElimFromText(namesText, tournamentName)
-      : generateSwissFromText(namesText, tournamentName, roundCount, groupCount);
-    if (!next) return;
-    if (mode === "swiss-only") next.mode = "swiss-only"; // gate the auto Top-8 bracket
-    next.ranked = !!ranked;
+    // Open Registration only — empty room in registering phase. Players
+    // self-register with their decks via the Rooms tab, then the host
+    // clicks Start to generate groups / bracket from the registrants.
+    const next = createRegisteringTournamentState({
+      mode, tournamentName, roundCount, ranked, groupCount
+    });
     startTournamentFromState(next);
   });
 });
 
-function joinSwissByCode(code, { onStatus } = {}) {
-  const setStatus = msg => { if (typeof onStatus === "function") onStatus(msg); };
-  if (!code) return;
-  if (!firebaseReady()) {
-    setStatus("Live sync isn't configured on this build.");
-    return;
+// Build the empty-shell tournament state for the open-registration flow.
+// Stores the format choices up front so participants signing up via the
+// Room tab can see exactly what they're entering.
+function createRegisteringTournamentState({ mode, tournamentName, roundCount, ranked, groupCount }) {
+  const safeMode = mode === "single-elim" ? "single-elim"
+    : mode === "swiss-only" ? "swiss-only"
+    : "swiss";
+  const state = {
+    groups: null,
+    matches: {},
+    groupRounds: [],
+    mode: safeMode,
+    participants: [],
+    tournamentName: (tournamentName || "").trim() || null,
+    ranked: !!ranked,
+    phase: "registering",
+    registrants: {},
+    createdAt: new Date().toISOString()
+  };
+  if (safeMode !== "single-elim") {
+    state.roundCount = SWISS_ROUND_OPTIONS.includes(Number(roundCount))
+      ? Number(roundCount) : SWISS_ROUND_COUNT;
+    state.groupCount = SWISS_GROUP_OPTIONS.includes(Number(groupCount))
+      ? Number(groupCount) : SWISS_GROUP_COUNT_DEFAULT;
   }
-  setStatus("Looking up room…");
-  resolveRoomCode(code, result => {
-    if (!result.ok) {
-      setStatus(result.reason || "Failed to connect.");
-      return;
-    }
-    // Fresh join — remote owns the view, clear any stale local state.
-    localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [] }));
-    const asHost = isRoomHosted(result.editCode);
-    const canEdit = asHost || result.role === "edit";
-    const connected = connectSwissRoom(result.editCode, result.viewCode, asHost, canEdit);
-    if (!connected.ok) {
-      setStatus(connected.reason || "Failed to connect.");
-      return;
-    }
-    const label = asHost ? "host" : (canEdit ? "co-host" : "participant");
-    setStatus(`Joined as ${label}.`);
-    renderSwiss();
-  });
+  return state;
 }
-
-document.getElementById("swiss-join")?.addEventListener("click", () => {
-  const input = document.getElementById("swiss-join-code");
-  const status = document.getElementById("swiss-join-status");
-  if (!input) return;
-  const code = (input.value || "").trim().toUpperCase();
-  joinSwissByCode(code, {
-    onStatus: msg => { if (status) status.textContent = msg; }
-  });
-});
 
 function fetchTournamentState(code, cb) {
   const db = initFirebase();
@@ -3173,9 +3506,401 @@ document.addEventListener("webkitfullscreenchange", scheduleSwissScrollRestore);
       panels.forEach(p => p.classList.toggle("hidden", p.id !== "tournament-panel-" + view));
       if (view === "ranking") renderTournamentRanking();
       if (view === "revox") renderRevoxRanking();
+      // Coming back to Hosting? Refresh the open-tournaments list so it
+      // doesn't sit stale while the user is poking at other tabs. Only
+      // matters when the setup form is actually visible (i.e. the user
+      // isn't currently inside a tournament).
+      if (view === "hosting") {
+        const setup = document.getElementById("swiss-setup");
+        if (setup && !setup.classList.contains("hidden")) {
+          refreshOpenTournamentRooms();
+        }
+      }
     });
   });
+  document.getElementById("swiss-rooms-refresh")?.addEventListener("click", refreshOpenTournamentRooms);
 })();
+
+// ===== Public Rooms tab: list open tournaments, click to register. =====
+
+function refreshOpenTournamentRooms() {
+  const list = document.getElementById("swiss-rooms-list");
+  const status = document.getElementById("swiss-rooms-status");
+  if (!list) return;
+  const setStatus = msg => { if (status) status.textContent = msg || ""; };
+  if (!firebaseReady()) {
+    list.innerHTML = "";
+    setStatus("Live sync isn't configured on this build.");
+    return;
+  }
+  setStatus("Loading…");
+  const db = initFirebase();
+  db.ref("openTournaments").once("value")
+    .then(snap => {
+      const val = snap.val() || {};
+      const rooms = Object.values(val).filter(r => r && r.editCode);
+      if (!rooms.length) {
+        list.innerHTML = `<p class="swiss-rooms-empty">No tournaments are open for registration right now. Ask your host to create one.</p>`;
+        setStatus("");
+        return;
+      }
+      // Cross-check each lobby entry against the underlying swissRoom phase.
+      // Catches leftovers from explicit-remove failures or onDisconnect not
+      // firing in time (e.g. tournament finished/cancelled but the lobby
+      // entry stuck around). Stale entries are pruned client-side too.
+      return Promise.all(rooms.map(r =>
+        db.ref("swissRooms/" + r.editCode + "/phase").once("value")
+          .then(phaseSnap => ({ room: r, phase: phaseSnap.val() }))
+          .catch(() => ({ room: r, phase: null }))
+      )).then(results => {
+        const live = [];
+        results.forEach(({ room, phase }) => {
+          if (phase === "registering") {
+            live.push(room);
+          } else {
+            // Underlying room is gone or already running/finished — drop it.
+            db.ref("openTournaments/" + room.editCode).set(null)
+              .catch(() => {});
+          }
+        });
+        live.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+        if (!live.length) {
+          list.innerHTML = `<p class="swiss-rooms-empty">No tournaments are open for registration right now. Ask your host to create one.</p>`;
+          setStatus("");
+          return;
+        }
+        renderLobbyRooms(list, live);
+        setStatus("");
+      });
+    })
+    .catch(err => {
+      console.warn("Open rooms fetch failed:", err);
+      setStatus("Couldn't load rooms. Check your connection.");
+    });
+}
+
+function renderLobbyRooms(list, rooms) {
+  list.innerHTML = rooms.map(r => {
+    const name = (r.name || "").trim() || "(unnamed tournament)";
+    const modeLabel = r.mode === "single-elim" ? "Single Elim"
+      : r.mode === "swiss-only" ? "Swiss"
+      : "Swiss + Top 8";
+    const meta = [`${r.registrantCount || 0} registered`];
+    if (r.mode !== "single-elim") {
+      if (r.groupCount) meta.push(`${r.groupCount} groups`);
+      if (r.roundCount) meta.push(`${r.roundCount} rounds`);
+    }
+    return `
+      <button type="button" class="swiss-room-card" data-edit-code="${escapeHtml(r.editCode)}">
+        <div class="swiss-room-card-name">${escapeHtml(name)}</div>
+        <div class="swiss-room-card-mode">${modeLabel}</div>
+        <div class="swiss-room-card-meta">${meta.map(escapeHtml).join(" · ")}</div>
+      </button>
+    `;
+  }).join("");
+  list.querySelectorAll(".swiss-room-card").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const editCode = btn.dataset.editCode;
+      const room = rooms.find(r => r.editCode === editCode);
+      if (room) showTournamentJoinChoicePopup(room);
+    });
+  });
+}
+
+// Three-way join picker shown when a user taps an entry in the Open
+// Tournaments list. Co-host requires the host code (matched against the
+// lobby summary's editCode), participant opens the registration form,
+// viewer connects view-only directly via the lobby's viewCode.
+function showTournamentJoinChoicePopup(room) {
+  const popup = document.getElementById("tournament-join-choice-popup");
+  if (!popup) return;
+  const subtitle = popup.querySelector("#tournament-join-choice-subtitle");
+  const cohostBtn = popup.querySelector("#tournament-join-cohost");
+  const participantBtn = popup.querySelector("#tournament-join-participant");
+  const viewerBtn = popup.querySelector("#tournament-join-viewer");
+  const cancelBtn = popup.querySelector("#tournament-join-choice-cancel");
+
+  if (subtitle) {
+    const name = (room.name || "").trim() || "(unnamed tournament)";
+    const modeLabel = room.mode === "single-elim" ? "Single Elim"
+      : room.mode === "swiss-only" ? "Swiss"
+      : "Swiss + Top 8";
+    subtitle.textContent = `${name} · ${modeLabel}`;
+  }
+
+  const close = () => {
+    popup.classList.add("hidden");
+    if (cohostBtn) cohostBtn.onclick = null;
+    if (participantBtn) participantBtn.onclick = null;
+    if (viewerBtn) viewerBtn.onclick = null;
+    if (cancelBtn) cancelBtn.onclick = null;
+  };
+
+  if (cohostBtn) {
+    cohostBtn.onclick = () => {
+      close();
+      showCoHostCodePopup(room);
+    };
+  }
+  if (participantBtn) {
+    participantBtn.onclick = () => {
+      close();
+      showRegistrationPopup(room);
+    };
+  }
+  if (viewerBtn) {
+    viewerBtn.onclick = () => {
+      close();
+      joinTournamentAsViewer(room);
+    };
+  }
+  if (cancelBtn) cancelBtn.onclick = close;
+  popup.classList.remove("hidden");
+}
+
+// Code prompt for the co-host path. Validates the entered code against
+// the lobby summary's editCode rather than going through resolveRoomCode,
+// so a user accidentally typing the view code gets a clear error instead
+// of silently being downgraded to view-only.
+function showCoHostCodePopup(room) {
+  const popup = document.getElementById("tournament-cohost-code-popup");
+  if (!popup) return;
+  const subtitle = popup.querySelector("#tournament-cohost-code-subtitle");
+  const input = popup.querySelector("#tournament-cohost-code-input");
+  const statusEl = popup.querySelector("#tournament-cohost-code-status");
+  const submitBtn = popup.querySelector("#tournament-cohost-code-submit");
+  const cancelBtn = popup.querySelector("#tournament-cohost-code-cancel");
+
+  if (subtitle) {
+    const name = (room.name || "").trim() || "(unnamed tournament)";
+    subtitle.textContent = `Enter the host code for ${name}.`;
+  }
+  if (input) input.value = "";
+  if (statusEl) { statusEl.textContent = ""; statusEl.classList.remove("is-err", "is-ok", "is-pending"); }
+
+  const setStatus = (msg, kind) => {
+    if (!statusEl) return;
+    statusEl.textContent = msg || "";
+    statusEl.classList.remove("is-err", "is-ok", "is-pending");
+    if (kind) statusEl.classList.add(`is-${kind}`);
+  };
+
+  const close = () => {
+    popup.classList.add("hidden");
+    if (submitBtn) submitBtn.onclick = null;
+    if (cancelBtn) cancelBtn.onclick = null;
+    if (input) input.onkeydown = null;
+  };
+
+  const submit = () => {
+    const entered = (input?.value || "").trim().toUpperCase();
+    if (!entered) {
+      setStatus("Enter the host code.", "err");
+      input?.focus();
+      return;
+    }
+    if (entered !== String(room.editCode || "").toUpperCase()) {
+      setStatus("Wrong host code for this tournament.", "err");
+      input?.select();
+      return;
+    }
+    close();
+    joinTournamentAsCoHost(room);
+  };
+
+  if (submitBtn) submitBtn.onclick = submit;
+  if (cancelBtn) cancelBtn.onclick = close;
+  if (input) {
+    input.onkeydown = (e) => {
+      if (e.key === "Enter") { e.preventDefault(); submit(); }
+      else if (e.key === "Escape") { e.preventDefault(); close(); }
+    };
+  }
+  popup.classList.remove("hidden");
+  setTimeout(() => input?.focus(), 0);
+}
+
+function joinTournamentAsCoHost(room) {
+  if (!firebaseReady()) {
+    alert("Live sync isn't configured on this build.");
+    return;
+  }
+  disconnectSwissRoom();
+  localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [], phase: "running", registrants: {} }));
+  const asHost = isRoomHosted(room.editCode);
+  connectSwissRoom(room.editCode, room.viewCode || null, asHost, true);
+  // Make sure the user is on the Hosting tab so they see the live tournament.
+  const hostingTab = document.querySelector('.tournament-sub-tab[data-tournament-view="hosting"]');
+  hostingTab?.click();
+}
+
+function joinTournamentAsViewer(room) {
+  if (!firebaseReady()) {
+    alert("Live sync isn't configured on this build.");
+    return;
+  }
+  // Viewer connects via the lobby's viewCode (or falls back to the editCode
+  // path with canEdit=false if the lobby summary somehow lacks viewCode).
+  disconnectSwissRoom();
+  localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [], phase: "running", registrants: {} }));
+  connectSwissRoom(room.editCode, room.viewCode || null, false, false);
+  const hostingTab = document.querySelector('.tournament-sub-tab[data-tournament-view="hosting"]');
+  hostingTab?.click();
+}
+
+function showRegistrationPopup(room) {
+  const popup = document.getElementById("register-popup");
+  if (!popup) return;
+  const subtitle = popup.querySelector("#register-subtitle");
+  const nameInput = popup.querySelector("#register-name-input");
+  const slotsHost = popup.querySelector("#register-deck-slots");
+  const status = popup.querySelector("#register-status");
+  const submitBtn = popup.querySelector("#register-submit");
+  const cancelBtn = popup.querySelector("#register-cancel");
+  const pasteBtn = popup.querySelector("#register-paste");
+
+  const setStatus = (msg, kind) => {
+    if (!status) return;
+    status.textContent = msg || "";
+    status.classList.remove("is-ok", "is-err", "is-pending");
+    if (kind) status.classList.add(`is-${kind}`);
+  };
+
+  if (subtitle) {
+    const name = (room.name || "").trim() || "(unnamed tournament)";
+    const modeLabel = room.mode === "single-elim" ? "Single Elim"
+      : room.mode === "swiss-only" ? "Swiss"
+      : "Swiss + Top 8";
+    subtitle.textContent = `${name} · ${modeLabel}`;
+  }
+  if (nameInput) nameInput.value = "";
+  setStatus("");
+  let deck = emptyBeyCheckDeck();
+
+  const renderSlots = () => {
+    if (!slotsHost) return;
+    slotsHost.innerHTML = deck.map((s, i) => renderBeyCheckSlot(i, s)).join("");
+    slotsHost.querySelectorAll(".bey-check-slot").forEach(el => {
+      el.addEventListener("click", () => {
+        const slotIdx = Number(el.dataset.slot);
+        showBeyCheckSlotPopup(slotIdx, deck[slotIdx], deck, (next) => {
+          deck[slotIdx] = next;
+          renderSlots();
+        });
+      });
+    });
+  };
+  renderSlots();
+
+  popup.classList.remove("hidden");
+  setTimeout(() => nameInput?.focus(), 0);
+
+  const close = () => {
+    popup.classList.add("hidden");
+    submitBtn.onclick = null;
+    cancelBtn.onclick = null;
+    if (pasteBtn) pasteBtn.onclick = null;
+    if (nameInput) nameInput.onkeydown = null;
+  };
+  cancelBtn.onclick = close;
+
+  // Paste from Deck tab. Reads the JSON payload that the Deck tab's Copy
+  // button writes to the clipboard, validates the wrapper, then drops the
+  // 3-slot deck straight into the form (the user can still tweak slots
+  // before submitting).
+  if (pasteBtn) {
+    pasteBtn.onclick = () => {
+      if (!navigator.clipboard || !navigator.clipboard.readText) {
+        setStatus("Clipboard read isn't available in this browser.", "err");
+        return;
+      }
+      navigator.clipboard.readText().then(text => {
+        let parsed;
+        try { parsed = JSON.parse(text); } catch (e) { parsed = null; }
+        if (!parsed || parsed.type !== "x-optimizer-deck" || !Array.isArray(parsed.deck)) {
+          setStatus("Clipboard doesn't contain a copied deck. Hit Copy in the Deck tab first.", "err");
+          return;
+        }
+        // normalizeBeyCheckDeck filters parts to the slot's mode + caps to 3
+        // slots, so anything weird in the payload gets sanitised before we
+        // render it.
+        deck = normalizeBeyCheckDeck(parsed.deck);
+        renderSlots();
+        const label = parsed.name ? ` "${parsed.name}"` : "";
+        setStatus(`Pasted deck${label} — review before registering.`, "ok");
+      }).catch(() => {
+        setStatus("Couldn't read the clipboard. Did you allow the permission?", "err");
+      });
+    };
+  }
+
+  const submit = () => {
+    const name = (nameInput?.value || "").trim();
+    if (!name) {
+      setStatus("Enter a name to register.", "err");
+      nameInput?.focus();
+      return;
+    }
+    if (isBeyCheckDeckEmpty(deck)) {
+      // Soft-warn but allow — host can still start with an empty deck if needed.
+      if (!confirm("You haven't built any deck slots yet. Register without a deck?")) {
+        return;
+      }
+    }
+    submitRegistration(room, name, deck, setStatus, close);
+  };
+  submitBtn.onclick = submit;
+  if (nameInput) {
+    nameInput.onkeydown = (e) => {
+      if (e.key === "Enter") { e.preventDefault(); submit(); }
+      else if (e.key === "Escape") { e.preventDefault(); close(); }
+    };
+  }
+}
+
+function submitRegistration(room, name, deck, setStatus, onSuccess) {
+  const db = initFirebase();
+  if (!db) { setStatus("Firebase not available.", "err"); return; }
+  setStatus("Looking up tournament…", "pending");
+  const editCode = room.editCode;
+  const roomRef = db.ref("swissRooms/" + editCode);
+  roomRef.once("value")
+    .then(snap => {
+      const remote = snap.val();
+      if (!remote || remote.phase !== "registering") {
+        throw new Error("This tournament is no longer accepting registrations.");
+      }
+      // Duplicate-name guard. Match registrants and (if already started)
+      // existing participants.
+      const lower = name.trim().toLowerCase();
+      const taken = Object.values(remote.registrants || {}).some(r =>
+        r && typeof r.name === "string" && r.name.trim().toLowerCase() === lower);
+      if (taken) throw new Error("That name is already registered. Pick a different one.");
+
+      const id = generateRegistrantId();
+      const payload = { name: name.trim(), deck };
+      setStatus("Submitting…", "pending");
+      return roomRef.child("registrants/" + id).set(payload).then(() => remote);
+    })
+    .then(remote => {
+      // Auto-join as a view-only participant so the registrant immediately
+      // sees the registrants list updating live and the tournament starting.
+      const viewCode = remote.viewCode || null;
+      // Disconnect any prior room first so we don't leak listeners.
+      disconnectSwissRoom();
+      localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [], phase: "running", registrants: {} }));
+      connectSwissRoom(editCode, viewCode, false, false);
+      setStatus("Registered ✓ — switching to tournament view…", "ok");
+      onSuccess?.();
+      // Switch the user's visible tab to Hosting so they see the tournament.
+      const hostingTab = document.querySelector('.tournament-sub-tab[data-tournament-view="hosting"]');
+      hostingTab?.click();
+    })
+    .catch(err => {
+      console.warn("Registration failed:", err);
+      setStatus(err.message || "Couldn't register. Try again.", "err");
+    });
+}
 
 // Firebase keys can't contain ".", "#", "$", "/", "[", "]". Normalize so
 // "Alice" and "alice" merge into a single leaderboard entry.

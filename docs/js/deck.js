@@ -374,6 +374,70 @@ function shuffleDeck() {
 document.getElementById("deck-download")?.addEventListener("click", downloadDeckPNG);
 document.getElementById("deck-reset")?.addEventListener("click", resetDeck);
 document.getElementById("deck-shuffle")?.addEventListener("click", shuffleDeck);
+document.getElementById("deck-copy")?.addEventListener("click", copyDeckForTournamentRegistration);
+
+// Serialize the active deck into the same shape the Bey Check / tournament
+// registration popup uses (each slot: { mode, parts }) and write it to the
+// clipboard with a small wrapper so the paste side can recognise our payload
+// vs. random clipboard text.
+const TOURNAMENT_DECK_CLIPBOARD_TYPE = "x-optimizer-deck";
+const TOURNAMENT_DECK_CLIPBOARD_VERSION = 1;
+
+function deckSlotToBeyCheckShape(slot) {
+  if (!slot || !slot.data || !slot.data.parts) {
+    return { mode: "standard", parts: {} };
+  }
+  return {
+    mode: typeof slot.mode === "string" ? slot.mode : "standard",
+    parts: { ...slot.data.parts }
+  };
+}
+
+function copyDeckForTournamentRegistration() {
+  const slots = loadDeck();
+  const deck = slots.map(deckSlotToBeyCheckShape);
+  const payload = JSON.stringify({
+    type: TOURNAMENT_DECK_CLIPBOARD_TYPE,
+    v: TOURNAMENT_DECK_CLIPBOARD_VERSION,
+    name: (loadDeckName() || "").trim() || null,
+    deck
+  });
+  const btn = document.getElementById("deck-copy");
+  const flash = (ok) => {
+    if (!btn) return;
+    const origHtml = btn.innerHTML;
+    btn.innerHTML = ok
+      ? `<img src="assets/icons/thumbs-up.png" alt="Copied"
+           onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x2713;');">`
+      : `&#x2715;`; // ✕
+    btn.disabled = true;
+    btn.classList.toggle("btn-reset", !ok);
+    setTimeout(() => {
+      btn.innerHTML = origHtml;
+      btn.disabled = false;
+      btn.classList.remove("btn-reset");
+    }, 1200);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(payload)
+      .then(() => flash(true))
+      .catch(() => flash(false));
+    return;
+  }
+  // Fallback: temp textarea + execCommand for older browsers / non-HTTPS.
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = payload;
+    ta.style.cssText = "position:fixed;left:-9999px;top:0;";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    flash(ok);
+  } catch (e) {
+    flash(false);
+  }
+}
 
 (function initDeckName() {
   const input = document.getElementById("deck-name");

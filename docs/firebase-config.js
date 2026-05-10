@@ -11,23 +11,21 @@
 // 3. In the left nav, go to Build -> Realtime Database.
 //    Click "Create Database", pick a region, and start in TEST MODE for now.
 // 4. Still in Realtime Database, open the Rules tab and replace the contents
-//    with the block below, then click Publish:
+//    with the FULL rules block at the bottom of this file (the one with
+//    `swissRooms`, `swissViewCodes`, `openTournaments`, `ranking`, and
+//    `revoxRanking`), then click Publish.
 //
-//    {
-//      "rules": {
-//        "swissRooms": {
-//          "$code": { ".read": true, ".write": true }
-//        },
-//        "swissViewCodes": {
-//          "$code": { ".read": true, ".write": true }
-//        }
-//      }
-//    }
+//    Path roles:
+//    - swissRooms       — tournament state keyed by the co-host code.
+//    - swissViewCodes   — lookup mapping participant codes -> co-host codes.
+//    - openTournaments  — public lobby of rooms accepting self-registration.
+//                         Listed by the Rooms tab; needs read on the parent
+//                         so the lobby can enumerate children.
+//    - ranking          — global Beyblade-X tournament leaderboard.
+//    - revoxRanking     — Revox club leaderboard.
 //
-//    (Two open paths: swissRooms holds tournament state keyed by the co-host
-//    code; swissViewCodes is a small lookup mapping participant codes to the
-//    co-host code they reference. The rest of the DB stays locked. The UI
-//    enforces who can score based on which code the joiner used.)
+//    The rest of the DB stays locked. UI enforces who can score based on
+//    which code the joiner used.
 //
 // If this file is left blank, the Swiss tab still works locally — it just
 // won't sync between devices.
@@ -53,16 +51,25 @@ window.FIREBASE_CONFIG = {
 window.TOURNAMENT_REVOX_ADMIN_SHA256 =
   "e466afc350e05dc5a73887167512284874e477041b7c728aa586a0e012080339";
 
-// NOTE: Realtime Database rules need a `revoxRanking` entry alongside the
-// existing `ranking` block. Replace the rules in Firebase Console with:
+// Replace the rules in Firebase Console with this block:
 //   {
 //     "rules": {
-//       "swissRooms":     { "$code": { ".read": true, ".write": true } },
-//       "swissViewCodes": { "$code": { ".read": true, ".write": true } },
-//       "ranking":        { ".read": true, "$name": { ".write": true } },
-//       "revoxRanking":   { ".read": true, "$name": { ".write": true } }
+//       "swissRooms":      { "$code": { ".read": true, ".write": true } },
+//       "swissViewCodes":  { "$code": { ".read": true, ".write": true } },
+//       "openTournaments": { ".read": true, "$code": { ".write": true } },
+//       "ranking":         { ".read": true, "$name": { ".write": true } },
+//       "revoxRanking":    { ".read": true, "$name": { ".write": true } }
 //     }
 //   }
+//
+// Notes on `openTournaments`:
+// - `.read: true` is on the parent (not per-child) so the Rooms tab can
+//   list every room in one shot. Per-child read wouldn't allow that — RTDB
+//   rules cascade down, not up.
+// - `$code/.write: true` lets any client publish a lobby entry under their
+//   room's code; the host writes when opening registration and clears it
+//   on Start / Reset. Same trust model as `swissRooms` — knowing the
+//   editCode is the credential.
 
 
 // // Import the functions you need from the SDKs you need
