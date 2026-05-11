@@ -2,12 +2,46 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>X Optimizer</title>
-  <meta http-equiv="refresh" content="0; url=calculator/">
-  <link rel="canonical" href="calculator/">
-  <script>location.replace("calculator/" + (location.search || "") + (location.hash || ""));</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
+  <title>X Optimizer — What's New</title>
+  <link rel="stylesheet" href="style.css">
+  <script>
+    // Apply the saved theme class early so the page doesn't flash the
+    // default dark theme before paint.
+    (function applyEarlyTheme() {
+      try {
+        var t = localStorage.getItem("theme");
+        if (t && /^[a-z]+$/.test(t) && t !== "dark") {
+          document.addEventListener("DOMContentLoaded", function () {
+            document.body.classList.add(t + "-mode");
+          });
+        }
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
-  <p>Redirecting to <a href="calculator/">/calculator/</a>…</p>
+  <main class="updates-page">
+    <header class="updates-header">
+      <h1 class="updates-title">What's New</h1>
+      <p class="updates-subtitle">Recent changes to X Optimizer.</p>
+    </header>
+
+    <!-- Bump data-version when the list below changes so the splash flags
+         it as fresh for returning users. -->
+    <article class="updates-card" data-version="2026-05-14">
+      <ul class="popup-list">
+        <li><strong>Share button.</strong> A Share button in the tournament toolbar copies (or hands off to your phone's share sheet) a direct link to the Tournament tab.</li>
+        <li><strong>Hosts and co-hosts can play too.</strong> Tap "+ Register myself" in the registering screen to add yourself as a participant.</li>
+        <li><strong>Past tournaments stay viewable.</strong> Reset clears the live room but keeps a snapshot — clicking the entry in history still shows the final results.</li>
+        <li><strong>Each tab has its own URL.</strong> /calculator/, /deck/, /tournament/, etc. — bookmark or share a direct link to any tab.</li>
+        <li><strong>Scoreboard round counter.</strong> Shows the current round above VS, advancing every 3 score taps so judges always know where they are.</li>
+      </ul>
+    </article>
+
+    <nav class="updates-nav">
+      <a class="btn updates-enter" href="calculator/">Open the app</a>
+    </nav>
+  </main>
 </body>
 </html>

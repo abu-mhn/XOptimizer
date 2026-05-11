@@ -1494,22 +1494,17 @@ function bindSwissShareButton(view) {
   const btn = view.querySelector("#swiss-share");
   if (!btn) return;
   btn.addEventListener("click", async () => {
-    const state = loadSwiss();
-    const tournamentName = (state.tournamentName || "").trim();
-    const title = tournamentName
-      ? `Join "${tournamentName}" on X-Optimizer`
-      : "Join my Beyblade X tournament on X-Optimizer";
     const text = "Find it under Open Tournaments on the X-Optimizer Tournament tab.";
     const url = SHARE_TOURNAMENT_URL;
     // Mobile native share sheet first; falls back to clipboard, then to a
     // prompt() as a last resort for very old browsers without either API.
     if (navigator.share) {
       try {
-        await navigator.share({ title, text, url });
+        await navigator.share({ text, url });
         return;
       } catch (e) { /* user cancelled or unsupported — fall through */ }
     }
-    const payload = `${title}\n\n${text}\n\n${url}`;
+    const payload = `${text}\n\n${url}`;
     const flash = (msg) => {
       const orig = btn.innerHTML;
       btn.innerHTML = `<span class="swiss-share-flash">${msg}</span>`;
