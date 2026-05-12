@@ -247,12 +247,14 @@ function downloadResultPNG(el) {
 
   // Temporarily add footer for the screenshot (hidden from user view)
   const cls = document.body.classList;
-  const isLightLike = cls.contains("light-mode") || cls.contains("tropical-mode");
+  const isLove = cls.contains("love-mode");
+  const isForest = cls.contains("forest-mode");
+  const isLightLike = cls.contains("light-mode") || cls.contains("tropical-mode") || isLove || isForest;
   const isTropical = cls.contains("tropical-mode");
-  const footerColor = isTropical ? "#8a6d3b" : isLightLike ? "#656d76" : "#8b949e";
-  const footerBorder = isTropical ? "#ffd8a8" : isLightLike ? "#d1d9e0" : "#21262d";
-  const strongColor = isTropical ? "#2d3a3a" : isLightLike ? "#1f2328" : "#c9d1d9";
-  const pageBg = isTropical ? "#fff6e6" : cls.contains("light-mode") ? "#f6f8fa" : cls.contains("space-mode") ? "#0b0d1a" : cls.contains("stormy-mode") ? "#1e2330" : cls.contains("mono-mode") ? "#000000" : "#0d1117";
+  const footerColor = isForest ? "#5a6a4b" : isLove ? "#9c4a5e" : isTropical ? "#8a6d3b" : isLightLike ? "#656d76" : "#8b949e";
+  const footerBorder = isForest ? "#b5c89a" : isLove ? "#ffc1d2" : isTropical ? "#ffd8a8" : isLightLike ? "#d1d9e0" : "#21262d";
+  const strongColor = isForest ? "#2d3e1f" : isLove ? "#4a1d2a" : isTropical ? "#2d3a3a" : isLightLike ? "#1f2328" : "#c9d1d9";
+  const pageBg = isForest ? "#f0f4e8" : isLove ? "#fff0f5" : isTropical ? "#fff6e6" : cls.contains("light-mode") ? "#f6f8fa" : cls.contains("space-mode") ? "#0b0d1a" : cls.contains("stormy-mode") ? "#1e2330" : cls.contains("mono-mode") ? "#000000" : "#0d1117";
   const logoSrc = isLightLike ? "assets/icons/revoxNameLight.webp" : "assets/icons/revoxName.webp";
 
   const footer = document.createElement("div");
@@ -1436,21 +1438,32 @@ function initSettingDropdown(id, storageKey, defaultVal, onChange) {
 
 // Theme setting
 initSettingDropdown("setting-theme", "theme", "dark", (val) => {
-  document.body.classList.remove("light-mode", "space-mode", "tropical-mode", "stormy-mode", "mono-mode");
+  document.body.classList.remove("light-mode", "space-mode", "tropical-mode", "stormy-mode", "mono-mode", "love-mode", "forest-mode");
   if (val === "light") document.body.classList.add("light-mode");
   if (val === "space") document.body.classList.add("space-mode");
   if (val === "tropical") document.body.classList.add("tropical-mode");
   if (val === "stormy") document.body.classList.add("stormy-mode");
   if (val === "mono") document.body.classList.add("mono-mode");
+  if (val === "love") document.body.classList.add("love-mode");
+  if (val === "forest") document.body.classList.add("forest-mode");
   const titleLogo = document.getElementById("app-title-logo");
   if (titleLogo) {
-    const isLightLike = val === "light" || val === "tropical";
+    // Love and Forest use light surfaces (blush / moss-cream), so they
+    // get the dark logo variant for readable contrast.
+    const isLightLike = val === "light" || val === "tropical" || val === "love" || val === "forest";
     titleLogo.src = "assets/icons/" + (isLightLike ? "XOptimizerLight.webp" : "XOptimizerDark.webp");
   }
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = val === "light" ? "#f6f8fa" : val === "space" ? "#0b0d1a" : val === "tropical" ? "#fff6e6" : val === "stormy" ? "#1e2330" : val === "mono" ? "#000000" : "#0a4797";
+  if (meta) meta.content = val === "light" ? "#f6f8fa"
+    : val === "space" ? "#0b0d1a"
+    : val === "tropical" ? "#fff6e6"
+    : val === "stormy" ? "#1e2330"
+    : val === "mono" ? "#000000"
+    : val === "love" ? "#fff0f5"
+    : val === "forest" ? "#f0f4e8"
+    : "#0a4797";
   document.querySelectorAll('img.footer-logo').forEach(img => {
-    img.src = (val === "light" || val === "tropical") ? "assets/icons/revoxNameLight.webp" : "assets/icons/revoxName.webp";
+    img.src = (val === "light" || val === "tropical" || val === "love" || val === "forest") ? "assets/icons/revoxNameLight.webp" : "assets/icons/revoxName.webp";
   });
 });
 

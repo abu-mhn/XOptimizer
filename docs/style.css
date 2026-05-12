@@ -723,6 +723,53 @@ body.light-mode .result-part-name {
     outline: none;
 }
 
+/* ===== Tournament Share popup ===== */
+.tournament-share-card {
+    max-width: 420px;
+    width: min(96vw, 420px);
+}
+.tournament-share-subtitle {
+    margin: 0 0 8px;
+    color: #8b949e;
+    font-size: 0.85rem;
+}
+.tournament-share-card .tournament-name-label {
+    margin-top: 10px;
+}
+.tournament-share-remark {
+    width: 100%;
+    box-sizing: border-box;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 60px;
+}
+/* Hint browsers about the form-control colour scheme so the native
+   date/time picker icons render light on dark themes (otherwise mono
+   etc. show a black calendar icon on a black input). */
+.tournament-share-card .tournament-name-input {
+    color-scheme: dark;
+}
+
+/* Custom-dropdown variant for Stadium / Rule pickers in the share popup.
+   Mirrors the settings dropdown styling but stretches full-width. */
+.share-dropdown {
+    width: 100%;
+    margin-top: 0;
+}
+.share-dropdown .setting-dropdown-btn {
+    width: 100%;
+    min-width: 0;
+    padding: 10px 12px;
+    background: #0d1117;
+    border-color: #30363d;
+    color: #e6edf3;
+    font-size: 0.95rem;
+}
+.share-dropdown .setting-dropdown-menu {
+    width: 100%;
+    max-height: 200px;
+}
+
 /* ===== Settings → Show Features popup ===== */
 .features-popup-card {
     max-width: 600px;
@@ -748,6 +795,43 @@ body.light-mode .result-part-name {
     line-height: 1.5;
     text-align: left;
     margin: 0 0 10px;
+}
+/* Per-theme overrides for the feature list — the default dark surface
+   above looks out of place inside a light-themed popup card. */
+body.light-mode .features-list {
+    background: #f6f8fa;
+    color: #1f2328;
+    border-color: #d1d9e0;
+}
+body.space-mode .features-list {
+    background: #060818;
+    color: #c8d6e5;
+    border-color: #1a1f3d;
+}
+body.tropical-mode .features-list {
+    background: #fff6e6;
+    color: #2d3a3a;
+    border-color: #ffd8a8;
+}
+body.stormy-mode .features-list {
+    background: #14182a;
+    color: #d5dae4;
+    border-color: #3a4054;
+}
+body.mono-mode .features-list {
+    background: #000000;
+    color: #e6e6e6;
+    border-color: #2a2a2a;
+}
+body.love-mode .features-list {
+    background: #fff0f5;
+    color: #4a1d2a;
+    border-color: #ffc1d2;
+}
+body.forest-mode .features-list {
+    background: #f0f4e8;
+    color: #2d3e1f;
+    border-color: #b5c89a;
 }
 
 /* ===== Root index.html "What's New" landing page ===== */
@@ -1155,6 +1239,336 @@ body.light-mode .result-part-name {
 
 .part-usage-count {
     color: #6e7681;
+}
+
+/* ===== Parts Usage cards — theme overrides ===== */
+body.light-mode .part-usage-card {
+    background: #ffffff;
+    border-color: #d1d9e0;
+}
+body.light-mode .part-usage-title { color: #0969da; }
+body.light-mode .part-usage-name { color: #1f2328; }
+body.light-mode .part-usage-pct { color: #656d76; }
+body.light-mode .part-usage-count { color: #8b949e; }
+
+body.space-mode .part-usage-card {
+    background: #0a0d1f;
+    border-color: #1a1f3d;
+}
+body.space-mode .part-usage-title { color: #4d7eef; }
+body.space-mode .part-usage-name { color: #c8d6e5; }
+body.space-mode .part-usage-pct { color: #7a8aa0; }
+body.space-mode .part-usage-count { color: #5d6a82; }
+
+body.tropical-mode .part-usage-card {
+    background: #ffe8c5;
+    border-color: #ffd8a8;
+}
+body.tropical-mode .part-usage-title { color: #00b8a9; }
+body.tropical-mode .part-usage-name { color: #2d3a3a; }
+body.tropical-mode .part-usage-pct { color: #8a6d3b; }
+body.tropical-mode .part-usage-count { color: #6b4f1f; }
+
+body.stormy-mode .part-usage-card {
+    background: #1a2030;
+    border-color: #3a4054;
+}
+body.stormy-mode .part-usage-title { color: #3e5fb0; }
+body.stormy-mode .part-usage-name { color: #d5dae4; }
+body.stormy-mode .part-usage-pct { color: #838b9b; }
+body.stormy-mode .part-usage-count { color: #5e6573; }
+
+body.mono-mode .part-usage-card {
+    background: #0b0b0b;
+    border-color: #2a2a2a;
+}
+body.mono-mode .part-usage-title { color: #ffffff; }
+body.mono-mode .part-usage-name { color: #e6e6e6; }
+body.mono-mode .part-usage-pct { color: #a0a0a0; }
+body.mono-mode .part-usage-count { color: #666666; }
+
+body.love-mode .part-usage-card {
+    background: #ffd6e3;
+    border-color: #ffc1d2;
+}
+body.love-mode .part-usage-title { color: #e63978; }
+body.love-mode .part-usage-name { color: #4a1d2a; }
+body.love-mode .part-usage-pct { color: #9c4a5e; }
+body.love-mode .part-usage-count { color: #6b2944; }
+
+/* ===== Battle Pass — theme overrides ===== */
+/* Light */
+body.light-mode .bp-help { color: #656d76; }
+body.light-mode .bp-status,
+body.light-mode .bp-summary > div,
+body.light-mode .bp-launch {
+    background: #ffffff;
+    border-color: #d1d9e0;
+    color: #1f2328;
+}
+body.light-mode .bp-launches { background: #f6f8fa; border-color: #d1d9e0; }
+body.light-mode .bp-launch-value,
+body.light-mode .bp-launch span:last-child { color: #0969da; }
+body.light-mode .bp-label,
+body.light-mode .bp-launch span:first-child { color: #656d76; }
+body.light-mode .bp-value { color: #1f2328; }
+
+/* Space */
+body.space-mode .bp-help { color: #7a8aa0; }
+body.space-mode .bp-status,
+body.space-mode .bp-summary > div,
+body.space-mode .bp-launch {
+    background: #0a0d1f;
+    border-color: #1a1f3d;
+    color: #c8d6e5;
+}
+body.space-mode .bp-launches { background: #060818; border-color: #1a1f3d; }
+body.space-mode .bp-launch-value,
+body.space-mode .bp-launch span:last-child { color: #4d7eef; }
+body.space-mode .bp-label,
+body.space-mode .bp-launch span:first-child { color: #7a8aa0; }
+body.space-mode .bp-value { color: #c8d6e5; }
+
+/* Tropical */
+body.tropical-mode .bp-help { color: #8a6d3b; }
+body.tropical-mode .bp-status,
+body.tropical-mode .bp-summary > div,
+body.tropical-mode .bp-launch {
+    background: #ffe8c5;
+    border-color: #ffd8a8;
+    color: #2d3a3a;
+}
+body.tropical-mode .bp-launches { background: #fff6e6; border-color: #ffd8a8; }
+body.tropical-mode .bp-launch-value,
+body.tropical-mode .bp-launch span:last-child { color: #00b8a9; }
+body.tropical-mode .bp-label,
+body.tropical-mode .bp-launch span:first-child { color: #8a6d3b; }
+body.tropical-mode .bp-value { color: #2d3a3a; }
+
+/* Stormy */
+body.stormy-mode .bp-help { color: #838b9b; }
+body.stormy-mode .bp-status,
+body.stormy-mode .bp-summary > div,
+body.stormy-mode .bp-launch {
+    background: #1a2030;
+    border-color: #3a4054;
+    color: #d5dae4;
+}
+body.stormy-mode .bp-launches { background: #14182a; border-color: #3a4054; }
+body.stormy-mode .bp-launch-value,
+body.stormy-mode .bp-launch span:last-child { color: #3e5fb0; }
+body.stormy-mode .bp-label,
+body.stormy-mode .bp-launch span:first-child { color: #838b9b; }
+body.stormy-mode .bp-value { color: #d5dae4; }
+
+/* Mono */
+body.mono-mode .bp-help { color: #a0a0a0; }
+body.mono-mode .bp-status,
+body.mono-mode .bp-summary > div,
+body.mono-mode .bp-launch {
+    background: #0b0b0b;
+    border-color: #2a2a2a;
+    color: #e6e6e6;
+}
+body.mono-mode .bp-launches { background: #000000; border-color: #2a2a2a; }
+body.mono-mode .bp-launch-value,
+body.mono-mode .bp-launch span:last-child { color: #ffffff; }
+body.mono-mode .bp-label,
+body.mono-mode .bp-launch span:first-child { color: #a0a0a0; }
+body.mono-mode .bp-value { color: #e6e6e6; }
+
+/* Love */
+body.love-mode .bp-help { color: #9c4a5e; }
+body.love-mode .bp-status,
+body.love-mode .bp-summary > div,
+body.love-mode .bp-launch {
+    background: #ffd6e3;
+    border-color: #ffc1d2;
+    color: #4a1d2a;
+}
+body.love-mode .bp-launches { background: #fff0f5; border-color: #ffc1d2; }
+body.love-mode .bp-launch-value,
+body.love-mode .bp-launch span:last-child { color: #e63978; }
+body.love-mode .bp-label,
+body.love-mode .bp-launch span:first-child { color: #9c4a5e; }
+body.love-mode .bp-value { color: #4a1d2a; }
+
+/* ===== Settings → Show Features button — theme overrides =====
+   Mirrors each theme's .setting-dropdown-btn palette so the button sits
+   visually beside the dropdowns in the Settings panel. */
+body.light-mode .setting-action-btn {
+    background: #ffffff;
+    color: #1f2328;
+    border-color: #d1d9e0;
+}
+body.light-mode .setting-action-btn:hover,
+body.light-mode .setting-action-btn:focus-visible {
+    background: #f3f4f6;
+}
+
+body.space-mode .setting-action-btn {
+    background: rgba(15, 18, 40, 0.8);
+    color: #c8d6e5;
+    border-color: #1a1f3d;
+}
+body.space-mode .setting-action-btn:hover,
+body.space-mode .setting-action-btn:focus-visible {
+    background: rgba(20, 24, 50, 0.85);
+}
+
+body.tropical-mode .setting-action-btn {
+    background: #ffffff;
+    color: #2d3a3a;
+    border-color: #ffd8a8;
+}
+body.tropical-mode .setting-action-btn:hover,
+body.tropical-mode .setting-action-btn:focus-visible {
+    background: #fff0d6;
+}
+
+body.stormy-mode .setting-action-btn {
+    background: rgba(42, 48, 64, 0.8);
+    color: #d5dae4;
+    border-color: #3a4054;
+}
+body.stormy-mode .setting-action-btn:hover,
+body.stormy-mode .setting-action-btn:focus-visible {
+    background: rgba(52, 58, 78, 0.85);
+}
+
+body.mono-mode .setting-action-btn {
+    background: #111111;
+    color: #e6e6e6;
+    border-color: #2a2a2a;
+}
+body.mono-mode .setting-action-btn:hover,
+body.mono-mode .setting-action-btn:focus-visible {
+    background: #1a1a1a;
+}
+
+body.love-mode .setting-action-btn {
+    background: #ffffff;
+    color: #4a1d2a;
+    border-color: #ffc1d2;
+}
+body.love-mode .setting-action-btn:hover,
+body.love-mode .setting-action-btn:focus-visible {
+    background: #ffe1ea;
+}
+
+/* ===== Forest theme — extras not auto-cloned from tropical-mode ===== */
+/* Parts Usage cards */
+body.forest-mode .part-usage-card {
+    background: #e1e8d2;
+    border-color: #b5c89a;
+}
+body.forest-mode .part-usage-title { color: #386641; }
+body.forest-mode .part-usage-name  { color: #2d3e1f; }
+body.forest-mode .part-usage-pct   { color: #5a6a4b; }
+body.forest-mode .part-usage-count { color: #3a4a1f; }
+
+/* Deck name input */
+body.forest-mode .deck-name-input {
+    background: #ffffff;
+    border-color: #b5c89a;
+    color: #2d3e1f;
+}
+body.forest-mode .deck-name-input:focus { border-color: #386641; }
+
+/* Battle Pass */
+body.forest-mode .bp-help { color: #5a6a4b; }
+body.forest-mode .bp-status,
+body.forest-mode .bp-summary > div,
+body.forest-mode .bp-launch {
+    background: #e1e8d2;
+    border-color: #b5c89a;
+    color: #2d3e1f;
+}
+body.forest-mode .bp-launches { background: #f0f4e8; border-color: #b5c89a; }
+body.forest-mode .bp-launch-value,
+body.forest-mode .bp-launch span:last-child { color: #386641; }
+body.forest-mode .bp-label,
+body.forest-mode .bp-launch span:first-child { color: #5a6a4b; }
+body.forest-mode .bp-value { color: #2d3e1f; }
+
+/* Show Features button (Settings) */
+body.forest-mode .setting-action-btn {
+    background: #ffffff;
+    color: #2d3e1f;
+    border-color: #b5c89a;
+}
+body.forest-mode .setting-action-btn:hover,
+body.forest-mode .setting-action-btn:focus-visible {
+    background: #e9efdc;
+}
+
+/* ===== Library Search input — theme overrides ===== */
+body.light-mode #library-search {
+    background: #ffffff;
+    color: #1f2328;
+    border-color: #d1d9e0;
+}
+body.light-mode #library-search:focus { border-color: #0969da; }
+
+body.space-mode #library-search {
+    background: #0a0d1f;
+    color: #c8d6e5;
+    border-color: #1a1f3d;
+}
+body.space-mode #library-search:focus { border-color: #4d7eef; }
+
+body.tropical-mode #library-search {
+    background: #ffffff;
+    color: #2d3a3a;
+    border-color: #ffd8a8;
+}
+body.tropical-mode #library-search:focus { border-color: #00b8a9; }
+
+body.stormy-mode #library-search {
+    background: #1a2030;
+    color: #d5dae4;
+    border-color: #3a4054;
+}
+body.stormy-mode #library-search:focus { border-color: #3e5fb0; }
+
+body.mono-mode #library-search {
+    background: #111111;
+    color: #e6e6e6;
+    border-color: #2a2a2a;
+}
+body.mono-mode #library-search:focus { border-color: #ffffff; }
+
+body.love-mode #library-search {
+    background: #ffffff;
+    color: #4a1d2a;
+    border-color: #ffc1d2;
+}
+body.love-mode #library-search:focus { border-color: #e63978; }
+
+body.forest-mode #library-search {
+    background: #ffffff;
+    color: #2d3e1f;
+    border-color: #b5c89a;
+}
+body.forest-mode #library-search:focus { border-color: #386641; }
+
+/* Mono-mode was missing filter/sort button overrides. */
+body.mono-mode .sort-btn,
+body.mono-mode .filter-btn {
+    background: #111111;
+    border-color: #2a2a2a;
+    color: #e6e6e6;
+}
+body.mono-mode .sort-btn:hover,
+body.mono-mode .filter-btn:hover {
+    background: #1a1a1a;
+    border-color: #3a3a3a;
+}
+body.mono-mode .sort-btn.active,
+body.mono-mode .filter-btn.active {
+    background: #ffffff;
+    border-color: #ffffff;
+    color: #000000;
 }
 
 /* Lock the Ratchet / Ratchet-Bit chooser to viewport center (mobile-safe) */
@@ -1753,6 +2167,14 @@ body.light-mode .result-part-name {
     font-size: 16px;
     padding: 0 12px;
     box-sizing: border-box;
+    background: #0d1117;
+    color: #e6edf3;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+}
+#library-search:focus {
+    outline: none;
+    border-color: #1f6feb;
 }
 
 .library-sort {
@@ -4205,6 +4627,38 @@ body.mono-mode .deck-name-input {
     border-color: #2a2a2a;
     color: #e6e6e6;
 }
+
+/* ===== Deck name input — remaining theme overrides ===== */
+body.light-mode .deck-name-input {
+    background: #ffffff;
+    border-color: #d1d9e0;
+    color: #1f2328;
+}
+body.space-mode .deck-name-input {
+    background: #0a0d1f;
+    border-color: #1a1f3d;
+    color: #c8d6e5;
+}
+body.tropical-mode .deck-name-input {
+    background: #ffffff;
+    border-color: #ffd8a8;
+    color: #2d3a3a;
+}
+body.stormy-mode .deck-name-input {
+    background: #1a2030;
+    border-color: #3a4054;
+    color: #d5dae4;
+}
+body.love-mode .deck-name-input {
+    background: #ffffff;
+    border-color: #ffc1d2;
+    color: #4a1d2a;
+}
+body.light-mode .deck-name-input:focus { border-color: #0969da; }
+body.space-mode .deck-name-input:focus { border-color: #4d7eef; }
+body.tropical-mode .deck-name-input:focus { border-color: #00b8a9; }
+body.stormy-mode .deck-name-input:focus { border-color: #3e5fb0; }
+body.love-mode .deck-name-input:focus { border-color: #e63978; }
 
 body.mono-mode .search-dropdown .dd-list {
     background: #111111;
@@ -6666,4 +7120,964 @@ body.mono-mode .tournament-results-row {
     border-color: #2a2a2a;
     background: #0b0b0b;
     color: #e6e6e6;
+}
+
+/* ===== Tournament Share popup — per-theme picker icon scheme =====
+   Flips color-scheme so the native date/time picker icons render in a
+   colour visible against the input background. */
+body.light-mode .tournament-share-card .tournament-name-input,
+body.tropical-mode .tournament-share-card .tournament-name-input {
+    color-scheme: light;
+}
+body.space-mode .tournament-share-card .tournament-name-input,
+body.stormy-mode .tournament-share-card .tournament-name-input,
+body.mono-mode .tournament-share-card .tournament-name-input {
+    color-scheme: dark;
+}
+
+/* Theme overrides for the custom share dropdowns reuse the same
+   palette as the existing setting-dropdown variants (which already
+   provide menu / option theme rules per theme), so we only need to
+   restate the button surface colour here. */
+body.light-mode .share-dropdown .setting-dropdown-btn {
+    background: #ffffff;
+    border-color: #d1d9e0;
+    color: #1f2328;
+}
+body.space-mode .share-dropdown .setting-dropdown-btn {
+    background: #0a0d1f;
+    border-color: #1a1f3d;
+    color: #c8d6e5;
+}
+body.tropical-mode .share-dropdown .setting-dropdown-btn {
+    background: #ffffff;
+    border-color: #ffd8a8;
+    color: #2d3a3a;
+}
+body.stormy-mode .share-dropdown .setting-dropdown-btn {
+    background: #1a2030;
+    border-color: #3a4054;
+    color: #d5dae4;
+}
+body.mono-mode .share-dropdown .setting-dropdown-btn {
+    background: #111111;
+    border-color: #2a2a2a;
+    color: #e6e6e6;
+}
+
+
+/* ===================================================================
+   LOVE theme - auto-generated from tropical-mode with a rose/blush
+   palette.
+   =================================================================== */
+body.love-mode .app-header  {
+    border-bottom-color: #ffc1d2;
+}
+body.love-mode .icon-meta  {
+    filter: brightness(0) invert(1);
+}
+body.love-mode  {
+    background: #fff0f5;
+    background-image:
+        radial-gradient(circle at 10% 0%, rgba(255, 180, 120, 0.25) 0%, transparent 45%),
+        radial-gradient(circle at 90% 0%, rgba(0, 184, 169, 0.18) 0%, transparent 45%),
+        radial-gradient(circle at 50% 100%, rgba(255, 210, 120, 0.2) 0%, transparent 50%);
+    background-attachment: fixed;
+    color: #4a1d2a;
+}
+body.love-mode .mode-tabs,
+body.love-mode .sub-tabs,
+body.love-mode .history-sub-tabs,
+body.love-mode .tournament-sub-tabs  {
+    background: rgba(255, 246, 230, 0.85);
+    border-bottom-color: #ffc1d2;
+    box-shadow: 0 6px 14px -8px rgba(140, 90, 40, 0.18);
+}
+body.love-mode .tab  {
+    border-color: #ffc1d2;
+    background: #f0a0bc;
+    color: #fff;
+}
+body.love-mode .tab.active  {
+    background: linear-gradient(135deg, #e63978, #c0245f);
+    color: #fff;
+    border-color: #e63978;
+}
+body.love-mode .tab:hover:not(.active)  {
+    background: #e88aa6;
+    border-color: #e88aa6;
+    color: #fff;
+}
+body.love-mode .reel-embed blockquote.instagram-media  {
+    background: #ffffff !important;
+    border-color: #ffc1d2 !important;
+    color: #4a1d2a !important;
+}
+body.love-mode .reel-embed blockquote.instagram-media a  {
+    color: #e63978 !important;
+}
+body.love-mode .reel-embed iframe.instagram-media  {
+    border-color: #ffc1d2 !important;
+    background: #ffffff;
+}
+body.love-mode .sub-tab  {
+    border-color: #ffc1d2;
+    background: #ffffff;
+    color: #9c4a5e;
+}
+body.love-mode .sub-tab.active  {
+    background: linear-gradient(135deg, #e63978, #c0245f);
+    color: #fff;
+    border-color: #e63978;
+}
+body.love-mode .sub-tab:hover:not(.active),
+body.love-mode .sub-tab:focus-visible  {
+    background: #ffe1ea;
+    border-color: #f0a0bc;
+    color: #4a1d2a;
+}
+body.love-mode fieldset  {
+    background: #ffffff;
+    border-color: #ffc1d2;
+}
+body.love-mode legend  {
+    color: #c0245f;
+}
+body.love-mode label  {
+    color: #8a6275;
+}
+body.love-mode .search-dropdown input  {
+    background: #ffffff;
+    border-color: #ffc1d2;
+    color: #4a1d2a;
+}
+body.love-mode .search-dropdown .dd-list  {
+    background: #ffffff;
+    border-color: #ffc1d2;
+}
+body.love-mode .dd-item  {
+    color: #4a1d2a;
+}
+body.love-mode .dd-item:hover,
+body.love-mode .dd-item.active  {
+    background: #fce4ec;
+}
+body.love-mode .result  {
+    background: #ffffff;
+    border-color: #ffc1d2;
+}
+body.love-mode .result th  {
+    color: #9c4a5e;
+    border-bottom-color: #ffc1d2;
+}
+body.love-mode .result td  {
+    color: #9c4a5e;
+    border-bottom-color: #ffd6e3;
+}
+body.love-mode .btn  {
+    background: #e63978;
+    border: none;
+    color: #fff;
+}
+body.love-mode .btn:hover  {
+    background: #c0245f;
+}
+body.love-mode .btn-reset  {
+    background: #ff6b8a;
+}
+body.love-mode .btn-reset:hover  {
+    background: #ff4d6d;
+}
+body.love-mode .btn-lucky  {
+    background: #ff7aa1;
+}
+body.love-mode .btn-lucky:hover  {
+    background: #ff5c8a;
+}
+body.love-mode .btn-lucky img  {
+    filter: brightness(0) invert(1);
+}
+body.love-mode .btn-download  {
+    background: #ff4d8d;
+    color: #fff;
+}
+body.love-mode .btn-download:hover  {
+    background: #d6326d;
+}
+body.love-mode .btn-copy  {
+    background: #ff6b9d;
+    color: #fff;
+}
+body.love-mode .btn-copy:hover  {
+    background: #d6326d;
+}
+body.love-mode .popup-ok  {
+    background: #e63978;
+    color: #fff;
+}
+body.love-mode .popup-ok:hover  {
+    background: #c0245f;
+}
+body.love-mode .btn-row  {
+    background: transparent;
+}
+body.love-mode .app-footer  {
+    background: rgba(255, 246, 230, 0.95);
+    border-top-color: #ffc1d2;
+    color: #9c4a5e;
+}
+body.love-mode .separator  {
+    color: #9c4a5e;
+}
+body.love-mode .popup-overlay  {
+    background: rgba(45, 58, 58, 0.5);
+}
+body.love-mode .popup-card  {
+    background: #ffffff;
+    border-color: #ffc1d2;
+    color: #4a1d2a;
+}
+body.love-mode .popup-title  {
+    color: #c0245f;
+}
+body.love-mode .popup-list li  {
+    color: #4a1d2a;
+}
+body.love-mode .setting-dropdown-btn  {
+    background: #ffffff;
+    color: #4a1d2a;
+    border-color: #ffc1d2;
+}
+body.love-mode .setting-dropdown-btn:hover  {
+    background: #ffe1ea;
+}
+body.love-mode .setting-dropdown-menu  {
+    background: #ffffff;
+    border-color: #ffc1d2;
+}
+body.love-mode .setting-dropdown-option  {
+    color: #4a1d2a;
+}
+body.love-mode .setting-dropdown-option:hover  {
+    background: #fce4ec;
+}
+body.love-mode .setting-dropdown-option.active  {
+    background: #fce4ec;
+    color: #c0245f;
+}
+body.love-mode .setting-label-text  {
+    color: #4a1d2a;
+}
+body.love-mode .stat-bar-bg,
+body.love-mode .stat-bar-track  {
+    background: #ffd6e3;
+}
+body.love-mode .library-sort  {
+    background: #ffffff;
+}
+body.love-mode .sort-btn,
+body.love-mode .filter-btn  {
+    background: #ffffff;
+    border-color: #ffc1d2;
+    color: #9c4a5e;
+}
+body.love-mode .sort-btn.active,
+body.love-mode .filter-btn.active  {
+    background: #e63978;
+    color: #fff;
+    border-color: #e63978;
+}
+body.love-mode .search-item  {
+    background: #ffffff;
+    border-color: #ffc1d2;
+    color: #4a1d2a;
+}
+body.love-mode .dd-clear  {
+    color: #9c4a5e;
+}
+body.love-mode .image-popup-content  {
+    background: #ffffff;
+    border-color: #ffc1d2;
+}
+body.love-mode .image-popup-content img  {
+    background: #ffe1ea;
+}
+body.love-mode .image-popup-name  {
+    color: #4a1d2a;
+}
+body.love-mode .combo-name  {
+    color: #ff4d6d;
+}
+body.love-mode .history-section  {
+    background: rgba(255, 246, 230, 0.6);
+}
+body.love-mode .history-item  {
+    background: #ffffff;
+    border: 1px solid #ffc1d2;
+}
+body.love-mode .history-parts  {
+    color: #9c4a5e;
+}
+body.love-mode .history-mode  {
+    color: #c0245f;
+}
+body.love-mode .history-name  {
+    color: #4a1d2a;
+}
+body.love-mode h1  {
+    color: #9c4a5e;
+}
+body.love-mode .tab[data-mode="calculator"] img,
+body.love-mode .tab[data-mode="settings"] img,
+body.love-mode .tab.active[data-mode="calculator"] img,
+body.love-mode .tab.active[data-mode="settings"] img  {
+    filter: brightness(0) invert(1);
+}
+body.love-mode .tab[data-mode="library"] img,
+body.love-mode .tab[data-mode="history"] img,
+body.love-mode .tab.active[data-mode="library"] img,
+body.love-mode .tab.active[data-mode="history"] img  {
+    filter: brightness(0) invert(1);
+}
+body.love-mode .tab[data-mode="deck"] img,
+body.love-mode .tab.active[data-mode="deck"] img,
+body.love-mode .tab[data-mode="swiss"] img,
+body.love-mode .tab.active[data-mode="swiss"] img  {
+    filter: brightness(0) invert(1);
+}
+body.love-mode .icon-1d1c  {
+    filter: brightness(0) invert(1);
+}
+body.love-mode .part-img,
+body.love-mode .result-part-img-box  {
+    background: #ffe1ea;
+    border-color: #ffc1d2;
+}
+body.love-mode .result-part-name  {
+    color: #9c4a5e;
+}
+body.love-mode .scoreboard-overlay  {
+    background: #fff0f5;
+}
+body.love-mode .scoreboard-left  {
+    background: rgba(0, 184, 169, 0.15);
+}
+body.love-mode .scoreboard-right  {
+    background: rgba(255, 126, 103, 0.15);
+}
+body.love-mode .scoreboard-divider  {
+    color: #c0245f;
+}
+body.love-mode .scoreboard-score  {
+    color: #4a1d2a;
+}
+body.love-mode .sb-btn  {
+    background: #ffffff;
+    border-color: #ffc1d2;
+    color: #4a1d2a;
+}
+body.love-mode .sb-btn:active  {
+    background: #fce4ec;
+}
+body.love-mode .scoreboard-reset,
+body.love-mode .scoreboard-play  {
+    background: #ff6b8a;
+    border-color: #ff4d6d;
+    color: #fff;
+}
+body.love-mode .scoreboard-play.is-playing  {
+    background: linear-gradient(135deg, #e63978, #c0245f);
+    border-color: #e63978;
+    color: #fff;
+}
+body.love-mode .stat-bar-label  {
+    color: #9c4a5e;
+}
+body.love-mode .popup-close  {
+    color: #9c4a5e;
+}
+body.love-mode .popup-close:hover  {
+    color: #4a1d2a;
+    background: #ffe1ea;
+}
+body.love-mode .sort-label  {
+    color: #9c4a5e;
+}
+body.love-mode .scoreboard-player-label  {
+    color: #4a1d2a;
+}
+body.love-mode .setting-dropdown-arrow  {
+    color: #9c4a5e;
+}
+body.love-mode .history-sub-tab,
+body.love-mode .reel-sub-tab,
+body.love-mode .tournament-sub-tab  {
+    border-color: #ffc1d2;
+    background: #ffffff;
+    color: #9c4a5e;
+}
+body.love-mode .history-sub-tab:hover:not(.active),
+body.love-mode .history-sub-tab:focus-visible,
+body.love-mode .reel-sub-tab:hover:not(.active),
+body.love-mode .reel-sub-tab:focus-visible,
+body.love-mode .tournament-sub-tab:hover:not(.active),
+body.love-mode .tournament-sub-tab:focus-visible  {
+    background: #ffe1ea;
+    border-color: #f0a0bc;
+    color: #4a1d2a;
+}
+body.love-mode .history-sub-tab.active,
+body.love-mode .reel-sub-tab.active,
+body.love-mode .tournament-sub-tab.active  {
+    background: linear-gradient(135deg, #e63978, #c0245f);
+    color: #fff;
+    border-color: #e63978;
+}
+body.love-mode .reel-video  {
+    background: #ffffff;
+    border-color: #ffc1d2;
+}
+body.love-mode .reel-empty  {
+    color: #9c4a5e;
+}
+body.love-mode .reel-empty code  {
+    background: #ffe1ea;
+    border-color: #ffc1d2;
+    color: #6b2944;
+}
+body.love-mode .tournament-history-item  {
+    background: #ffffff;
+    border-color: #ffc1d2;
+    color: #4a1d2a;
+}
+body.love-mode .tournament-history-mode,
+body.love-mode .tournament-history-time,
+body.love-mode .tournament-history-empty  {
+    color: #9c4a5e;
+}
+body.love-mode .tournament-name-input,
+body.love-mode .tournament-mode-btn  {
+    background: #ffffff;
+    border-color: #ffc1d2;
+    color: #4a1d2a;
+}
+body.love-mode .tournament-name-input:focus  {
+    border-color: #e63978;
+    background: #fff5f9;
+}
+body.love-mode .tournament-mode-btn:hover,
+body.love-mode .tournament-mode-btn:focus-visible  {
+    border-color: #e63978;
+    background: #ffe1ea;
+}
+body.love-mode .tournament-mode-name  {
+    color: #c0245f;
+}
+body.love-mode .deck-pill  {
+    border-color: #ffc1d2;
+    background: #ffffff;
+    color: #9c4a5e;
+}
+body.love-mode .deck-pill:hover:not(.active)  {
+    background: #ffe1ea;
+    border-color: #f0a0bc;
+    color: #4a1d2a;
+}
+body.love-mode .deck-pill.active  {
+    background: linear-gradient(135deg, #e63978, #c0245f);
+    border-color: #e63978;
+    color: #fff;
+}
+body.love-mode .tournament-results-heading  {
+    border-bottom-color: #ffc1d2;
+}
+body.love-mode .tournament-results-row  {
+    border-color: #ffc1d2;
+    background: #ffffff;
+    color: #4a1d2a;
+}
+body.love-mode .tournament-share-card .tournament-name-input  {
+    color-scheme: light;
+}
+body.love-mode .share-dropdown .setting-dropdown-btn  {
+    background: #ffffff;
+    border-color: #ffc1d2;
+    color: #4a1d2a;
+}
+
+
+/* ===================================================================
+   FOREST theme - auto-generated from tropical-mode with a moss/woodland
+   palette.
+   =================================================================== */
+body.forest-mode .part-usage-card  {
+    background: #e1e8d2;
+    border-color: #b5c89a;
+}
+body.forest-mode .part-usage-title  { color: #386641; }
+body.forest-mode .part-usage-name  { color: #2d3e1f; }
+body.forest-mode .part-usage-pct  { color: #5a6a4b; }
+body.forest-mode .part-usage-count  { color: #3a4a1f; }
+body.forest-mode .bp-help  { color: #5a6a4b; }
+body.forest-mode .bp-status,
+body.forest-mode .bp-summary > div,
+body.forest-mode .bp-launch  {
+    background: #e1e8d2;
+    border-color: #b5c89a;
+    color: #2d3e1f;
+}
+body.forest-mode .bp-launches  { background: #f0f4e8; border-color: #b5c89a; }
+body.forest-mode .bp-launch-value,
+body.forest-mode .bp-launch span:last-child  { color: #386641; }
+body.forest-mode .bp-label,
+body.forest-mode .bp-launch span:first-child  { color: #5a6a4b; }
+body.forest-mode .bp-value  { color: #2d3e1f; }
+body.forest-mode .setting-action-btn  {
+    background: #ffffff;
+    color: #2d3e1f;
+    border-color: #b5c89a;
+}
+body.forest-mode .setting-action-btn:hover,
+body.forest-mode .setting-action-btn:focus-visible  {
+    background: #e9efdc;
+}
+body.forest-mode .app-header  {
+    border-bottom-color: #b5c89a;
+}
+body.forest-mode .icon-meta  {
+    filter: brightness(0) invert(1);
+}
+body.forest-mode  {
+    background: #f0f4e8;
+    background-image:
+        radial-gradient(circle at 10% 0%, rgba(255, 180, 120, 0.25) 0%, transparent 45%),
+        radial-gradient(circle at 90% 0%, rgba(0, 184, 169, 0.18) 0%, transparent 45%),
+        radial-gradient(circle at 50% 100%, rgba(255, 210, 120, 0.2) 0%, transparent 50%);
+    background-attachment: fixed;
+    color: #2d3e1f;
+}
+body.forest-mode .mode-tabs,
+body.forest-mode .sub-tabs,
+body.forest-mode .history-sub-tabs,
+body.forest-mode .tournament-sub-tabs  {
+    background: rgba(255, 246, 230, 0.85);
+    border-bottom-color: #b5c89a;
+    box-shadow: 0 6px 14px -8px rgba(140, 90, 40, 0.18);
+}
+body.forest-mode .tab  {
+    border-color: #b5c89a;
+    background: #d4a673;
+    color: #fff;
+}
+body.forest-mode .tab.active  {
+    background: linear-gradient(135deg, #386641, #2d4f33);
+    color: #fff;
+    border-color: #386641;
+}
+body.forest-mode .tab:hover:not(.active)  {
+    background: #c98a48;
+    border-color: #c98a48;
+    color: #fff;
+}
+body.forest-mode .reel-embed blockquote.instagram-media  {
+    background: #ffffff !important;
+    border-color: #b5c89a !important;
+    color: #2d3e1f !important;
+}
+body.forest-mode .reel-embed blockquote.instagram-media a  {
+    color: #386641 !important;
+}
+body.forest-mode .reel-embed iframe.instagram-media  {
+    border-color: #b5c89a !important;
+    background: #ffffff;
+}
+body.forest-mode .sub-tab  {
+    border-color: #b5c89a;
+    background: #ffffff;
+    color: #5a6a4b;
+}
+body.forest-mode .sub-tab.active  {
+    background: linear-gradient(135deg, #386641, #2d4f33);
+    color: #fff;
+    border-color: #386641;
+}
+body.forest-mode .sub-tab:hover:not(.active),
+body.forest-mode .sub-tab:focus-visible  {
+    background: #e9efdc;
+    border-color: #d4a673;
+    color: #2d3e1f;
+}
+body.forest-mode fieldset  {
+    background: #ffffff;
+    border-color: #b5c89a;
+}
+body.forest-mode legend  {
+    color: #2d4f33;
+}
+body.forest-mode label  {
+    color: #5a6a4b;
+}
+body.forest-mode .search-dropdown input  {
+    background: #ffffff;
+    border-color: #b5c89a;
+    color: #2d3e1f;
+}
+body.forest-mode .search-dropdown .dd-list  {
+    background: #ffffff;
+    border-color: #b5c89a;
+}
+body.forest-mode .dd-item  {
+    color: #2d3e1f;
+}
+body.forest-mode .dd-item:hover,
+body.forest-mode .dd-item.active  {
+    background: #d4e3c4;
+}
+body.forest-mode .result  {
+    background: #ffffff;
+    border-color: #b5c89a;
+}
+body.forest-mode .result th  {
+    color: #5a6a4b;
+    border-bottom-color: #b5c89a;
+}
+body.forest-mode .result td  {
+    color: #5a6a4b;
+    border-bottom-color: #e1e8d2;
+}
+body.forest-mode .btn  {
+    background: #386641;
+    border: none;
+    color: #fff;
+}
+body.forest-mode .btn:hover  {
+    background: #2d4f33;
+}
+body.forest-mode .btn-reset  {
+    background: #c97f55;
+}
+body.forest-mode .btn-reset:hover  {
+    background: #c46b3a;
+}
+body.forest-mode .btn-lucky  {
+    background: #e6b352;
+}
+body.forest-mode .btn-lucky:hover  {
+    background: #b8841c;
+}
+body.forest-mode .btn-lucky img  {
+    filter: brightness(0) invert(1);
+}
+body.forest-mode .btn-download  {
+    background: #6a994e;
+    color: #fff;
+}
+body.forest-mode .btn-download:hover  {
+    background: #4a7a3a;
+}
+body.forest-mode .btn-copy  {
+    background: #bc6c25;
+    color: #fff;
+}
+body.forest-mode .btn-copy:hover  {
+    background: #8b4513;
+}
+body.forest-mode .popup-ok  {
+    background: #386641;
+    color: #fff;
+}
+body.forest-mode .popup-ok:hover  {
+    background: #2d4f33;
+}
+body.forest-mode .btn-row  {
+    background: transparent;
+}
+body.forest-mode .app-footer  {
+    background: rgba(255, 246, 230, 0.95);
+    border-top-color: #b5c89a;
+    color: #5a6a4b;
+}
+body.forest-mode .separator  {
+    color: #5a6a4b;
+}
+body.forest-mode .popup-overlay  {
+    background: rgba(45, 58, 58, 0.5);
+}
+body.forest-mode .popup-card  {
+    background: #ffffff;
+    border-color: #b5c89a;
+    color: #2d3e1f;
+}
+body.forest-mode .popup-title  {
+    color: #2d4f33;
+}
+body.forest-mode .popup-list li  {
+    color: #2d3e1f;
+}
+body.forest-mode .setting-dropdown-btn  {
+    background: #ffffff;
+    color: #2d3e1f;
+    border-color: #b5c89a;
+}
+body.forest-mode .setting-dropdown-btn:hover  {
+    background: #e9efdc;
+}
+body.forest-mode .setting-dropdown-menu  {
+    background: #ffffff;
+    border-color: #b5c89a;
+}
+body.forest-mode .setting-dropdown-option  {
+    color: #2d3e1f;
+}
+body.forest-mode .setting-dropdown-option:hover  {
+    background: #d4e3c4;
+}
+body.forest-mode .setting-dropdown-option.active  {
+    background: #d4e3c4;
+    color: #2d4f33;
+}
+body.forest-mode .setting-label-text  {
+    color: #2d3e1f;
+}
+body.forest-mode .stat-bar-bg,
+body.forest-mode .stat-bar-track  {
+    background: #e1e8d2;
+}
+body.forest-mode .library-sort  {
+    background: #ffffff;
+}
+body.forest-mode .sort-btn,
+body.forest-mode .filter-btn  {
+    background: #ffffff;
+    border-color: #b5c89a;
+    color: #5a6a4b;
+}
+body.forest-mode .sort-btn.active,
+body.forest-mode .filter-btn.active  {
+    background: #386641;
+    color: #fff;
+    border-color: #386641;
+}
+body.forest-mode .search-item  {
+    background: #ffffff;
+    border-color: #b5c89a;
+    color: #2d3e1f;
+}
+body.forest-mode .dd-clear  {
+    color: #5a6a4b;
+}
+body.forest-mode .image-popup-content  {
+    background: #ffffff;
+    border-color: #b5c89a;
+}
+body.forest-mode .image-popup-content img  {
+    background: #e9efdc;
+}
+body.forest-mode .image-popup-name  {
+    color: #2d3e1f;
+}
+body.forest-mode .combo-name  {
+    color: #c46b3a;
+}
+body.forest-mode .history-section  {
+    background: rgba(255, 246, 230, 0.6);
+}
+body.forest-mode .history-item  {
+    background: #ffffff;
+    border: 1px solid #b5c89a;
+}
+body.forest-mode .history-parts  {
+    color: #5a6a4b;
+}
+body.forest-mode .history-mode  {
+    color: #2d4f33;
+}
+body.forest-mode .history-name  {
+    color: #2d3e1f;
+}
+body.forest-mode h1  {
+    color: #5a6a4b;
+}
+body.forest-mode .tab[data-mode="calculator"] img,
+body.forest-mode .tab[data-mode="settings"] img,
+body.forest-mode .tab.active[data-mode="calculator"] img,
+body.forest-mode .tab.active[data-mode="settings"] img  {
+    filter: brightness(0) invert(1);
+}
+body.forest-mode .tab[data-mode="library"] img,
+body.forest-mode .tab[data-mode="history"] img,
+body.forest-mode .tab.active[data-mode="library"] img,
+body.forest-mode .tab.active[data-mode="history"] img  {
+    filter: brightness(0) invert(1);
+}
+body.forest-mode .tab[data-mode="deck"] img,
+body.forest-mode .tab.active[data-mode="deck"] img,
+body.forest-mode .tab[data-mode="swiss"] img,
+body.forest-mode .tab.active[data-mode="swiss"] img  {
+    filter: brightness(0) invert(1);
+}
+body.forest-mode .icon-1d1c  {
+    filter: brightness(0) invert(1);
+}
+body.forest-mode .part-img,
+body.forest-mode .result-part-img-box  {
+    background: #e9efdc;
+    border-color: #b5c89a;
+}
+body.forest-mode .result-part-name  {
+    color: #5a6a4b;
+}
+body.forest-mode .scoreboard-overlay  {
+    background: #f0f4e8;
+}
+body.forest-mode .scoreboard-left  {
+    background: rgba(0, 184, 169, 0.15);
+}
+body.forest-mode .scoreboard-right  {
+    background: rgba(255, 126, 103, 0.15);
+}
+body.forest-mode .scoreboard-divider  {
+    color: #2d4f33;
+}
+body.forest-mode .scoreboard-score  {
+    color: #2d3e1f;
+}
+body.forest-mode .sb-btn  {
+    background: #ffffff;
+    border-color: #b5c89a;
+    color: #2d3e1f;
+}
+body.forest-mode .sb-btn:active  {
+    background: #d4e3c4;
+}
+body.forest-mode .scoreboard-reset,
+body.forest-mode .scoreboard-play  {
+    background: #c97f55;
+    border-color: #c46b3a;
+    color: #fff;
+}
+body.forest-mode .scoreboard-play.is-playing  {
+    background: linear-gradient(135deg, #386641, #2d4f33);
+    border-color: #386641;
+    color: #fff;
+}
+body.forest-mode .stat-bar-label  {
+    color: #5a6a4b;
+}
+body.forest-mode .popup-close  {
+    color: #5a6a4b;
+}
+body.forest-mode .popup-close:hover  {
+    color: #2d3e1f;
+    background: #e9efdc;
+}
+body.forest-mode .sort-label  {
+    color: #5a6a4b;
+}
+body.forest-mode .scoreboard-player-label  {
+    color: #2d3e1f;
+}
+body.forest-mode .setting-dropdown-arrow  {
+    color: #5a6a4b;
+}
+body.forest-mode .deck-name-input  {
+    background: #ffffff;
+    border-color: #b5c89a;
+    color: #2d3e1f;
+}
+body.forest-mode .deck-name-input:focus  { border-color: #386641; }
+body.forest-mode .history-sub-tab,
+body.forest-mode .reel-sub-tab,
+body.forest-mode .tournament-sub-tab  {
+    border-color: #b5c89a;
+    background: #ffffff;
+    color: #5a6a4b;
+}
+body.forest-mode .history-sub-tab:hover:not(.active),
+body.forest-mode .history-sub-tab:focus-visible,
+body.forest-mode .reel-sub-tab:hover:not(.active),
+body.forest-mode .reel-sub-tab:focus-visible,
+body.forest-mode .tournament-sub-tab:hover:not(.active),
+body.forest-mode .tournament-sub-tab:focus-visible  {
+    background: #e9efdc;
+    border-color: #d4a673;
+    color: #2d3e1f;
+}
+body.forest-mode .history-sub-tab.active,
+body.forest-mode .reel-sub-tab.active,
+body.forest-mode .tournament-sub-tab.active  {
+    background: linear-gradient(135deg, #386641, #2d4f33);
+    color: #fff;
+    border-color: #386641;
+}
+body.forest-mode .reel-video  {
+    background: #ffffff;
+    border-color: #b5c89a;
+}
+body.forest-mode .reel-empty  {
+    color: #5a6a4b;
+}
+body.forest-mode .reel-empty code  {
+    background: #e9efdc;
+    border-color: #b5c89a;
+    color: #3a4a1f;
+}
+body.forest-mode .tournament-history-item  {
+    background: #ffffff;
+    border-color: #b5c89a;
+    color: #2d3e1f;
+}
+body.forest-mode .tournament-history-mode,
+body.forest-mode .tournament-history-time,
+body.forest-mode .tournament-history-empty  {
+    color: #5a6a4b;
+}
+body.forest-mode .tournament-name-input,
+body.forest-mode .tournament-mode-btn  {
+    background: #ffffff;
+    border-color: #b5c89a;
+    color: #2d3e1f;
+}
+body.forest-mode .tournament-name-input:focus  {
+    border-color: #386641;
+    background: #f5f9ec;
+}
+body.forest-mode .tournament-mode-btn:hover,
+body.forest-mode .tournament-mode-btn:focus-visible  {
+    border-color: #386641;
+    background: #e9efdc;
+}
+body.forest-mode .tournament-mode-name  {
+    color: #2d4f33;
+}
+body.forest-mode .deck-pill  {
+    border-color: #b5c89a;
+    background: #ffffff;
+    color: #5a6a4b;
+}
+body.forest-mode .deck-pill:hover:not(.active)  {
+    background: #e9efdc;
+    border-color: #d4a673;
+    color: #2d3e1f;
+}
+body.forest-mode .deck-pill.active  {
+    background: linear-gradient(135deg, #386641, #2d4f33);
+    border-color: #386641;
+    color: #fff;
+}
+body.forest-mode .tournament-results-heading  {
+    border-bottom-color: #b5c89a;
+}
+body.forest-mode .tournament-results-row  {
+    border-color: #b5c89a;
+    background: #ffffff;
+    color: #2d3e1f;
+}
+body.forest-mode .tournament-share-card .tournament-name-input  {
+    color-scheme: light;
+}
+body.forest-mode .share-dropdown .setting-dropdown-btn  {
+    background: #ffffff;
+    border-color: #b5c89a;
+    color: #2d3e1f;
 }

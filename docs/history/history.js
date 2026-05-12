@@ -131,7 +131,7 @@ function renderHistory() {
     if (num >= 100) return "#2ecc71";
     if (num >= 50) {
       const cls = document.body.classList;
-      return (cls.contains("light-mode") || cls.contains("tropical-mode")) ? "#ffbd59" : "#f1c40f";
+      return (cls.contains("light-mode") || cls.contains("tropical-mode") || cls.contains("love-mode") || cls.contains("forest-mode")) ? "#ffbd59" : "#f1c40f";
     }
     return "#e74c3c";
   }

@@ -450,6 +450,8 @@
               <div class="setting-dropdown-option" data-value="tropical">Tropical</div>
               <div class="setting-dropdown-option" data-value="stormy">Stormy</div>
               <div class="setting-dropdown-option" data-value="mono">Monochrome</div>
+              <div class="setting-dropdown-option" data-value="love">Love</div>
+              <div class="setting-dropdown-option" data-value="forest">Forest</div>
             </div>
           </div>
         </div>
@@ -722,6 +724,53 @@
         </button>
       </div>
       <button type="button" id="tournament-mode-cancel" class="btn popup-cancel">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ================= TOURNAMENT SHARE POPUP ================= -->
+  <div id="tournament-share-popup" class="popup-overlay hidden">
+    <div class="popup-card tournament-share-card">
+      <h2 class="popup-title">Share Tournament</h2>
+      <p class="popup-text tournament-share-subtitle" id="tournament-share-subtitle"></p>
+
+      <label class="tournament-name-label" for="share-date-input">Date</label>
+      <input id="share-date-input" type="date" class="tournament-name-input" />
+
+      <label class="tournament-name-label" for="share-time-input">Time</label>
+      <input id="share-time-input" type="time" class="tournament-name-input" />
+
+      <label class="tournament-name-label">Stadium</label>
+      <div class="setting-dropdown share-dropdown" id="share-stadium-input">
+        <button type="button" class="setting-dropdown-btn share-dropdown-btn" data-value="Xtreme">
+          <span class="setting-dropdown-text">Xtreme</span>
+          <span class="setting-dropdown-arrow">&#9662;</span>
+        </button>
+        <div class="setting-dropdown-menu hidden">
+          <div class="setting-dropdown-option" data-value="Xtreme">Xtreme</div>
+          <div class="setting-dropdown-option" data-value="Double Xtreme">Double Xtreme</div>
+          <div class="setting-dropdown-option" data-value="Infinity">Infinity</div>
+        </div>
+      </div>
+
+      <label class="tournament-name-label">Rule</label>
+      <div class="setting-dropdown share-dropdown" id="share-rule-input">
+        <button type="button" class="setting-dropdown-btn share-dropdown-btn" data-value="Official">
+          <span class="setting-dropdown-text">Official</span>
+          <span class="setting-dropdown-arrow">&#9662;</span>
+        </button>
+        <div class="setting-dropdown-menu hidden">
+          <div class="setting-dropdown-option" data-value="Official">Official</div>
+          <div class="setting-dropdown-option" data-value="Unofficial">Unofficial</div>
+        </div>
+      </div>
+
+      <label class="tournament-name-label" for="share-remark-input">Remark</label>
+      <textarea id="share-remark-input" class="tournament-name-input tournament-share-remark" rows="3" placeholder="Anything else to mention..."></textarea>
+
+      <div class="popup-actions">
+        <button type="button" id="tournament-share-submit" class="btn">Share</button>
+        <button type="button" id="tournament-share-cancel" class="btn popup-cancel">Cancel</button>
+      </div>
     </div>
   </div>
 

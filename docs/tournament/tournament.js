@@ -1483,45 +1483,204 @@ function renderSwissRoomBadge() {
   return `<div class="swiss-room-badges">${pills.join("")}</div>`;
 }
 
-// Direct link to the Tournament tab. Used by the Share button so anyone
-// who taps it lands on the lobby and can find the open tournament.
+const STADIUM_OPTIONS = ["Xtreme", "Infinity", "Double Xtreme"];
+const RULE_OPTIONS = ["Official", "Unofficial"];
 const SHARE_TOURNAMENT_URL = "https://abu-mhn.github.io/XOptimizer/tournament/";
+const SHARE_TOURNAMENT_INVITE = "To all the bladers that are planning to join this event, please click the link below for registration.";
 
 function renderSwissShareButton() {
-  return `<button type="button" id="swiss-share" class="btn btn-icon-sm swiss-share-btn" aria-label="Share tournament link" title="Share tournament link">
+  return `<button type="button" id="swiss-share" class="btn btn-icon-sm swiss-share-btn" aria-label="Share tournament details" title="Share tournament details">
     <img src="assets/icons/share.png" alt="Share"
          onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21AA;');">
   </button>`;
 }
 
+// Compose the share message in the form:
+//   [name]
+//   Date: [date]
+//   Time: [time]
+//   Stadium: [stadium]
+//   Rule: [rule]
+//   Remark: [remark]
+//
+//   To all the bladers ... please click the link below for registration.
+//
+//   https://abu-mhn.github.io/XOptimizer/tournament/
+// Lines whose field is empty are omitted so the message stays clean.
+function composeTournamentShareMessage(state, details) {
+  const d = details || {};
+  const name = (state?.tournamentName || "").trim() || "Tournament";
+  const lines = [name];
+  if (d.date)    lines.push(`Date: ${d.date}`);
+  if (d.time)    lines.push(`Time: ${d.time}`);
+  if (d.stadium) lines.push(`Stadium: ${d.stadium}`);
+  if (d.rule)    lines.push(`Rule: ${d.rule}`);
+  if (d.remark)  lines.push(`Remark: ${d.remark}`);
+  lines.push("");
+  lines.push(SHARE_TOURNAMENT_INVITE);
+  lines.push("");
+  lines.push(SHARE_TOURNAMENT_URL);
+  return lines.join("\n");
+}
+
+function flashShareButton(btn, msg) {
+  if (!btn) return;
+  const orig = btn.innerHTML;
+  btn.innerHTML = `<span class="swiss-share-flash">${msg}</span>`;
+  setTimeout(() => { btn.innerHTML = orig; }, 1200);
+}
+
+async function dispatchShareMessage(message, btn) {
+  // Mobile native share sheet first; falls back to clipboard, then to a
+  // prompt() as a last resort for very old browsers without either API.
+  if (navigator.share) {
+    try {
+      await navigator.share({ text: message });
+      return;
+    } catch (e) { /* user cancelled or unsupported — fall through */ }
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(message);
+      flashShareButton(btn, "&#x2713;"); // ✓
+      return;
+    } catch (e) { /* fall through */ }
+  }
+  prompt("Copy this and share it:", message);
+}
+
 function bindSwissShareButton(view) {
   const btn = view.querySelector("#swiss-share");
   if (!btn) return;
-  btn.addEventListener("click", async () => {
-    const text = "Find it under Open Tournaments on the X-Optimizer Tournament tab.";
-    const url = SHARE_TOURNAMENT_URL;
-    // Mobile native share sheet first; falls back to clipboard, then to a
-    // prompt() as a last resort for very old browsers without either API.
-    if (navigator.share) {
-      try {
-        await navigator.share({ text, url });
-        return;
-      } catch (e) { /* user cancelled or unsupported — fall through */ }
-    }
-    const payload = `${text}\n\n${url}`;
-    const flash = (msg) => {
-      const orig = btn.innerHTML;
-      btn.innerHTML = `<span class="swiss-share-flash">${msg}</span>`;
-      setTimeout(() => { btn.innerHTML = orig; }, 1200);
-    };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(payload)
-        .then(() => flash("&#x2713;")) // ✓
-        .catch(() => prompt("Copy this and share it:", payload));
+  btn.addEventListener("click", () => {
+    if (swissCanEdit) {
+      // Host / co-host: open the details popup so they can pick / edit the
+      // date, time, stadium, rule, remark before sharing.
+      showShareDetailsPopup(btn);
     } else {
-      prompt("Copy this and share it:", payload);
+      // Viewer / participant: share whatever details the host has saved.
+      const state = loadSwiss();
+      const message = composeTournamentShareMessage(state, state.eventDetails);
+      dispatchShareMessage(message, btn);
     }
   });
+}
+
+// Persist the host-picked event details onto the live tournament state.
+// Pushes to Firebase too so co-hosts see the same values when they tap
+// share.
+function saveTournamentEventDetails(details) {
+  const s = loadSwiss();
+  s.eventDetails = {
+    date: details.date || "",
+    time: details.time || "",
+    stadium: details.stadium || "",
+    rule: details.rule || "",
+    remark: details.remark || ""
+  };
+  persistSwiss(s);
+  if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
+    swissRoomRef.update({ eventDetails: s.eventDetails })
+      .catch(e => console.warn("Event details push failed:", e));
+  }
+}
+
+// Popup that lets the host / co-host fill (or edit) the share-message
+// fields. Pre-fills from state.eventDetails so re-opening shows the
+// previous choices.
+function showShareDetailsPopup(triggerBtn) {
+  const popup = document.getElementById("tournament-share-popup");
+  if (!popup) {
+    // Popup missing — fall back to sharing whatever's already on state.
+    const state = loadSwiss();
+    dispatchShareMessage(composeTournamentShareMessage(state, state.eventDetails), triggerBtn);
+    return;
+  }
+  const dateInput = popup.querySelector("#share-date-input");
+  const timeInput = popup.querySelector("#share-time-input");
+  const stadiumDd = popup.querySelector("#share-stadium-input");
+  const ruleDd = popup.querySelector("#share-rule-input");
+  const remarkInput = popup.querySelector("#share-remark-input");
+  const submitBtn = popup.querySelector("#tournament-share-submit");
+  const cancelBtn = popup.querySelector("#tournament-share-cancel");
+  const nameLabel = popup.querySelector("#tournament-share-subtitle");
+
+  const state = loadSwiss();
+  const details = state.eventDetails || {};
+  if (nameLabel) {
+    nameLabel.textContent = (state.tournamentName || "").trim() || "(unnamed tournament)";
+  }
+  if (dateInput) dateInput.value = details.date || "";
+  if (timeInput) timeInput.value = details.time || "";
+  if (remarkInput) remarkInput.value = details.remark || "";
+
+  const stadiumCtrl = wireShareDropdown(stadiumDd, STADIUM_OPTIONS, details.stadium);
+  const ruleCtrl = wireShareDropdown(ruleDd, RULE_OPTIONS, details.rule);
+
+  const close = () => {
+    popup.classList.add("hidden");
+    if (submitBtn) submitBtn.onclick = null;
+    if (cancelBtn) cancelBtn.onclick = null;
+  };
+
+  if (submitBtn) {
+    submitBtn.onclick = async () => {
+      const picked = {
+        date: dateInput?.value || "",
+        time: timeInput?.value || "",
+        stadium: stadiumCtrl ? stadiumCtrl.getValue() : "",
+        rule: ruleCtrl ? ruleCtrl.getValue() : "",
+        remark: (remarkInput?.value || "").trim()
+      };
+      saveTournamentEventDetails(picked);
+      close();
+      const message = composeTournamentShareMessage(loadSwiss(), picked);
+      await dispatchShareMessage(message, triggerBtn);
+    };
+  }
+  if (cancelBtn) cancelBtn.onclick = close;
+  popup.classList.remove("hidden");
+}
+
+// Lightweight custom dropdown wiring for the share popup — mirrors the
+// behaviour of initSettingDropdown from calculator.js but doesn't
+// persist to localStorage (we save the picked value onto state.eventDetails
+// after the user hits Share). Returns { getValue, setValue }.
+function wireShareDropdown(root, options, initial) {
+  if (!root) return null;
+  const btn = root.querySelector(".setting-dropdown-btn");
+  const text = root.querySelector(".setting-dropdown-text");
+  const menu = root.querySelector(".setting-dropdown-menu");
+  const opts = root.querySelectorAll(".setting-dropdown-option");
+  if (!btn || !text || !menu) return null;
+
+  const safeInitial = options.includes(initial) ? initial : options[0];
+  const apply = (val) => {
+    btn.dataset.value = val;
+    text.textContent = val;
+    opts.forEach(o => o.classList.toggle("active", o.dataset.value === val));
+  };
+  apply(safeInitial);
+
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    menu.classList.toggle("hidden");
+  };
+  opts.forEach(opt => {
+    opt.onclick = () => {
+      apply(opt.dataset.value);
+      menu.classList.add("hidden");
+    };
+  });
+  // Close when clicking outside (one-shot per popup-open is fine — the
+  // listener becomes a no-op once the menu is already hidden).
+  const outsideClick = (e) => { if (!root.contains(e.target)) menu.classList.add("hidden"); };
+  document.addEventListener("click", outsideClick);
+
+  return {
+    getValue: () => btn.dataset.value || safeInitial,
+    setValue: apply
+  };
 }
 
 function bindSwissRoomBadge(view) {
@@ -2387,15 +2546,52 @@ function aggregatePartUsage(state) {
   return usage;
 }
 
-function partUsageColor(i, total) {
-  const hue = Math.round((i * 360) / Math.max(total, 1));
-  return `hsl(${hue}, 65%, 55%)`;
+// Theme-aware pie palette. Each theme has its own hue band + S/L preset so
+// the slices feel native to the surrounding card. Mono uses a grayscale
+// gradient; the rest distribute hues across a constrained band so slices
+// stay distinguishable without falling back to rainbow primaries.
+function getPiePaletteForTheme() {
+  const cls = document.body.classList;
+  if (cls.contains("love-mode"))     return { type: "hue", hueStart: 320, hueRange: 100, sat: 70, light: 60 };
+  if (cls.contains("forest-mode"))   return { type: "hue", hueStart: 70,  hueRange: 80,  sat: 50, light: 45 };
+  if (cls.contains("tropical-mode")) return { type: "hue", hueStart: 15,  hueRange: 60,  sat: 70, light: 55 };
+  if (cls.contains("space-mode"))    return { type: "hue", hueStart: 200, hueRange: 120, sat: 65, light: 60 };
+  if (cls.contains("stormy-mode"))   return { type: "hue", hueStart: 200, hueRange: 90,  sat: 55, light: 55 };
+  if (cls.contains("mono-mode"))     return { type: "gray", lightStart: 30, lightEnd: 80 };
+  if (cls.contains("light-mode"))    return { type: "hue", hueStart: 0,   hueRange: 360, sat: 55, light: 50 };
+  return                                    { type: "hue", hueStart: 0,   hueRange: 360, sat: 65, light: 55 };
+}
+
+function getPieStrokeForTheme() {
+  const cls = document.body.classList;
+  if (cls.contains("love-mode"))     return "#ffd6e3";
+  if (cls.contains("forest-mode"))   return "#e1e8d2";
+  if (cls.contains("tropical-mode")) return "#ffe8c5";
+  if (cls.contains("light-mode"))    return "#ffffff";
+  if (cls.contains("space-mode"))    return "#0a0d1f";
+  if (cls.contains("stormy-mode"))   return "#1a2030";
+  if (cls.contains("mono-mode"))     return "#0b0b0b";
+  return "#0d1117";
+}
+
+function partUsageColor(i, total, palette) {
+  if (palette.type === "gray") {
+    const t = total <= 1 ? 0 : i / (total - 1);
+    const light = palette.lightStart + (palette.lightEnd - palette.lightStart) * t;
+    return `hsl(0, 0%, ${light.toFixed(0)}%)`;
+  }
+  // Spread hues evenly across the band. Wrap around the colour wheel so a
+  // band wider than 360 still produces distinct hues.
+  const hue = (palette.hueStart + (i * palette.hueRange) / Math.max(total, 1)) % 360;
+  return `hsl(${hue.toFixed(0)}, ${palette.sat}%, ${palette.light}%)`;
 }
 
 function renderPartUsagePie(label, counts) {
   const entries = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   const total = entries.reduce((s, [, c]) => s + c, 0);
   if (total === 0) return "";
+  const palette = getPiePaletteForTheme();
+  const strokeColor = getPieStrokeForTheme();
   const cx = 70, cy = 70, r = 60;
   let cumulative = 0;
   const slices = entries.map(([, count], i) => {
@@ -2407,16 +2603,16 @@ function renderPartUsagePie(label, counts) {
     const x2 = cx + r * Math.sin(endAngle);
     const y2 = cy - r * Math.cos(endAngle);
     const large = endAngle - startAngle > Math.PI ? 1 : 0;
-    const color = partUsageColor(i, entries.length);
+    const color = partUsageColor(i, entries.length, palette);
     // Single-slice pie: a full circle path (zero-length arc isn't drawn).
     const path = entries.length === 1
       ? `M ${cx - r} ${cy} A ${r} ${r} 0 1 1 ${cx + r} ${cy} A ${r} ${r} 0 1 1 ${cx - r} ${cy} Z`
       : `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`;
-    return `<path d="${path}" fill="${color}" stroke="#0d1117" stroke-width="1"/>`;
+    return `<path d="${path}" fill="${color}" stroke="${strokeColor}" stroke-width="1"/>`;
   }).join("");
   const legend = entries.map(([name, count], i) => {
     const pct = ((count / total) * 100).toFixed(1);
-    const color = partUsageColor(i, entries.length);
+    const color = partUsageColor(i, entries.length, palette);
     return `<li class="part-usage-legend-item">
       <span class="part-usage-swatch" style="background:${color}"></span>
       <span class="part-usage-name">${escapeHtml(name)}</span>

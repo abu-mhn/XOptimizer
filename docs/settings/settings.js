@@ -22,25 +22,25 @@ Deck (3 Slots)
 - Multiple named decks with an active selector
 - Shuffle slot order
 - Reset / clear the deck
-- Download the deck as a PNG
+- Download the deck as a PNG (background follows your theme)
 - Copy a deck to paste into a tournament registration
 
 Tournament
 - Three formats: Swiss + Top 8, Swiss only, Single Elimination
 - Configurable Swiss groups: 2 or 4
 - Configurable rounds per group: 3, 4, 5
+- Every tournament is ranked automatically — no host password
 - Self-registration via the Open Tournaments lobby (no manual name list)
 - Three-way join from the lobby: Co-host (with host code), Participant (register name + deck), Viewer (watch only)
-- Hosts and co-hosts can also play (+ Register myself)
-- Edit participant name and deck during registration
+- Hosts AND co-hosts can play (+ Register myself), start the tournament, edit participants, and remove registrants
+- Edit a registrant in place — tap their name to change the name or rebuild their deck
 - Registered decks pre-fill every match; judges can override per match
 - Swiss + Top 8 auto-generates the knockout bracket from group standings
 - Scoreboard round counter above VS, advancing every 3 score taps
 - Tilt-activated scoreboard on mobile (rotate to landscape)
-- Share button copies / hands off a direct Tournament tab link
+- Share button opens a popup for date, time, stadium (Xtreme / Infinity / Double Xtreme), rule (Official / Unofficial), and remark — then composes a message with a registration link
 - Past tournaments stay viewable in history after reset (cached snapshot)
-- Ranking system with daily host password
-- Parts-usage pie charts at tournament end
+- Parts-usage pie charts at tournament end (theme-aware palette)
 
 Battle Pass
 - Bluetooth connection to BEYBLADE_TOOL01 launcher (Chrome / Edge on desktop or Android, Bluefy browser on iOS)
@@ -54,15 +54,17 @@ History
 - Clickable entries open final placements (cached when the live room is gone)
 
 Settings
-- Themes: Dark, Light, Space, Tropical, Stormy, Monochrome
+- Themes: Dark, Light, Space, Tropical, Stormy, Monochrome, Love, Forest
 - Stat display: Bar or Radar
 - Additional button mode picker
 - Show Features (this list)
 
 Other
 - Per-tab URLs: /calculator/, /library/, /deck/, /tournament/, /battlepass/, /reel/, /history/, /settings/
+- "What's New" landing page at the site root
 - Revox member ranking
 - Live Firebase sync across host / co-host / participant / viewer devices
+- Themed across the whole UI (forms, buttons, popups, scoreboard, charts, Battle Pass widgets)
 `;
 
   const btn = document.getElementById("settings-show-features");

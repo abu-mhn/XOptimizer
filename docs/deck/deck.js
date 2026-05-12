@@ -300,12 +300,14 @@ function downloadDeckPNG() {
   }
 
   const cls = document.body.classList;
-  const isLightLike = cls.contains("light-mode") || cls.contains("tropical-mode");
+  const isLove = cls.contains("love-mode");
+  const isForest = cls.contains("forest-mode");
+  const isLightLike = cls.contains("light-mode") || cls.contains("tropical-mode") || isLove || isForest;
   const isTropical = cls.contains("tropical-mode");
-  const footerColor = isTropical ? "#8a6d3b" : isLightLike ? "#656d76" : "#8b949e";
-  const footerBorder = isTropical ? "#ffd8a8" : isLightLike ? "#d1d9e0" : "#21262d";
-  const strongColor = isTropical ? "#2d3a3a" : isLightLike ? "#1f2328" : "#c9d1d9";
-  const pageBg = isTropical ? "#fff6e6" : cls.contains("light-mode") ? "#f6f8fa" : cls.contains("space-mode") ? "#0b0d1a" : cls.contains("stormy-mode") ? "#1e2330" : cls.contains("mono-mode") ? "#000000" : "#0d1117";
+  const footerColor = isForest ? "#5a6a4b" : isLove ? "#9c4a5e" : isTropical ? "#8a6d3b" : isLightLike ? "#656d76" : "#8b949e";
+  const footerBorder = isForest ? "#b5c89a" : isLove ? "#ffc1d2" : isTropical ? "#ffd8a8" : isLightLike ? "#d1d9e0" : "#21262d";
+  const strongColor = isForest ? "#2d3e1f" : isLove ? "#4a1d2a" : isTropical ? "#2d3a3a" : isLightLike ? "#1f2328" : "#c9d1d9";
+  const pageBg = isForest ? "#f0f4e8" : isLove ? "#fff0f5" : isTropical ? "#fff6e6" : cls.contains("light-mode") ? "#f6f8fa" : cls.contains("space-mode") ? "#0b0d1a" : cls.contains("stormy-mode") ? "#1e2330" : cls.contains("mono-mode") ? "#000000" : "#0d1117";
   const logoSrc = isLightLike ? "assets/icons/revoxNameLight.webp" : "assets/icons/revoxName.webp";
 
   const wrap = document.createElement("div");
