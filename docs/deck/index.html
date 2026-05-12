@@ -707,9 +707,6 @@
       <h2 class="popup-title">Tournament Format</h2>
       <label class="tournament-name-label" for="tournament-name-input">Tournament Name <span class="tournament-name-optional">(optional)</span></label>
       <input id="tournament-name-input" type="text" class="tournament-name-input" placeholder="e.g. Spring Cup 2026" maxlength="80" autocomplete="off" />
-      <label class="tournament-name-label" for="tournament-password-input">Host Password <span class="tournament-name-optional">(leave blank to host without ranking)</span></label>
-      <input id="tournament-password-input" type="password" class="tournament-name-input" placeholder="Optional" maxlength="80" autocomplete="off" />
-      <div id="tournament-password-status" class="tournament-password-status"></div>
       <div class="tournament-mode-choices">
         <button type="button" id="tournament-mode-swiss" class="tournament-mode-btn">
           <span class="tournament-mode-name">Swiss + Top 8</span>
@@ -741,14 +738,6 @@
       </div>
     </div>
   </div>
-
-  <!-- ================= WRONG PASSWORD POPUP ================= -->
-  <div id="wrong-password-popup" class="popup-overlay hidden">
-    <div class="popup-card">
-      <h2 class="popup-title">Wrong Password</h2>
-      <p class="popup-text">The password you entered is incorrect. Please try again.</p>
-      <button type="button" id="wrong-password-ok" class="btn popup-cancel">OK</button>
-    </div>
   </div>
 
   <!-- ================= SWISS ROUNDS POPUP ================= -->

@@ -3180,99 +3180,6 @@ function showSwissGroupsPopup(onPick) {
   popup.classList.remove("hidden");
 }
 
-// Daily host password derivation. Rotates per local date.
-function computeDailyHostPassword() {
-  const dateSeededRng = (seed) => {
-    let h = seed;
-    return () => {
-      h = Math.imul(h ^ (h >>> 16), 2246822507);
-      h = Math.imul(h ^ (h >>> 13), 3266489909);
-      h ^= h >>> 16;
-      return (h >>> 0) / 4294967296;
-    };
-  };
-  const today = new Date();
-  const dateStr = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}-standard`;
-  let seed = 0;
-  for (let i = 0; i < dateStr.length; i++) seed = ((seed << 5) - seed + dateStr.charCodeAt(i)) | 0;
-  const rng = dateSeededRng(seed);
-  const pickIdx = (arr) => {
-    const idxs = nonExclusiveIndices(arr);
-    return idxs[Math.floor(rng() * idxs.length)];
-  };
-  const pickIdxBy = (arr, predicate) => {
-    const idxs = [];
-    arr.forEach((item, i) => { if (!isExclusive(item) && predicate(item)) idxs.push(i); });
-    if (idxs.length === 0) return -1;
-    return idxs[Math.floor(rng() * idxs.length)];
-  };
-  const bladeIdx = pickIdx(DATA.blades);
-  const blade = DATA.blades[bladeIdx];
-  let ratchetName = "NORATCHET";
-  let bitCode = "";
-  if (blade.codename === "BULLETGRIFFON") {
-    const idx = pickIdxBy(DATA.bits, isNormalBit);
-    if (idx >= 0) bitCode = DATA.bits[idx].codename;
-  } else if (blade.codename === "CLOCKMIRAGE") {
-    const valid = DATA.ratchets.map((r, i) => ({ r, i })).filter(x => x.r.name.endsWith("5"));
-    const choice = valid[Math.floor(rng() * valid.length)];
-    if (choice) ratchetName = choice.r.name;
-    const idx = pickIdxBy(DATA.bits, isNormalBit);
-    if (idx >= 0) bitCode = DATA.bits[idx].codename;
-  } else {
-    // pickBottom equivalent: 5% RB-bit chance, else normal ratchet+bit.
-    // The original falls through to the normal path if no RB bit exists,
-    // consuming 2 extra rng() calls — preserve that to keep determinism.
-    let done = false;
-    if (rng() < 0.05) {
-      const rbIdx = pickIdxBy(DATA.bits, isRBBit);
-      if (rbIdx >= 0) {
-        bitCode = DATA.bits[rbIdx].codename;
-        done = true;
-      }
-    }
-    if (!done) {
-      const ratchIdx = pickIdx(DATA.ratchets);
-      if (ratchIdx != null && DATA.ratchets[ratchIdx]) ratchetName = DATA.ratchets[ratchIdx].name;
-      const idx = pickIdxBy(DATA.bits, isNormalBit);
-      if (idx >= 0) bitCode = DATA.bits[idx].codename;
-    }
-  }
-  return `${blade.codename}-${ratchetName}-${bitCode}`;
-}
-
-function normalizePassword(s) {
-  return String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-async function verifyHostPassword(password) {
-  if (!password) return false;
-  try {
-    return normalizePassword(password) === normalizePassword(computeDailyHostPassword());
-  } catch {
-    return false;
-  }
-}
-
-function showWrongPasswordPopup() {
-  const popup = document.getElementById("wrong-password-popup");
-  if (!popup) return;
-  popup.classList.remove("hidden");
-  const ok = popup.querySelector("#wrong-password-ok");
-  const close = () => {
-    popup.classList.add("hidden");
-    ok?.removeEventListener("click", close);
-    popup.removeEventListener("click", onBackdrop);
-    document.removeEventListener("keydown", onKey);
-  };
-  const onBackdrop = (e) => { if (e.target === popup) close(); };
-  const onKey = (e) => { if (e.key === "Escape" || e.key === "Enter") close(); };
-  ok?.addEventListener("click", close);
-  popup.addEventListener("click", onBackdrop);
-  document.addEventListener("keydown", onKey);
-  setTimeout(() => ok?.focus(), 0);
-}
-
 function showTournamentModePopup(onPick) {
   const popup = document.getElementById("tournament-mode-popup");
   if (!popup) { onPick("swiss", "", SWISS_ROUND_COUNT); return; } // popup missing, fall back to swiss
@@ -3281,62 +3188,35 @@ function showTournamentModePopup(onPick) {
   const singleBtn = popup.querySelector("#tournament-mode-single");
   const cancelBtn = popup.querySelector("#tournament-mode-cancel");
   const nameInput = popup.querySelector("#tournament-name-input");
-  const passwordInput = popup.querySelector("#tournament-password-input");
-  const statusEl = popup.querySelector("#tournament-password-status");
   if (nameInput) nameInput.value = "";
-  if (passwordInput) passwordInput.value = "";
-  if (statusEl) { statusEl.textContent = ""; statusEl.classList.remove("is-ok"); }
-  const setStatus = (msg, ok) => {
-    if (!statusEl) return;
-    statusEl.textContent = msg || "";
-    statusEl.classList.toggle("is-ok", !!ok);
-  };
-  const setBusy = (busy) => {
-    swissBtn.disabled = busy;
-    if (swissOnlyBtn) swissOnlyBtn.disabled = busy;
-    singleBtn.disabled = busy;
-  };
   const teardown = () => {
     popup.classList.add("hidden");
     swissBtn.onclick = null;
     if (swissOnlyBtn) swissOnlyBtn.onclick = null;
     singleBtn.onclick = null;
     cancelBtn.onclick = null;
-    setBusy(false);
   };
-  const gated = (afterPass) => async () => {
-    const password = passwordInput ? passwordInput.value : "";
-    if (!password) {
-      // Empty password = host an unranked tournament (no ranking writes).
-      afterPass(false);
-      return;
-    }
-    setStatus("Checking…"); setBusy(true);
-    const ok = await verifyHostPassword(password);
-    setBusy(false);
-    if (!ok) { setStatus("Wrong password."); passwordInput?.select(); showWrongPasswordPopup(); return; }
-    setStatus("Password accepted.", true);
-    afterPass(true);
-  };
-  swissBtn.onclick = gated((ranked) => {
+  // Every tournament is ranked now — no password gate. Pass ranked=true
+  // through unchanged for compatibility with existing call sites.
+  swissBtn.onclick = () => {
     const name = nameInput ? nameInput.value.trim() : "";
     teardown();
     showSwissRoundsPopup((rc) => {
-      showSwissGroupsPopup((gc) => onPick("swiss", name, rc, ranked, gc));
+      showSwissGroupsPopup((gc) => onPick("swiss", name, rc, true, gc));
     });
-  });
-  if (swissOnlyBtn) swissOnlyBtn.onclick = gated((ranked) => {
+  };
+  if (swissOnlyBtn) swissOnlyBtn.onclick = () => {
     const name = nameInput ? nameInput.value.trim() : "";
     teardown();
     showSwissRoundsPopup((rc) => {
-      showSwissGroupsPopup((gc) => onPick("swiss-only", name, rc, ranked, gc));
+      showSwissGroupsPopup((gc) => onPick("swiss-only", name, rc, true, gc));
     });
-  });
-  singleBtn.onclick = gated((ranked) => {
+  };
+  singleBtn.onclick = () => {
     const name = nameInput ? nameInput.value.trim() : "";
     teardown();
-    onPick("single-elim", name, undefined, ranked, undefined);
-  });
+    onPick("single-elim", name, undefined, true, undefined);
+  };
   cancelBtn.onclick = () => teardown();
   popup.classList.remove("hidden");
   if (nameInput) setTimeout(() => nameInput.focus(), 0);
