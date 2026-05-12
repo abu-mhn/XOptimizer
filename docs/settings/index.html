@@ -487,8 +487,27 @@
             </div>
           </div>
         </div>
+
+        <div class="setting-item">
+          <span class="setting-label-text">Features</span>
+          <button type="button" id="settings-show-features" class="setting-action-btn">Show Features</button>
+        </div>
       </fieldset>
     </section>
+
+    <!-- ================= FEATURES POPUP ================= -->
+    <div id="features-popup" class="popup-overlay hidden">
+      <div class="popup-card features-popup-card">
+        <h2 class="popup-title">X Optimizer — Features</h2>
+        <p class="popup-text features-popup-hint">Copy the list as text to share or document.</p>
+        <pre id="features-list" class="features-list"></pre>
+        <div id="features-status" class="swiss-join-status"></div>
+        <div class="popup-actions">
+          <button type="button" id="features-copy" class="btn">Copy</button>
+          <button type="button" id="features-close" class="btn popup-cancel">Close</button>
+        </div>
+      </div>
+    </div>
 
     <!-- ================= RESULT ================= -->
     <div id="result" class="result hidden"></div>
@@ -838,6 +857,7 @@
   <script src="history/history.js"></script>
   <script src="reel/reel.js"></script>
   <script type="module" src="battlepass/battlepass-tab.js"></script>
+  <script src="settings/settings.js"></script>
   <script src="app.js"></script>
 </body>
 

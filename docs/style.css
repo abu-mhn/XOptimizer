@@ -703,6 +703,53 @@ body.light-mode .result-part-name {
     text-align: justify;
 }
 
+/* ===== Settings → inline action buttons (sized like the dropdowns) ===== */
+.setting-action-btn {
+    background: #21262d;
+    color: #e6edf3;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    min-width: 130px;
+    text-align: center;
+    transition: background 0.12s ease;
+}
+.setting-action-btn:hover,
+.setting-action-btn:focus-visible {
+    background: #30363d;
+    outline: none;
+}
+
+/* ===== Settings → Show Features popup ===== */
+.features-popup-card {
+    max-width: 600px;
+    width: min(96vw, 600px);
+}
+.features-popup-hint {
+    color: #8b949e;
+    font-size: 0.85rem;
+    margin: -4px 0 10px;
+}
+.features-list {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    background: #0d1117;
+    color: #c9d1d9;
+    padding: 14px 16px;
+    border: 1px solid #21262d;
+    border-radius: 8px;
+    max-height: 55vh;
+    overflow-y: auto;
+    font-family: inherit;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    text-align: left;
+    margin: 0 0 10px;
+}
+
 /* ===== Root index.html "What's New" landing page ===== */
 .updates-page {
     max-width: 640px;
@@ -722,6 +769,21 @@ body.light-mode .result-part-name {
     margin: 0;
     color: #8b949e;
     font-size: 0.9rem;
+}
+.updates-version {
+    margin: 8px 0 0;
+    font-size: 0.75rem;
+    color: #8b949e;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+}
+.updates-version-num {
+    color: #c9d1d9;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: rgba(110, 118, 129, 0.18);
+    padding: 1px 8px;
+    border-radius: 999px;
+    margin-left: 4px;
 }
 .updates-card {
     background: #161b22;
@@ -4806,6 +4868,23 @@ body.light-mode .swiss-group-progress {
     flex: 1;
     color: #f0f6fc;
 }
+button.swiss-reg-name-edit {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    text-align: left;
+    font: inherit;
+    color: #f0f6fc;
+    cursor: pointer;
+    border-radius: 4px;
+}
+button.swiss-reg-name-edit:hover,
+button.swiss-reg-name-edit:focus-visible {
+    color: #58a6ff;
+    text-decoration: underline;
+    outline: none;
+}
 .swiss-reg-deck-badge {
     font-size: 0.75rem;
     padding: 2px 8px;
@@ -5281,6 +5360,12 @@ body.light-mode .swiss-group-progress {
     background: rgba(88, 166, 255, 0.16);
     border-color: rgba(88, 166, 255, 0.45);
     color: #58a6ff;
+}
+
+.tournament-history-role-participant {
+    background: rgba(187, 128, 232, 0.16);
+    border-color: rgba(187, 128, 232, 0.45);
+    color: #bb80e8;
 }
 
 .tournament-history-mode {

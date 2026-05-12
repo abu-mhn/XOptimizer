@@ -32,6 +32,7 @@ function renderTournamentHistory() {
   const roleLabel = r => {
     if (r === "host") return "Host";
     if (r === "co-host") return "Co-host";
+    if (r === "participant") return "Participant";
     if (r === "view") return "Viewer";
     return "";
   };

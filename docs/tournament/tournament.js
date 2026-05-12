@@ -128,7 +128,7 @@ function resolveRoomCode(code, cb) {
   });
 }
 
-function connectSwissRoom(editCode, viewCode, asHost, canEdit) {
+function connectSwissRoom(editCode, viewCode, asHost, canEdit, roleHint) {
   const db = initFirebase();
   if (!db) return { ok: false, reason: "Firebase not configured" };
   if (swissRoomRef) {
@@ -142,8 +142,12 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit) {
   const isPopulatedRemote = (r) => !!(r && (r.groups || (r.matches && Object.keys(r.matches).length > 0) || r.phase === "registering"));
   const isPopulatedLocal = (s) => !!(s && (s.groups || (s.matches && Object.keys(s.matches).length > 0) || s.phase === "registering"));
 
-  const role = asHost ? "host" : (canEdit ? "co-host" : "view");
-  const isViewer = role === "view";
+  // Role hint lets callers (e.g. submitRegistration's lobby path) tag
+  // this session as "participant" so the History tab can distinguish
+  // self-registered players from plain viewers. Without a hint we
+  // fall back to the canEdit/asHost flags.
+  const role = roleHint || (asHost ? "host" : (canEdit ? "co-host" : "view"));
+  const isViewer = role === "view" || role === "participant";
   const localNow = loadSwiss();
   saveTournamentHistoryEntry({
     editCode: isViewer ? null : editCode,
@@ -1521,21 +1525,14 @@ function bindSwissShareButton(view) {
 }
 
 function bindSwissRoomBadge(view) {
-  const SHARE_URL = "https://abu-mhn.github.io/XOptimizer/";
   view.querySelectorAll(".swiss-room-code").forEach(btn => {
     btn.addEventListener("click", () => {
       const code = btn.dataset.room || "";
       if (!code) return;
-      let payload;
-      if (btn.closest(".tournament-history-item")) {
-        payload = code;
-      } else {
-        // Only the Host code is surfaced now — viewers/participants join
-        // via the Open Tournaments lobby, not by typing a code.
-        payload = `Help co-host my Beyblade X tournament on X-Optimizer!\n\nUse the Host code to join as a referee: ${code}\n\n${SHARE_URL}`;
-      }
+      // Copy the bare code — no URL, no message. Co-hosts paste it into
+      // the Co-host code prompt from the Open Tournaments lobby.
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(payload).then(() => {
+        navigator.clipboard.writeText(code).then(() => {
           const prev = btn.textContent;
           btn.textContent = "Copied!";
           setTimeout(() => { btn.textContent = prev; }, 1200);
@@ -1752,10 +1749,11 @@ function renderSwiss() {
 // later in the tournament reads from these registrants directly.
 function renderSwissRegisteringMarkup(state) {
   const isHost = swissIsHost;
-  const canEdit = isHost; // only the host can remove signups or start
-  // Hosts AND co-hosts can register themselves to play. They keep their
-  // edit privileges (scoring, removing, starting if host) — registering
-  // adds them to the participants pool without changing their role.
+  // Hosts AND co-hosts can both start the tournament, remove registrants,
+  // edit the name, etc. The Reset / Leave behaviour still differs by
+  // role — only the original host wipes the room; co-hosts just
+  // disconnect locally.
+  const canEdit = !!swissCanEdit;
   const canRegisterSelf = !!swissCanEdit;
   const registrants = listRegistrants(state).sort((a, b) =>
     (a.name || "").localeCompare(b.name || "")
@@ -1792,9 +1790,15 @@ function renderSwissRegisteringMarkup(state) {
         const deckBadge = deckHasContent
           ? `<span class="swiss-reg-deck-badge">Deck ✓</span>`
           : `<span class="swiss-reg-deck-badge swiss-reg-deck-badge-missing">No deck</span>`;
+        // Hosts and co-hosts can tap a registrant's name to edit it
+        // (re-opens the registration form pre-filled with that
+        // registrant's name + deck).
+        const nameEl = canEdit
+          ? `<button type="button" class="swiss-reg-name swiss-reg-name-edit" data-reg-id="${escapeHtml(r.id)}" title="Edit name or deck">${escapeHtml(r.name || "(unnamed)")}</button>`
+          : `<span class="swiss-reg-name">${escapeHtml(r.name || "(unnamed)")}</span>`;
         return `<li class="swiss-reg-row">
           <span class="swiss-reg-num">${i + 1}</span>
-          <span class="swiss-reg-name">${escapeHtml(r.name || "(unnamed)")}</span>
+          ${nameEl}
           ${deckBadge}
           ${removeBtn}
         </li>`;
@@ -1854,6 +1858,36 @@ function bindSwissRegisteringHandlers(view, state) {
       removeRegistrant(id);
     });
   });
+  view.querySelectorAll(".swiss-reg-name-edit").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.regId;
+      if (id) showEditRegistrantPopup(id);
+    });
+  });
+}
+
+// Edit an existing registrant — re-opens the registration popup pre-filled
+// with their current name and deck, and routes the submit through an
+// update path (overwrites the same registrant entry, no new id).
+function showEditRegistrantPopup(registrantId) {
+  if (!swissCanEdit || !swissEditCode || !registrantId) return;
+  const state = loadSwiss();
+  if (!isRegisteringPhase(state)) return;
+  const reg = state.registrants && state.registrants[registrantId];
+  if (!reg) return;
+  const room = {
+    editCode: swissEditCode,
+    viewCode: swissViewCode,
+    name: state.tournamentName || "",
+    mode: state.mode || "swiss",
+    roundCount: state.roundCount || null,
+    groupCount: state.groupCount || null
+  };
+  showRegistrationPopup(room, {
+    editRegistrantId: registrantId,
+    initialName: reg.name || "",
+    initialDeck: normalizeBeyCheckDeck(reg.deck)
+  });
 }
 
 // Host / co-host registers themselves as a player. Reuses the registration
@@ -1908,7 +1942,8 @@ function removeRegistrant(id) {
 // from the registered names, copy registrants forward into the running
 // state, flip phase to "running", and remove the open-tournaments index.
 function startRegisteringTournament() {
-  if (!swissIsHost) return;
+  // Host and co-host can both start the tournament.
+  if (!swissCanEdit) return;
   const state = loadSwiss();
   if (!isRegisteringPhase(state)) return;
   const registrants = listRegistrants(state);
@@ -3878,6 +3913,10 @@ function showRegistrationPopup(room, options = {}) {
   const cancelBtn = popup.querySelector("#register-cancel");
   const pasteBtn = popup.querySelector("#register-paste");
   const selfRegister = !!options.selfRegister;
+  const editRegistrantId = options.editRegistrantId || null;
+  // Edit mode is implicitly self-managed too (writes via swissRoomRef,
+  // no disconnect/reconnect).
+  const isEdit = !!editRegistrantId;
 
   const setStatus = (msg, kind) => {
     if (!status) return;
@@ -3893,9 +3932,12 @@ function showRegistrationPopup(room, options = {}) {
       : "Swiss + Top 8";
     subtitle.textContent = `${name} · ${modeLabel}`;
   }
-  if (nameInput) nameInput.value = "";
+  if (nameInput) nameInput.value = options.initialName || "";
+  if (submitBtn) submitBtn.textContent = isEdit ? "Save" : "Register";
   setStatus("");
-  let deck = emptyBeyCheckDeck();
+  let deck = options.initialDeck && Array.isArray(options.initialDeck)
+    ? normalizeBeyCheckDeck(options.initialDeck)
+    : emptyBeyCheckDeck();
 
   const renderSlots = () => {
     if (!slotsHost) return;
@@ -3963,11 +4005,12 @@ function showRegistrationPopup(room, options = {}) {
     }
     if (isBeyCheckDeckEmpty(deck)) {
       // Soft-warn but allow — host can still start with an empty deck if needed.
-      if (!confirm("You haven't built any deck slots yet. Register without a deck?")) {
-        return;
-      }
+      const msg = isEdit
+        ? "This deck has no slots filled. Save anyway?"
+        : "You haven't built any deck slots yet. Register without a deck?";
+      if (!confirm(msg)) return;
     }
-    submitRegistration(room, name, deck, setStatus, close, { selfRegister });
+    submitRegistration(room, name, deck, setStatus, close, { selfRegister, editRegistrantId });
   };
   submitBtn.onclick = submit;
   if (nameInput) {
@@ -3980,9 +4023,11 @@ function showRegistrationPopup(room, options = {}) {
 
 function submitRegistration(room, name, deck, setStatus, onSuccess, options = {}) {
   const selfRegister = !!options.selfRegister;
+  const editRegistrantId = options.editRegistrantId || null;
+  const isEdit = !!editRegistrantId;
   const db = initFirebase();
   if (!db) { setStatus("Firebase not available.", "err"); return; }
-  setStatus("Looking up tournament…", "pending");
+  setStatus(isEdit ? "Saving…" : "Looking up tournament…", "pending");
   const editCode = room.editCode;
   const roomRef = db.ref("swissRooms/" + editCode);
   roomRef.once("value")
@@ -3991,19 +4036,29 @@ function submitRegistration(room, name, deck, setStatus, onSuccess, options = {}
       if (!remote || remote.phase !== "registering") {
         throw new Error("This tournament is no longer accepting registrations.");
       }
-      // Duplicate-name guard. Match registrants and (if already started)
-      // existing participants.
+      // Duplicate-name guard. Skip the registrant being edited so saving
+      // an unchanged name doesn't trip the check against itself.
       const lower = name.trim().toLowerCase();
-      const taken = Object.values(remote.registrants || {}).some(r =>
-        r && typeof r.name === "string" && r.name.trim().toLowerCase() === lower);
+      const taken = Object.entries(remote.registrants || {}).some(([id, r]) => {
+        if (!r || typeof r.name !== "string") return false;
+        if (id === editRegistrantId) return false;
+        return r.name.trim().toLowerCase() === lower;
+      });
       if (taken) throw new Error("That name is already registered. Pick a different one.");
 
-      const id = generateRegistrantId();
+      const id = editRegistrantId || generateRegistrantId();
       const payload = { name: name.trim(), deck };
-      setStatus("Submitting…", "pending");
+      if (!isEdit) setStatus("Submitting…", "pending");
       return roomRef.child("registrants/" + id).set(payload).then(() => remote);
     })
     .then(remote => {
+      if (isEdit) {
+        // Host / co-host edited a registrant in place — listener will
+        // re-render the row with the new name + deck.
+        setStatus("Saved ✓", "ok");
+        onSuccess?.();
+        return;
+      }
       if (selfRegister) {
         // Host / co-host registering themselves: keep their existing
         // connection and edit privileges. The Firebase listener will pick
@@ -4015,11 +4070,13 @@ function submitRegistration(room, name, deck, setStatus, onSuccess, options = {}
       }
       // Lobby path: auto-join as a view-only participant so the registrant
       // immediately sees the registrants list updating live and the
-      // tournament starting.
+      // tournament starting. The "participant" role hint sticks across
+      // listener ticks so the Tournament History tab distinguishes
+      // self-registered players from plain spectators.
       const viewCode = remote.viewCode || null;
       disconnectSwissRoom();
       localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [], phase: "running", registrants: {} }));
-      connectSwissRoom(editCode, viewCode, false, false);
+      connectSwissRoom(editCode, viewCode, false, false, "participant");
       setStatus("Registered ✓ — switching to tournament view…", "ok");
       onSuccess?.();
       // Switch the user's visible tab to Hosting so they see the tournament.
@@ -4028,7 +4085,7 @@ function submitRegistration(room, name, deck, setStatus, onSuccess, options = {}
     })
     .catch(err => {
       console.warn("Registration failed:", err);
-      setStatus(err.message || "Couldn't register. Try again.", "err");
+      setStatus(err.message || (isEdit ? "Couldn't save. Try again." : "Couldn't register. Try again."), "err");
     });
 }
 
