@@ -81,6 +81,15 @@ h1 {
 .mode-tabs > .tab {
     flex: 0 0 auto;
 }
+/* Centers the tab row when it fits (desktop / wider screens). When the
+   row overflows on mobile, the auto margins collapse to 0 and the tabs
+   pack to the left so horizontal scrolling still reaches the first tab. */
+.mode-tabs > .tab:first-of-type {
+    margin-inline-start: auto;
+}
+.mode-tabs > .tab:last-of-type {
+    margin-inline-end: auto;
+}
 
 .tab:hover:not(.active) {
     background: #21262d;
