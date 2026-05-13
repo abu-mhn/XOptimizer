@@ -8460,3 +8460,129 @@ body.mono-mode .updates-card {
     background: #0b0b0b;
     border-color: #2a2a2a;
 }
+
+/* ===== Revox input — theme overrides ===== */
+body.light-mode .revox-input {
+    background: #ffffff;
+    border-color: #d1d9e0;
+    color: #1f2328;
+}
+body.light-mode .revox-input:focus {
+    border-color: #0969da;
+    background: #f6f8fa;
+}
+body.tropical-mode .revox-input {
+    background: #ffffff;
+    border-color: #ffd8a8;
+    color: #2d3a3a;
+}
+body.tropical-mode .revox-input:focus {
+    border-color: #f5b86b;
+}
+body.love-mode .revox-input {
+    background: #ffffff;
+    border-color: #ffc1d2;
+    color: #4a1d2a;
+}
+body.love-mode .revox-input:focus {
+    border-color: #f0a0bc;
+}
+body.forest-mode .revox-input {
+    background: #ffffff;
+    border-color: #b5c89a;
+    color: #2d3e1f;
+}
+body.forest-mode .revox-input:focus {
+    border-color: #7a9159;
+}
+body.space-mode .revox-input {
+    background: rgba(15, 18, 40, 0.85);
+    border-color: #1a1f3d;
+    color: #c8d6e5;
+}
+body.stormy-mode .revox-input {
+    background: rgba(30, 35, 48, 0.85);
+    border-color: #3a4054;
+    color: #d5dae4;
+}
+body.mono-mode .revox-input {
+    background: #0b0b0b;
+    border-color: #2a2a2a;
+    color: #e6e6e6;
+}
+
+/* ===== Open Tournaments list — theme overrides ===== */
+body.light-mode .swiss-rooms-heading {
+    color: #1f2328;
+}
+body.tropical-mode .swiss-rooms-heading {
+    color: #2d3a3a;
+}
+body.love-mode .swiss-rooms-heading {
+    color: #4a1d2a;
+}
+body.forest-mode .swiss-rooms-heading {
+    color: #2d3e1f;
+}
+
+body.light-mode .swiss-rooms-hint,
+body.light-mode .swiss-rooms-empty,
+body.light-mode .swiss-room-card-meta {
+    color: #656d76;
+}
+body.tropical-mode .swiss-rooms-hint,
+body.tropical-mode .swiss-rooms-empty,
+body.tropical-mode .swiss-room-card-meta {
+    color: #8a6d3b;
+}
+body.love-mode .swiss-rooms-hint,
+body.love-mode .swiss-rooms-empty,
+body.love-mode .swiss-room-card-meta {
+    color: #9c4a5e;
+}
+body.forest-mode .swiss-rooms-hint,
+body.forest-mode .swiss-rooms-empty,
+body.forest-mode .swiss-room-card-meta {
+    color: #5a6a4b;
+}
+
+body.light-mode .swiss-room-card {
+    background: #ffffff;
+    border-color: #d1d9e0;
+    color: #1f2328;
+}
+body.light-mode .swiss-room-card:hover,
+body.light-mode .swiss-room-card:focus-visible {
+    background: #f6f8fa;
+    border-color: #afb8c1;
+}
+body.tropical-mode .swiss-room-card {
+    background: #ffffff;
+    border-color: #ffd8a8;
+    color: #2d3a3a;
+}
+body.tropical-mode .swiss-room-card:hover,
+body.tropical-mode .swiss-room-card:focus-visible {
+    background: #fff0d6;
+    border-color: #f5b86b;
+}
+body.love-mode .swiss-room-card {
+    background: #ffffff;
+    border-color: #ffc1d2;
+    color: #4a1d2a;
+}
+body.love-mode .swiss-room-card:hover,
+body.love-mode .swiss-room-card:focus-visible {
+    background: #ffe6ee;
+    border-color: #f0a0bc;
+}
+body.forest-mode .swiss-room-card {
+    background: #ffffff;
+    border-color: #b5c89a;
+    color: #2d3e1f;
+}
+body.forest-mode .swiss-room-card:hover,
+body.forest-mode .swiss-room-card:focus-visible {
+    background: #e8f0d8;
+    border-color: #7a9159;
+}
