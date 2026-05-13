@@ -1121,6 +1121,18 @@ body.forest-mode .features-list {
     cursor: pointer;
     font-weight: 600;
     font-size: clamp(.8rem, 2.4vw, .9rem);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-height: 36px;
+}
+.bey-check-mode-tab img {
+    height: 16px;
+    width: auto;
+    max-width: 100%;
+    object-fit: contain;
+    display: block;
 }
 
 .bey-check-mode-tab.active {
@@ -1155,6 +1167,31 @@ body.forest-mode .features-list {
 
 .bey-check-slot-actions {
     flex-wrap: wrap;
+}
+
+/* Icon-style Save / Clear / Cancel buttons in the slot popup. Each row
+   item stays equal-width via the inherited .popup-actions .btn flex; we
+   just compact the padding and force the icon to a fixed size. */
+.bey-check-slot-action-btn {
+    padding: 10px 12px;
+}
+.bey-check-slot-action-btn img {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+}
+/* In light-leaning themes the global `body.{theme}-mode .btn img { filter: none }`
+   rule fires; force the slot-popup icons back to white so they stay
+   readable on the colored buttons. */
+body.light-mode .bey-check-slot-action-btn img,
+body.tropical-mode .bey-check-slot-action-btn img,
+body.love-mode .bey-check-slot-action-btn img,
+body.forest-mode .bey-check-slot-action-btn img {
+    filter: brightness(0) invert(1);
+}
+body.mono-mode .bey-check-slot-action-btn img {
+    filter: brightness(0);
 }
 
 .bey-check-slot-status {
@@ -1569,6 +1606,86 @@ body.mono-mode .filter-btn.active {
     background: #ffffff;
     border-color: #ffffff;
     color: #000000;
+}
+
+/* ===== Bey Check slot popup mode tabs (Standard / CX / CX Expand) =====
+   Mirrors the calculator .sub-tab palette per theme so the picker
+   inside the slot popup matches the picker at the top of the app. */
+body.light-mode .bey-check-mode-tab {
+    border-color: #d1d9e0;
+    background: #ffffff;
+    color: #656d76;
+}
+body.light-mode .bey-check-mode-tab.active {
+    background: #0550ae;
+    color: #ffffff;
+    border-color: #0550ae;
+}
+
+body.space-mode .bey-check-mode-tab {
+    border-color: #1a1f3d;
+    background: rgba(15, 18, 40, 0.8);
+    color: #7b8cad;
+}
+body.space-mode .bey-check-mode-tab.active {
+    background: linear-gradient(135deg, #1a237e, #311b92);
+    color: #fff;
+    border-color: #5c6bc0;
+}
+
+body.tropical-mode .bey-check-mode-tab {
+    border-color: #ffd8a8;
+    background: #ffffff;
+    color: #8a6d3b;
+}
+body.tropical-mode .bey-check-mode-tab.active {
+    background: linear-gradient(135deg, #00b8a9, #0d8a80);
+    color: #fff;
+    border-color: #00b8a9;
+}
+
+body.stormy-mode .bey-check-mode-tab {
+    border-color: #3a4054;
+    background: rgba(42, 48, 64, 0.8);
+    color: #9098a8;
+}
+body.stormy-mode .bey-check-mode-tab.active {
+    background: linear-gradient(135deg, #2c4a7a, #3a6fb0);
+    color: #fff;
+    border-color: #4a90e2;
+}
+
+body.mono-mode .bey-check-mode-tab {
+    background: #111111;
+    border-color: #2a2a2a;
+    color: #bdbdbd;
+}
+body.mono-mode .bey-check-mode-tab.active {
+    background: #ffffff;
+    color: #000000;
+    border-color: #ffffff;
+}
+
+body.love-mode .bey-check-mode-tab {
+    border-color: #ffc1d2;
+    background: #ffffff;
+    color: #9c4a5e;
+}
+body.love-mode .bey-check-mode-tab.active {
+    background: linear-gradient(135deg, #e63978, #c0245f);
+    color: #fff;
+    border-color: #e63978;
+}
+
+body.forest-mode .bey-check-mode-tab {
+    border-color: #b5c89a;
+    background: #ffffff;
+    color: #5a6a4b;
+}
+body.forest-mode .bey-check-mode-tab.active {
+    background: linear-gradient(135deg, #386641, #2d4f33);
+    color: #fff;
+    border-color: #386641;
 }
 
 /* Lock the Ratchet / Ratchet-Bit chooser to viewport center (mobile-safe) */

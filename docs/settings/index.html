@@ -635,9 +635,17 @@
       <p class="popup-text bey-check-slot-subtitle" id="bey-check-slot-subtitle"></p>
 
       <div class="bey-check-mode-tabs" role="tablist">
-        <button type="button" class="bey-check-mode-tab active" data-mode="standard" role="tab">Standard</button>
-        <button type="button" class="bey-check-mode-tab" data-mode="cx" role="tab">CX</button>
-        <button type="button" class="bey-check-mode-tab" data-mode="cxExpand" role="tab">CX Expand</button>
+        <button type="button" class="bey-check-mode-tab active" data-mode="standard" role="tab" aria-label="Basic / Unique Line" title="Basic / Unique Line">
+          <img src="assets/line/Basic_Line_Logo.webp" alt="Basic Line"> /
+          <img src="assets/line/Unique_Line_Logo.webp" alt="Unique Line">
+        </button>
+        <button type="button" class="bey-check-mode-tab" data-mode="cx" role="tab" aria-label="Custom Line" title="Custom Line">
+          <img src="assets/line/Custom_Line_Logo.webp" alt="Custom Line">
+        </button>
+        <button type="button" class="bey-check-mode-tab" data-mode="cxExpand" role="tab" aria-label="Custom Line Expand" title="Custom Line Expand">
+          <img src="assets/line/Custom_Line_Logo.webp" alt="Custom Line">
+          <img src="assets/line/Expand_Blade_Logo.webp" alt="Expand Blade">
+        </button>
       </div>
 
       <form id="bey-check-form-standard" class="bey-check-mode-form" data-mode="standard" onsubmit="return false;">
@@ -715,9 +723,18 @@
 
       <div id="bey-check-slot-status" class="bey-check-slot-status"></div>
       <div class="popup-actions bey-check-slot-actions">
-        <button type="button" id="bey-check-slot-save" class="btn">Save</button>
-        <button type="button" id="bey-check-slot-clear" class="btn btn-reset">Clear</button>
-        <button type="button" id="bey-check-slot-cancel" class="btn popup-cancel">Cancel</button>
+        <button type="button" id="bey-check-slot-save" class="btn bey-check-slot-action-btn" aria-label="Save" title="Save">
+          <img src="assets/icons/thumbs-up.png" alt="Save"
+               onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x2713;');">
+        </button>
+        <button type="button" id="bey-check-slot-clear" class="btn btn-reset bey-check-slot-action-btn" aria-label="Clear" title="Clear">
+          <img src="assets/icons/delete.png" alt="Clear"
+               onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x232B;');">
+        </button>
+        <button type="button" id="bey-check-slot-cancel" class="btn popup-cancel bey-check-slot-action-btn" aria-label="Cancel" title="Cancel">
+          <img src="assets/icons/exit-button.png" alt="Cancel"
+               onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x2715;');">
+        </button>
       </div>
     </div>
   </div>

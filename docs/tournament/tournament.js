@@ -3756,18 +3756,32 @@ function refreshOpenTournamentRooms() {
         setStatus("");
         return;
       }
-      // Cross-check each lobby entry against the underlying swissRoom phase.
-      // Catches leftovers from explicit-remove failures or onDisconnect not
-      // firing in time (e.g. tournament finished/cancelled but the lobby
-      // entry stuck around). Stale entries are pruned client-side too.
-      return Promise.all(rooms.map(r =>
-        db.ref("swissRooms/" + r.editCode + "/phase").once("value")
-          .then(phaseSnap => ({ room: r, phase: phaseSnap.val() }))
-          .catch(() => ({ room: r, phase: null }))
-      )).then(results => {
+      // Cross-check each lobby entry against the underlying swissRoom.
+      // We re-read phase + registrant count straight from the source so
+      // a stale cached `registrantCount` doesn't lie to viewers (the
+      // host's listener can miss publishes when their tab is suspended).
+      // Stale entries (room gone or phase no longer registering) get
+      // pruned from the lobby in the same pass.
+      return Promise.all(rooms.map(r => {
+        const phaseP = db.ref("swissRooms/" + r.editCode + "/phase").once("value")
+          .then(s => s.val())
+          .catch(() => null);
+        const regP = db.ref("swissRooms/" + r.editCode + "/registrants").once("value")
+          .then(s => s.numChildren())
+          .catch(() => null);
+        return Promise.all([phaseP, regP]).then(([phase, count]) => ({
+          room: r, phase, count
+        }));
+      })).then(results => {
         const live = [];
-        results.forEach(({ room, phase }) => {
+        results.forEach(({ room, phase, count }) => {
           if (phase === "registering") {
+            // Refresh the cached count too so future viewers benefit.
+            if (typeof count === "number" && count !== room.registrantCount) {
+              db.ref("openTournaments/" + room.editCode + "/registrantCount")
+                .set(count).catch(() => {});
+              room.registrantCount = count;
+            }
             live.push(room);
           } else {
             // Underlying room is gone or already running/finished — drop it.
@@ -4107,7 +4121,25 @@ function submitRegistration(room, name, deck, setStatus, onSuccess, options = {}
       const id = editRegistrantId || generateRegistrantId();
       const payload = { name: name.trim(), deck };
       if (!isEdit) setStatus("Submitting…", "pending");
-      return roomRef.child("registrants/" + id).set(payload).then(() => remote);
+      return roomRef.child("registrants/" + id).set(payload)
+        .then(() => {
+          // Refresh the lobby's registrantCount from the authoritative
+          // source. The host's listener would normally re-publish the
+          // open-tournaments summary on this same registrant write, but
+          // if the host is currently backgrounded (mobile suspends the
+          // WebSocket) that publish never fires and the lobby keeps
+          // showing a stale count. Have the registrant device update it
+          // directly so the lobby stays correct independently of the
+          // host's connectivity.
+          if (!isEdit) {
+            return roomRef.child("registrants").once("value").then(snap => {
+              const count = snap.numChildren();
+              return db.ref("openTournaments/" + editCode + "/registrantCount").set(count)
+                .catch(() => {}); // non-fatal — host listener will sync eventually
+            }).catch(() => {});
+          }
+        })
+        .then(() => remote);
     })
     .then(remote => {
       if (isEdit) {
