@@ -8393,3 +8393,70 @@ body.forest-mode .dashboard-card {
   border-color: #d1d9e0;
   background: rgba(0, 0, 0, 0.02);
 }
+
+/* ===== What's New (root index.html) — theme overrides ===== */
+body.light-mode .updates-title,
+body.tropical-mode .updates-title,
+body.love-mode .updates-title,
+body.forest-mode .updates-title {
+    color: #1f2328;
+}
+body.light-mode .updates-subtitle,
+body.tropical-mode .updates-subtitle,
+body.love-mode .updates-subtitle,
+body.forest-mode .updates-subtitle,
+body.light-mode .updates-version,
+body.tropical-mode .updates-version,
+body.love-mode .updates-version,
+body.forest-mode .updates-version {
+    color: #656d76;
+}
+body.light-mode .updates-card {
+    background: #ffffff;
+    border-color: #d1d9e0;
+    color: #1f2328;
+}
+body.tropical-mode .updates-card {
+    background: #ffffff;
+    border-color: #ffd8a8;
+    color: #2d3a3a;
+}
+body.love-mode .updates-card {
+    background: #ffffff;
+    border-color: #ffc1d2;
+    color: #4a1d2a;
+}
+body.forest-mode .updates-card {
+    background: #ffffff;
+    border-color: #b5c89a;
+    color: #2d3e1f;
+}
+body.light-mode .updates-version-num {
+    color: #1f2328;
+    background: rgba(15, 20, 30, 0.08);
+}
+body.tropical-mode .updates-version-num {
+    color: #2d3a3a;
+    background: rgba(245, 184, 107, 0.25);
+}
+body.love-mode .updates-version-num {
+    color: #4a1d2a;
+    background: rgba(240, 160, 188, 0.3);
+}
+body.forest-mode .updates-version-num {
+    color: #2d3e1f;
+    background: rgba(181, 200, 154, 0.35);
+}
+
+body.space-mode .updates-card {
+    background: rgba(15, 18, 40, 0.85);
+    border-color: #1a1f3d;
+}
+body.stormy-mode .updates-card {
+    background: rgba(30, 35, 48, 0.85);
+    border-color: #3a4054;
+}
+body.mono-mode .updates-card {
+    background: #0b0b0b;
+    border-color: #2a2a2a;
+}
