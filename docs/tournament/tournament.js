@@ -1461,7 +1461,8 @@ const SHARE_TOURNAMENT_INSTRUCTIONS = [
   "1. Open the link below on your phone.",
   "2. Under \"Open Tournaments\", tap this tournament.",
   "3. Pick \"Participant\".",
-  "4. Enter your name, build your 3-slot deck, then tap Register."
+  "4. Enter your name, then build your 3-slot deck — or open the Deck tab, tap Copy on a saved deck, and tap \"Paste from Deck tab\" in the register popup.",
+  "5. Tap Register."
 ].join("\n");
 
 function renderSwissShareButton() {
@@ -1487,11 +1488,24 @@ function renderSwissShareButton() {
 //
 //   https://abu-mhn.github.io/XOptimizer/tournament/
 // Lines whose field is empty are omitted so the message stays clean.
+function formatShareDate(value) {
+  if (typeof value !== "string") return value || "";
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return value;
+  const y = Number(m[1]), mo = Number(m[2]) - 1, day = Number(m[3]);
+  const date = new Date(y, mo, day);
+  if (isNaN(date.getTime())) return value;
+  const months = ["January","February","March","April","May","June",
+                  "July","August","September","October","November","December"];
+  const weekdays = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  return `${day} ${months[mo]} ${y} (${weekdays[date.getDay()]})`;
+}
+
 function composeTournamentShareMessage(state, details) {
   const d = details || {};
   const name = (state?.tournamentName || "").trim() || "Tournament";
   const lines = [name];
-  if (d.date)    lines.push(`Date: ${d.date}`);
+  if (d.date)    lines.push(`Date: ${formatShareDate(d.date)}`);
   if (d.time)    lines.push(`Time: ${d.time}`);
   if (d.stadium) lines.push(`Stadium: ${d.stadium}`);
   if (d.rule)    lines.push(`Rule: ${d.rule}`);
