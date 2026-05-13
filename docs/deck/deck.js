@@ -49,6 +49,84 @@ function loadDecksState() {
 
 function saveDecksState(state) {
   localStorage.setItem(DECKS_KEY, JSON.stringify(state));
+  pushDecksToCloudIfSignedIn(state);
+}
+
+// ===== Cross-device deck sync =====
+// When a user is signed in (Firebase Auth), decks live at
+// `userDecks/{uid}` in the Realtime Database. Every local save also
+// pushes to that path; a value listener pulls remote changes back into
+// localStorage so the other device's edits show up. Signed-out users
+// keep their decks purely in localStorage like before.
+let deckCloudRef = null;
+let deckApplyingRemote = false;
+
+function deckStateIsMeaningful(state) {
+  if (!state || !Array.isArray(state.decks) || !state.decks.length) return false;
+  return state.decks.some(d =>
+    (d.name && d.name.trim()) ||
+    (Array.isArray(d.slots) && d.slots.some(s => s != null))
+  );
+}
+
+function pushDecksToCloudIfSignedIn(state) {
+  if (deckApplyingRemote) return;
+  if (!deckCloudRef) return;
+  // Sanitize for Firebase (no undefined values, slots as plain objects).
+  // JSON round-trip is the simplest way to drop undefined / functions.
+  let payload;
+  try { payload = JSON.parse(JSON.stringify(state || {})); }
+  catch (e) { return; }
+  deckCloudRef.set(payload).catch(e => console.warn("Deck cloud push failed:", e));
+}
+
+function attachDeckCloudSync(uid) {
+  detachDeckCloudSync();
+  if (!uid) return;
+  if (typeof firebase === "undefined" || !firebase.database) return;
+  try {
+    deckCloudRef = firebase.database().ref("userDecks/" + uid);
+  } catch (e) { return; }
+  deckCloudRef.on("value", snap => {
+    const remote = snap.val();
+    if (remote && Array.isArray(remote.decks) && remote.decks.length) {
+      // Cloud has data — adopt it as the source of truth. Skips a
+      // re-push by setting the applying-remote flag during writes.
+      deckApplyingRemote = true;
+      localStorage.setItem(DECKS_KEY, JSON.stringify(remote));
+      deckApplyingRemote = false;
+      if (typeof renderDeck === "function") renderDeck();
+    } else {
+      // First-time sign-in on any device — seed the cloud from whatever
+      // decks the user has locally (if there's anything meaningful).
+      let local = null;
+      try { local = JSON.parse(localStorage.getItem(DECKS_KEY) || "null"); } catch (e) {}
+      if (deckStateIsMeaningful(local)) {
+        pushDecksToCloudIfSignedIn(local);
+      }
+    }
+  }, err => console.warn("Deck cloud listen error:", err));
+}
+
+function detachDeckCloudSync() {
+  if (deckCloudRef) {
+    try { deckCloudRef.off(); } catch (e) {}
+  }
+  deckCloudRef = null;
+}
+
+// Wire the auth state. window.onAuthChange is exposed by js/auth.js.
+if (typeof window !== "undefined") {
+  const wireSync = () => {
+    if (typeof window.onAuthChange !== "function") return;
+    window.onAuthChange(user => {
+      if (user && user.uid) attachDeckCloudSync(user.uid);
+      else detachDeckCloudSync();
+    });
+  };
+  // auth.js loads after deck.js — defer until the helper exists.
+  if (typeof window.onAuthChange === "function") wireSync();
+  else document.addEventListener("DOMContentLoaded", wireSync);
 }
 
 function getActiveDeck() {

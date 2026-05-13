@@ -3489,13 +3489,26 @@ function findCachedTournamentByCode(code) {
   return (entry && entry.cachedState) || null;
 }
 
-document.getElementById("swiss-generate")?.addEventListener("click", () => {
+document.getElementById("swiss-generate")?.addEventListener("click", async () => {
+  // Hosting requires a signed-in account. requireSignIn returns the
+  // current user (or pops the sign-in modal first). If the user cancels
+  // we silently bail.
+  let user = null;
+  try {
+    if (typeof window.requireSignIn === "function") {
+      user = await window.requireSignIn({
+        subtitle: "Sign in with your email to host a tournament."
+      });
+    }
+  } catch (e) {
+    return; // user cancelled the sign-in modal
+  }
   showTournamentModePopup((mode, tournamentName, roundCount, ranked, groupCount) => {
     // Open Registration only — empty room in registering phase. Players
     // self-register with their decks via the Rooms tab, then the host
     // clicks Start to generate groups / bracket from the registrants.
     const next = createRegisteringTournamentState({
-      mode, tournamentName, roundCount, ranked, groupCount
+      mode, tournamentName, roundCount, ranked, groupCount, hostUid: user ? user.uid : null
     });
     startTournamentFromState(next);
   });
@@ -3503,8 +3516,11 @@ document.getElementById("swiss-generate")?.addEventListener("click", () => {
 
 // Build the empty-shell tournament state for the open-registration flow.
 // Stores the format choices up front so participants signing up via the
-// Room tab can see exactly what they're entering.
-function createRegisteringTournamentState({ mode, tournamentName, roundCount, ranked, groupCount }) {
+// Room tab can see exactly what they're entering. The `hostUid` is the
+// Firebase Auth uid of the user creating the tournament — Reset / Start
+// flows check it to ensure only the original host (signed into the same
+// account on any device) can wipe or kick off the room.
+function createRegisteringTournamentState({ mode, tournamentName, roundCount, ranked, groupCount, hostUid }) {
   const safeMode = mode === "single-elim" ? "single-elim"
     : mode === "swiss-only" ? "swiss-only"
     : "swiss";
@@ -3518,7 +3534,8 @@ function createRegisteringTournamentState({ mode, tournamentName, roundCount, ra
     ranked: !!ranked,
     phase: "registering",
     registrants: {},
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    hostUid: hostUid || null
   };
   if (safeMode !== "single-elim") {
     state.roundCount = SWISS_ROUND_OPTIONS.includes(Number(roundCount))

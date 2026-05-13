@@ -490,6 +490,15 @@
           </div>
         </div>
 
+        <div class="setting-item setting-item-account" id="settings-account-row">
+          <div class="setting-account-info">
+            <span class="setting-label-text">Account</span>
+            <span class="setting-account-email" id="settings-account-email">Not signed in</span>
+          </div>
+          <button type="button" id="settings-signin-btn" class="setting-action-btn">Sign in</button>
+          <button type="button" id="settings-signout-btn" class="setting-action-btn hidden">Sign out</button>
+        </div>
+
         <div class="setting-item">
           <span class="setting-label-text">Features</span>
           <button type="button" id="settings-show-features" class="setting-action-btn">Show Features</button>
@@ -606,6 +615,31 @@
       <div class="popup-actions bey-check-actions">
         <button type="button" id="register-submit" class="btn">Register</button>
         <button type="button" id="register-cancel" class="btn popup-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SIGN IN POPUP ================= -->
+  <div id="signin-popup" class="popup-overlay hidden">
+    <div class="popup-card">
+      <h2 class="popup-title" id="signin-title">Sign in</h2>
+      <p class="popup-text" id="signin-subtitle">Sign in with your email to host tournaments.</p>
+
+      <label class="tournament-name-label" for="signin-email">Email</label>
+      <input id="signin-email" type="email" class="tournament-name-input" placeholder="you@example.com" autocomplete="email" />
+
+      <label class="tournament-name-label" for="signin-password">Password</label>
+      <input id="signin-password" type="password" class="tournament-name-input" placeholder="At least 6 characters" autocomplete="current-password" />
+
+      <div id="signin-status" class="swiss-join-status"></div>
+
+      <div class="popup-actions">
+        <button type="button" id="signin-submit" class="btn">Sign in</button>
+        <button type="button" id="signin-cancel" class="btn popup-cancel">Cancel</button>
+      </div>
+      <div class="signin-links">
+        <button type="button" id="signin-toggle" class="signin-linkbtn">No account yet? Sign up</button>
+        <button type="button" id="signin-reset" class="signin-linkbtn">Forgot password?</button>
       </div>
     </div>
   </div>
@@ -900,10 +934,12 @@
 
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
   <script src="firebase-config.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="data.js"></script>
   <script src="js/core.js"></script>
+  <script src="js/auth.js"></script>
   <script src="js/scoreboard.js"></script>
   <script src="calculator/calculator.js"></script>
   <script src="deck/deck.js"></script>

@@ -24,11 +24,13 @@ Deck (3 Slots)
 - Reset / clear the deck
 - Download the deck as a PNG (background follows your theme)
 - Copy a deck to paste into a tournament registration
+- Cross-device sync when signed in — decks follow your account everywhere
 
 Tournament
 - Three formats: Swiss + Top 8, Swiss only, Single Elimination
 - Configurable Swiss groups: 2 or 4
 - Configurable rounds per group: 3, 4, 5
+- Hosting requires a free email account (Settings → Account, or prompted on Create Tournament)
 - Every tournament is ranked automatically — no host password
 - Self-registration via the Open Tournaments lobby (no manual name list)
 - Three-way join from the lobby: Co-host (with host code), Participant (register name + deck), Viewer (watch only)
@@ -57,6 +59,7 @@ Settings
 - Themes: Dark, Light, Space, Tropical, Stormy, Monochrome, Love, Forest
 - Stat display: Bar or Radar
 - Additional button mode picker
+- Account: sign up / sign in with email + password, forgot-password reset, sign out
 - Show Features (this list)
 
 Other
@@ -93,6 +96,40 @@ Other
   btn.addEventListener("click", open);
   closeBtn?.addEventListener("click", close);
   popup.addEventListener("click", (e) => { if (e.target === popup) close(); });
+
+  // ===== Account row (sign-in / sign-out) =====
+  (function initAccountRow() {
+    const row = document.getElementById("settings-account-row");
+    if (!row) return;
+    const emailEl = row.querySelector("#settings-account-email");
+    const signInBtn = row.querySelector("#settings-signin-btn");
+    const signOutBtn = row.querySelector("#settings-signout-btn");
+    const render = (user) => {
+      if (user) {
+        if (emailEl) emailEl.textContent = user.email || "Signed in";
+        signInBtn?.classList.add("hidden");
+        signOutBtn?.classList.remove("hidden");
+      } else {
+        if (emailEl) emailEl.textContent = "Not signed in";
+        signInBtn?.classList.remove("hidden");
+        signOutBtn?.classList.add("hidden");
+      }
+    };
+    if (typeof window.onAuthChange === "function") {
+      window.onAuthChange(render);
+    } else {
+      render(null);
+    }
+    signInBtn?.addEventListener("click", () => {
+      if (typeof window.showSignInPopup !== "function") return;
+      window.showSignInPopup({}).catch(() => {});
+    });
+    signOutBtn?.addEventListener("click", () => {
+      if (typeof window.signOutCurrentUser !== "function") return;
+      if (!confirm("Sign out of this account?")) return;
+      window.signOutCurrentUser().catch(e => alert("Sign out failed: " + (e?.message || e)));
+    });
+  })();
 
   copyBtn?.addEventListener("click", () => {
     const text = listEl ? listEl.textContent : FEATURES_TEXT;

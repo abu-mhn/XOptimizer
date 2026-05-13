@@ -703,6 +703,50 @@ body.light-mode .result-part-name {
     text-align: justify;
 }
 
+/* ===== Sign-in popup link buttons (Forgot password / Toggle mode) ===== */
+.signin-links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 6px;
+    margin-top: 10px;
+}
+.signin-linkbtn {
+    background: none;
+    border: none;
+    color: #58a6ff;
+    font-size: 0.82rem;
+    cursor: pointer;
+    padding: 4px 0;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.signin-linkbtn:hover,
+.signin-linkbtn:focus-visible {
+    color: #79b8ff;
+    outline: none;
+}
+
+/* ===== Settings → Account row ===== */
+.setting-item-account {
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.setting-account-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.setting-account-email {
+    font-size: 0.78rem;
+    color: #8b949e;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* ===== Settings → inline action buttons (sized like the dropdowns) ===== */
 .setting-action-btn {
     background: #21262d;
