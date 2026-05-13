@@ -6,11 +6,20 @@
 (function initFeaturesPopup() {
   const FEATURES_TEXT = `X Optimizer — Features
 
+Dashboard
+- Auto-sliding carousel: Combo of the Day, Heaviest Bey, Max ATK / DEF / STA
+- Combo names computed exactly like the calculator (e.g. BULLETGRIFFONY) — codename + ratchet name + bit codename
+- Tap any part image for a larger preview
+- Best Parts carousel: top 3 most-used parts per type (Blade, Lock Chip, Ratchet, Bit, etc.) in the current tournament, ranked 1st (gold) / 2nd (silver) / 3rd (bronze)
+- Best Parts persist across tournament resets via a saved snapshot
+- Respects calculator constraints: Bullet Griffon's built-in ratchet (no ratchet slot), Clock Mirage's -5 ratchet requirement
+- Combo of the Day is seeded by today's date — every visitor sees the same combo until local midnight
+
 Calculator
 - Three combo modes: Standard, CX (Custom), CX Expand
 - Searchable part dropdowns
 - Reset, "I'm Feeling Lucky" random pick
-- Additional button modes: Random, 1D1C, Max Weight, Min Weight, Meta, Max ATK, Max DEF, Max STA
+- Additional button modes: Random, Meta
 
 Library
 - Search Beyblade X parts by name
@@ -37,12 +46,18 @@ Tournament
 - Hosts AND co-hosts can play (+ Register myself), start the tournament, edit participants, and remove registrants
 - Edit a registrant in place — tap their name to change the name or rebuild their deck
 - Registered decks pre-fill every match; judges can override per match
+- CX / CX Expand decks paste from the Deck tab without losing parts (lock chip / main blade / assist blade preserved)
 - Swiss + Top 8 auto-generates the knockout bracket from group standings
 - Scoreboard round counter above VS, advancing every 3 score taps
 - Tilt-activated scoreboard on mobile (rotate to landscape)
-- Share button opens a popup for date, time, stadium (Xtreme / Infinity / Double Xtreme), rule (Official / Unofficial), and remark — then composes a message with a registration link
+- Share button opens a popup for date, time, stadium (Xtreme / Infinity / Double Xtreme), rule (Official / Unofficial), and remark — date renders as "14 May 2026 (Thursday)", and the message points participants at the Deck tab's Copy → Paste flow
 - Past tournaments stay viewable in history after reset (cached snapshot)
-- Parts-usage pie charts at tournament end (theme-aware palette)
+- Parts-usage pie charts at tournament end as an auto-sliding carousel (theme-aware palette)
+
+Revox
+- Dedicated top-level tab with its own icon
+- Admin login to add, edit, and remove members
+- Member ranking by points
 
 Battle Pass
 - Bluetooth connection to BEYBLADE_TOOL01 launcher (Chrome / Edge on desktop or Android, Bluefy browser on iOS)
@@ -58,16 +73,16 @@ History
 Settings
 - Themes: Dark, Light, Space, Tropical, Stormy, Monochrome, Love, Forest
 - Stat display: Bar or Radar
-- Additional button mode picker
+- Additional button mode picker (Random / Meta)
 - Account: sign up / sign in with email + password, forgot-password reset, sign out
 - Show Features (this list)
 
 Other
-- Per-tab URLs: /calculator/, /library/, /deck/, /tournament/, /battlepass/, /reel/, /history/, /settings/
+- Per-tab URLs: /dashboard/, /calculator/, /library/, /deck/, /tournament/, /revox/, /battlepass/, /reel/, /history/, /settings/
 - "What's New" landing page at the site root
-- Revox member ranking
+- Single-line horizontal tab bar (invisible scrollbar) — scroll position preserved across navigation, centered on desktop
 - Live Firebase sync across host / co-host / participant / viewer devices
-- Themed across the whole UI (forms, buttons, popups, scoreboard, charts, Battle Pass widgets)
+- Themed across the whole UI (forms, buttons, popups, scoreboard, charts, Battle Pass widgets, Open Tournaments list, Revox input, What's New page)
 `;
 
   const btn = document.getElementById("settings-show-features");

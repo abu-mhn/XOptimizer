@@ -8595,3 +8595,110 @@ body.forest-mode .swiss-room-card:focus-visible {
     background: #e8f0d8;
     border-color: #7a9159;
 }
+
+/* ===== Scoreboard — fill in missing theme overrides ===== */
+/* .sb-btn (advanced score buttons) — only light-mode existed before */
+body.tropical-mode .sb-btn {
+    background: #ffffff;
+    color: #2d3a3a;
+    border-color: #ffd8a8;
+}
+body.tropical-mode .sb-btn:active {
+    background: #fff0d6;
+}
+body.love-mode .sb-btn {
+    background: #ffffff;
+    color: #4a1d2a;
+    border-color: #ffc1d2;
+}
+body.love-mode .sb-btn:active {
+    background: #ffe6ee;
+}
+body.forest-mode .sb-btn {
+    background: #ffffff;
+    color: #2d3e1f;
+    border-color: #b5c89a;
+}
+body.forest-mode .sb-btn:active {
+    background: #e8f0d8;
+}
+body.space-mode .sb-btn {
+    background: rgba(15, 18, 40, 0.8);
+    color: #c8d6e5;
+    border-color: #1a1f3d;
+}
+body.space-mode .sb-btn:active {
+    background: rgba(26, 35, 126, 0.4);
+}
+body.stormy-mode .sb-btn {
+    background: rgba(30, 35, 48, 0.8);
+    color: #d5dae4;
+    border-color: #3a4054;
+}
+body.stormy-mode .sb-btn:active {
+    background: rgba(74, 144, 226, 0.25);
+}
+body.mono-mode .sb-btn {
+    background: #111111;
+    color: #e6e6e6;
+    border-color: #2a2a2a;
+}
+body.mono-mode .sb-btn:active {
+    background: #1a1a1a;
+}
+
+/* .scoreboard-round (round counter under VS) */
+body.light-mode .scoreboard-round   { color: #1f2328; }
+body.tropical-mode .scoreboard-round { color: #2d3a3a; }
+body.love-mode .scoreboard-round     { color: #4a1d2a; }
+body.forest-mode .scoreboard-round   { color: #2d3e1f; }
+body.space-mode .scoreboard-round    { color: #c8d6e5; }
+body.stormy-mode .scoreboard-round   { color: #d5dae4; }
+body.mono-mode .scoreboard-round     { color: #e6e6e6; }
+
+/* .scoreboard-hint (small hint text) */
+body.light-mode .scoreboard-hint    { color: #afb8c1; }
+body.tropical-mode .scoreboard-hint { color: #c9a97a; }
+body.love-mode .scoreboard-hint     { color: #d8a4b8; }
+body.forest-mode .scoreboard-hint   { color: #9aae7c; }
+body.space-mode .scoreboard-hint    { color: #5a6a8a; }
+body.stormy-mode .scoreboard-hint   { color: #6a7080; }
+body.mono-mode .scoreboard-hint     { color: #6a6a6a; }
+
+/* .scoreboard-close (the X button) — only mono had an override */
+body.light-mode .scoreboard-close {
+    color: #656d76;
+}
+body.light-mode .scoreboard-close:hover {
+    color: #1f2328;
+}
+body.tropical-mode .scoreboard-close {
+    color: #8a6d3b;
+}
+body.tropical-mode .scoreboard-close:hover {
+    color: #2d3a3a;
+}
+body.love-mode .scoreboard-close {
+    color: #9c4a5e;
+}
+body.love-mode .scoreboard-close:hover {
+    color: #4a1d2a;
+}
+body.forest-mode .scoreboard-close {
+    color: #5a6a4b;
+}
+body.forest-mode .scoreboard-close:hover {
+    color: #2d3e1f;
+}
+body.space-mode .scoreboard-close {
+    color: #7b8cad;
+}
+body.space-mode .scoreboard-close:hover {
+    color: #c8d6e5;
+}
+body.stormy-mode .scoreboard-close {
+    color: #9098a8;
+}
+body.stormy-mode .scoreboard-close:hover {
+    color: #d5dae4;
+}
