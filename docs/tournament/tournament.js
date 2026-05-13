@@ -79,9 +79,6 @@ function disconnectSwissRoom() {
   if (swissRoomRef) {
     try { swissRoomRef.off(); } catch (e) {}
   }
-  // Drop any armed onDisconnect cleanup for the lobby index — we're leaving
-  // the room cleanly, not crashing, so we don't want it to fire later.
-  cancelOpenIndexDisconnect();
   swissRoomRef = null;
   swissEditCode = null;
   swissViewCode = null;
@@ -213,15 +210,19 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit, roleHint) {
 
 // Public lobby index. Hosts publish a small summary record at
 // `openTournaments/{editCode}` whenever a room is in the "registering" phase
-// so the Room tab can list them; the entry is removed the moment the host
-// starts the tournament (no more new signups) or resets it.
+// so the Open Tournaments list can show them; the entry is removed the
+// moment the host starts the tournament (no more new signups) or resets it.
 //
-// We also wire Firebase's onDisconnect() to auto-remove the entry if the
-// host's tab closes mid-registration without clicking Start/Reset — that
-// way abandoned rooms don't pile up in the lobby. The currently-armed code
-// is tracked so we can cancel the handler when leaving cleanly (otherwise
-// it would re-fire pointlessly on the next disconnect).
-let swissOpenIndexDisconnectCode = null;
+// We DON'T arm a Firebase onDisconnect().remove() handler. Mobile browsers
+// suspend the WebSocket when the app is backgrounded (e.g. host opens
+// YouTube), which would fire that handler and yank the room from the
+// lobby — participants viewing the lobby in that window can't register.
+// Instead we rely on:
+//   * explicit removal on Start / Reset, and
+//   * reactive stale-pruning in refreshOpenTournamentRooms (drops entries
+//     whose underlying swissRoom no longer has phase === "registering").
+// Truly abandoned rooms (host force-closed without resetting) will linger
+// in the lobby until the next refresh prunes them.
 
 function publishOpenRoomIndex(editCode, state) {
   const db = initFirebase();
@@ -238,7 +239,6 @@ function publishOpenRoomIndex(editCode, state) {
   };
   db.ref("openTournaments/" + editCode).set(summary)
     .catch(e => console.warn("Open room index push failed:", e));
-  armOpenIndexDisconnect(editCode);
 }
 
 function removeOpenRoomIndex(editCode) {
@@ -246,37 +246,6 @@ function removeOpenRoomIndex(editCode) {
   if (!db || !editCode) return;
   db.ref("openTournaments/" + editCode).set(null)
     .catch(e => console.warn("Open room index remove failed:", e));
-  // Explicit removal — also cancel the auto-disconnect cleanup so it doesn't
-  // fire later trying to delete an already-gone entry.
-  if (swissOpenIndexDisconnectCode === editCode) {
-    cancelOpenIndexDisconnect();
-  }
-}
-
-function armOpenIndexDisconnect(editCode) {
-  if (!editCode || swissOpenIndexDisconnectCode === editCode) return;
-  const db = initFirebase();
-  if (!db) return;
-  // Replace any previously-armed handler so we don't leak stale ones across
-  // hosts switching between rooms in a single session.
-  if (swissOpenIndexDisconnectCode) {
-    try { db.ref("openTournaments/" + swissOpenIndexDisconnectCode).onDisconnect().cancel(); } catch (e) {}
-  }
-  try {
-    db.ref("openTournaments/" + editCode).onDisconnect().remove();
-    swissOpenIndexDisconnectCode = editCode;
-  } catch (e) {
-    console.warn("Open room onDisconnect arm failed:", e);
-  }
-}
-
-function cancelOpenIndexDisconnect() {
-  if (!swissOpenIndexDisconnectCode) return;
-  const db = initFirebase();
-  if (db) {
-    try { db.ref("openTournaments/" + swissOpenIndexDisconnectCode).onDisconnect().cancel(); } catch (e) {}
-  }
-  swissOpenIndexDisconnectCode = null;
 }
 
 // Targeted update for a single score save (optionally with new matches +
@@ -1486,7 +1455,14 @@ function renderSwissRoomBadge() {
 const STADIUM_OPTIONS = ["Xtreme", "Infinity", "Double Xtreme"];
 const RULE_OPTIONS = ["Official", "Unofficial"];
 const SHARE_TOURNAMENT_URL = "https://abu-mhn.github.io/XOptimizer/tournament/";
-const SHARE_TOURNAMENT_INVITE = "To all the bladers that are planning to join this event, please click the link below for registration.";
+const SHARE_TOURNAMENT_INVITE = "To the bladers that are planning to join this event, please click the link below for registration.";
+const SHARE_TOURNAMENT_INSTRUCTIONS = [
+  "How to register as a Participant:",
+  "1. Open the link below on your phone.",
+  "2. Under \"Open Tournaments\", tap this tournament.",
+  "3. Pick \"Participant\".",
+  "4. Enter your name, build your 3-slot deck, then tap Register."
+].join("\n");
 
 function renderSwissShareButton() {
   return `<button type="button" id="swiss-share" class="btn btn-icon-sm swiss-share-btn" aria-label="Share tournament details" title="Share tournament details">
@@ -1503,7 +1479,11 @@ function renderSwissShareButton() {
 //   Rule: [rule]
 //   Remark: [remark]
 //
-//   To all the bladers ... please click the link below for registration.
+//   To the bladers ... please click the link below for registration.
+//
+//   How to register as a Participant:
+//   1. ...
+//   ...
 //
 //   https://abu-mhn.github.io/XOptimizer/tournament/
 // Lines whose field is empty are omitted so the message stays clean.
@@ -1518,6 +1498,8 @@ function composeTournamentShareMessage(state, details) {
   if (d.remark)  lines.push(`Remark: ${d.remark}`);
   lines.push("");
   lines.push(SHARE_TOURNAMENT_INVITE);
+  lines.push("");
+  lines.push(SHARE_TOURNAMENT_INSTRUCTIONS);
   lines.push("");
   lines.push(SHARE_TOURNAMENT_URL);
   return lines.join("\n");
