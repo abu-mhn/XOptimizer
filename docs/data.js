@@ -246,7 +246,7 @@ const DATA = {
     { atk: 5, def: 60, sta: 25, dash: 10, burstRes: 30, weight: 2.4, name: "Wall Wedge", codename: "WW" },
     { atk: 10, def: 15, sta: 65, dash: 10, burstRes: 30, weight: 4.2, name: "Yielding", codename: "Y", meta: true },
     { atk: 50, def: 15, sta: 5, dash: 30, burstRes: 80, weight: 2.4, name: "Ignition", codename: "I" },
-    { atk: 40, def: 15, sta: 15, dash: 30, burstRes: 80, weight: 0, name: "Free Flat", codename: "FF" },
+    { atk: 40, def: 15, sta: 15, dash: 30, burstRes: 80, weight: 2.3, name: "Free Flat", codename: "FF" },
     { atk: 30, def: 20, sta: 20, dash: 30, burstRes: 80, weight: 2.3, name: "Gear Unite", codename: "GU" }
   ],
 
