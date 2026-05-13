@@ -455,6 +455,37 @@ document.querySelectorAll(".sub-tab").forEach(tab => {
 // functions (renderDeck, renderSwiss, renderHistory, renderTournamentRanking,
 // etc.) live in scripts that load *after* core.js — they don't exist yet
 // when this file finishes parsing.
+// Preserve the .mode-tabs horizontal scroll position across page navigations.
+// Runs synchronously when core.js executes — since the script tag sits at the
+// end of <body>, the .mode-tabs element is already parsed and we can set
+// scrollLeft before the first paint, so there's no visible "reset then snap"
+// jump on each tab click.
+(function restoreModeTabsScrollSync() {
+  const tabs = document.querySelector(".mode-tabs");
+  if (!tabs) return;
+  const stored = sessionStorage.getItem("modeTabsScrollLeft");
+  if (stored !== null) tabs.scrollLeft = parseInt(stored, 10) || 0;
+  // Reveal once we've positioned it (CSS hides .mode-tabs by default to
+  // guarantee no scrollLeft=0 frame ever paints).
+  tabs.classList.add("mode-tabs-ready");
+
+  let scrollSaveTimer = null;
+  tabs.addEventListener("scroll", () => {
+    if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
+    scrollSaveTimer = setTimeout(() => {
+      sessionStorage.setItem("modeTabsScrollLeft", String(tabs.scrollLeft));
+    }, 80);
+  }, { passive: true });
+
+  // Final snapshot at the moment of click, in case the user clicked
+  // immediately after scrolling and the debounced save hasn't fired yet.
+  tabs.querySelectorAll(".tab").forEach(t => {
+    t.addEventListener("click", () => {
+      sessionStorage.setItem("modeTabsScrollLeft", String(tabs.scrollLeft));
+    });
+  });
+})();
+
 document.addEventListener("DOMContentLoaded", function initActiveTabRender() {
   const activeTab = document.querySelector(".tab.active");
   if (!activeTab) return;
@@ -481,12 +512,19 @@ document.addEventListener("DOMContentLoaded", function initActiveTabRender() {
     if (typeof renderDeck === "function") renderDeck();
   }
 
+  if (mode === "dashboard") {
+    if (typeof renderDashboard === "function") renderDashboard();
+  }
+
   if (mode === "swiss") {
     if (typeof renderSwiss === "function") renderSwiss();
     const activeTournamentSub = document.querySelector(".tournament-sub-tab.active");
     const view = activeTournamentSub?.dataset.tournamentView;
     if (view === "ranking" && typeof renderTournamentRanking === "function") renderTournamentRanking();
-    if (view === "revox" && typeof renderRevoxRanking === "function") renderRevoxRanking();
+  }
+
+  if (mode === "revox") {
+    if (typeof renderRevoxRanking === "function") renderRevoxRanking();
   }
 });
 

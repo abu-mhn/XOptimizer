@@ -1896,6 +1896,11 @@ function renderSwiss() {
     });
   });
   view.querySelector("#swiss-clear")?.addEventListener("click", resetSwiss);
+
+  // Wire up any part-usage carousels rendered into the view.
+  if (typeof setupDashboardCarousel === "function") {
+    view.querySelectorAll(".part-usage-carousel").forEach(setupDashboardCarousel);
+  }
 }
 
 // Registration-phase render. Same toolbar shape as the running view (so the
@@ -2635,7 +2640,10 @@ function renderPartUsageCharts(state) {
     .join("");
   return `<fieldset class="part-usage-fieldset">
     <legend>Parts Usage</legend>
-    <div class="part-usage-grid">${charts}</div>
+    <div class="dashboard-carousel part-usage-carousel">
+      <div class="dashboard-carousel-track">${charts}</div>
+      <div class="dashboard-carousel-dots"></div>
+    </div>
   </fieldset>`;
 }
 
@@ -3680,19 +3688,26 @@ function showTournamentResultsFromHistory(code) {
   // Cached snapshot saved on host reset — used as a fallback when Firebase
   // has no record (e.g. the room was cleared). For live-and-running rooms
   // we still prefer the Firebase fetch so the results stay current.
+  const wirePartUsageCarousels = () => {
+    if (typeof setupDashboardCarousel === "function") {
+      body.querySelectorAll(".part-usage-carousel").forEach(setupDashboardCarousel);
+    }
+  };
   const cached = findCachedTournamentByCode(code);
   if (!firebaseReady()) {
-    if (cached) { body.innerHTML = renderTournamentResultsMarkup(cached); return; }
+    if (cached) { body.innerHTML = renderTournamentResultsMarkup(cached); wirePartUsageCarousels(); return; }
     body.innerHTML = `<p class="tournament-results-empty">Live sync isn't configured on this build, so results can't be fetched.</p>`;
     return;
   }
   fetchTournamentState(code.toUpperCase(), state => {
     if (state) {
       body.innerHTML = renderTournamentResultsMarkup(state);
+      wirePartUsageCarousels();
       return;
     }
     if (cached) {
       body.innerHTML = renderTournamentResultsMarkup(cached);
+      wirePartUsageCarousels();
       return;
     }
     body.innerHTML = `<p class="tournament-results-empty">Couldn't find this tournament. It may have been cleared.</p>`;
@@ -3748,7 +3763,6 @@ document.addEventListener("webkitfullscreenchange", scheduleSwissScrollRestore);
       tabs.forEach(t => t.classList.toggle("active", t === tab));
       panels.forEach(p => p.classList.toggle("hidden", p.id !== "tournament-panel-" + view));
       if (view === "ranking") renderTournamentRanking();
-      if (view === "revox") renderRevoxRanking();
       // Coming back to Hosting? Refresh the open-tournaments list so it
       // doesn't sit stale while the user is poking at other tabs. Only
       // matters when the setup form is actually visible (i.e. the user

@@ -40,7 +40,7 @@
   <!-- Optional theme color -->
   <meta name="theme-color" content="#0a4797">
 
-  <title>Battle Pass — X Optimizer</title>
+  <title>Dashboard — X Optimizer</title>
   <link rel="stylesheet" href="style.css">
 </head>
 
@@ -63,7 +63,7 @@
 
     <!-- ================= TAB MENU ================= -->
     <div class="mode-tabs">
-      <a class="tab" href="dashboard/" data-mode="dashboard" aria-label="Dashboard">
+      <a class="tab active" href="dashboard/" data-mode="dashboard" aria-label="Dashboard">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false" style="width: 18px; height: 18px;">
           <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>
         </svg>
@@ -89,7 +89,7 @@
         <img src="assets/icons/revox.webp" alt="Revox">
       </a>
 
-      <a class="tab active" href="battlepass/" data-mode="battlepass" aria-label="Battle Pass">
+      <a class="tab" href="battlepass/" data-mode="battlepass" aria-label="Battle Pass">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false" style="width: 18px; height: 18px;">
           <path d="M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88z"/>
         </svg>
@@ -380,7 +380,7 @@
     </section>
 
     <!-- ================= DASHBOARD ================= -->
-    <section id="form-dashboard" class="calc-form hidden">
+    <section id="form-dashboard" class="calc-form">
       <fieldset>
         <legend>Dashboard</legend>
         <div id="dashboard-content" class="dashboard-content"></div>
@@ -433,7 +433,7 @@
     </section>
 
     <!-- ================= BATTLE PASS ================= -->
-    <section id="form-battlepass" class="calc-form">
+    <section id="form-battlepass" class="calc-form hidden">
       <fieldset>
         <legend>Battle Pass</legend>
         <p class="bp-help">Connect to a <strong>BEYBLADE_TOOL01</strong> launcher over Bluetooth to read your launch data. Requires Chrome or Edge on desktop / Android, or the <a href="https://apps.apple.com/app/bluefy-web-ble-browser/id1492822055" target="_blank" rel="noopener">Bluefy</a> browser on iOS (Safari and Chrome iOS don't support Web Bluetooth).</p>

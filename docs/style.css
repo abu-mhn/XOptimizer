@@ -50,8 +50,10 @@ h1 {
    TABS (FIXED FLEX SAFETY)
 ======================= */
 .mode-tabs {
-    display: grid;
-    grid-template-columns: repeat(8, 1fr);
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
     gap: 4px;
     margin-bottom: 0;
     position: sticky;
@@ -65,6 +67,19 @@ h1 {
     backdrop-filter: blur(10px);
     border-bottom: 1px solid #21262d;
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.5);
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    -webkit-overflow-scrolling: touch;
+    visibility: hidden;
+}
+.mode-tabs.mode-tabs-ready {
+    visibility: visible;
+}
+.mode-tabs::-webkit-scrollbar {
+    display: none;
+}
+.mode-tabs > .tab {
+    flex: 0 0 auto;
 }
 
 .tab:hover:not(.active) {
@@ -102,28 +117,7 @@ h1 {
 }
 
 .tab::after {
-    content: attr(aria-label);
-    position: absolute;
-    bottom: calc(100% + 6px);
-    left: 50%;
-    transform: translateX(-50%);
-    background: #0d1117;
-    color: #e6edf3;
-    border: 1px solid #30363d;
-    border-radius: 4px;
-    padding: 3px 8px;
-    font-size: 11px;
-    line-height: 1.3;
-    white-space: nowrap;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.12s ease 0.05s;
-    z-index: 100;
-}
-
-.tab:hover::after,
-.tab:focus-visible::after {
-    opacity: 1;
+    display: none;
 }
 
 /* =======================
@@ -5846,9 +5840,6 @@ button.swiss-reg-name-edit:focus-visible {
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.5);
 }
 
-.tournament-sub-tabs {
-    grid-template-columns: repeat(3, 1fr);
-}
 
 .history-sub-tab,
 .tournament-sub-tab {
@@ -8241,4 +8232,164 @@ body.forest-mode .share-dropdown .setting-dropdown-btn  {
     background: #ffffff;
     border-color: #b5c89a;
     color: #2d3e1f;
+}
+
+/* ================= DASHBOARD TAB ================= */
+.dashboard-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.dashboard-carousel {
+  position: relative;
+}
+.dashboard-card-parts > .result-part {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+}
+/* Centers the parts row when it fits. When content overflows, the auto
+   margins collapse to 0 so the scroller behaves normally. */
+.dashboard-card-parts > .result-part:first-child {
+  margin-inline-start: auto;
+}
+.dashboard-card-parts > .result-part:last-child {
+  margin-inline-end: auto;
+}
+.dashboard-combo-name {
+  text-align: center;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+  word-break: break-all;
+}
+.dashboard-part-img {
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.dashboard-part-img:hover {
+  transform: scale(1.05);
+}
+.dashboard-rank {
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+.dashboard-rank-gold   { color: #FFD700; }
+.dashboard-rank-silver { color: #C0C0C0; }
+.dashboard-rank-bronze { color: #CD7F32; }
+.dashboard-carousel-track {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.dashboard-carousel-track::-webkit-scrollbar {
+  display: none;
+}
+.dashboard-carousel-track > .dashboard-card,
+.dashboard-carousel-track > .part-usage-card {
+  flex: 0 0 100%;
+  min-width: 0;
+  max-width: 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  overflow: hidden;
+}
+.dashboard-carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.dashboard-carousel-dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+.dashboard-carousel-dot:hover {
+  background: rgba(255, 255, 255, 0.45);
+}
+.dashboard-carousel-dot.active {
+  background: rgba(255, 255, 255, 0.8);
+  transform: scale(1.15);
+}
+body.light-mode .dashboard-carousel-dot,
+body.tropical-mode .dashboard-carousel-dot,
+body.love-mode .dashboard-carousel-dot,
+body.forest-mode .dashboard-carousel-dot {
+  background: rgba(0, 0, 0, 0.22);
+}
+body.light-mode .dashboard-carousel-dot.active,
+body.tropical-mode .dashboard-carousel-dot.active,
+body.love-mode .dashboard-carousel-dot.active,
+body.forest-mode .dashboard-carousel-dot.active {
+  background: rgba(0, 0, 0, 0.7);
+}
+.dashboard-date {
+  margin: 0 0 4px 0;
+  font-size: 13px;
+  opacity: 0.75;
+  text-align: center;
+}
+.dashboard-card {
+  border: 1px solid #21262d;
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.dashboard-card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  gap: 8px;
+}
+.dashboard-card-header h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.dashboard-card-mode {
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  opacity: 0.85;
+}
+.dashboard-card-parts {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin-bottom: 10px;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+.dashboard-card-parts > .result-part {
+  flex: 0 0 auto;
+}
+.dashboard-card-footer {
+  font-size: 13px;
+  text-align: right;
+  opacity: 0.9;
+}
+.dashboard-card-empty {
+  opacity: 0.7;
+  font-size: 13px;
+}
+body.light-mode .dashboard-card,
+body.tropical-mode .dashboard-card,
+body.love-mode .dashboard-card,
+body.forest-mode .dashboard-card {
+  border-color: #d1d9e0;
+  background: rgba(0, 0, 0, 0.02);
 }
