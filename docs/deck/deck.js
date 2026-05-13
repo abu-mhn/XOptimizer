@@ -463,12 +463,15 @@ document.getElementById("deck-copy")?.addEventListener("click", copyDeckForTourn
 const TOURNAMENT_DECK_CLIPBOARD_TYPE = "x-optimizer-deck";
 const TOURNAMENT_DECK_CLIPBOARD_VERSION = 1;
 
+const CALC_MODE_TO_BEY_CHECK = { BX: "standard", CX: "cx", CX_EXPAND: "cxExpand" };
+
 function deckSlotToBeyCheckShape(slot) {
   if (!slot || !slot.data || !slot.data.parts) {
     return { mode: "standard", parts: {} };
   }
+  const mapped = CALC_MODE_TO_BEY_CHECK[slot.mode] || "standard";
   return {
-    mode: typeof slot.mode === "string" ? slot.mode : "standard",
+    mode: mapped,
     parts: { ...slot.data.parts }
   };
 }
