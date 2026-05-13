@@ -3956,6 +3956,7 @@ body.space-mode .scoreboard-right {
 }
 
 body.space-mode .scoreboard-divider {
+    background: #0b0d1a;
     color: #5c6bc0;
 }
 
@@ -4353,6 +4354,7 @@ body.tropical-mode .scoreboard-right {
 }
 
 body.tropical-mode .scoreboard-divider {
+    background: #fff6e6;
     color: #0d8a80;
 }
 
@@ -4678,6 +4680,7 @@ body.stormy-mode .scoreboard-right {
 }
 
 body.stormy-mode .scoreboard-divider {
+    background: #1e2330;
     color: #5a6278;
 }
 
@@ -7627,6 +7630,7 @@ body.love-mode .scoreboard-right  {
     background: rgba(255, 126, 103, 0.15);
 }
 body.love-mode .scoreboard-divider  {
+    background: #fff0f5;
     color: #c0245f;
 }
 body.love-mode .scoreboard-score  {
@@ -8098,6 +8102,7 @@ body.forest-mode .scoreboard-right  {
     background: rgba(255, 126, 103, 0.15);
 }
 body.forest-mode .scoreboard-divider  {
+    background: #f0f4e8;
     color: #2d4f33;
 }
 body.forest-mode .scoreboard-score  {
