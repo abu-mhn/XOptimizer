@@ -9220,3 +9220,11 @@ body.forest-mode .swiss-rounds-btn.active {
     border-color: #386641;
     color: #ffffff;
 }
+
+/* ===== Host actions under the Registrants heading ===== */
+.swiss-reg-host-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: -4px;
+}

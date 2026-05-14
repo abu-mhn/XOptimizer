@@ -25,21 +25,19 @@
     <header class="updates-header">
       <h1 class="updates-title">What's New</h1>
       <p class="updates-subtitle">Recent changes to X Optimizer.</p>
-      <p class="updates-version">Version <span class="updates-version-num">v1.2.8</span></p>
+      <p class="updates-version">Version <span class="updates-version-num">v1.2.9</span></p>
     </header>
 
     <!-- Bump data-version when the list below changes so the splash flags
          it as fresh for returning users. Keep this attribute in sync with
          the visible version number above. -->
-    <article class="updates-card" data-version="v1.2.8">
+    <article class="updates-card" data-version="v1.2.9">
       <ul class="popup-list">
-        <li><strong>Host Test button.</strong> Hosts and co-hosts now have a "Test" button on the registering screen that bulk-adds synthetic participants (defaults to 10) with meta-random decks. Names auto-skip duplicates, and the writes go through in a single batched Firebase update.</li>
-        <li><strong>No repeat parts in test decks.</strong> Each generated deck obeys the deck builder's "one of each part per deck" rule across all 3 slots. The exception (matching the regular Deck tab) is light lock chips — only the heaviest ones (Emperor / Valkyrie) are blocked from repeating.</li>
-        <li><strong>Multi-mode part images.</strong> Parts with mode switching (Eclipse, Dual, Turbo, Operate, Scorpio Spear, Lightning L-Drago) now show their image everywhere on the dashboard. Previously their assets were stored per mode and the fallback URL pointed to a file that didn't exist.</li>
-        <li><strong>Best Parts rank fix.</strong> If any one entry's image was missing, the whole row was hidden and 2nd/3rd appeared at positions 1st/2nd. Now only the broken image hides — the rank chip and part name stay in the correct slot.</li>
-        <li><strong>Bey Check cleanup.</strong> Slot labels are now just "Slot 1 / 2 / 3" (no "· CX" / "· CX Expand" suffix), and the parts row's scrollbar is invisible — swipe still works.</li>
-        <li><strong>Scoreboard theme polish.</strong> Advanced score buttons (Extreme / Burst / Over / Spin), the round counter, the corner ✕, and the centre divider all follow every theme now. The dark gash between the two sides is replaced with each theme's overlay background.</li>
-        <li><strong>Tournament theming, round two.</strong> Registering view (heading / format pills / + Register myself / row names), group + match cards (Standings / Matches sub-tabs, round titles, match rows, seed pills, score cells), the Bey Check popup (player tabs + slot cards + labels), and the Rounds / Groups picker popups all now follow Light / Tropical / Love / Forest themes instead of staying dark.</li>
+        <li><strong>Test button.</strong> Bulk-add synthetic participants with meta-random decks (weighted: ~75% Standard, ~13% CX, ~12% CX Expand). No parts repeat in a deck.</li>
+        <li><strong>Best Parts polish.</strong> Multi-mode parts (Eclipse, Dual, Turbo, etc.) now show their image, and the 1st / 2nd / 3rd ranks stay aligned even when an asset is missing.</li>
+        <li><strong>Bey Check cleaner.</strong> Slot labels are just "Slot 1 / 2 / 3", parts row scrolls without a visible scrollbar.</li>
+        <li><strong>Carousels pause on touch.</strong> Auto-advance stops when you interact and resumes after 3 seconds idle.</li>
+        <li><strong>Theme pass.</strong> Scoreboard, tournament registering view, match cards, Bey Check popup, and the Rounds / Groups pickers now follow every theme.</li>
       </ul>
     </article>
 

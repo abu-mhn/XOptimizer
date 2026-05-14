@@ -508,6 +508,17 @@ function setupDashboardCarousel(carouselEl) {
 
   let idx = 0;
   let paused = false;
+  let resumeTimer = null;
+
+  // Any user interaction halts the auto-advance. We then schedule a resume
+  // for a short idle window — every fresh interaction pushes that resume
+  // back so a user who's actively scrolling is never interrupted.
+  const RESUME_AFTER_MS = 3 * 1000;
+  const pauseAndScheduleResume = () => {
+    paused = true;
+    if (resumeTimer) clearTimeout(resumeTimer);
+    resumeTimer = setTimeout(() => { paused = false; }, RESUME_AFTER_MS);
+  };
 
   const goTo = (i) => {
     idx = ((i % cards.length) + cards.length) % cards.length;
@@ -516,16 +527,19 @@ function setupDashboardCarousel(carouselEl) {
   };
 
   dots.forEach(d => {
-    d.addEventListener("click", () => goTo(Number(d.dataset.idx)));
+    d.addEventListener("click", () => {
+      pauseAndScheduleResume();
+      goTo(Number(d.dataset.idx));
+    });
   });
 
-  track.addEventListener("mouseenter", () => { paused = true; });
-  track.addEventListener("mouseleave", () => { paused = false; });
-  track.addEventListener("touchstart", () => { paused = true; }, { passive: true });
-  track.addEventListener("touchend", () => { paused = false; }, { passive: true });
+  track.addEventListener("touchstart", pauseAndScheduleResume, { passive: true });
+  track.addEventListener("mousedown", pauseAndScheduleResume);
+  track.addEventListener("wheel", pauseAndScheduleResume, { passive: true });
 
   let scrollIdleTimer = null;
   track.addEventListener("scroll", () => {
+    pauseAndScheduleResume();
     if (scrollIdleTimer) clearTimeout(scrollIdleTimer);
     scrollIdleTimer = setTimeout(() => {
       const closest = cards.reduce((best, c, i) => {

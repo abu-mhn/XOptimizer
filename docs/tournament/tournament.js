@@ -2000,9 +2000,10 @@ function renderSwissRegisteringMarkup(state) {
       <div class="swiss-reg-format">${formatBits.join("")}</div>
       <div class="swiss-reg-heading-row">
         <h3 class="swiss-reg-heading">Registrants <span class="swiss-reg-count">(${registrants.length}${minTotal ? ` / ${minTotal} min` : ""})</span></h3>
-        ${selfRegBtnHtml}
-        ${testRegBtnHtml}
       </div>
+      ${(selfRegBtnHtml || testRegBtnHtml)
+        ? `<div class="swiss-reg-host-actions">${selfRegBtnHtml}${testRegBtnHtml}</div>`
+        : ""}
       <ul class="swiss-reg-list">${registrantRows}</ul>
       <div class="swiss-reg-actions">${startBtnHtml}</div>
     </section>
