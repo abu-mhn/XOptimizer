@@ -278,9 +278,7 @@ function dashboardRenderTopPartsCarousel(groups) {
     const title = `Best Parts (${DASHBOARD_PART_TYPE_LABEL[field] || field})`;
     const partsHtml = parts.map(({ name }, i) => {
       if (!folder) return "";
-      const isRatchetBit = field === "bit"
-        && (DATA.bits || []).some(b => b.isRatchetBit && b.name === name);
-      const src = partImgPath(isRatchetBit ? "ratchetBits" : folder, name, null);
+      const src = dashboardResolvePartImg(field, name);
       const rankClass = DASHBOARD_RANK_CLASS[i];
       const rankText = DASHBOARD_RANK_TEXT[i];
       const rankHtml = rankClass
@@ -290,7 +288,7 @@ function dashboardRenderTopPartsCarousel(groups) {
         <div class="result-part-img-box">
           <img src="${src}" alt="${escapeHtml(name)}" class="result-part-img dashboard-part-img"
                data-part-name="${escapeHtml(name)}"
-               onerror="this.closest('.result-part').style.display='none'">
+               onerror="this.style.display='none'">
         </div>
         <span class="result-part-name">${rankHtml}${escapeHtml(name)}</span>
       </div>`;
@@ -371,17 +369,38 @@ function dashboardComboName(combo) {
   return (blade?.codename || blade?.name || "") + bottom;
 }
 
+// Resolves the asset path for a named part, honouring two things the bare
+// partImgPath() doesn't:
+//   1. A "bit" field that turns out to be a ratchet-bit (Turbo / Operate)
+//      lives in the "ratchetBits" asset folder, not "bits".
+//   2. Parts with a `modes` array (Eclipse, Dual, Lightning L-Drago, Turbo,
+//      Operate, Scorpio Spear) store one image per mode and have no plain
+//      "{Name}.webp" — default to mode index 0 when we don't know which.
+function dashboardResolvePartImg(key, name) {
+  const baseFolder = DASHBOARD_PART_FOLDER[key];
+  if (!baseFolder || !name) return "";
+  let folder = baseFolder;
+  let part = null;
+  if (key === "bit") {
+    const allBits = DATA.bits || [];
+    part = allBits.find(b => b.name === name) || null;
+    if (part && part.isRatchetBit) folder = "ratchetBits";
+  } else {
+    part = (DATA[baseFolder] || []).find(p => p.name === name) || null;
+  }
+  const modeIdx = (part && Array.isArray(part.modes) && part.modes.length > 0) ? 0 : null;
+  return partImgPath(folder, name, modeIdx);
+}
+
 function dashboardPartImgHtml(key, name) {
   const folder = DASHBOARD_PART_FOLDER[key];
   if (!folder || !name) return "";
-  const isRatchetBit = key === "bit"
-    && (DATA.bits || []).some(b => b.isRatchetBit && b.name === name);
-  const src = partImgPath(isRatchetBit ? "ratchetBits" : folder, name, null);
+  const src = dashboardResolvePartImg(key, name);
   return `<div class="result-part">
     <div class="result-part-img-box">
       <img src="${src}" alt="${escapeHtml(name)}" class="result-part-img dashboard-part-img"
            data-part-name="${escapeHtml(name)}"
-           onerror="this.closest('.result-part').style.display='none'">
+           onerror="this.style.display='none'">
     </div>
     <span class="result-part-name">${escapeHtml(name)}</span>
   </div>`;

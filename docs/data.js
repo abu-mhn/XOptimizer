@@ -68,7 +68,7 @@ const DATA = {
     { atk: 30, def: 60, sta: 20, weight: 37.5, spindirection: "R", name: "Mummy Curse", codename: "MUMMYCURSE", meta: true },
     { atk: 55, def: 30, sta: 15, weight: 25.1, spindirection: "L", name: "Dragoon Storm", codename: "DRAGOONSTORM" },
     { atk: 30, def: 40, sta: 30, weight: 31.0, spindirection: "R", name: "Storm Spriggan", codename: "STORMSPRIGGAN" },
-    { atk: 45, def: 45, sta: 40, weight: 60.6, spindirection: "R", name: "Bullet Griffon", codename: "BULLETGRIFFON" },
+    { atk: 45, def: 45, sta: 40, weight: 60.6, spindirection: "R", name: "Bullet Griffon", codename: "BULLETGRIFFON", meta: true },
     { atk: 58, def: 25, sta: 17, weight: 41.4, spindirection: "R", name: "Dran Strike", codename: "DRANSTRIKE" },
     { atk: 60, def: 25, sta: 30, weight: 38.7, spindirection: "R", name: "Aero Pegasus", codename: "AEROPEGASUS", exclusive: true },
     { atk: 13, def: 60, sta: 27, weight: 35.1, spindirection: "R", name: "Wyvern Hover", codename: "WYVERNHOVER", exclusive: true },
@@ -121,7 +121,7 @@ const DATA = {
     { atk: 25, def: 10, sta: 5, weight: 29.4, spindirection: "R", name: "Blitz", codename: "BLITZ", meta: true },
     { atk: 10, def: 20, sta: 10, weight: 27.7, spindirection: "R", name: "Fortress", codename: "FORTRESS", meta: true },
     { atk: 10, def: 10, sta: 29, weight: 27.4, spindirection: "R", name: "Rage", codename: "RAGE", meta: true },
-    { atk: 15, def: 15, sta: 10, weight: 27.8, spindirection: "R", name: "Delta", codename: "DELTA" },
+    { atk: 15, def: 15, sta: 10, weight: 27.8, spindirection: "R", name: "Delta", codename: "DELTA", meta: true },
   ],
 
   overBlades: [

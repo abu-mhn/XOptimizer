@@ -1069,16 +1069,12 @@ body.forest-mode .features-list {
     overflow-x: auto;
     justify-content: safe center;
     -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }
 
 .bey-check-slot-parts::-webkit-scrollbar {
-    height: 4px;
-}
-
-.bey-check-slot-parts::-webkit-scrollbar-thumb {
-    background: #30363d;
-    border-radius: 2px;
+    display: none;
 }
 
 .bey-check-part {
@@ -8706,4 +8702,521 @@ body.stormy-mode .scoreboard-close {
 }
 body.stormy-mode .scoreboard-close:hover {
     color: #d5dae4;
+}
+
+/* ===== Tournament registering view — theme overrides ===== */
+/* Headings, format pills, registrant rows and buttons used the dark-theme
+   default colors which became unreadable on the light-style themes. */
+
+/* Light */
+body.light-mode .swiss-reg-heading,
+body.light-mode .swiss-reg-format-mode,
+body.light-mode .swiss-reg-format,
+body.light-mode .swiss-reg-name,
+body.light-mode button.swiss-reg-name-edit {
+    color: #1f2328;
+}
+body.light-mode .swiss-reg-count,
+body.light-mode .swiss-reg-num,
+body.light-mode .swiss-reg-empty,
+body.light-mode .swiss-reg-waiting {
+    color: #656d76;
+}
+body.light-mode .swiss-reg-format-bit,
+body.light-mode .swiss-reg-row,
+body.light-mode .swiss-reg-empty {
+    background: rgba(15, 20, 30, 0.05);
+}
+body.light-mode .swiss-reg-self {
+    background: #ffffff;
+    border-color: #d1d9e0;
+    color: #1f2328;
+}
+body.light-mode .swiss-reg-self:hover,
+body.light-mode .swiss-reg-self:focus-visible {
+    background: #f6f8fa;
+    border-color: #afb8c1;
+}
+
+/* Tropical */
+body.tropical-mode .swiss-reg-heading,
+body.tropical-mode .swiss-reg-format-mode,
+body.tropical-mode .swiss-reg-format,
+body.tropical-mode .swiss-reg-name,
+body.tropical-mode button.swiss-reg-name-edit {
+    color: #2d3a3a;
+}
+body.tropical-mode .swiss-reg-count,
+body.tropical-mode .swiss-reg-num,
+body.tropical-mode .swiss-reg-empty,
+body.tropical-mode .swiss-reg-waiting {
+    color: #8a6d3b;
+}
+body.tropical-mode .swiss-reg-format-bit,
+body.tropical-mode .swiss-reg-row,
+body.tropical-mode .swiss-reg-empty {
+    background: rgba(245, 184, 107, 0.18);
+}
+body.tropical-mode .swiss-reg-self {
+    background: #ffffff;
+    border-color: #ffd8a8;
+    color: #2d3a3a;
+}
+body.tropical-mode .swiss-reg-self:hover,
+body.tropical-mode .swiss-reg-self:focus-visible {
+    background: #fff0d6;
+    border-color: #f5b86b;
+}
+
+/* Love */
+body.love-mode .swiss-reg-heading,
+body.love-mode .swiss-reg-format-mode,
+body.love-mode .swiss-reg-format,
+body.love-mode .swiss-reg-name,
+body.love-mode button.swiss-reg-name-edit {
+    color: #4a1d2a;
+}
+body.love-mode .swiss-reg-count,
+body.love-mode .swiss-reg-num,
+body.love-mode .swiss-reg-empty,
+body.love-mode .swiss-reg-waiting {
+    color: #9c4a5e;
+}
+body.love-mode .swiss-reg-format-bit,
+body.love-mode .swiss-reg-row,
+body.love-mode .swiss-reg-empty {
+    background: rgba(240, 160, 188, 0.2);
+}
+body.love-mode .swiss-reg-self {
+    background: #ffffff;
+    border-color: #ffc1d2;
+    color: #4a1d2a;
+}
+body.love-mode .swiss-reg-self:hover,
+body.love-mode .swiss-reg-self:focus-visible {
+    background: #ffe6ee;
+    border-color: #f0a0bc;
+}
+
+/* Forest */
+body.forest-mode .swiss-reg-heading,
+body.forest-mode .swiss-reg-format-mode,
+body.forest-mode .swiss-reg-format,
+body.forest-mode .swiss-reg-name,
+body.forest-mode button.swiss-reg-name-edit {
+    color: #2d3e1f;
+}
+body.forest-mode .swiss-reg-count,
+body.forest-mode .swiss-reg-num,
+body.forest-mode .swiss-reg-empty,
+body.forest-mode .swiss-reg-waiting {
+    color: #5a6a4b;
+}
+body.forest-mode .swiss-reg-format-bit,
+body.forest-mode .swiss-reg-row,
+body.forest-mode .swiss-reg-empty {
+    background: rgba(181, 200, 154, 0.25);
+}
+body.forest-mode .swiss-reg-self {
+    background: #ffffff;
+    border-color: #b5c89a;
+    color: #2d3e1f;
+}
+body.forest-mode .swiss-reg-self:hover,
+body.forest-mode .swiss-reg-self:focus-visible {
+    background: #e8f0d8;
+    border-color: #7a9159;
+}
+
+/* ===== Tournament group / match cards — light-theme overrides =====
+   The .swiss-group, .swiss-match-card, .swiss-match-row, .swiss-round-title
+   and helper labels all hardcoded dark-theme colors. The four light themes
+   now restyle them so groups + match strips read on a light background. */
+
+/* Light */
+body.light-mode .swiss-group {
+    background: #ffffff;
+    border-color: #d1d9e0;
+}
+body.light-mode .swiss-group-header {
+    background: rgba(0, 0, 0, 0.02);
+    border-bottom-color: #d1d9e0;
+}
+body.light-mode .swiss-group-title { color: #1f2328; }
+body.light-mode .swiss-group-tab { color: #656d76; }
+body.light-mode .swiss-group-tab:hover { color: #1f2328; }
+body.light-mode .swiss-group-tab.active {
+    color: #1f2328;
+    border-color: #afb8c1;
+    background: #f6f8fa;
+}
+body.light-mode .swiss-empty { color: #656d76; }
+body.light-mode .swiss-round-title {
+    color: #1f2328;
+    background: rgba(0, 0, 0, 0.05);
+}
+body.light-mode .swiss-match-num { color: #656d76; }
+body.light-mode .swiss-match-card {
+    background: #ffffff;
+    border-color: #d1d9e0;
+}
+body.light-mode .swiss-match-row {
+    background: #f6f8fa;
+    color: #1f2328;
+}
+body.light-mode .swiss-match-row + .swiss-match-row { border-top-color: #d1d9e0; }
+body.light-mode .swiss-match-row-win { background: #dcfce7; }
+body.light-mode .swiss-match-row-lose { background: #f6f8fa; color: #656d76; }
+body.light-mode .swiss-seed {
+    background: rgba(0, 0, 0, 0.05);
+    color: #656d76;
+}
+body.light-mode .swiss-score-cell {
+    background: rgba(0, 0, 0, 0.05);
+    color: #1f2328;
+}
+
+/* Tropical */
+body.tropical-mode .swiss-group {
+    background: #ffffff;
+    border-color: #ffd8a8;
+}
+body.tropical-mode .swiss-group-header {
+    background: rgba(245, 184, 107, 0.12);
+    border-bottom-color: #ffd8a8;
+}
+body.tropical-mode .swiss-group-title { color: #2d3a3a; }
+body.tropical-mode .swiss-group-progress { color: #8a6d3b; }
+body.tropical-mode .swiss-group-tab { color: #8a6d3b; }
+body.tropical-mode .swiss-group-tab:hover { color: #2d3a3a; }
+body.tropical-mode .swiss-group-tab.active {
+    color: #2d3a3a;
+    border-color: #f5b86b;
+    background: #fff0d6;
+}
+body.tropical-mode .swiss-empty { color: #8a6d3b; }
+body.tropical-mode .swiss-round-title {
+    color: #2d3a3a;
+    background: rgba(245, 184, 107, 0.18);
+}
+body.tropical-mode .swiss-match-num { color: #8a6d3b; }
+body.tropical-mode .swiss-match-card {
+    background: #ffffff;
+    border-color: #ffd8a8;
+}
+body.tropical-mode .swiss-match-row {
+    background: rgba(245, 184, 107, 0.18);
+    color: #2d3a3a;
+}
+body.tropical-mode .swiss-match-row + .swiss-match-row { border-top-color: #ffd8a8; }
+body.tropical-mode .swiss-match-row-win { background: rgba(0, 184, 169, 0.18); }
+body.tropical-mode .swiss-match-row-lose { background: rgba(245, 184, 107, 0.1); color: #8a6d3b; }
+body.tropical-mode .swiss-seed {
+    background: rgba(245, 184, 107, 0.2);
+    color: #8a6d3b;
+}
+body.tropical-mode .swiss-score-cell {
+    background: rgba(245, 184, 107, 0.2);
+    color: #2d3a3a;
+}
+
+/* Love */
+body.love-mode .swiss-group {
+    background: #ffffff;
+    border-color: #ffc1d2;
+}
+body.love-mode .swiss-group-header {
+    background: rgba(240, 160, 188, 0.15);
+    border-bottom-color: #ffc1d2;
+}
+body.love-mode .swiss-group-title { color: #4a1d2a; }
+body.love-mode .swiss-group-progress { color: #9c4a5e; }
+body.love-mode .swiss-group-tab { color: #9c4a5e; }
+body.love-mode .swiss-group-tab:hover { color: #4a1d2a; }
+body.love-mode .swiss-group-tab.active {
+    color: #4a1d2a;
+    border-color: #f0a0bc;
+    background: #ffe6ee;
+}
+body.love-mode .swiss-empty { color: #9c4a5e; }
+body.love-mode .swiss-round-title {
+    color: #4a1d2a;
+    background: rgba(240, 160, 188, 0.2);
+}
+body.love-mode .swiss-match-num { color: #9c4a5e; }
+body.love-mode .swiss-match-card {
+    background: #ffffff;
+    border-color: #ffc1d2;
+}
+body.love-mode .swiss-match-row {
+    background: rgba(240, 160, 188, 0.18);
+    color: #4a1d2a;
+}
+body.love-mode .swiss-match-row + .swiss-match-row { border-top-color: #ffc1d2; }
+body.love-mode .swiss-match-row-win { background: rgba(0, 184, 169, 0.18); }
+body.love-mode .swiss-match-row-lose { background: rgba(240, 160, 188, 0.08); color: #9c4a5e; }
+body.love-mode .swiss-seed {
+    background: rgba(240, 160, 188, 0.22);
+    color: #9c4a5e;
+}
+body.love-mode .swiss-score-cell {
+    background: rgba(240, 160, 188, 0.22);
+    color: #4a1d2a;
+}
+
+/* Forest */
+body.forest-mode .swiss-group {
+    background: #ffffff;
+    border-color: #b5c89a;
+}
+body.forest-mode .swiss-group-header {
+    background: rgba(181, 200, 154, 0.18);
+    border-bottom-color: #b5c89a;
+}
+body.forest-mode .swiss-group-title { color: #2d3e1f; }
+body.forest-mode .swiss-group-progress { color: #5a6a4b; }
+body.forest-mode .swiss-group-tab { color: #5a6a4b; }
+body.forest-mode .swiss-group-tab:hover { color: #2d3e1f; }
+body.forest-mode .swiss-group-tab.active {
+    color: #2d3e1f;
+    border-color: #7a9159;
+    background: #e8f0d8;
+}
+body.forest-mode .swiss-empty { color: #5a6a4b; }
+body.forest-mode .swiss-round-title {
+    color: #2d3e1f;
+    background: rgba(181, 200, 154, 0.25);
+}
+body.forest-mode .swiss-match-num { color: #5a6a4b; }
+body.forest-mode .swiss-match-card {
+    background: #ffffff;
+    border-color: #b5c89a;
+}
+body.forest-mode .swiss-match-row {
+    background: rgba(181, 200, 154, 0.22);
+    color: #2d3e1f;
+}
+body.forest-mode .swiss-match-row + .swiss-match-row { border-top-color: #b5c89a; }
+body.forest-mode .swiss-match-row-win { background: rgba(0, 184, 169, 0.18); }
+body.forest-mode .swiss-match-row-lose { background: rgba(181, 200, 154, 0.1); color: #5a6a4b; }
+body.forest-mode .swiss-seed {
+    background: rgba(181, 200, 154, 0.28);
+    color: #5a6a4b;
+}
+body.forest-mode .swiss-score-cell {
+    background: rgba(181, 200, 154, 0.28);
+    color: #2d3e1f;
+}
+
+/* ===== Bey Check popup — light-theme overrides =====
+   .bey-check-tab and .bey-check-slot used dark backgrounds with light text;
+   on Light / Tropical / Love / Forest those become unreadable. */
+
+/* Light */
+body.light-mode .bey-check-tab {
+    background: #ffffff;
+    color: #1f2328;
+    border-color: #d1d9e0;
+}
+body.light-mode .bey-check-tab.active {
+    background: #0550ae;
+    border-color: #0550ae;
+    color: #ffffff;
+}
+body.light-mode .bey-check-slot {
+    background: #ffffff;
+    border-color: #d1d9e0;
+    color: #1f2328;
+}
+body.light-mode .bey-check-slot:hover,
+body.light-mode .bey-check-slot:focus-visible {
+    background: #f6f8fa;
+    border-color: #0969da;
+}
+body.light-mode .bey-check-slot-label { color: #656d76; }
+body.light-mode .bey-check-slot-summary { color: #1f2328; }
+body.light-mode .bey-check-slot-empty .bey-check-slot-summary { color: #afb8c1; }
+
+/* Tropical */
+body.tropical-mode .bey-check-tab {
+    background: #ffffff;
+    color: #2d3a3a;
+    border-color: #ffd8a8;
+}
+body.tropical-mode .bey-check-tab.active {
+    background: linear-gradient(135deg, #00b8a9, #0d8a80);
+    border-color: #00b8a9;
+    color: #ffffff;
+}
+body.tropical-mode .bey-check-slot {
+    background: #ffffff;
+    border-color: #ffd8a8;
+    color: #2d3a3a;
+}
+body.tropical-mode .bey-check-slot:hover,
+body.tropical-mode .bey-check-slot:focus-visible {
+    background: #fff0d6;
+    border-color: #f5b86b;
+}
+body.tropical-mode .bey-check-slot-label { color: #8a6d3b; }
+body.tropical-mode .bey-check-slot-summary { color: #2d3a3a; }
+body.tropical-mode .bey-check-slot-empty .bey-check-slot-summary { color: #c9a97a; }
+
+/* Love */
+body.love-mode .bey-check-tab {
+    background: #ffffff;
+    color: #4a1d2a;
+    border-color: #ffc1d2;
+}
+body.love-mode .bey-check-tab.active {
+    background: linear-gradient(135deg, #f0a0bc, #c0245f);
+    border-color: #c0245f;
+    color: #ffffff;
+}
+body.love-mode .bey-check-slot {
+    background: #ffffff;
+    border-color: #ffc1d2;
+    color: #4a1d2a;
+}
+body.love-mode .bey-check-slot:hover,
+body.love-mode .bey-check-slot:focus-visible {
+    background: #ffe6ee;
+    border-color: #f0a0bc;
+}
+body.love-mode .bey-check-slot-label { color: #9c4a5e; }
+body.love-mode .bey-check-slot-summary { color: #4a1d2a; }
+body.love-mode .bey-check-slot-empty .bey-check-slot-summary { color: #d8a4b8; }
+
+/* Forest */
+body.forest-mode .bey-check-tab {
+    background: #ffffff;
+    color: #2d3e1f;
+    border-color: #b5c89a;
+}
+body.forest-mode .bey-check-tab.active {
+    background: linear-gradient(135deg, #386641, #2d4f33);
+    border-color: #386641;
+    color: #ffffff;
+}
+body.forest-mode .bey-check-slot {
+    background: #ffffff;
+    border-color: #b5c89a;
+    color: #2d3e1f;
+}
+body.forest-mode .bey-check-slot:hover,
+body.forest-mode .bey-check-slot:focus-visible {
+    background: #e8f0d8;
+    border-color: #7a9159;
+}
+body.forest-mode .bey-check-slot-label { color: #5a6a4b; }
+body.forest-mode .bey-check-slot-summary { color: #2d3e1f; }
+body.forest-mode .bey-check-slot-empty .bey-check-slot-summary { color: #9aae7c; }
+
+/* ===== Part image box + name — dark-theme overrides ===== */
+/* Space / Stormy / Mono didn't have overrides for .result-part-img-box or
+   .result-part-name, so the part chips were stuck on the default dark-blue
+   (#161b22 / #30363d / #8b949e) regardless of theme. */
+
+body.space-mode .part-img,
+body.space-mode .result-part-img-box {
+    background: rgba(26, 35, 126, 0.25);
+    border-color: #1a1f3d;
+}
+body.space-mode .result-part-name {
+    color: #c8d6e5;
+}
+
+body.stormy-mode .part-img,
+body.stormy-mode .result-part-img-box {
+    background: rgba(74, 144, 226, 0.18);
+    border-color: #3a4054;
+}
+body.stormy-mode .result-part-name {
+    color: #d5dae4;
+}
+
+body.mono-mode .part-img,
+body.mono-mode .result-part-img-box {
+    background: #111111;
+    border-color: #2a2a2a;
+}
+body.mono-mode .result-part-name {
+    color: #e6e6e6;
+}
+
+/* ===== Rounds-per-Group / Number-of-Groups popups — theme overrides ===== */
+/* .swiss-rounds-btn (also used by .swiss-groups-btn) and .popup-subtitle
+   were locked to dark-theme defaults. */
+
+body.light-mode .popup-subtitle    { color: #656d76; }
+body.tropical-mode .popup-subtitle { color: #8a6d3b; }
+body.love-mode .popup-subtitle     { color: #9c4a5e; }
+body.forest-mode .popup-subtitle   { color: #5a6a4b; }
+
+body.light-mode .swiss-rounds-btn {
+    background: #ffffff;
+    border-color: #d1d9e0;
+    color: #1f2328;
+}
+body.light-mode .swiss-rounds-btn:hover:not(.active),
+body.light-mode .swiss-rounds-btn:focus-visible {
+    background: #f6f8fa;
+    border-color: #afb8c1;
+    color: #1f2328;
+}
+body.light-mode .swiss-rounds-btn.active {
+    background: #0550ae;
+    border-color: #0550ae;
+    color: #ffffff;
+}
+
+body.tropical-mode .swiss-rounds-btn {
+    background: #ffffff;
+    border-color: #ffd8a8;
+    color: #2d3a3a;
+}
+body.tropical-mode .swiss-rounds-btn:hover:not(.active),
+body.tropical-mode .swiss-rounds-btn:focus-visible {
+    background: #fff0d6;
+    border-color: #f5b86b;
+    color: #2d3a3a;
+}
+body.tropical-mode .swiss-rounds-btn.active {
+    background: linear-gradient(135deg, #00b8a9, #0d8a80);
+    border-color: #00b8a9;
+    color: #ffffff;
+}
+
+body.love-mode .swiss-rounds-btn {
+    background: #ffffff;
+    border-color: #ffc1d2;
+    color: #4a1d2a;
+}
+body.love-mode .swiss-rounds-btn:hover:not(.active),
+body.love-mode .swiss-rounds-btn:focus-visible {
+    background: #ffe6ee;
+    border-color: #f0a0bc;
+    color: #4a1d2a;
+}
+body.love-mode .swiss-rounds-btn.active {
+    background: linear-gradient(135deg, #f0a0bc, #c0245f);
+    border-color: #c0245f;
+    color: #ffffff;
+}
+
+body.forest-mode .swiss-rounds-btn {
+    background: #ffffff;
+    border-color: #b5c89a;
+    color: #2d3e1f;
+}
+body.forest-mode .swiss-rounds-btn:hover:not(.active),
+body.forest-mode .swiss-rounds-btn:focus-visible {
+    background: #e8f0d8;
+    border-color: #7a9159;
+    color: #2d3e1f;
+}
+body.forest-mode .swiss-rounds-btn.active {
+    background: linear-gradient(135deg, #386641, #2d4f33);
+    border-color: #386641;
+    color: #ffffff;
 }

@@ -25,25 +25,21 @@
     <header class="updates-header">
       <h1 class="updates-title">What's New</h1>
       <p class="updates-subtitle">Recent changes to X Optimizer.</p>
-      <p class="updates-version">Version <span class="updates-version-num">v1.2.7</span></p>
+      <p class="updates-version">Version <span class="updates-version-num">v1.2.8</span></p>
     </header>
 
     <!-- Bump data-version when the list below changes so the splash flags
          it as fresh for returning users. Keep this attribute in sync with
          the visible version number above. -->
-    <article class="updates-card" data-version="v1.2.7">
+    <article class="updates-card" data-version="v1.2.8">
       <ul class="popup-list">
-        <li><strong>Dashboard tab.</strong> A new home tab with an auto-sliding carousel for Combo of the Day, Heaviest Bey, and Max ATK / DEF / STA — combo names are computed exactly like the calculator (e.g. <em>BULLETGRIFFONY</em>). Tap any part image to zoom it.</li>
-        <li><strong>Best Parts cards.</strong> Below the combos, a second carousel shows the most-used parts in the current tournament, split by type (Blade, Lock Chip, Ratchet, Bit, etc.) with 1st (gold) / 2nd (silver) / 3rd (bronze) ranks. Results persist across tournament resets.</li>
-        <li><strong>Revox tab.</strong> Revox Members now lives in its own top-level tab, with its own icon — no more digging into a Tournament sub-tab.</li>
-        <li><strong>Parts Usage carousel.</strong> The pie charts shown after a finished tournament now auto-slide through each part type, so you can flip through them on mobile without scrolling a long page.</li>
-        <li><strong>Tab bar improvements.</strong> Tabs sit in a single horizontal scroller (no visible scrollbar) and the scroll position is preserved when you switch tabs — no more jumping back to the start. On desktop the row centers itself in the available space; on mobile it scrolls horizontally.</li>
-        <li><strong>Share message polish.</strong> Tournament share text now formats the date as <em>14 May 2026 (Thursday)</em> and adds a step pointing participants at the Deck tab's Copy → Paste flow during registration.</li>
-        <li><strong>Deck paste fix.</strong> Pasting a CX or CX Expand deck into a tournament registration popup now keeps all of its parts (lock chip / main blade / assist blade) instead of dropping them.</li>
-        <li><strong>Calculator parity in Dashboard.</strong> Best-bey calculations respect Bullet Griffon's built-in ratchet and Clock Mirage's <em>-5</em> ratchet requirement, matching what the calculator allows.</li>
-        <li><strong>Settings dropdown cleanup.</strong> The Additional button mode dropdown no longer lists 1D1C, Max Weight, Min Weight, Max ATK, Max DEF, or Max STA — those now live on the Dashboard. Random and Meta remain.</li>
-        <li><strong>Theme polish.</strong> The What's New page, the Revox member-name input, and the Open Tournaments list now follow the active theme (Light / Tropical / Love / Forest / Space / Stormy / Mono) instead of staying dark on light backgrounds.</li>
-        <li><strong>Tournament sub-tabs fix.</strong> With Revox split out, the Tournament tab's Hosting / Ranking buttons no longer stretch across a leftover empty column.</li>
+        <li><strong>Host Test button.</strong> Hosts and co-hosts now have a "Test" button on the registering screen that bulk-adds synthetic participants (defaults to 10) with meta-random decks. Names auto-skip duplicates, and the writes go through in a single batched Firebase update.</li>
+        <li><strong>No repeat parts in test decks.</strong> Each generated deck obeys the deck builder's "one of each part per deck" rule across all 3 slots. The exception (matching the regular Deck tab) is light lock chips — only the heaviest ones (Emperor / Valkyrie) are blocked from repeating.</li>
+        <li><strong>Multi-mode part images.</strong> Parts with mode switching (Eclipse, Dual, Turbo, Operate, Scorpio Spear, Lightning L-Drago) now show their image everywhere on the dashboard. Previously their assets were stored per mode and the fallback URL pointed to a file that didn't exist.</li>
+        <li><strong>Best Parts rank fix.</strong> If any one entry's image was missing, the whole row was hidden and 2nd/3rd appeared at positions 1st/2nd. Now only the broken image hides — the rank chip and part name stay in the correct slot.</li>
+        <li><strong>Bey Check cleanup.</strong> Slot labels are now just "Slot 1 / 2 / 3" (no "· CX" / "· CX Expand" suffix), and the parts row's scrollbar is invisible — swipe still works.</li>
+        <li><strong>Scoreboard theme polish.</strong> Advanced score buttons (Extreme / Burst / Over / Spin), the round counter, the corner ✕, and the centre divider all follow every theme now. The dark gash between the two sides is replaced with each theme's overlay background.</li>
+        <li><strong>Tournament theming, round two.</strong> Registering view (heading / format pills / + Register myself / row names), group + match cards (Standings / Matches sub-tabs, round titles, match rows, seed pills, score cells), the Bey Check popup (player tabs + slot cards + labels), and the Rounds / Groups picker popups all now follow Light / Tropical / Love / Forest themes instead of staying dark.</li>
       </ul>
     </article>
 

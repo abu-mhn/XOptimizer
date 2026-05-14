@@ -44,9 +44,12 @@ Tournament
 - Self-registration via the Open Tournaments lobby (no manual name list)
 - Three-way join from the lobby: Co-host (with host code), Participant (register name + deck), Viewer (watch only)
 - Hosts AND co-hosts can play (+ Register myself), start the tournament, edit participants, and remove registrants
+- Test button (host / co-host): bulk-adds synthetic participants (default 10) with meta-random decks, one batched Firebase write
+- Test decks obey "one of each part per deck" across all 3 slots (only light lock chips can repeat; Emperor / Valkyrie cannot)
 - Edit a registrant in place — tap their name to change the name or rebuild their deck
 - Registered decks pre-fill every match; judges can override per match
 - CX / CX Expand decks paste from the Deck tab without losing parts (lock chip / main blade / assist blade preserved)
+- Bey Check slots show just "Slot 1 / 2 / 3" with an invisible-scrollbar part row (swipe still works)
 - Swiss + Top 8 auto-generates the knockout bracket from group standings
 - Scoreboard round counter above VS, advancing every 3 score taps
 - Tilt-activated scoreboard on mobile (rotate to landscape)
@@ -82,7 +85,9 @@ Other
 - "What's New" landing page at the site root
 - Single-line horizontal tab bar (invisible scrollbar) — scroll position preserved across navigation, centered on desktop
 - Live Firebase sync across host / co-host / participant / viewer devices
-- Themed across the whole UI (forms, buttons, popups, scoreboard, charts, Battle Pass widgets, Open Tournaments list, Revox input, What's New page)
+- Multi-mode part images (Eclipse, Dual, Turbo, Operate, Scorpio Spear, Lightning L-Drago) display correctly everywhere — defaults to mode 0 when no mode is recorded
+- Broken-image fallback hides only the image (rank chip + name stay), so Best Parts 1st / 2nd / 3rd rows never shift out of alignment
+- Themed end-to-end: dashboard, scoreboard (sb-btn / round / hint / close / divider), tournament registering view (heading / format pills / + Register myself / row names), group + match cards (sub-tabs / round titles / match rows / seed pills / score cells), Bey Check popup (player tabs / slot cards / labels), Rounds + Groups picker popups, Open Tournaments list, Revox input, What's New page, charts, Battle Pass widgets
 `;
 
   const btn = document.getElementById("settings-show-features");

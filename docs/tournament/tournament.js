@@ -1968,6 +1968,9 @@ function renderSwissRegisteringMarkup(state) {
   const selfRegBtnHtml = canRegisterSelf
     ? `<button type="button" id="swiss-reg-self" class="swiss-reg-self">+ Register myself</button>`
     : "";
+  const testRegBtnHtml = canEdit
+    ? `<button type="button" id="swiss-reg-test" class="swiss-reg-self swiss-reg-test">Test</button>`
+    : "";
   const startBtnHtml = canEdit
     ? `<button type="button" id="swiss-reg-start" class="btn swiss-reg-start" ${enoughRegistrants ? "" : "disabled"}>
          ${enoughRegistrants ? "Start Tournament" : `Need ${minTotal - registrants.length} more`}
@@ -1998,6 +2001,7 @@ function renderSwissRegisteringMarkup(state) {
       <div class="swiss-reg-heading-row">
         <h3 class="swiss-reg-heading">Registrants <span class="swiss-reg-count">(${registrants.length}${minTotal ? ` / ${minTotal} min` : ""})</span></h3>
         ${selfRegBtnHtml}
+        ${testRegBtnHtml}
       </div>
       <ul class="swiss-reg-list">${registrantRows}</ul>
       <div class="swiss-reg-actions">${startBtnHtml}</div>
@@ -2010,6 +2014,16 @@ function bindSwissRegisteringHandlers(view, state) {
   view.querySelector("#swiss-clear")?.addEventListener("click", resetSwiss);
   view.querySelector("#swiss-reg-start")?.addEventListener("click", startRegisteringTournament);
   view.querySelector("#swiss-reg-self")?.addEventListener("click", showSelfRegisterPopup);
+  view.querySelector("#swiss-reg-test")?.addEventListener("click", () => {
+    const raw = prompt("How many test registrants?", "10");
+    if (raw == null) return;
+    const n = parseInt(raw, 10);
+    if (!Number.isFinite(n) || n <= 0) { alert("Enter a positive number."); return; }
+    if (n > 64) {
+      if (!confirm(`Add ${n} test registrants? That's a lot — confirm to proceed.`)) return;
+    }
+    addTestRegistrants(n);
+  });
   bindSwissShareButton(view);
   view.querySelectorAll(".swiss-reg-remove").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -2751,15 +2765,12 @@ function renderBeyCheckSlotParts(slot) {
 
 function renderBeyCheckSlot(slotIdx, slot) {
   const empty = isBeyCheckSlotEmpty(slot);
-  const modeLabel = !empty && slot && slot.mode === "cx" ? " · CX"
-    : !empty && slot && slot.mode === "cxExpand" ? " · CX Expand"
-    : "";
   const body = empty
     ? `<div class="bey-check-slot-summary">Empty — tap to build</div>`
     : `<div class="bey-check-slot-parts">${renderBeyCheckSlotParts(slot)}</div>`;
   return `
     <button type="button" class="bey-check-slot${empty ? " bey-check-slot-empty" : ""}" data-slot="${slotIdx}">
-      <div class="bey-check-slot-label">Slot ${slotIdx + 1}${modeLabel}</div>
+      <div class="bey-check-slot-label">Slot ${slotIdx + 1}</div>
       ${body}
     </button>
   `;
@@ -4136,6 +4147,198 @@ function showRegistrationPopup(room, options = {}) {
       else if (e.key === "Escape") { e.preventDefault(); close(); }
     };
   }
+}
+
+// Test-data generation: builds a single bey-check slot using the same
+// meta-random rules the calculator's selectMeta uses, but returns the
+// {mode, parts} shape the tournament's deck slots expect.
+//
+// Across the 3 slots of a deck, parts MUST NOT repeat, matching the deck
+// builder's "one of each part per deck" rule (see deck.js). The only
+// exception is lock chips — light lock chips can repeat freely; the
+// heaviest ones (Emperor and Valkyrie) can't.
+const META_UNIQUE_LOCK_CHIPS = new Set(["Emperor", "Valkyrie"]);
+
+function metaIsLockChipUniqueTracked(name) {
+  return META_UNIQUE_LOCK_CHIPS.has(name);
+}
+
+// Generic picker that prefers meta-flagged items and respects the `used`
+// exclusion set. Falls back through wider pools so a slot can always fill
+// even when the meta pool is empty after exclusions.
+function pickMetaFrom(arr, used, extraFilter) {
+  if (!Array.isArray(arr) || !arr.length) return null;
+  const baseFilter = p => p && !isExclusive(p) && (!extraFilter || extraFilter(p));
+  const notUsed = p => baseFilter(p) && !used.has(p.name);
+  const tiers = [
+    arr.filter(p => notUsed(p) && p.meta === true),  // meta + unused
+    arr.filter(notUsed),                              // any eligible + unused
+    arr.filter(p => baseFilter(p) && p.meta === true),// meta (used pool exhausted)
+    arr.filter(baseFilter)                            // anything eligible
+  ];
+  for (const pool of tiers) {
+    if (pool.length) return pool[Math.floor(Math.random() * pool.length)];
+  }
+  return null;
+}
+
+function pickMetaLockChip(used) {
+  // Light lock chips (everything except Emperor/Valkyrie) repeat freely, so
+  // they're never considered "used" for exclusion purposes.
+  const arr = DATA.lockChips || [];
+  const baseFilter = p => p && !isExclusive(p);
+  const notBlocked = p => baseFilter(p) && !(metaIsLockChipUniqueTracked(p.name) && used.has(p.name));
+  const tiers = [
+    arr.filter(p => notBlocked(p) && p.meta === true),
+    arr.filter(notBlocked),
+    arr.filter(p => baseFilter(p) && p.meta === true),
+    arr.filter(baseFilter)
+  ];
+  for (const pool of tiers) {
+    if (pool.length) return pool[Math.floor(Math.random() * pool.length)];
+  }
+  return null;
+}
+
+function buildMetaSlot(mode, used) {
+  const bitObj = pickMetaFrom(DATA.bits || [], used, isNormalBit);
+  const bitName = bitObj?.name || null;
+
+  if (mode === "cx") {
+    const lc = pickMetaLockChip(used);
+    const mb = pickMetaFrom(DATA.mainBlades || [], used);
+    const ab = pickMetaFrom(DATA.assistBlades || [], used);
+    const ratchet = pickMetaFrom(DATA.ratchets || [], used);
+    return {
+      mode,
+      parts: {
+        lockChip: lc?.name || null,
+        mainBlade: mb?.name || null,
+        assistBlade: ab?.name || null,
+        ratchet: ratchet?.name || null,
+        bit: bitName
+      }
+    };
+  }
+  if (mode === "cxExpand") {
+    const lc = pickMetaLockChip(used);
+    const metal = pickMetaFrom(DATA.metalBlades || [], used);
+    const over = pickMetaFrom(DATA.overBlades || [], used);
+    const ab = pickMetaFrom(DATA.assistBlades || [], used);
+    const ratchet = pickMetaFrom(DATA.ratchets || [], used);
+    return {
+      mode,
+      parts: {
+        lockChip: lc?.name || null,
+        metalBlade: metal?.name || null,
+        overBlade: over?.name || null,
+        assistBlade: ab?.name || null,
+        ratchet: ratchet?.name || null,
+        bit: bitName
+      }
+    };
+  }
+
+  // standard — honour Bullet Griffon (no ratchet) and Clock Mirage (ratchet
+  // must end in "5") the same way the calculator's selectMeta does.
+  const blade = pickMetaFrom(DATA.blades || [], used);
+  const codename = blade?.codename || "";
+  if (codename === "BULLETGRIFFON") {
+    return { mode, parts: { blade: blade.name, bit: bitName } };
+  }
+  if (codename === "CLOCKMIRAGE") {
+    const ratchet = pickMetaFrom(DATA.ratchets || [], used, r => r.name.endsWith("5"));
+    return { mode, parts: { blade: blade.name, ratchet: ratchet?.name || null, bit: bitName } };
+  }
+  const ratchet = pickMetaFrom(DATA.ratchets || [], used);
+  return {
+    mode,
+    parts: {
+      blade: blade?.name || null,
+      ratchet: ratchet?.name || null,
+      bit: bitName
+    }
+  };
+}
+
+// Real-world players bring Standard combos most of the time, with the odd
+// CX / CX Expand thrown in. The weighted pick below biases the generator
+// toward that distribution so test brackets feel realistic.
+function pickWeightedMode() {
+  const r = Math.random();
+  if (r < 0.75) return "standard";   // 75% Standard
+  if (r < 0.88) return "cx";          // 13% CX
+  return "cxExpand";                  // 12% CX Expand
+}
+
+function buildMetaDeck() {
+  const used = new Set();
+  const out = [];
+  for (let i = 0; i < BEY_CHECK_DECK_SIZE; i++) {
+    const slot = buildMetaSlot(pickWeightedMode(), used);
+    out.push(slot);
+    // Record what's used for the next slot. Lock chips are only tracked if
+    // they're a heaviest variant (Emperor / Valkyrie) — see deck.js's
+    // LOCK_CHIP_EXCLUSIVE rule.
+    for (const [key, name] of Object.entries(slot.parts || {})) {
+      if (!name) continue;
+      if (key === "lockChip" && !metaIsLockChipUniqueTracked(name)) continue;
+      used.add(name);
+    }
+  }
+  return out;
+}
+
+// Bulk-register `count` synthetic participants with meta-random decks. Used
+// for stress-testing the bracket / pairing logic without manually filling
+// the registration popup N times.
+function addTestRegistrants(count) {
+  if (!swissCanEdit || !swissEditCode) {
+    alert("You need host or co-host privileges to add test registrants.");
+    return;
+  }
+  const state = loadSwiss();
+  if (!isRegisteringPhase(state)) {
+    alert("The tournament isn't in the registering phase.");
+    return;
+  }
+  const db = initFirebase();
+  if (!db) { alert("Firebase not available."); return; }
+
+  const roomRef = db.ref("swissRooms/" + swissEditCode);
+  roomRef.once("value").then(snap => {
+    const remote = snap.val();
+    if (!remote || remote.phase !== "registering") {
+      alert("This tournament is no longer accepting registrations.");
+      return;
+    }
+    const usedNames = new Set(
+      Object.values(remote.registrants || {})
+        .map(r => (r && typeof r.name === "string") ? r.name.trim().toLowerCase() : "")
+        .filter(Boolean)
+    );
+
+    const updates = {};
+    let added = 0;
+    let nextNum = 1;
+    while (added < count) {
+      const name = `Tester ${nextNum++}`;
+      if (usedNames.has(name.toLowerCase())) continue;
+      usedNames.add(name.toLowerCase());
+      const id = generateRegistrantId();
+      updates[`registrants/${id}`] = { name, deck: buildMetaDeck() };
+      added++;
+    }
+
+    return roomRef.update(updates).then(() => {
+      return roomRef.child("registrants").once("value").then(s => {
+        const total = s.numChildren();
+        return db.ref("openTournaments/" + swissEditCode + "/registrantCount").set(total).catch(() => {});
+      });
+    });
+  }).catch(e => {
+    alert("Couldn't add test registrants: " + (e?.message || e));
+  });
 }
 
 function submitRegistration(room, name, deck, setStatus, onSuccess, options = {}) {
