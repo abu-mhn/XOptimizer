@@ -36,8 +36,9 @@ Deck (3 Slots)
 - Cross-device sync when signed in — decks follow your account everywhere
 
 Tournament
-- Three formats: Swiss + Top 8, Swiss only, Single Elimination
-- Configurable Swiss groups: 2 or 4
+- Two formats: Swiss, Single Elimination
+- Pick Swiss, then choose whether to add a Top 8 knockout (Swiss + Top 8) or finish on group records (Swiss only)
+- Configurable Swiss groups: 2, 3, or 4
 - Configurable rounds per group: 3, 4, 5
 - Hosting requires a free email account (Settings → Account, or prompted on Create Tournament)
 - Every tournament is ranked automatically — no host password
@@ -46,11 +47,12 @@ Tournament
 - Hosts AND co-hosts can play (+ Register myself), start the tournament, edit participants, and remove registrants
 - Test button (host / co-host): bulk-adds synthetic participants (default 10) with meta-random decks, one batched Firebase write
 - Test decks obey "one of each part per deck" across all 3 slots (only light lock chips can repeat; Emperor / Valkyrie cannot)
+- Test deck mode mix is weighted realistic: ~75% Standard, ~13% CX, ~12% CX Expand
 - Edit a registrant in place — tap their name to change the name or rebuild their deck
 - Registered decks pre-fill every match; judges can override per match
 - CX / CX Expand decks paste from the Deck tab without losing parts (lock chip / main blade / assist blade preserved)
 - Bey Check slots show just "Slot 1 / 2 / 3" with an invisible-scrollbar part row (swipe still works)
-- Swiss + Top 8 auto-generates the knockout bracket from group standings
+- Swiss + Top 8 auto-generates the knockout bracket from group standings — 2 groups (top 4), 3 groups (top 2 + 2 best 3rd-place wildcards), 4 groups (top 2)
 - Scoreboard round counter above VS, advancing every 3 score taps
 - Tilt-activated scoreboard on mobile (rotate to landscape)
 - Share button opens a popup for date, time, stadium (Xtreme / Infinity / Double Xtreme), rule (Official / Unofficial), and remark — date renders as "14 May 2026 (Thursday)", and the message points participants at the Deck tab's Copy → Paste flow

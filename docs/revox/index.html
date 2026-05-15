@@ -766,12 +766,8 @@
       <input id="tournament-name-input" type="text" class="tournament-name-input" placeholder="e.g. Spring Cup 2026" maxlength="80" autocomplete="off" />
       <div class="tournament-mode-choices">
         <button type="button" id="tournament-mode-swiss" class="tournament-mode-btn">
-          <span class="tournament-mode-name">Swiss + Top 8</span>
-          <span class="tournament-mode-desc">4 groups, Swiss rounds, top 2 per group advance into the knockout bracket.</span>
-        </button>
-        <button type="button" id="tournament-mode-swiss-only" class="tournament-mode-btn">
           <span class="tournament-mode-name">Swiss</span>
-          <span class="tournament-mode-desc">4 groups, Swiss rounds — no knockout bracket. Final standings come from group records, combined across all groups.</span>
+          <span class="tournament-mode-desc">Group stage with Swiss rounds. You'll be asked whether to add a Top 8 knockout after.</span>
         </button>
         <button type="button" id="tournament-mode-single" class="tournament-mode-btn">
           <span class="tournament-mode-name">Single Elimination</span>
@@ -779,6 +775,25 @@
         </button>
       </div>
       <button type="button" id="tournament-mode-cancel" class="btn popup-cancel">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ================= TOP 8 POPUP ================= -->
+  <div id="tournament-top-eight-popup" class="popup-overlay hidden">
+    <div class="popup-card">
+      <h2 class="popup-title">Add Top 8?</h2>
+      <p class="popup-subtitle">After Swiss rounds, advance the top finishers into a knockout bracket?</p>
+      <div class="tournament-mode-choices">
+        <button type="button" id="tournament-top-eight-yes" class="tournament-mode-btn">
+          <span class="tournament-mode-name">Yes — Swiss + Top 8</span>
+          <span class="tournament-mode-desc">Top 2 per group advance into a knockout bracket after the group stage.</span>
+        </button>
+        <button type="button" id="tournament-top-eight-no" class="tournament-mode-btn">
+          <span class="tournament-mode-name">No — Swiss only</span>
+          <span class="tournament-mode-desc">Final standings come from combined group records, no knockout.</span>
+        </button>
+      </div>
+      <button type="button" id="tournament-top-eight-cancel" class="btn popup-cancel">Cancel</button>
     </div>
   </div>
 
@@ -865,6 +880,7 @@
       <p class="popup-subtitle">Split participants into how many Swiss groups? Top finishers from each group feed the Top-8 bracket.</p>
       <div class="swiss-groups-options swiss-rounds-options-popup">
         <button type="button" class="swiss-groups-btn swiss-rounds-btn" data-groups="2">2</button>
+        <button type="button" class="swiss-groups-btn swiss-rounds-btn" data-groups="3">3</button>
         <button type="button" class="swiss-groups-btn swiss-rounds-btn" data-groups="4">4</button>
       </div>
       <button type="button" id="swiss-groups-cancel" class="btn popup-cancel">Cancel</button>

@@ -297,7 +297,7 @@ function initSwissRoomOnLoad() {
 // (counts as a win) and rotate which member receives it.
 const SWISS_KEY = "beyblade_swiss";
 const SWISS_GROUP_COUNT_DEFAULT = 4; // legacy fallback when state.groupCount is missing
-const SWISS_GROUP_OPTIONS = [2, 4];  // selectable group counts; both feed an 8-player Top-8 bracket (top 4/2 per group)
+const SWISS_GROUP_OPTIONS = [2, 3, 4];  // selectable group counts. 2 and 4 feed a clean Top-8; 3 works for Swiss-only (the Top-8 generator skips uneven group counts).
 const SWISS_ROUND_COUNT = 4; // default / legacy fallback; actual count lives on state.roundCount
 const SWISS_ROUND_OPTIONS = [3, 4, 5];
 const SWISS_MIN_PER_GROUP = 2; // minimum so every group can run at least one match per round
@@ -2339,6 +2339,40 @@ function bracketSeedingFromStandings(state) {
   // 2 groups → top 4. The cross-seed pattern keeps each group's #1 on a
   // different half of the bracket so top seeds can only meet later.
   const groupCount = getGroupCount(state);
+
+  if (groupCount === 3) {
+    // 8 doesn't divide evenly across 3 groups, so we take top 2 from each
+    // (6 players) and add the best 2 third-place finishers as wildcards.
+    const standings = state.groups.map((members, gi) =>
+      computeStandings(members, state.matches, gi)
+    );
+    const top2 = standings.map(st => [st[0]?.name || null, st[1]?.name || null]);
+    // Collect 3rd-place finishers across groups, sorted by the same metrics
+    // computeStandings already ranks by — wins desc, then ties broken by
+    // whatever computeStandings put after (already sorted, so list order is
+    // each group's 3rd seed in its own ranking). Compare across groups using
+    // available numeric stats with safe fallbacks.
+    const thirds = standings
+      .map(st => st[2])
+      .filter(Boolean);
+    thirds.sort((a, b) =>
+      ((b.wins || 0) - (a.wins || 0)) ||
+      ((b.pointsScored || 0) - (a.pointsScored || 0)) ||
+      ((b.pointsDiff || 0) - (a.pointsDiff || 0)) ||
+      ((b.medianBuchholz || 0) - (a.medianBuchholz || 0)) ||
+      (a.name || "").localeCompare(b.name || "")
+    );
+    const wild1 = thirds[0]?.name || null;
+    const wild2 = thirds[1]?.name || null;
+    const [A, B, C] = top2;
+    return [
+      [A[0], wild2],   // half 1: A1 vs weaker wildcard
+      [B[1], C[1]],    // half 1: B2 vs C2
+      [B[0], wild1],   // half 2: B1 vs stronger wildcard
+      [C[0], A[1]]     // half 2: C1 vs A2
+    ];
+  }
+
   const topN = SWISS_BRACKET_SIZE / groupCount;
   const top = state.groups.map((members, gi) => {
     const st = computeStandings(members, state.matches, gi);
@@ -3392,11 +3426,31 @@ function showSwissGroupsPopup(onPick) {
   popup.classList.remove("hidden");
 }
 
+// Yes / No follow-up that asks whether the Swiss tournament should end in
+// a Top 8 knockout. Resolves the callback with the corresponding mode key
+// ("swiss" = with Top 8, "swiss-only" = without).
+function showTopEightPopup(onPick) {
+  const popup = document.getElementById("tournament-top-eight-popup");
+  if (!popup) { onPick("swiss"); return; }
+  const yesBtn = popup.querySelector("#tournament-top-eight-yes");
+  const noBtn = popup.querySelector("#tournament-top-eight-no");
+  const cancelBtn = popup.querySelector("#tournament-top-eight-cancel");
+  const teardown = () => {
+    popup.classList.add("hidden");
+    if (yesBtn) yesBtn.onclick = null;
+    if (noBtn) noBtn.onclick = null;
+    if (cancelBtn) cancelBtn.onclick = null;
+  };
+  if (yesBtn) yesBtn.onclick = () => { teardown(); onPick("swiss"); };
+  if (noBtn) noBtn.onclick = () => { teardown(); onPick("swiss-only"); };
+  if (cancelBtn) cancelBtn.onclick = () => { teardown(); onPick(null); };
+  popup.classList.remove("hidden");
+}
+
 function showTournamentModePopup(onPick) {
   const popup = document.getElementById("tournament-mode-popup");
   if (!popup) { onPick("swiss", "", SWISS_ROUND_COUNT); return; } // popup missing, fall back to swiss
   const swissBtn = popup.querySelector("#tournament-mode-swiss");
-  const swissOnlyBtn = popup.querySelector("#tournament-mode-swiss-only");
   const singleBtn = popup.querySelector("#tournament-mode-single");
   const cancelBtn = popup.querySelector("#tournament-mode-cancel");
   const nameInput = popup.querySelector("#tournament-name-input");
@@ -3404,7 +3458,6 @@ function showTournamentModePopup(onPick) {
   const teardown = () => {
     popup.classList.add("hidden");
     swissBtn.onclick = null;
-    if (swissOnlyBtn) swissOnlyBtn.onclick = null;
     singleBtn.onclick = null;
     cancelBtn.onclick = null;
   };
@@ -3413,15 +3466,12 @@ function showTournamentModePopup(onPick) {
   swissBtn.onclick = () => {
     const name = nameInput ? nameInput.value.trim() : "";
     teardown();
-    showSwissRoundsPopup((rc) => {
-      showSwissGroupsPopup((gc) => onPick("swiss", name, rc, true, gc));
-    });
-  };
-  if (swissOnlyBtn) swissOnlyBtn.onclick = () => {
-    const name = nameInput ? nameInput.value.trim() : "";
-    teardown();
-    showSwissRoundsPopup((rc) => {
-      showSwissGroupsPopup((gc) => onPick("swiss-only", name, rc, true, gc));
+    // Ask whether to add a Top 8 bracket after the group stage.
+    showTopEightPopup((mode) => {
+      if (!mode) return; // user cancelled at the Top 8 step
+      showSwissRoundsPopup((rc) => {
+        showSwissGroupsPopup((gc) => onPick(mode, name, rc, true, gc));
+      });
     });
   };
   singleBtn.onclick = () => {
