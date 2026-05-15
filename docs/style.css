@@ -9228,3 +9228,20 @@ body.forest-mode .swiss-rounds-btn.active {
     gap: 8px;
     margin-top: -4px;
 }
+
+/* ===== Editable format bits in the registering view ===== */
+.swiss-reg-format-editable {
+    font: inherit;
+    cursor: pointer;
+    border: 1px dashed rgba(110, 118, 129, 0.55);
+}
+button.swiss-reg-format-mode.swiss-reg-format-editable {
+    background: transparent;
+    border-radius: 6px;
+    padding: 2px 8px;
+}
+.swiss-reg-format-editable:hover,
+.swiss-reg-format-editable:focus-visible {
+    border-style: solid;
+    outline: none;
+}

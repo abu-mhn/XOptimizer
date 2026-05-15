@@ -1924,10 +1924,23 @@ function renderSwissRegisteringMarkup(state) {
   const modeLabel = state.mode === "single-elim" ? "Single Elimination"
     : state.mode === "swiss-only" ? "Swiss"
     : "Swiss + Top 8";
-  const formatBits = [`<span class="swiss-reg-format-mode">${modeLabel}</span>`];
-  if (state.mode !== "single-elim") {
-    formatBits.push(`<span class="swiss-reg-format-bit">${getGroupCount(state)} groups</span>`);
-    formatBits.push(`<span class="swiss-reg-format-bit">${getRoundCount(state)} rounds</span>`);
+  // Hosts / co-hosts can tweak the format while still waiting for players —
+  // no matches exist yet, so changing groups / rounds / Top-8 is safe.
+  const isSwiss = state.mode !== "single-elim";
+  const formatBits = [];
+  if (canEdit && isSwiss) {
+    formatBits.push(`<button type="button" class="swiss-reg-format-mode swiss-reg-format-editable" id="swiss-edit-mode" title="Tap to change Top 8">${modeLabel}</button>`);
+  } else {
+    formatBits.push(`<span class="swiss-reg-format-mode">${modeLabel}</span>`);
+  }
+  if (isSwiss) {
+    if (canEdit) {
+      formatBits.push(`<button type="button" class="swiss-reg-format-bit swiss-reg-format-editable" id="swiss-edit-groups" title="Tap to change groups">${getGroupCount(state)} groups</button>`);
+      formatBits.push(`<button type="button" class="swiss-reg-format-bit swiss-reg-format-editable" id="swiss-edit-rounds" title="Tap to change rounds">${getRoundCount(state)} rounds</button>`);
+    } else {
+      formatBits.push(`<span class="swiss-reg-format-bit">${getGroupCount(state)} groups</span>`);
+      formatBits.push(`<span class="swiss-reg-format-bit">${getRoundCount(state)} rounds</span>`);
+    }
   }
 
   const nameValue = state.tournamentName || "";
@@ -2010,9 +2023,33 @@ function renderSwissRegisteringMarkup(state) {
   `;
 }
 
+// Apply a settings patch to the tournament while it's still in the
+// registering phase, persist locally and push to Firebase, then re-render.
+function updateRegisteringSetting(patch) {
+  const s = loadSwiss();
+  if (!isRegisteringPhase(s)) return;
+  Object.assign(s, patch);
+  persistSwiss(s);
+  if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
+    swissRoomRef.update(patch).catch(e => console.warn("Tournament setting push failed:", e));
+  }
+  renderSwiss();
+}
+
 function bindSwissRegisteringHandlers(view, state) {
   view.querySelector("#swiss-edit-name")?.addEventListener("click", showEditTournamentNamePopup);
   view.querySelector("#swiss-clear")?.addEventListener("click", resetSwiss);
+  view.querySelector("#swiss-edit-mode")?.addEventListener("click", () => {
+    showTopEightPopup((mode) => {
+      if (mode) updateRegisteringSetting({ mode });
+    });
+  });
+  view.querySelector("#swiss-edit-groups")?.addEventListener("click", () => {
+    showSwissGroupsPopup((gc) => updateRegisteringSetting({ groupCount: gc }));
+  });
+  view.querySelector("#swiss-edit-rounds")?.addEventListener("click", () => {
+    showSwissRoundsPopup((rc) => updateRegisteringSetting({ roundCount: rc }));
+  });
   view.querySelector("#swiss-reg-start")?.addEventListener("click", startRegisteringTournament);
   view.querySelector("#swiss-reg-self")?.addEventListener("click", showSelfRegisterPopup);
   view.querySelector("#swiss-reg-test")?.addEventListener("click", () => {

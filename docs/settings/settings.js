@@ -45,6 +45,7 @@ Tournament
 - Self-registration via the Open Tournaments lobby (no manual name list)
 - Three-way join from the lobby: Co-host (with host code), Participant (register name + deck), Viewer (watch only)
 - Hosts AND co-hosts can play (+ Register myself), start the tournament, edit participants, and remove registrants
+- Edit the format while waiting for players — tap the Top 8 / groups / rounds chips during registration to change them, no reset needed
 - Test button (host / co-host): bulk-adds synthetic participants (default 10) with meta-random decks, one batched Firebase write
 - Test decks obey "one of each part per deck" across all 3 slots (only light lock chips can repeat; Emperor / Valkyrie cannot)
 - Test deck mode mix is weighted realistic: ~75% Standard, ~13% CX, ~12% CX Expand
