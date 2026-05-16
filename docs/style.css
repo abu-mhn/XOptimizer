@@ -9232,6 +9232,7 @@ body.forest-mode .swiss-rounds-btn.active {
 /* ===== Editable format bits in the registering view ===== */
 .swiss-reg-format-editable {
     font: inherit;
+    color: inherit;
     cursor: pointer;
     border: 1px dashed rgba(110, 118, 129, 0.55);
 }
@@ -9244,4 +9245,26 @@ button.swiss-reg-format-mode.swiss-reg-format-editable {
 .swiss-reg-format-editable:focus-visible {
     border-style: solid;
     outline: none;
+}
+/* Theme-aware dashed border so the editable chips match the active theme. */
+body.light-mode    .swiss-reg-format-editable { border-color: #afb8c1; }
+body.tropical-mode .swiss-reg-format-editable { border-color: #f5b86b; }
+body.love-mode     .swiss-reg-format-editable { border-color: #f0a0bc; }
+body.forest-mode   .swiss-reg-format-editable { border-color: #7a9159; }
+body.space-mode    .swiss-reg-format-editable { border-color: #5c6bc0; }
+body.stormy-mode   .swiss-reg-format-editable { border-color: #4a90e2; }
+body.mono-mode     .swiss-reg-format-editable { border-color: #4a4a4a; }
+
+/* ===== "Hosting" badge on the user's own lobby rooms ===== */
+.swiss-room-hosting-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    vertical-align: middle;
+    background: rgba(63, 185, 80, 0.18);
+    color: #3fb950;
+    border: 1px solid rgba(63, 185, 80, 0.4);
 }

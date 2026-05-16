@@ -235,7 +235,8 @@ function publishOpenRoomIndex(editCode, state) {
     roundCount: state.roundCount || null,
     groupCount: state.groupCount || null,
     registrantCount: Object.keys(state.registrants || {}).length,
-    createdAt: state.createdAt || new Date().toISOString()
+    createdAt: state.createdAt || new Date().toISOString(),
+    hostUid: state.hostUid || null
   };
   db.ref("openTournaments/" + editCode).set(summary)
     .catch(e => console.warn("Open room index push failed:", e));
@@ -1510,6 +1511,22 @@ function composeTournamentShareMessage(state, details) {
   if (d.stadium) lines.push(`Stadium: ${d.stadium}`);
   if (d.rule)    lines.push(`Rule: ${d.rule}`);
   if (d.remark)  lines.push(`Remark: ${d.remark}`);
+
+  // List the registered participants if any have signed up — useful for
+  // a host sharing the line-up before starting.
+  let participantNames = listRegistrants(state)
+    .map(r => (r.name || "").trim())
+    .filter(Boolean);
+  if (!participantNames.length && typeof getParticipants === "function") {
+    participantNames = getParticipants(state).map(n => (n || "").trim()).filter(Boolean);
+  }
+  participantNames.sort((a, b) => a.localeCompare(b));
+  if (participantNames.length) {
+    lines.push("");
+    lines.push(`Participants (${participantNames.length}):`);
+    participantNames.forEach((n, i) => lines.push(`${i + 1}. ${n}`));
+  }
+
   lines.push("");
   lines.push(SHARE_TOURNAMENT_INVITE);
   lines.push("");
@@ -3950,6 +3967,10 @@ function refreshOpenTournamentRooms() {
 }
 
 function renderLobbyRooms(list, rooms) {
+  // Tag rooms the signed-in account hosts so the user can spot their own
+  // tournaments in the lobby.
+  const myUid = (typeof getCurrentUser === "function" && getCurrentUser())
+    ? getCurrentUser().uid : null;
   list.innerHTML = rooms.map(r => {
     const name = (r.name || "").trim() || "(unnamed tournament)";
     const modeLabel = r.mode === "single-elim" ? "Single Elim"
@@ -3960,9 +3981,12 @@ function renderLobbyRooms(list, rooms) {
       if (r.groupCount) meta.push(`${r.groupCount} groups`);
       if (r.roundCount) meta.push(`${r.roundCount} rounds`);
     }
+    const hostingBadge = (myUid && r.hostUid && r.hostUid === myUid)
+      ? `<span class="swiss-room-hosting-badge">Hosting</span>`
+      : "";
     return `
       <button type="button" class="swiss-room-card" data-edit-code="${escapeHtml(r.editCode)}">
-        <div class="swiss-room-card-name">${escapeHtml(name)}</div>
+        <div class="swiss-room-card-name">${escapeHtml(name)}${hostingBadge}</div>
         <div class="swiss-room-card-mode">${modeLabel}</div>
         <div class="swiss-room-card-meta">${meta.map(escapeHtml).join(" · ")}</div>
       </button>
