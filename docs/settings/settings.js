@@ -43,6 +43,7 @@ Tournament
 - Hosting requires a free email account (Settings → Account, or prompted on Create Tournament)
 - Every tournament is ranked automatically — no host password
 - Self-registration via the Open Tournaments lobby (no manual name list)
+- Tournaments you host show a "Hosting" badge in the Open Tournaments lobby when you're signed in
 - Three-way join from the lobby: Co-host (with host code), Participant (register name + deck), Viewer (watch only)
 - Hosts AND co-hosts can play (+ Register myself), start the tournament, edit participants, and remove registrants
 - Edit the format while waiting for players — tap the Top 8 / groups / rounds chips during registration to change them, no reset needed
@@ -57,6 +58,7 @@ Tournament
 - Scoreboard round counter above VS, advancing every 3 score taps
 - Tilt-activated scoreboard on mobile (rotate to landscape)
 - Share button opens a popup for date, time, stadium (Xtreme / Infinity / Double Xtreme), rule (Official / Unofficial), and remark — date renders as "14 May 2026 (Thursday)", and the message points participants at the Deck tab's Copy → Paste flow
+- Share message lists the registered participants (numbered) when anyone has signed up
 - Past tournaments stay viewable in history after reset (cached snapshot)
 - Parts-usage pie charts at tournament end as an auto-sliding carousel (theme-aware palette)
 
