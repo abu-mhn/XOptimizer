@@ -811,6 +811,10 @@
           <span class="tournament-mode-name">Swiss</span>
           <span class="tournament-mode-desc">Group stage with Swiss rounds. You'll be asked whether to add a Top 8 knockout after.</span>
         </button>
+        <button type="button" id="tournament-mode-roundrobin" class="tournament-mode-btn">
+          <span class="tournament-mode-name">Round Robin</span>
+          <span class="tournament-mode-desc">Group stage where everyone plays everyone once. Rounds are set by group size. You'll be asked whether to add a Top 8 knockout after.</span>
+        </button>
         <button type="button" id="tournament-mode-single" class="tournament-mode-btn">
           <span class="tournament-mode-name">Single Elimination</span>
           <span class="tournament-mode-desc">Any number of players, direct knockout — no group stage. Bracket auto-sizes to the next power of 2; empty slots become BYEs that auto-advance.</span>
@@ -824,10 +828,10 @@
   <div id="tournament-top-eight-popup" class="popup-overlay hidden">
     <div class="popup-card">
       <h2 class="popup-title">Add Top 8?</h2>
-      <p class="popup-subtitle">After Swiss rounds, advance the top finishers into a knockout bracket?</p>
+      <p class="popup-subtitle">After the group stage, advance the top finishers into a knockout bracket?</p>
       <div class="tournament-mode-choices">
         <button type="button" id="tournament-top-eight-yes" class="tournament-mode-btn">
-          <span class="tournament-mode-name">Yes — Swiss + Top 8</span>
+          <span class="tournament-mode-name">Yes — add a Top 8</span>
           <span class="tournament-mode-desc">Top 2 per group advance into a knockout bracket after the group stage.</span>
         </button>
         <button type="button" id="tournament-top-eight-no" class="tournament-mode-btn">

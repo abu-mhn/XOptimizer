@@ -232,6 +232,7 @@ function publishOpenRoomIndex(editCode, state) {
     viewCode: swissViewCode || null,
     name: state.tournamentName || "",
     mode: state.mode || "swiss",
+    pairing: state.pairing || null,
     roundCount: state.roundCount || null,
     groupCount: state.groupCount || null,
     registrantCount: Object.keys(state.registrants || {}).length,
@@ -305,6 +306,11 @@ const SWISS_MIN_PER_GROUP = 2; // minimum so every group can run at least one ma
 const SWISS_BRACKET_SIZE = 8;  // Top-8 bracket; top-N per group derives from groupCount
 
 function getRoundCount(state) {
+  // Round robin derives its round count from group size, not a stored setting.
+  if (state && state.pairing === "round-robin"
+      && Array.isArray(state.groups) && state.groups.length) {
+    return Math.max(1, ...state.groups.map(g => roundRobinRoundCount((g || []).length)));
+  }
   const n = state && Number(state.roundCount);
   return SWISS_ROUND_OPTIONS.includes(n) ? n : SWISS_ROUND_COUNT;
 }
@@ -319,6 +325,15 @@ function getGroupCount(state) {
     return state.groups.length;
   }
   return SWISS_GROUP_COUNT_DEFAULT;
+}
+
+// Human-readable format label. Round robin reuses the swiss / swiss-only mode
+// keys plus a `pairing: "round-robin"` flag, so the label keys off both.
+// `shortElim` picks the compact "Single Elim" for room cards.
+function tournamentFormatLabel(mode, pairing, shortElim) {
+  if (mode === "single-elim") return shortElim ? "Single Elim" : "Single Elimination";
+  const base = pairing === "round-robin" ? "Round Robin" : "Swiss";
+  return mode === "swiss-only" ? base : base + " + Top 8";
 }
 
 // Registration-phase helpers. A tournament with `phase: "registering"` is
@@ -515,9 +530,57 @@ function greedySwissPairing(queue, played) {
   return pairs;
 }
 
+// --- Round-robin scheduling (circle method) ---
+// A round robin pairs everyone in a group against everyone else exactly once:
+// N players → N-1 rounds (N even) or N rounds (N odd, one bye each round).
+function roundRobinRoundCount(n) {
+  if (n < 2) return 0;
+  return n % 2 === 0 ? n - 1 : n;
+}
+
+// Full schedule as an array of rounds; each round is an array of [a, b] pairs.
+// A null in a pair marks the bye that an odd group size forces each round.
+function roundRobinSchedule(members) {
+  const arr = members.slice();
+  if (arr.length % 2 === 1) arr.push(null); // bye marker
+  const n = arr.length;
+  if (n < 2) return [];
+  const fixed = arr[0];
+  let rest = arr.slice(1);
+  const rounds = [];
+  for (let r = 0; r < n - 1; r++) {
+    const row = [fixed].concat(rest);
+    const pairs = [];
+    for (let i = 0; i < n / 2; i++) pairs.push([row[i], row[n - 1 - i]]);
+    rounds.push(pairs);
+    // Rotate everything except the fixed player one step.
+    rest = [rest[rest.length - 1]].concat(rest.slice(0, rest.length - 1));
+  }
+  return rounds;
+}
+
 function appendGroupRound(state, groupIndex) {
   const members = state.groups[groupIndex];
   const roundIndex = state.groupRounds[groupIndex] || 0;
+  // Round robin: pull this round straight from the fixed circle-method
+  // schedule. Its length is the cap — appending stops when it's exhausted.
+  if (state.pairing === "round-robin") {
+    const schedule = roundRobinSchedule(members);
+    if (roundIndex >= schedule.length) return false;
+    schedule[roundIndex].forEach((pair, i) => {
+      const [a, b] = pair;
+      const bye = a == null || b == null;
+      const id = `g${groupIndex}-r${roundIndex}-m${i}`;
+      state.matches[id] = {
+        id, groupIndex, round: roundIndex,
+        a: bye ? (a || b) : a,
+        b: bye ? null : b,
+        scoreA: null, scoreB: null, bye
+      };
+    });
+    state.groupRounds[groupIndex] = roundIndex + 1;
+    return true;
+  }
   if (roundIndex >= getRoundCount(state)) return false;
   const ordered = roundIndex === 0
     ? shuffleArray(members)
@@ -544,7 +607,7 @@ function balanceSwissGroups(groups) {
   }
 }
 
-function generateSwissFromText(text, tournamentName, roundCount, groupCount) {
+function generateSwissFromText(text, tournamentName, roundCount, groupCount, pairing) {
   const names = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
   const seen = new Set();
   const unique = [];
@@ -584,6 +647,10 @@ function generateSwissFromText(text, tournamentName, roundCount, groupCount) {
     roundCount: rc,
     groupCount: gc
   };
+  // Round robin reuses the whole Swiss group/standings/bracket machinery —
+  // only the per-round pairing differs (everyone-vs-everyone, see
+  // appendGroupRound). `pairing` must be set before the first round appends.
+  if (pairing === "round-robin") state.pairing = "round-robin";
   groups.forEach((_, gi) => appendGroupRound(state, gi));
   return state;
 }
@@ -1917,8 +1984,16 @@ function renderSwiss() {
     const roundsGen = state.groupRounds[gi] || 0;
     // Host can retune the total round count mid-tournament, but only while the
     // group stage is live — once the Top-8 bracket is up, rounds are moot.
-    const progressLabel = `Round ${roundsGen} / ${getRoundCount(state)}`;
-    const progressHtml = (canEdit && !bracketActive)
+    // Round robin's total is this group's own schedule length (groups can
+    // differ by a player), not the tournament-wide max.
+    const totalRounds = state.pairing === "round-robin"
+      ? roundRobinRoundCount(members.length)
+      : getRoundCount(state);
+    const progressLabel = `Round ${roundsGen} / ${totalRounds}`;
+    // Round robin's round count is fixed by group size — only Swiss exposes
+    // the tap-to-edit round picker.
+    const canEditRounds = canEdit && !bracketActive && state.pairing !== "round-robin";
+    const progressHtml = canEditRounds
       ? `<button type="button" class="swiss-group-progress swiss-group-progress-edit" title="Tap to change total rounds">${progressLabel}</button>`
       : `<span class="swiss-group-progress">${progressLabel}</span>`;
 
@@ -2067,9 +2142,7 @@ function renderSwissRegisteringMarkup(state) {
   const minTotal = swissRegistrationMinimum(state);
   const enoughRegistrants = registrants.length >= minTotal;
 
-  const modeLabel = state.mode === "single-elim" ? "Single Elimination"
-    : state.mode === "swiss-only" ? "Swiss"
-    : "Swiss + Top 8";
+  const modeLabel = tournamentFormatLabel(state.mode, state.pairing, false);
   // Hosts / co-hosts can tweak the format while still waiting for players —
   // no matches exist yet, so changing groups / rounds / Top-8 is safe.
   const isSwiss = state.mode !== "single-elim";
@@ -2323,7 +2396,7 @@ function startRegisteringTournament() {
   const namesText = names.join("\n");
   const generated = state.mode === "single-elim"
     ? generateSingleElimFromText(namesText, state.tournamentName)
-    : generateSwissFromText(namesText, state.tournamentName, getRoundCount(state), getGroupCount(state));
+    : generateSwissFromText(namesText, state.tournamentName, getRoundCount(state), getGroupCount(state), state.pairing);
   if (!generated) return; // generator already alerted
   // Carry forward registrants + metadata; flip phase to running. hostUid must
   // be carried too — the room push below is a full overwrite, so dropping it
@@ -2465,6 +2538,15 @@ function hasSwissBracket(state) {
 
 function isGroupStageComplete(state) {
   if (!state.groups || state.groups.length === 0) return false;
+  // Round robin: each group finishes on its own schedule length, which
+  // depends on that group's size (groups can differ by one player).
+  if (state.pairing === "round-robin") {
+    return state.groups.every((g, gi) => {
+      const need = roundRobinRoundCount((g || []).length);
+      return (state.groupRounds[gi] || 0) >= need
+        && (need === 0 || isGroupRoundComplete(state.matches, gi, need - 1));
+    });
+  }
   const rc = getRoundCount(state);
   return state.groups.every((_, gi) =>
     (state.groupRounds[gi] || 0) >= rc &&
@@ -3616,26 +3698,38 @@ function showAddParticipantPopup() {
       if (!confirm(`"${name}" has no deck slots filled. Add anyway?`)) return;
     }
 
-    // Swiss / Swiss-only: slot into the next round, no reset.
-    const isSwiss = state.mode !== "single-elim"
-      && Array.isArray(state.groups) && state.groups.length;
-    if (isSwiss) {
+    // Swiss (standings pairing) can slot a player into the next round with no
+    // reset. Single-elim (fixed bracket) and round robin (fixed everyone-vs-
+    // everyone schedule) have no open slot, so they regenerate.
+    const hasGroups = Array.isArray(state.groups) && state.groups.length;
+    const canSlotIn = state.mode !== "single-elim"
+      && state.pairing !== "round-robin" && hasGroups;
+    if (canSlotIn) {
       if (!addSwissParticipantNextRound(name, deck)) return; // helper alerted
       renderSwiss();
       close();
       return;
     }
 
-    // Single-elim: a fixed bracket has no open slot mid-tournament, so the
-    // only way to add a player is a full regeneration.
     const names = current.concat([name]);
+    const isRR = state.pairing === "round-robin";
+    const reason = isRR
+      ? "a round robin re-pairs everyone against everyone, so it"
+      : "a single-elimination bracket can't take a new player mid-tournament, so it";
     const msg = `Adding "${name}" brings the tournament to ${names.length} participants. ` +
-                `A single-elimination bracket can't take a new player mid-tournament, so it ` +
-                `will be regenerated — all current matches and scores will be lost. Continue?`;
+                `Because ${reason} will be regenerated — all current matches and scores will be lost. Continue?`;
     if (!confirm(msg)) return;
-    const next = generateSingleElimFromText(names.join("\n"), state.tournamentName);
+    let next;
+    if (state.mode === "single-elim") {
+      next = generateSingleElimFromText(names.join("\n"), state.tournamentName);
+    } else {
+      next = generateSwissFromText(names.join("\n"), state.tournamentName,
+        getRoundCount(state), getGroupCount(state), state.pairing);
+      if (next && state.mode === "swiss-only") next.mode = "swiss-only";
+    }
     if (!next) return; // generator already alerted
     if (typeof state.ranked === "boolean") next.ranked = state.ranked;
+    next.hostUid = state.hostUid || null;
     // Carry registrants forward so existing players keep their registered
     // decks, then add the new player's registrant entry.
     next.registrants = { ...(state.registrants || {}) };
@@ -3729,6 +3823,7 @@ function showTournamentModePopup(onPick) {
   const popup = document.getElementById("tournament-mode-popup");
   if (!popup) { onPick("swiss", "", SWISS_ROUND_COUNT); return; } // popup missing, fall back to swiss
   const swissBtn = popup.querySelector("#tournament-mode-swiss");
+  const rrBtn = popup.querySelector("#tournament-mode-roundrobin");
   const singleBtn = popup.querySelector("#tournament-mode-single");
   const cancelBtn = popup.querySelector("#tournament-mode-cancel");
   const nameInput = popup.querySelector("#tournament-name-input");
@@ -3736,6 +3831,7 @@ function showTournamentModePopup(onPick) {
   const teardown = () => {
     popup.classList.add("hidden");
     swissBtn.onclick = null;
+    if (rrBtn) rrBtn.onclick = null;
     singleBtn.onclick = null;
     cancelBtn.onclick = null;
   };
@@ -3750,6 +3846,16 @@ function showTournamentModePopup(onPick) {
       showSwissRoundsPopup((rc) => {
         showSwissGroupsPopup((gc) => onPick(mode, name, rc, true, gc));
       });
+    });
+  };
+  if (rrBtn) rrBtn.onclick = () => {
+    const name = nameInput ? nameInput.value.trim() : "";
+    teardown();
+    // Round robin asks Top 8 + group count, but skips the round picker —
+    // rounds are fixed by group size (everyone plays everyone once).
+    showTopEightPopup((mode) => {
+      if (!mode) return;
+      showSwissGroupsPopup((gc) => onPick(mode, name, undefined, true, gc, "round-robin"));
     });
   };
   singleBtn.onclick = () => {
@@ -3868,12 +3974,12 @@ document.getElementById("swiss-generate")?.addEventListener("click", async () =>
   } catch (e) {
     return; // user cancelled the sign-in modal
   }
-  showTournamentModePopup((mode, tournamentName, roundCount, ranked, groupCount) => {
+  showTournamentModePopup((mode, tournamentName, roundCount, ranked, groupCount, pairing) => {
     // Open Registration only — empty room in registering phase. Players
     // self-register with their decks via the Rooms tab, then the host
     // clicks Start to generate groups / bracket from the registrants.
     const next = createRegisteringTournamentState({
-      mode, tournamentName, roundCount, ranked, groupCount, hostUid: user ? user.uid : null
+      mode, tournamentName, roundCount, ranked, groupCount, pairing, hostUid: user ? user.uid : null
     });
     startTournamentFromState(next);
   });
@@ -3885,7 +3991,7 @@ document.getElementById("swiss-generate")?.addEventListener("click", async () =>
 // Firebase Auth uid of the user creating the tournament — Reset / Start
 // flows check it to ensure only the original host (signed into the same
 // account on any device) can wipe or kick off the room.
-function createRegisteringTournamentState({ mode, tournamentName, roundCount, ranked, groupCount, hostUid }) {
+function createRegisteringTournamentState({ mode, tournamentName, roundCount, ranked, groupCount, pairing, hostUid }) {
   const safeMode = mode === "single-elim" ? "single-elim"
     : mode === "swiss-only" ? "swiss-only"
     : "swiss";
@@ -3903,10 +4009,15 @@ function createRegisteringTournamentState({ mode, tournamentName, roundCount, ra
     hostUid: hostUid || null
   };
   if (safeMode !== "single-elim") {
-    state.roundCount = SWISS_ROUND_OPTIONS.includes(Number(roundCount))
-      ? Number(roundCount) : SWISS_ROUND_COUNT;
     state.groupCount = SWISS_GROUP_OPTIONS.includes(Number(groupCount))
       ? Number(groupCount) : SWISS_GROUP_COUNT_DEFAULT;
+    // Round robin derives its rounds from group size, so it skips roundCount.
+    if (pairing === "round-robin") {
+      state.pairing = "round-robin";
+    } else {
+      state.roundCount = SWISS_ROUND_OPTIONS.includes(Number(roundCount))
+        ? Number(roundCount) : SWISS_ROUND_COUNT;
+    }
   }
   return state;
 }
@@ -3974,8 +4085,7 @@ function renderTournamentResultsMarkup(state) {
   const name = state.tournamentName && state.tournamentName.trim()
     ? escapeHtml(state.tournamentName)
     : "(unnamed tournament)";
-  const modeLabel = state.mode === "single-elim" ? "Single Elimination"
-    : state.mode === "swiss-only" ? "Swiss" : "Swiss + Top 8";
+  const modeLabel = tournamentFormatLabel(state.mode, state.pairing, false);
   const header = `
     <div class="tournament-results-heading">
       <div class="tournament-results-name">${name}</div>
@@ -4149,6 +4259,7 @@ function publishUserTournament(uid, editCode, state) {
     viewCode: swissViewCode || state.viewCode || null,
     name: state.tournamentName || "",
     mode: state.mode || "swiss",
+    pairing: state.pairing || null,
     phase: state.phase || "running",
     createdAt: state.createdAt || new Date().toISOString()
   }).catch(e => console.warn("My-tournament publish failed:", e));
@@ -4211,6 +4322,14 @@ function refreshMyTournaments() {
           setStatus("");
           return;
         }
+        // Auto-enter: if the host has exactly one live tournament and isn't
+        // already in a room, drop straight into it instead of showing a card
+        // to tap. Two or more still list, since there's a real choice to make.
+        if (live.length === 1 && !swissEditCode) {
+          setStatus("Entering your tournament…");
+          joinMyTournament(live[0]);
+          return;
+        }
         renderMyTournamentRooms(list, live);
         setStatus("");
       });
@@ -4224,9 +4343,7 @@ function refreshMyTournaments() {
 function renderMyTournamentRooms(list, rooms) {
   list.innerHTML = rooms.map(r => {
     const name = (r.name || "").trim() || "(unnamed tournament)";
-    const modeLabel = r.mode === "single-elim" ? "Single Elim"
-      : r.mode === "swiss-only" ? "Swiss"
-      : "Swiss + Top 8";
+    const modeLabel = tournamentFormatLabel(r.mode, r.pairing, true);
     const badge = r.phase === "running"
       ? `<span class="swiss-room-running-badge">In progress</span>`
       : `<span class="swiss-room-hosting-badge">Registering</span>`;
@@ -4343,9 +4460,7 @@ function renderLobbyRooms(list, rooms) {
     ? getCurrentUser().uid : null;
   list.innerHTML = rooms.map(r => {
     const name = (r.name || "").trim() || "(unnamed tournament)";
-    const modeLabel = r.mode === "single-elim" ? "Single Elim"
-      : r.mode === "swiss-only" ? "Swiss"
-      : "Swiss + Top 8";
+    const modeLabel = tournamentFormatLabel(r.mode, r.pairing, true);
     const isRunning = r.phase === "running";
     const meta = [`${r.registrantCount || 0} ${isRunning ? "players" : "registered"}`];
     if (r.mode !== "single-elim") {
@@ -4390,9 +4505,7 @@ function showTournamentJoinChoicePopup(room) {
 
   if (subtitle) {
     const name = (room.name || "").trim() || "(unnamed tournament)";
-    const modeLabel = room.mode === "single-elim" ? "Single Elim"
-      : room.mode === "swiss-only" ? "Swiss"
-      : "Swiss + Top 8";
+    const modeLabel = tournamentFormatLabel(room.mode, room.pairing, true);
     subtitle.textContent = `${name} · ${modeLabel}`;
   }
 
@@ -4555,9 +4668,7 @@ function showRegistrationPopup(room, options = {}) {
 
   if (subtitle) {
     const name = (room.name || "").trim() || "(unnamed tournament)";
-    const modeLabel = room.mode === "single-elim" ? "Single Elim"
-      : room.mode === "swiss-only" ? "Swiss"
-      : "Swiss + Top 8";
+    const modeLabel = tournamentFormatLabel(room.mode, room.pairing, true);
     subtitle.textContent = `${name} · ${modeLabel}`;
   }
   if (nameInput) nameInput.value = options.initialName || "";

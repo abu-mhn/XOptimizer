@@ -36,16 +36,18 @@ Deck (3 Slots)
 - Cross-device sync when signed in — decks follow your account everywhere
 
 Tournament
-- Two formats: Swiss, Single Elimination
-- Pick Swiss, then choose whether to add a Top 8 knockout (Swiss + Top 8) or finish on group records (Swiss only)
-- Configurable Swiss groups: 2, 3, or 4
-- Configurable rounds per group: 3, 4, 5
+- Three formats: Swiss, Round Robin, Single Elimination
+- Round Robin: everyone in a group plays everyone else exactly once; rounds are fixed by group size (N players = N-1 rounds, or N with a bye each round when odd)
+- Round Robin reuses the Swiss group stage, standings and Top 8 — only the per-round pairing differs (fixed everyone-vs-everyone schedule vs. Swiss standings-based pairing)
+- Pick Swiss or Round Robin, then choose whether to add a Top 8 knockout (+ Top 8) or finish on group records (group records only)
+- Configurable groups: 2, 3, or 4 (Swiss and Round Robin)
+- Configurable rounds per group for Swiss: 3, 4, 5 (Round Robin derives rounds from group size)
 - Hosting requires a free email account (Settings → Account, or prompted on Create Tournament)
 - Every tournament is ranked automatically — no host password
 - Self-registration via the Open Tournaments lobby (no manual name list)
 - Tournaments you host show a "Hosting" badge in the Open Tournaments lobby when you're signed in
 - Running tournaments stay listed in the Open Tournaments lobby with an "In progress" badge — registration is closed, but co-hosts and viewers can still join
-- My Tournaments: signed-in hosts see every tournament they host on any device — tap one to rejoin as host (the room index follows your account, not the device)
+- My Tournaments: a signed-in host is dropped straight back into the tournament they host on any device — the room index follows your account, not the device (a pick list appears only if you host more than one)
 - Three-way join from the lobby: Co-host (with host code), Participant (register name + deck), Viewer (watch only)
 - Hosts AND co-hosts can play (+ Register myself), start the tournament, add participants, and remove registrants
 - Edit the format while waiting for players — tap the Top 8 / groups / rounds chips during registration to change them, no reset needed
