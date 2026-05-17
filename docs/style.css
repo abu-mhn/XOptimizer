@@ -5313,6 +5313,13 @@ body.mono-mode .popup-ok:hover {
     object-fit: contain;
 }
 
+.swiss-toolbar .btn-icon-plus {
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 2px 8px;
+}
+
 .swiss-toolbar .btn img {
     width: 16px;
     height: 16px;
@@ -5370,6 +5377,24 @@ body.mono-mode .swiss-toolbar .swiss-share-btn img {
     margin-right: auto;
     font-size: 0.8rem;
     color: #8b949e;
+}
+
+/* Round-count label rendered as a tap-to-edit button (host, group stage). */
+button.swiss-group-progress-edit {
+    appearance: none;
+    -webkit-appearance: none;
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    cursor: pointer;
+}
+
+button.swiss-group-progress-edit:hover,
+button.swiss-group-progress-edit:focus-visible {
+    color: #58a6ff;
+    text-decoration: underline;
+    outline: none;
 }
 
 body.light-mode .swiss-group-progress {
@@ -6382,6 +6407,18 @@ button.swiss-tournament-name-editable:focus-visible {
     box-shadow: 0 0 0 1px #58a6ff inset;
 }
 
+.tournament-mode-btn.is-disabled,
+.tournament-mode-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.tournament-mode-btn.is-disabled:hover,
+.tournament-mode-btn:disabled:hover {
+    border-color: #30363d;
+    background: #0d1117;
+}
+
 .tournament-mode-name {
     font-weight: 700;
     font-size: 1rem;
@@ -6588,6 +6625,29 @@ body.light-mode .swiss-top-rank-2 .swiss-top-rank-name {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* Standings name cell rendered as a tap-to-rename button (host-only). Strip
+   the native button chrome so it reads as plain text until hovered. */
+.swiss-name-edit {
+    appearance: none;
+    -webkit-appearance: none;
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    max-width: 100%;
+}
+
+.swiss-name-edit:hover,
+.swiss-name-edit:focus-visible {
+    color: #58a6ff;
+    text-decoration: underline;
+    outline: none;
 }
 
 .swiss-score-cell {
@@ -9267,4 +9327,17 @@ body.mono-mode     .swiss-reg-format-editable { border-color: #4a4a4a; }
     background: rgba(63, 185, 80, 0.18);
     color: #3fb950;
     border: 1px solid rgba(63, 185, 80, 0.4);
+}
+
+.swiss-room-running-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    vertical-align: middle;
+    background: rgba(210, 153, 34, 0.18);
+    color: #d29922;
+    border: 1px solid rgba(210, 153, 34, 0.4);
 }

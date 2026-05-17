@@ -563,13 +563,19 @@
 
   <!-- ================= EDIT PARTICIPANTS POPUP ================= -->
   <div id="edit-participants-popup" class="popup-overlay hidden">
-    <div class="popup-card">
-      <h2 class="popup-title">Edit Participants</h2>
-      <p class="popup-text">One name per line. Keep the same total to <strong>rename</strong> in place (scores and pairings preserved). Add or remove lines to <strong>regenerate</strong> the tournament from scratch.</p>
-      <textarea id="edit-participants-names" class="swiss-names" rows="10" placeholder="Alice&#10;Bob&#10;Carol&#10;..." autocomplete="off" spellcheck="false"></textarea>
+    <div class="popup-card bey-check-card">
+      <h2 class="popup-title">Add Participant</h2>
+      <p class="popup-text">Add one player with their deck. In Swiss they join the <strong>next round</strong> &mdash; current matches and scores are kept. A single-elimination bracket has no open slot, so it regenerates.</p>
+      <label class="tournament-name-label" for="add-participant-name">Name</label>
+      <input id="add-participant-name" type="text" class="tournament-name-input" placeholder="e.g. Alice" maxlength="60" autocomplete="off" />
+      <p class="popup-text register-deck-hint">Build the 3-combo deck this player brings. The judge sees this deck at every match. Tip: copy a deck from the Deck tab, then paste it here.</p>
+      <div class="bey-check-slots" id="add-participant-deck-slots"></div>
+      <div class="register-deck-actions">
+        <button type="button" id="add-participant-paste" class="btn btn-sm">Paste from Deck tab</button>
+      </div>
       <div id="edit-participants-status" class="swiss-join-status"></div>
-      <div class="popup-actions">
-        <button type="button" id="edit-participants-save" class="btn">Save</button>
+      <div class="popup-actions bey-check-actions">
+        <button type="button" id="edit-participants-save" class="btn">Add</button>
         <button type="button" id="edit-participants-cancel" class="btn popup-cancel">Cancel</button>
       </div>
     </div>

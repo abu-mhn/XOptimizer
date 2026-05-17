@@ -1091,21 +1091,135 @@ function renderSwissGroupMatches(state, gi) {
   return `<div class="swiss-rounds-scroll">${rounds.join("")}</div>`;
 }
 
-function renderSwissGroupStandings(state, gi) {
+function renderSwissGroupStandings(state, gi, canEdit) {
   const members = state.groups[gi];
   const standings = computeStandings(members, state.matches, gi);
   const rows = standings.map((row, idx) => {
     const pd = row.pointsDiff > 0 ? `+${row.pointsDiff}` : `${row.pointsDiff}`;
+    // Host / co-host can rename a participant straight from the standings,
+    // even mid-tournament — the name cell becomes a tap-to-rename button.
+    const nameCell = canEdit
+      ? `<button type="button" class="swiss-name-cell swiss-name-edit" data-rename="${escapeHtml(row.name)}" title="Tap to rename">${escapeHtml(row.name)}</button>`
+      : `<span class="swiss-name-cell">${escapeHtml(row.name)}</span>`;
     return `
     <li>
       <span class="swiss-rank">${idx + 1}</span>
-      <span class="swiss-name-cell">${escapeHtml(row.name)}</span>
+      ${nameCell}
       <span class="swiss-record">${row.wins}W-${row.losses}L-${row.draws}D</span>
       <span class="swiss-tiebreak" title="Points Scored · Points Difference · Median-Buchholz">PS ${row.pointsScored} · PD ${pd} · MB ${row.medianBuchholz}</span>
     </li>
   `;
   }).join("");
   return `<ol class="swiss-members">${rows}</ol>`;
+}
+
+// Rename a participant everywhere their name appears — groups, the
+// participant list, every match (group + bracket) and the registrants map.
+// Match decks are keyed by side (a/b), not name, so they need no change.
+// Works at any phase; pushes a targeted update so nothing else is clobbered.
+function renameSwissParticipant(oldName, newName) {
+  const s = loadSwiss();
+  const updates = {};
+  if (Array.isArray(s.participants)) {
+    let changed = false;
+    s.participants = s.participants.map(n => {
+      if (n === oldName) { changed = true; return newName; }
+      return n;
+    });
+    if (changed) updates.participants = s.participants;
+  }
+  if (Array.isArray(s.groups)) {
+    s.groups.forEach((g, gi) => {
+      let changed = false;
+      const ng = g.map(n => {
+        if (n === oldName) { changed = true; return newName; }
+        return n;
+      });
+      if (changed) { s.groups[gi] = ng; updates[`groups/${gi}`] = ng; }
+    });
+  }
+  Object.entries(s.matches || {}).forEach(([id, m]) => {
+    if (!m) return;
+    if (m.a === oldName) { m.a = newName; updates[`matches/${id}/a`] = newName; }
+    if (m.b === oldName) { m.b = newName; updates[`matches/${id}/b`] = newName; }
+  });
+  if (s.registrants && typeof s.registrants === "object") {
+    Object.entries(s.registrants).forEach(([id, r]) => {
+      if (r && r.name === oldName) {
+        r.name = newName;
+        updates[`registrants/${id}/name`] = newName;
+      }
+    });
+  }
+  persistSwiss(s);
+  if (swissRoomRef && swissCanEdit && !swissApplyingRemote && Object.keys(updates).length) {
+    swissRoomRef.update(updates).catch(e => console.warn("Rename push failed:", e));
+  }
+  renderSwiss();
+}
+
+// Standings tap-to-rename entry point: prompt for the new name, reject blanks
+// and case-insensitive clashes with another participant, then apply.
+function promptRenameSwissParticipant(oldName) {
+  if (!oldName) return;
+  const raw = prompt(`Rename "${oldName}" to:`, oldName);
+  if (raw == null) return; // cancelled
+  const newName = raw.trim();
+  if (!newName || newName === oldName) return;
+  const taken = getParticipants(loadSwiss())
+    .some(n => n !== oldName && n.toLowerCase() === newName.toLowerCase());
+  if (taken) {
+    alert(`"${newName}" is already a participant in this tournament.`);
+    return;
+  }
+  renameSwissParticipant(oldName, newName);
+}
+
+// Change a running tournament's total round count — no reset. Raising it lets
+// more rounds pair in; lowering it ends the group stage sooner. The floor is
+// the most rounds any group has already generated, so no played/generated
+// round is ever orphaned.
+function setSwissRoundCount(newRc) {
+  const s = loadSwiss();
+  if (getRoundCount(s) === newRc) return;
+  s.roundCount = newRc;
+  const updates = { roundCount: newRc };
+  // Raising the cap can re-open a finished group stage. The per-match
+  // auto-append never fires when every match is already scored, so append the
+  // next round now for any group sitting complete-but-below the new cap.
+  if (Array.isArray(s.groups)) {
+    s.groups.forEach((_, gi) => {
+      const gen = s.groupRounds[gi] || 0;
+      if (gen > 0 && gen < newRc && isGroupRoundComplete(s.matches, gi, gen - 1)) {
+        const before = new Set(Object.keys(s.matches));
+        if (appendGroupRound(s, gi)) {
+          updates[`groupRounds/${gi}`] = s.groupRounds[gi];
+          Object.keys(s.matches).forEach(id => {
+            if (!before.has(id)) updates[`matches/${id}`] = s.matches[id];
+          });
+        }
+      }
+    });
+  }
+  persistSwiss(s);
+  if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
+    swissRoomRef.update(updates).catch(e => console.warn("Round count push failed:", e));
+  }
+  renderSwiss();
+}
+
+// Host entry point: reuse the round-count picker, then apply with no reset.
+function showEditRoundCountPopup() {
+  const s = loadSwiss();
+  if (!Array.isArray(s.groups) || !s.groups.length) return;
+  const maxGen = s.groups.reduce((m, _, gi) => Math.max(m, s.groupRounds[gi] || 0), 0);
+  showSwissRoundsPopup(rc => {
+    if (rc < maxGen) {
+      alert(`A group has already played ${maxGen} rounds — the total can't be lower than that. Set it to ${maxGen} to end the group stage now.`);
+      return;
+    }
+    setSwissRoundCount(rc);
+  });
 }
 
 // Picks the scrollLeft target for a .swiss-rounds-scroll strip. Group strips
@@ -1796,14 +1910,20 @@ function renderSwiss() {
   const groupsHtml = hasGroups ? state.groups.map((members, gi) => {
     const mode = swissGroupViews[gi] || "matches";
     const body = mode === "standings"
-      ? renderSwissGroupStandings(state, gi)
+      ? renderSwissGroupStandings(state, gi, canEdit)
       : renderSwissGroupMatches(state, gi);
     const roundsGen = state.groupRounds[gi] || 0;
+    // Host can retune the total round count mid-tournament, but only while the
+    // group stage is live — once the Top-8 bracket is up, rounds are moot.
+    const progressLabel = `Round ${roundsGen} / ${getRoundCount(state)}`;
+    const progressHtml = (canEdit && !bracketActive)
+      ? `<button type="button" class="swiss-group-progress swiss-group-progress-edit" title="Tap to change total rounds">${progressLabel}</button>`
+      : `<span class="swiss-group-progress">${progressLabel}</span>`;
 
     return `<section class="swiss-group">
       <header class="swiss-group-header">
         <span class="swiss-group-title">Group ${String.fromCharCode(65 + gi)}</span>
-        <span class="swiss-group-progress">Round ${roundsGen} / ${getRoundCount(state)}</span>
+        ${progressHtml}
         <div class="swiss-group-tabs">
           <button type="button" class="swiss-group-tab ${mode === "standings" ? "active" : ""}" data-group="${gi}" data-view="standings">Standings</button>
           <button type="button" class="swiss-group-tab ${mode === "matches" ? "active" : ""}" data-group="${gi}" data-view="matches">Matches</button>
@@ -1844,10 +1964,7 @@ function renderSwiss() {
         ${showStartKnockoutBtn ? `<button type="button" id="swiss-start-bracket" class="btn">Start Knockout</button>` : ""}
         <div class="swiss-toolbar-actions">
           ${renderSwissShareButton()}
-          ${canEdit ? `<button type="button" id="swiss-edit-participants" class="btn btn-icon-sm" aria-label="Edit participants" title="Edit participants">
-            <img src="assets/icons/pencil.png" alt="Edit"
-                 onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#9998;');">
-          </button>` : ""}
+          ${canEdit ? `<button type="button" id="swiss-edit-participants" class="btn btn-icon-sm btn-icon-plus" aria-label="Add participant" title="Add participant">+</button>` : ""}
           <button type="button" id="swiss-clear" class="btn btn-reset btn-icon-sm" title="${resetTitle}">
             <img src="assets/icons/exit-button.png" alt="${resetTitle}"
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
@@ -1881,7 +1998,7 @@ function renderSwiss() {
 
   bindSwissRoomBadge(view);
   view.querySelector("#swiss-start-bracket")?.addEventListener("click", startSwissBracket);
-  view.querySelector("#swiss-edit-participants")?.addEventListener("click", showEditParticipantsPopup);
+  view.querySelector("#swiss-edit-participants")?.addEventListener("click", showAddParticipantPopup);
   view.querySelector("#swiss-edit-name")?.addEventListener("click", showEditTournamentNamePopup);
   bindSwissShareButton(view);
 
@@ -1911,6 +2028,16 @@ function renderSwiss() {
       swissGroupViews[gi] = btn.dataset.view;
       renderSwiss();
     });
+  });
+  // Tap a name in the Standings view to rename that participant (host-only;
+  // the buttons are only rendered when canEdit).
+  view.querySelectorAll(".swiss-name-edit").forEach(btn => {
+    btn.addEventListener("click", () => promptRenameSwissParticipant(btn.dataset.rename));
+  });
+  // Tap the "Round X / Y" header to change the total round count (host-only,
+  // group stage only).
+  view.querySelectorAll(".swiss-group-progress-edit").forEach(btn => {
+    btn.addEventListener("click", showEditRoundCountPopup);
   });
   view.querySelector("#swiss-clear")?.addEventListener("click", resetSwiss);
 
@@ -2196,10 +2323,13 @@ function startRegisteringTournament() {
     ? generateSingleElimFromText(namesText, state.tournamentName)
     : generateSwissFromText(namesText, state.tournamentName, getRoundCount(state), getGroupCount(state));
   if (!generated) return; // generator already alerted
-  // Carry forward registrants + metadata; flip phase to running.
+  // Carry forward registrants + metadata; flip phase to running. hostUid must
+  // be carried too — the room push below is a full overwrite, so dropping it
+  // would wipe the room's owner field.
   generated.registrants = state.registrants;
   generated.phase = "running";
   generated.ranked = state.ranked;
+  generated.hostUid = state.hostUid || null;
   if (state.mode === "swiss-only") generated.mode = "swiss-only";
   if (state.createdAt) generated.createdAt = state.createdAt;
   persistSwiss(generated);
@@ -2212,7 +2342,10 @@ function startRegisteringTournament() {
       .catch(e => console.warn("Start tournament push failed:", e))
       .finally(() => { swissApplyingRemote = false; });
   }
-  if (swissEditCode) removeOpenRoomIndex(swissEditCode);
+  // Keep the room in the Open Tournaments lobby once it's running. Registration
+  // is closed, but co-hosts and viewers can still find and join it — the entry
+  // is only removed when the host resets/closes the room.
+  if (swissEditCode) publishOpenRoomIndex(swissEditCode, generated);
   renderSwiss();
 }
 
@@ -2506,30 +2639,6 @@ function startSwissBracket() {
     swissRoomRef.update(updates).catch(e => console.warn("Bracket push failed:", e));
   }
   renderSwiss();
-}
-
-// Apply a pure rename mapping (old names → new names at the same positions)
-// across groups, matches and the participants list. Returns true if any
-// actual change was applied.
-function applyParticipantRenames(state, oldNames, newNames) {
-  const renames = Object.create(null);
-  let any = false;
-  for (let i = 0; i < oldNames.length; i++) {
-    if (oldNames[i] !== newNames[i]) {
-      renames[oldNames[i]] = newNames[i];
-      any = true;
-    }
-  }
-  if (!any) return false;
-  state.participants = newNames.slice();
-  if (Array.isArray(state.groups)) {
-    state.groups = state.groups.map(grp => grp.map(name => (name in renames) ? renames[name] : name));
-  }
-  Object.values(state.matches || {}).forEach(m => {
-    if (m && m.a && (m.a in renames)) m.a = renames[m.a];
-    if (m && m.b && (m.b in renames)) m.b = renames[m.b];
-  });
-  return true;
 }
 
 // Bey check popup: when host/co-host taps a match, build each participant's
@@ -3364,74 +3473,183 @@ function showEditTournamentNamePopup() {
   }
 }
 
-function showEditParticipantsPopup() {
+// Slot a new participant into a running Swiss tournament without resetting it:
+// the player joins the smallest group that still has rounds left and is paired
+// in by that group's next round — all played matches and scores are kept. The
+// player also gets a registrant entry so their deck pre-fills every match.
+// Returns true on success. Swiss + Swiss-only only (both carry `groups`).
+function addSwissParticipantNextRound(name, deck) {
+  const s = loadSwiss();
+  if (!Array.isArray(s.groups) || !s.groups.length) return false;
+  const rc = getRoundCount(s);
+  // Eligible groups still have at least one unplayed round to pair into.
+  // Among those, pick the smallest so groups stay balanced.
+  let target = -1;
+  for (let i = 0; i < s.groups.length; i++) {
+    if ((s.groupRounds[i] || 0) >= rc) continue;
+    if (target === -1 || s.groups[i].length < s.groups[target].length) target = i;
+  }
+  if (target === -1) {
+    alert("Every group has already played all its rounds — there's no upcoming round to add a player to.");
+    return false;
+  }
+  s.groups[target].push(name);
+  // Keep the canonical participant list in sync (getParticipants falls back to
+  // groups.flat() only when `participants` is absent).
+  if (Array.isArray(s.participants)) s.participants.push(name);
+  if (!s.registrants || typeof s.registrants !== "object") s.registrants = {};
+  const regId = generateRegistrantId();
+  s.registrants[regId] = { name, deck };
+  persistSwiss(s);
+  if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
+    // Targeted update — only the touched group, the participant list and the
+    // new registrant. Nothing else in the room is rewritten.
+    const updates = {
+      [`groups/${target}`]: s.groups[target],
+      [`registrants/${regId}`]: { name, deck }
+    };
+    if (Array.isArray(s.participants)) updates.participants = s.participants;
+    swissRoomRef.update(updates).catch(e => console.warn("Add participant push failed:", e));
+  }
+  return true;
+}
+
+// Add a single participant — name + a 3-combo deck — to a running tournament.
+// Swiss tournaments slot the player into the next round with no reset (see
+// addSwissParticipantNextRound). Single-elim has no open slot mid-bracket, so
+// it regenerates from scratch after an explicit confirm.
+function showAddParticipantPopup() {
   const popup = document.getElementById("edit-participants-popup");
   if (!popup) return;
-  const textarea = popup.querySelector("#edit-participants-names");
+  const nameInput = popup.querySelector("#add-participant-name");
+  const slotsHost = popup.querySelector("#add-participant-deck-slots");
   const status = popup.querySelector("#edit-participants-status");
   const saveBtn = popup.querySelector("#edit-participants-save");
   const cancelBtn = popup.querySelector("#edit-participants-cancel");
+  const pasteBtn = popup.querySelector("#add-participant-paste");
+
   const state = loadSwiss();
   const current = getParticipants(state);
-  textarea.value = current.join("\n");
-  if (status) status.textContent = "";
+  let deck = emptyBeyCheckDeck();
+
+  const setStatus = (msg, kind) => {
+    if (!status) return;
+    status.textContent = msg || "";
+    status.classList.remove("is-ok", "is-err", "is-pending");
+    if (kind) status.classList.add(`is-${kind}`);
+  };
+
+  if (nameInput) nameInput.value = "";
+  setStatus("");
+
+  const renderSlots = () => {
+    if (!slotsHost) return;
+    slotsHost.innerHTML = deck.map((s, i) => renderBeyCheckSlot(i, s)).join("");
+    slotsHost.querySelectorAll(".bey-check-slot").forEach(el => {
+      el.addEventListener("click", () => {
+        const slotIdx = Number(el.dataset.slot);
+        showBeyCheckSlotPopup(slotIdx, deck[slotIdx], deck, (next) => {
+          deck[slotIdx] = next;
+          renderSlots();
+        });
+      });
+    });
+  };
+  renderSlots();
+
   popup.classList.remove("hidden");
+  setTimeout(() => nameInput?.focus(), 0);
 
   const close = () => {
     popup.classList.add("hidden");
     saveBtn.onclick = null;
     cancelBtn.onclick = null;
+    if (pasteBtn) pasteBtn.onclick = null;
+    if (nameInput) nameInput.onkeydown = null;
   };
   cancelBtn.onclick = close;
-  saveBtn.onclick = () => {
-    const lines = textarea.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-    const seen = new Set();
-    const unique = [];
-    for (const n of lines) {
-      const k = n.toLowerCase();
-      if (!seen.has(k)) { seen.add(k); unique.push(n); }
-    }
-    if (unique.length === 0) {
-      if (status) status.textContent = "Need at least one participant.";
+
+  // Paste a deck copied from the Deck tab (same payload the registration
+  // popup accepts) straight into the slots.
+  if (pasteBtn) {
+    pasteBtn.onclick = () => {
+      if (!navigator.clipboard || !navigator.clipboard.readText) {
+        setStatus("Clipboard read isn't available in this browser.", "err");
+        return;
+      }
+      navigator.clipboard.readText().then(text => {
+        let parsed;
+        try { parsed = JSON.parse(text); } catch (e) { parsed = null; }
+        if (!parsed || parsed.type !== "x-optimizer-deck" || !Array.isArray(parsed.deck)) {
+          setStatus("Clipboard doesn't contain a copied deck. Hit Copy in the Deck tab first.", "err");
+          return;
+        }
+        deck = normalizeBeyCheckDeck(parsed.deck);
+        renderSlots();
+        const label = parsed.name ? ` "${parsed.name}"` : "";
+        setStatus(`Pasted deck${label} — review before adding.`, "ok");
+      }).catch(() => {
+        setStatus("Couldn't read the clipboard. Did you allow the permission?", "err");
+      });
+    };
+  }
+
+  const submit = () => {
+    const name = (nameInput?.value || "").trim();
+    if (!name) {
+      setStatus("Enter a name.", "err");
+      nameInput?.focus();
       return;
     }
-    const sameCount = unique.length === current.length;
-    if (sameCount) {
-      // Pure rename path — preserves scores, pairings and standings.
-      const s = loadSwiss();
-      const changed = applyParticipantRenames(s, current, unique);
-      if (!changed) { close(); return; }
-      persistSwiss(s);
-      if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
-        const payload = { ...s };
-        if (swissViewCode) payload.viewCode = swissViewCode;
-        swissRoomRef.set(payload).catch(e => console.warn("Rename push failed:", e));
-      }
+    if (current.some(n => n.toLowerCase() === name.toLowerCase())) {
+      setStatus("That name is already in the tournament.", "err");
+      return;
+    }
+    if (isBeyCheckDeckEmpty(deck)) {
+      // Soft-warn but allow — the judge can still fill the deck at match time.
+      if (!confirm(`"${name}" has no deck slots filled. Add anyway?`)) return;
+    }
+
+    // Swiss / Swiss-only: slot into the next round, no reset.
+    const isSwiss = state.mode !== "single-elim"
+      && Array.isArray(state.groups) && state.groups.length;
+    if (isSwiss) {
+      if (!addSwissParticipantNextRound(name, deck)) return; // helper alerted
       renderSwiss();
       close();
       return;
     }
-    // Count changed — regenerate the tournament.
-    const msg = `Participant count changes from ${current.length} to ${unique.length}. ` +
-                `This will regenerate the tournament — all current matches and scores will be lost. Continue?`;
+
+    // Single-elim: a fixed bracket has no open slot mid-tournament, so the
+    // only way to add a player is a full regeneration.
+    const names = current.concat([name]);
+    const msg = `Adding "${name}" brings the tournament to ${names.length} participants. ` +
+                `A single-elimination bracket can't take a new player mid-tournament, so it ` +
+                `will be regenerated — all current matches and scores will be lost. Continue?`;
     if (!confirm(msg)) return;
-    const mode = state.mode === "single-elim" ? "single-elim"
-      : state.mode === "swiss-only" ? "swiss-only" : "swiss";
-    const next = mode === "single-elim"
-      ? generateSingleElimFromText(unique.join("\n"), state.tournamentName)
-      : generateSwissFromText(unique.join("\n"), state.tournamentName, getRoundCount(state), getGroupCount(state));
-    if (!next) return; // generator already alerted (e.g. Swiss min participants)
-    if (mode === "swiss-only") next.mode = "swiss-only";
+    const next = generateSingleElimFromText(names.join("\n"), state.tournamentName);
+    if (!next) return; // generator already alerted
     if (typeof state.ranked === "boolean") next.ranked = state.ranked;
+    // Carry registrants forward so existing players keep their registered
+    // decks, then add the new player's registrant entry.
+    next.registrants = { ...(state.registrants || {}) };
+    next.registrants[generateRegistrantId()] = { name, deck };
     persistSwiss(next);
     if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
       const payload = { ...next };
       if (swissViewCode) payload.viewCode = swissViewCode;
-      swissRoomRef.set(payload).catch(e => console.warn("Regenerate push failed:", e));
+      swissRoomRef.set(payload).catch(e => console.warn("Add participant push failed:", e));
     }
     renderSwiss();
     close();
   };
+  saveBtn.onclick = submit;
+  if (nameInput) {
+    nameInput.onkeydown = (e) => {
+      if (e.key === "Enter") { e.preventDefault(); submit(); }
+      else if (e.key === "Escape") { e.preventDefault(); close(); }
+    };
+  }
 }
 
 function showSwissRoundsPopup(onPick) {
@@ -3913,7 +4131,7 @@ function refreshOpenTournamentRooms() {
       const val = snap.val() || {};
       const rooms = Object.values(val).filter(r => r && r.editCode);
       if (!rooms.length) {
-        list.innerHTML = `<p class="swiss-rooms-empty">No tournaments are open for registration right now. Ask your host to create one.</p>`;
+        list.innerHTML = `<p class="swiss-rooms-empty">No tournaments right now. Ask your host to create one.</p>`;
         setStatus("");
         return;
       }
@@ -3936,23 +4154,27 @@ function refreshOpenTournamentRooms() {
       })).then(results => {
         const live = [];
         results.forEach(({ room, phase, count }) => {
-          if (phase === "registering") {
+          // Registering AND running rooms stay listed — running ones just
+          // can't take new registrations. Only a vanished room (phase is
+          // null because the host reset/deleted it) gets pruned.
+          if (phase === "registering" || phase === "running") {
             // Refresh the cached count too so future viewers benefit.
             if (typeof count === "number" && count !== room.registrantCount) {
               db.ref("openTournaments/" + room.editCode + "/registrantCount")
                 .set(count).catch(() => {});
               room.registrantCount = count;
             }
+            room.phase = phase;
             live.push(room);
           } else {
-            // Underlying room is gone or already running/finished — drop it.
+            // Underlying room is gone — drop the stale lobby entry.
             db.ref("openTournaments/" + room.editCode).set(null)
               .catch(() => {});
           }
         });
         live.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
         if (!live.length) {
-          list.innerHTML = `<p class="swiss-rooms-empty">No tournaments are open for registration right now. Ask your host to create one.</p>`;
+          list.innerHTML = `<p class="swiss-rooms-empty">No tournaments right now. Ask your host to create one.</p>`;
           setStatus("");
           return;
         }
@@ -3976,7 +4198,8 @@ function renderLobbyRooms(list, rooms) {
     const modeLabel = r.mode === "single-elim" ? "Single Elim"
       : r.mode === "swiss-only" ? "Swiss"
       : "Swiss + Top 8";
-    const meta = [`${r.registrantCount || 0} registered`];
+    const isRunning = r.phase === "running";
+    const meta = [`${r.registrantCount || 0} ${isRunning ? "players" : "registered"}`];
     if (r.mode !== "single-elim") {
       if (r.groupCount) meta.push(`${r.groupCount} groups`);
       if (r.roundCount) meta.push(`${r.roundCount} rounds`);
@@ -3984,9 +4207,12 @@ function renderLobbyRooms(list, rooms) {
     const hostingBadge = (myUid && r.hostUid && r.hostUid === myUid)
       ? `<span class="swiss-room-hosting-badge">Hosting</span>`
       : "";
+    const runningBadge = isRunning
+      ? `<span class="swiss-room-running-badge">In progress</span>`
+      : "";
     return `
       <button type="button" class="swiss-room-card" data-edit-code="${escapeHtml(r.editCode)}">
-        <div class="swiss-room-card-name">${escapeHtml(name)}${hostingBadge}</div>
+        <div class="swiss-room-card-name">${escapeHtml(name)}${hostingBadge}${runningBadge}</div>
         <div class="swiss-room-card-mode">${modeLabel}</div>
         <div class="swiss-room-card-meta">${meta.map(escapeHtml).join(" · ")}</div>
       </button>
@@ -4037,10 +4263,24 @@ function showTournamentJoinChoicePopup(room) {
     };
   }
   if (participantBtn) {
-    participantBtn.onclick = () => {
-      close();
-      showRegistrationPopup(room);
-    };
+    // A running tournament has closed registration — co-host and viewer
+    // still work, but the participant sign-up path is disabled. The desc
+    // text is restored explicitly because the popup is reused across rooms.
+    const desc = participantBtn.querySelector(".tournament-mode-desc");
+    if (room.phase === "running") {
+      participantBtn.disabled = true;
+      participantBtn.classList.add("is-disabled");
+      participantBtn.onclick = null;
+      if (desc) desc.textContent = "Registration is closed — this tournament has already started.";
+    } else {
+      participantBtn.disabled = false;
+      participantBtn.classList.remove("is-disabled");
+      if (desc) desc.textContent = "Sign up with your name and deck. Your deck pre-fills every match you play.";
+      participantBtn.onclick = () => {
+        close();
+        showRegistrationPopup(room);
+      };
+    }
   }
   if (viewerBtn) {
     viewerBtn.onclick = () => {
@@ -4548,6 +4788,13 @@ function rankingKey(name) {
     .replace(/[.#$/\[\]]/g, "_");
 }
 
+// Stress-test registrants added via the "Test" button are always named
+// exactly "Tester <n>". They play out the bracket like real players but must
+// never earn global ranking points or appear on the leaderboard.
+function isTestRegistrant(name) {
+  return /^Tester \d+$/.test(String(name || "").trim());
+}
+
 // Atomically add `points` to /ranking/{key}.points. Stores the freshest cased
 // version of the name so the leaderboard shows a real spelling, not the key.
 function bumpGlobalRanking(name, points) {
@@ -4568,6 +4815,8 @@ function awardPlayerIfNew(name, points) {
   if (!swissRoomRef || !points) return;
   const cleanName = (name || "").trim();
   if (!cleanName) return;
+  if (isTestRegistrant(cleanName)) return; // test registrants aren't ranked
+
   const key = rankingKey(cleanName);
   if (!key) return;
   const slotRef = swissRoomRef.child("awarded/players/" + key);
@@ -4671,7 +4920,7 @@ function renderTournamentRanking() {
           name: (v && v.name) || key,
           points: (v && Number(v.points)) || 0
         }))
-        .filter(r => r.points > 0)
+        .filter(r => r.points > 0 && !isTestRegistrant(r.name))
         .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
       if (!list.length) {
         container.innerHTML = `<p class="tournament-results-empty">No tournament results yet. Finish an online tournament to start earning ranking points (1st = +5, 2nd = +4, 3rd = +3, top 8 = +2, participation = +1). Same names merge across tournaments.</p>`;

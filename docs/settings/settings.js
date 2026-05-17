@@ -44,13 +44,18 @@ Tournament
 - Every tournament is ranked automatically — no host password
 - Self-registration via the Open Tournaments lobby (no manual name list)
 - Tournaments you host show a "Hosting" badge in the Open Tournaments lobby when you're signed in
+- Running tournaments stay listed in the Open Tournaments lobby with an "In progress" badge — registration is closed, but co-hosts and viewers can still join
 - Three-way join from the lobby: Co-host (with host code), Participant (register name + deck), Viewer (watch only)
-- Hosts AND co-hosts can play (+ Register myself), start the tournament, edit participants, and remove registrants
+- Hosts AND co-hosts can play (+ Register myself), start the tournament, add participants, and remove registrants
 - Edit the format while waiting for players — tap the Top 8 / groups / rounds chips during registration to change them, no reset needed
 - Test button (host / co-host): bulk-adds synthetic participants (default 10) with meta-random decks, one batched Firebase write
 - Test decks obey "one of each part per deck" across all 3 slots (only light lock chips can repeat; Emperor / Valkyrie cannot)
 - Test deck mode mix is weighted realistic: ~75% Standard, ~13% CX, ~12% CX Expand
+- Test registrants never earn global ranking points or appear on the leaderboard
 - Edit a registrant in place — tap their name to change the name or rebuild their deck
+- Add a participant after the tournament starts — name + 3-combo deck; in Swiss they slot into the next round with no reset
+- Rename any participant after the tournament starts — tap their name in a group's Standings
+- Adjust the total round count mid-tournament — tap "Round X / Y" in a group header; already-played rounds are kept
 - Registered decks pre-fill every match; judges can override per match
 - CX / CX Expand decks paste from the Deck tab without losing parts (lock chip / main blade / assist blade preserved)
 - Bey Check slots show just "Slot 1 / 2 / 3" with an invisible-scrollbar part row (swipe still works)
