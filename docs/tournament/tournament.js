@@ -875,6 +875,7 @@ function resetSwiss() {
       dbHandle.ref("swissRooms/" + codeForRemote).set(null);
       if (viewCodeForRemote) dbHandle.ref("swissViewCodes/" + viewCodeForRemote).set(null);
       removeOpenRoomIndex(codeForRemote);
+      if (state.hostUid) removeUserTournament(state.hostUid, codeForRemote);
     } catch (e) {}
   }
 
@@ -1861,6 +1862,7 @@ function renderSwiss() {
   const setupNowVisible = !setupShouldHide;
   if (setupNowVisible && !swissSetupWasVisible) {
     refreshOpenTournamentRooms();
+    refreshMyTournaments();
   }
   swissSetupWasVisible = setupNowVisible;
 
@@ -2346,6 +2348,10 @@ function startRegisteringTournament() {
   // is closed, but co-hosts and viewers can still find and join it — the entry
   // is only removed when the host resets/closes the room.
   if (swissEditCode) publishOpenRoomIndex(swissEditCode, generated);
+  // Refresh the host's account-scoped index so the phase flips to running.
+  if (swissEditCode && generated.hostUid) {
+    publishUserTournament(generated.hostUid, swissEditCode, generated);
+  }
   renderSwiss();
 }
 
@@ -3769,6 +3775,9 @@ function startTournamentFromState(next) {
     // connectSwissRoom saves a tournament history entry and its listener will
     // push the local state (with viewCode metadata) and publish the
     // swissViewCodes mapping because remote is empty.
+    // Index it under the host's account so it shows in "My Tournaments" on
+    // any device they sign in on.
+    if (next.hostUid) publishUserTournament(next.hostUid, editCode, { ...next, viewCode });
   }
   renderSwiss();
 }
@@ -4105,12 +4114,151 @@ document.addEventListener("webkitfullscreenchange", scheduleSwissScrollRestore);
         const setup = document.getElementById("swiss-setup");
         if (setup && !setup.classList.contains("hidden")) {
           refreshOpenTournamentRooms();
+          refreshMyTournaments();
         }
       }
     });
   });
-  document.getElementById("swiss-rooms-refresh")?.addEventListener("click", refreshOpenTournamentRooms);
+  document.getElementById("swiss-rooms-refresh")?.addEventListener("click", () => {
+    refreshOpenTournamentRooms();
+    refreshMyTournaments();
+  });
+  // Re-list the host's own tournaments whenever auth resolves or changes —
+  // this also fires once at boot, populating the list on first load.
+  if (typeof onAuthChange === "function") {
+    onAuthChange(() => refreshMyTournaments());
+  }
 })();
+
+// ===== "My Tournaments": an account-scoped index so a host sees their own
+// rooms on any device they sign in on. The joined-room pointer and Tournament
+// History both live in localStorage (per-device), so without this a host on a
+// second device has no way back into their tournament. Each hosted room
+// writes a small summary at userTournaments/{uid}/{editCode}. =====
+
+function publishUserTournament(uid, editCode, state) {
+  const db = initFirebase();
+  if (!db || !uid || !editCode || !state) return;
+  // The DB rule only lets a signed-in user write their own userTournaments
+  // subtree. Skip when this device isn't that account (e.g. a co-host starting
+  // the tournament) — the host already indexed the room when they created it.
+  const user = (typeof getCurrentUser === "function") ? getCurrentUser() : null;
+  if (!user || user.uid !== uid) return;
+  db.ref(`userTournaments/${uid}/${editCode}`).set({
+    editCode,
+    viewCode: swissViewCode || state.viewCode || null,
+    name: state.tournamentName || "",
+    mode: state.mode || "swiss",
+    phase: state.phase || "running",
+    createdAt: state.createdAt || new Date().toISOString()
+  }).catch(e => console.warn("My-tournament publish failed:", e));
+}
+
+function removeUserTournament(uid, editCode) {
+  const db = initFirebase();
+  if (!db || !uid || !editCode) return;
+  const user = (typeof getCurrentUser === "function") ? getCurrentUser() : null;
+  if (!user || user.uid !== uid) return;
+  db.ref(`userTournaments/${uid}/${editCode}`).set(null)
+    .catch(e => console.warn("My-tournament remove failed:", e));
+}
+
+function refreshMyTournaments() {
+  const list = document.getElementById("my-tournaments-list");
+  const status = document.getElementById("my-tournaments-status");
+  if (!list) return;
+  const setStatus = msg => { if (status) status.textContent = msg || ""; };
+  const user = (typeof getCurrentUser === "function") ? getCurrentUser() : null;
+  if (!user) {
+    list.innerHTML = `<p class="swiss-rooms-empty">Sign in (Settings → Account) to see the tournaments you host on every device.</p>`;
+    setStatus("");
+    return;
+  }
+  if (!firebaseReady()) {
+    list.innerHTML = "";
+    setStatus("Live sync isn't configured on this build.");
+    return;
+  }
+  setStatus("Loading…");
+  const db = initFirebase();
+  db.ref("userTournaments/" + user.uid).once("value")
+    .then(snap => {
+      const rooms = Object.values(snap.val() || {}).filter(r => r && r.editCode);
+      if (!rooms.length) {
+        list.innerHTML = `<p class="swiss-rooms-empty">No tournaments yet. Create one and it'll show here on every device you sign in on.</p>`;
+        setStatus("");
+        return;
+      }
+      // Cross-check each entry against the live room; prune ones whose room
+      // is gone (host reset / closed it).
+      return Promise.all(rooms.map(r =>
+        db.ref("swissRooms/" + r.editCode + "/phase").once("value")
+          .then(s => s.val()).catch(() => null)
+          .then(phase => ({ room: r, phase }))
+      )).then(results => {
+        const live = [];
+        results.forEach(({ room, phase }) => {
+          if (phase === "registering" || phase === "running") {
+            room.phase = phase;
+            live.push(room);
+          } else {
+            removeUserTournament(user.uid, room.editCode);
+          }
+        });
+        live.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+        if (!live.length) {
+          list.innerHTML = `<p class="swiss-rooms-empty">No active tournaments. Create one and it'll show here on every device you sign in on.</p>`;
+          setStatus("");
+          return;
+        }
+        renderMyTournamentRooms(list, live);
+        setStatus("");
+      });
+    })
+    .catch(err => {
+      console.warn("My-tournaments fetch failed:", err);
+      setStatus("Couldn't load your tournaments. Check your connection.");
+    });
+}
+
+function renderMyTournamentRooms(list, rooms) {
+  list.innerHTML = rooms.map(r => {
+    const name = (r.name || "").trim() || "(unnamed tournament)";
+    const modeLabel = r.mode === "single-elim" ? "Single Elim"
+      : r.mode === "swiss-only" ? "Swiss"
+      : "Swiss + Top 8";
+    const badge = r.phase === "running"
+      ? `<span class="swiss-room-running-badge">In progress</span>`
+      : `<span class="swiss-room-hosting-badge">Registering</span>`;
+    return `
+      <button type="button" class="swiss-room-card" data-edit-code="${escapeHtml(r.editCode)}">
+        <div class="swiss-room-card-name">${escapeHtml(name)}${badge}</div>
+        <div class="swiss-room-card-mode">${modeLabel}</div>
+        <div class="swiss-room-card-meta">Host code ${escapeHtml(r.editCode)}</div>
+      </button>
+    `;
+  }).join("");
+  list.querySelectorAll(".swiss-room-card").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const room = rooms.find(r => r.editCode === btn.dataset.editCode);
+      if (room) joinMyTournament(room);
+    });
+  });
+}
+
+// Re-open one of the signed-in user's own tournaments as host on this device.
+// The account owns the room, so we connect with full host authority and mark
+// it hosted locally so it also auto-reconnects on reload.
+function joinMyTournament(room) {
+  if (!room || !room.editCode) return;
+  if (!firebaseReady()) { alert("Live sync isn't configured on this build."); return; }
+  markRoomHosted(room.editCode);
+  disconnectSwissRoom();
+  // Empty placeholder — connectSwissRoom's listener fills it from the remote.
+  localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [], phase: "running", registrants: {} }));
+  connectSwissRoom(room.editCode, room.viewCode || null, true, true);
+  renderSwiss();
+}
 
 // ===== Public Rooms tab: list open tournaments, click to register. =====
 

@@ -45,6 +45,7 @@ Tournament
 - Self-registration via the Open Tournaments lobby (no manual name list)
 - Tournaments you host show a "Hosting" badge in the Open Tournaments lobby when you're signed in
 - Running tournaments stay listed in the Open Tournaments lobby with an "In progress" badge — registration is closed, but co-hosts and viewers can still join
+- My Tournaments: signed-in hosts see every tournament they host on any device — tap one to rejoin as host (the room index follows your account, not the device)
 - Three-way join from the lobby: Co-host (with host code), Participant (register name + deck), Viewer (watch only)
 - Hosts AND co-hosts can play (+ Register myself), start the tournament, add participants, and remove registrants
 - Edit the format while waiting for players — tap the Top 8 / groups / rounds chips during registration to change them, no reset needed

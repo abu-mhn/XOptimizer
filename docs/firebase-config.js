@@ -21,6 +21,10 @@
 //    - openTournaments  — public lobby of rooms accepting self-registration.
 //                         Listed by the Rooms tab; needs read on the parent
 //                         so the lobby can enumerate children.
+//    - userTournaments  — per-account index of rooms a user hosts, so "My
+//                         Tournaments" works on any device they sign in on.
+//                         Keyed by Firebase Auth uid; needs read on the $uid
+//                         node so a device can enumerate that account's rooms.
 //    - ranking          — global Beyblade-X tournament leaderboard.
 //    - revoxRanking     — Revox club leaderboard.
 //
@@ -57,6 +61,7 @@ window.TOURNAMENT_REVOX_ADMIN_SHA256 =
 //       "swissRooms":      { "$code": { ".read": true, ".write": true } },
 //       "swissViewCodes":  { "$code": { ".read": true, ".write": true } },
 //       "openTournaments": { ".read": true, "$code": { ".write": true } },
+//       "userTournaments": { "$uid": { ".read": "auth != null && auth.uid === $uid", ".write": "auth != null && auth.uid === $uid" } },
 //       "ranking":         { ".read": true, "$name": { ".write": true } },
 //       "revoxRanking":    { ".read": true, "$name": { ".write": true } }
 //     }
