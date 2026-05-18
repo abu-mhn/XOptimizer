@@ -460,6 +460,19 @@ document.querySelectorAll(".sub-tab").forEach(tab => {
 // end of <body>, the .mode-tabs element is already parsed and we can set
 // scrollLeft before the first paint, so there's no visible "reset then snap"
 // jump on each tab click.
+// Lets a vertical mouse wheel scroll a horizontal-only row sideways. A
+// horizontal wheel / trackpad swipe already scrolls it natively, so that's
+// left alone, and the page wheel is only hijacked when the row can scroll.
+function enableHorizontalWheelScroll(el) {
+  if (!el) return;
+  el.addEventListener("wheel", (e) => {
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;     // horizontal input
+    if (el.scrollWidth <= el.clientWidth) return;             // nothing to scroll
+    el.scrollLeft += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY; // line vs pixel
+    e.preventDefault();
+  }, { passive: false });
+}
+
 (function restoreModeTabsScrollSync() {
   const tabs = document.querySelector(".mode-tabs");
   if (!tabs) return;
@@ -477,6 +490,9 @@ document.querySelectorAll(".sub-tab").forEach(tab => {
     }, 80);
   }, { passive: true });
 
+  // Vertical mouse wheel scrolls the tab row horizontally.
+  enableHorizontalWheelScroll(tabs);
+
   // Final snapshot at the moment of click, in case the user clicked
   // immediately after scrolling and the debounced save hasn't fired yet.
   tabs.querySelectorAll(".tab").forEach(t => {
@@ -485,6 +501,10 @@ document.querySelectorAll(".sub-tab").forEach(tab => {
     });
   });
 })();
+
+// Library filter chips + sort row: vertical wheel scrolls them horizontally.
+enableHorizontalWheelScroll(document.querySelector(".library-filter"));
+enableHorizontalWheelScroll(document.querySelector(".library-sort"));
 
 document.addEventListener("DOMContentLoaded", function initActiveTabRender() {
   const activeTab = document.querySelector(".tab.active");

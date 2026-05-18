@@ -2355,22 +2355,14 @@ body.forest-mode .bey-check-mode-tab.active {
     flex-wrap: nowrap;
     overflow-x: auto;
     overflow-y: hidden;
-    scrollbar-width: thin;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
     -webkit-overflow-scrolling: touch;
     padding-bottom: 4px;
 }
 
 .library-sort::-webkit-scrollbar {
-    height: 6px;
-}
-
-.library-sort::-webkit-scrollbar-thumb {
-    background: #30363d;
-    border-radius: 3px;
-}
-
-.library-sort::-webkit-scrollbar-track {
-    background: transparent;
+    display: none;
 }
 
 .library-sort.hidden {
@@ -2415,22 +2407,14 @@ body.forest-mode .bey-check-mode-tab.active {
     margin-top: 8px;
     overflow-x: auto;
     overflow-y: hidden;
-    scrollbar-width: thin;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
     -webkit-overflow-scrolling: touch;
     padding-bottom: 4px;
 }
 
 .library-filter::-webkit-scrollbar {
-    height: 6px;
-}
-
-.library-filter::-webkit-scrollbar-thumb {
-    background: #30363d;
-    border-radius: 3px;
-}
-
-.library-filter::-webkit-scrollbar-track {
-    background: transparent;
+    display: none;
 }
 
 .filter-btn {
