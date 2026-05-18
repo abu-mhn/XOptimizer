@@ -1396,6 +1396,15 @@ function initSettingDropdown(id, storageKey, defaultVal, onChange) {
 
   let value = localStorage.getItem(storageKey) || defaultVal;
 
+  // A value left in localStorage by an older build may no longer be a valid
+  // option (e.g. retired Random-button modes like "minweight"). If it doesn't
+  // match any menu entry, fall back to the default and re-persist — otherwise
+  // the stale value keeps driving onChange even though it can't be re-selected.
+  if (!dropdown.querySelector(`.setting-dropdown-option[data-value="${value}"]`)) {
+    value = defaultVal;
+    localStorage.setItem(storageKey, value);
+  }
+
   // Init from saved value
   btn.dataset.value = value;
   const saved = dropdown.querySelector(`.setting-dropdown-option[data-value="${value}"]`);
@@ -1482,36 +1491,13 @@ const getRandomMode = initSettingDropdown("setting-random-mode", "randomMode", "
   updateLuckyButtons();
 });
 
+// The Additional button has just two modes: Random and Meta.
 function updateLuckyButtons() {
   document.querySelectorAll(".btn-lucky").forEach(btn => {
-    if (randomModeValue === "maxweight") {
-      btn.innerHTML = '<img src="assets/icons/heavy.png" alt="Max Weight">';
-      btn.setAttribute("aria-label", "Max Weight");
-      btn.title = "Max Weight";
-    } else if (randomModeValue === "minweight") {
-      btn.innerHTML = '<img src="assets/icons/lightweight.png" alt="Min Weight">';
-      btn.setAttribute("aria-label", "Min Weight");
-      btn.title = "Min Weight";
-    } else if (randomModeValue === "comboday") {
-      btn.innerHTML = '<img src="assets/icons/calendar.png" alt="1D1C" class="icon-1d1c">';
-      btn.setAttribute("aria-label", "1D1C");
-      btn.title = "1 Day, 1 Combo";
-    } else if (randomModeValue === "meta") {
+    if (randomModeValue === "meta") {
       btn.innerHTML = '<img src="assets/icons/confrontation.png" alt="Meta" class="icon-meta">';
       btn.setAttribute("aria-label", "Meta Combo");
       btn.title = "Meta Combo";
-    } else if (randomModeValue === "maxatk") {
-      btn.innerHTML = '<span class="btn-lucky-stat">ATK</span>';
-      btn.setAttribute("aria-label", "Max ATK");
-      btn.title = "Max ATK Build";
-    } else if (randomModeValue === "maxdef") {
-      btn.innerHTML = '<span class="btn-lucky-stat">DEF</span>';
-      btn.setAttribute("aria-label", "Max DEF");
-      btn.title = "Max DEF Build";
-    } else if (randomModeValue === "maxsta") {
-      btn.innerHTML = '<span class="btn-lucky-stat">STA</span>';
-      btn.setAttribute("aria-label", "Max STA");
-      btn.title = "Max STA Build";
     } else {
       btn.innerHTML = '<img src="assets/icons/dice.png" alt="Random">';
       btn.setAttribute("aria-label", "Random Combo");
@@ -1903,20 +1889,8 @@ document.querySelectorAll(".btn-lucky").forEach(btn => {
     form.querySelector(".btn-reset").click();
     const mode = form.id.replace("form-", "");
 
-    if (randomModeValue === "maxweight") {
-      selectMaxWeight(form, mode);
-    } else if (randomModeValue === "minweight") {
-      selectMinWeight(form, mode);
-    } else if (randomModeValue === "comboday") {
-      selectComboOfDay(form, mode);
-    } else if (randomModeValue === "meta") {
+    if (randomModeValue === "meta") {
       selectMeta(form, mode);
-    } else if (randomModeValue === "maxatk") {
-      selectMaxAtk(form, mode);
-    } else if (randomModeValue === "maxdef") {
-      selectMaxDef(form, mode);
-    } else if (randomModeValue === "maxsta") {
-      selectMaxSta(form, mode);
     } else {
       selectRandom(form, mode);
     }

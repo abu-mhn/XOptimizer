@@ -94,6 +94,7 @@ const DATA = {
     { name: "Ragna", weight: 1.7, codename: "RAGNA" },
     { name: "Unicorn", weight: 1.7, codename: "UNICORN" },
     { name: "Valkyrie", weight: 5.6, codename: "VALKYRIE", exclusive: true },
+    { name: "Brachio", weight: 1.7, codename: "BRACHIO" }
   ],
 
   mainBlades: [
@@ -122,6 +123,7 @@ const DATA = {
     { atk: 10, def: 20, sta: 10, weight: 27.7, spindirection: "R", name: "Fortress", codename: "FORTRESS", meta: true },
     { atk: 10, def: 10, sta: 29, weight: 27.4, spindirection: "R", name: "Rage", codename: "RAGE", meta: true },
     { atk: 15, def: 15, sta: 10, weight: 27.8, spindirection: "R", name: "Delta", codename: "DELTA", meta: true },
+    { atk: 4, def: 10, sta: 16, weight: 0, spindirection: "R", name: "Whip", codename: "WHIP", meta: true },
   ],
 
   overBlades: [
@@ -129,6 +131,7 @@ const DATA = {
     { atk: 5, def: 10, sta: 5, weight: 3.4, spindirection: "R", name: "Guard", codename: "G" },
     { atk: 5, def: 5, sta: 10, weight: 3.7, spindirection: "R", name: "Flow", codename: "F" },
     { atk: 8, def: 7, sta: 5, weight: 3.5, spindirection: "R", name: "Peak", codename: "P" },
+    { atk: 4, def: 10, sta: 16, weight: 0, spindirection: "R", name: "Outer", codename: "O" },
   ],
 
   assistBlades: [
@@ -247,7 +250,8 @@ const DATA = {
     { atk: 10, def: 15, sta: 65, dash: 10, burstRes: 30, weight: 4.2, name: "Yielding", codename: "Y", meta: true },
     { atk: 50, def: 15, sta: 5, dash: 30, burstRes: 80, weight: 2.4, name: "Ignition", codename: "I" },
     { atk: 40, def: 15, sta: 15, dash: 30, burstRes: 80, weight: 2.3, name: "Free Flat", codename: "FF" },
-    { atk: 30, def: 20, sta: 20, dash: 30, burstRes: 80, weight: 2.3, name: "Gear Unite", codename: "GU" }
+    { atk: 30, def: 20, sta: 20, dash: 30, burstRes: 80, weight: 2.3, name: "Gear Unite", codename: "GU" },
+    { atk: 15, def: 20, sta: 60, dash: 5, burstRes: 30, weight: 0, name: "Narrow", codename: "Nr" }
   ],
 
   ratchetBits: [
