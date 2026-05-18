@@ -21,7 +21,7 @@ function renderTournamentHistory() {
   if (!container) return;
   const list = loadTournamentHistory();
   if (!list.length) {
-    container.innerHTML = `<p class="tournament-history-empty">No tournaments yet. Tournaments you host, co-host, or watch will appear here with their Host and View codes.</p>`;
+    container.innerHTML = `<p class="tournament-history-empty">No tournaments yet. Tournaments you host, co-host, or watch will appear here.</p>`;
     return;
   }
   const modeLabel = m => {
@@ -43,18 +43,15 @@ function renderTournamentHistory() {
     const when = e.createdAt ? new Date(e.createdAt).toLocaleString() : "";
     const mLabel = modeLabel(e.mode);
     const rLabel = roleLabel(e.role);
+    // Host/co-host entries no longer show a room code — codes aren't used to
+    // join any more (lobby + username-based co-hosts). Viewer entries keep
+    // their view code as a copy-to-share convenience.
     const codes = [];
-    if (e.role === "view") {
-      if (e.viewCode) codes.push(`
+    if (e.role === "view" && e.viewCode) {
+      codes.push(`
         <span class="swiss-room-badge swiss-room-badge-view" title="View code — tap to copy">
           <span class="swiss-room-role">View</span>
           <button type="button" class="swiss-room-code" data-room="${escapeHtml(e.viewCode)}">${escapeHtml(e.viewCode)}</button>
-        </span>`);
-    } else if (e.editCode) {
-      codes.push(`
-        <span class="swiss-room-badge swiss-room-badge-edit" title="Host code — tap to copy">
-          <span class="swiss-room-role">Host</span>
-          <button type="button" class="swiss-room-code" data-room="${escapeHtml(e.editCode)}">${escapeHtml(e.editCode)}</button>
         </span>`);
     }
     const metaBits = [];

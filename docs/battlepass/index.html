@@ -383,22 +383,7 @@
       <fieldset>
         <legend>Revox Members</legend>
         <div id="revox-admin-form" class="revox-admin-form hidden">
-          <input type="text" id="revox-add-name" class="revox-input" placeholder="Member name" maxlength="60" autocomplete="off" list="revox-name-options" />
-          <datalist id="revox-name-options"></datalist>
-          <div class="setting-dropdown revox-points-dropdown" id="revox-add-points">
-            <button type="button" class="setting-dropdown-btn" data-value="">
-              <span class="setting-dropdown-text">Points</span>
-              <span class="setting-dropdown-arrow">&#9662;</span>
-            </button>
-            <div class="setting-dropdown-menu hidden">
-              <div class="setting-dropdown-option" data-value="5">5</div>
-              <div class="setting-dropdown-option" data-value="4">4</div>
-              <div class="setting-dropdown-option" data-value="3">3</div>
-              <div class="setting-dropdown-option" data-value="2">2</div>
-              <div class="setting-dropdown-option" data-value="1">1</div>
-            </div>
-          </div>
-          <button type="button" id="revox-add-btn" class="btn btn-sm">Add</button>
+          <button type="button" id="revox-add-btn" class="btn btn-sm revox-icon-btn" title="Add a result" aria-label="Add a result"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button>
         </div>
         <div id="revox-ranking-list"></div>
       </fieldset>
@@ -563,7 +548,7 @@
   <div id="edit-participants-popup" class="popup-overlay hidden">
     <div class="popup-card bey-check-card">
       <h2 class="popup-title">Add Participant</h2>
-      <p class="popup-text">Add one player with their deck. In Swiss they join the <strong>next round</strong> &mdash; current matches and scores are kept. A single-elimination bracket has no open slot, so it regenerates.</p>
+      <p class="popup-text">Add one player with their deck.</p>
       <label class="tournament-name-label" for="add-participant-name">Name</label>
       <input id="add-participant-name" type="text" class="tournament-name-input" placeholder="e.g. Alice" maxlength="60" autocomplete="off" />
       <p class="popup-text register-deck-hint">Build the 3-combo deck this player brings. The judge sees this deck at every match. Tip: copy a deck from the Deck tab, then paste it here.</p>
@@ -890,6 +875,73 @@
     </div>
   </div>
 
+  </div>
+
+  <!-- ================= REVOX ADD RESULT POPUP ================= -->
+  <div id="revox-add-popup" class="popup-overlay hidden">
+    <div class="popup-card">
+      <h2 class="popup-title">Add Result</h2>
+      <label class="tournament-name-label" for="revox-add-tournament">Tournament</label>
+      <input id="revox-add-tournament" type="text" class="tournament-name-input" placeholder="Tournament name" maxlength="80" autocomplete="off" />
+      <label class="tournament-name-label" for="revox-add-date">Date</label>
+      <input id="revox-add-date" type="date" class="tournament-name-input" />
+      <label class="tournament-name-label" for="revox-add-name">Name</label>
+      <input id="revox-add-name" type="text" class="tournament-name-input" placeholder="Member name" maxlength="60" autocomplete="off" list="revox-name-options" />
+      <datalist id="revox-name-options"></datalist>
+      <label class="tournament-name-label">Placing</label>
+      <div class="setting-dropdown revox-points-dropdown" id="revox-add-placing">
+        <button type="button" class="setting-dropdown-btn" data-value="">
+          <span class="setting-dropdown-text">Placing</span>
+          <span class="setting-dropdown-arrow">&#9662;</span>
+        </button>
+        <div class="setting-dropdown-menu hidden">
+          <div class="setting-dropdown-option" data-value="1">1st</div>
+          <div class="setting-dropdown-option" data-value="2">2nd</div>
+          <div class="setting-dropdown-option" data-value="3">3rd</div>
+          <div class="setting-dropdown-option" data-value="4">4th</div>
+          <div class="setting-dropdown-option" data-value="5">5th</div>
+          <div class="setting-dropdown-option" data-value="6">6th</div>
+          <div class="setting-dropdown-option" data-value="7">7th</div>
+          <div class="setting-dropdown-option" data-value="8">8th</div>
+        </div>
+      </div>
+      <label class="tournament-name-label">Points</label>
+      <div id="revox-add-points" class="revox-points-display">—</div>
+      <div id="revox-add-status" class="tournament-password-status"></div>
+      <div class="popup-actions">
+        <button type="button" id="revox-add-confirm" class="btn">Add</button>
+        <button type="button" id="revox-add-cancel" class="btn popup-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= REVOX HISTORY POPUP ================= -->
+  <div id="revox-history-popup" class="popup-overlay hidden">
+    <div class="popup-card">
+      <h2 class="popup-title" id="revox-history-title">Member</h2>
+      <div id="revox-history-list"></div>
+      <div class="popup-actions">
+        <button type="button" id="revox-history-close" class="btn popup-cancel">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SUB-HOSTS POPUP ================= -->
+  <div id="tournament-cohosts-popup" class="popup-overlay hidden">
+    <div class="popup-card">
+      <h2 class="popup-title">Sub-hosts</h2>
+      <p class="popup-text">Anyone signed in with one of these usernames gets full co-host access &mdash; no host code needed.</p>
+      <label class="tournament-name-label" for="cohost-username-input">Username</label>
+      <div class="cohost-add-row">
+        <input id="cohost-username-input" type="text" class="tournament-name-input" placeholder="e.g. RvX-Khal" maxlength="30" autocomplete="off" />
+        <button type="button" id="cohost-username-add" class="btn btn-sm">Add</button>
+      </div>
+      <div id="cohost-suggest" class="cohost-suggest hidden"></div>
+      <div id="cohost-list"></div>
+      <div class="popup-actions">
+        <button type="button" id="tournament-cohosts-close" class="btn popup-cancel">Close</button>
+      </div>
+    </div>
   </div>
 
   <!-- ================= SWISS ROUNDS POPUP ================= -->

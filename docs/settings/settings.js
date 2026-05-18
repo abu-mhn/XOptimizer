@@ -39,6 +39,7 @@ Tournament
 - Three formats: Swiss, Round Robin, Single Elimination
 - Round Robin: everyone in a group plays everyone else exactly once; rounds are fixed by group size (N players = N-1 rounds, or N with a bye each round when odd)
 - Round Robin reuses the Swiss group stage, standings and Top 8 — only the per-round pairing differs (fixed everyone-vs-everyone schedule vs. Swiss standings-based pairing)
+- A Round Robin bye (forced by an odd group size) is a sit-out, not a win — only real matches count toward standings and the top-2-per-group Top 8 seeding
 - Pick Swiss or Round Robin, then choose whether to add a Top 8 knockout (+ Top 8) or finish on group records (group records only)
 - Configurable groups: 2, 3, or 4 (Swiss and Round Robin)
 - Configurable rounds per group for Swiss: 3, 4, 5 (Round Robin derives rounds from group size)
@@ -48,7 +49,8 @@ Tournament
 - Tournaments you host show a "Hosting" badge in the Open Tournaments lobby when you're signed in
 - Running tournaments stay listed in the Open Tournaments lobby with an "In progress" badge — registration is closed, but co-hosts and viewers can still join
 - My Tournaments: a signed-in host is dropped straight back into the tournament they host on any device — the room index follows your account, not the device (a pick list appears only if you host more than one)
-- Three-way join from the lobby: Co-host (with host code), Participant (register name + deck), Viewer (watch only)
+- Join from the lobby as Participant (register name + deck) or Viewer (watch only)
+- Sub-hosts: the host lists co-host usernames in a "Sub-hosts" popup — anyone signed in with a listed username gets full co-host powers (no host code) and joins straight as co-host from the lobby
 - Hosts AND co-hosts can play (+ Register myself), start the tournament, add participants, and remove registrants
 - Edit the format while waiting for players — tap the Top 8 / groups / rounds chips during registration to change them, no reset needed
 - Test button (host / co-host): bulk-adds synthetic participants (default 10) with meta-random decks, one batched Firebase write
@@ -56,7 +58,7 @@ Tournament
 - Test deck mode mix is weighted realistic: ~75% Standard, ~13% CX, ~12% CX Expand
 - Test registrants never earn global ranking points or appear on the leaderboard
 - Edit a registrant in place — tap their name to change the name or rebuild their deck
-- Add a participant after the tournament starts — name + 3-combo deck; in Swiss they slot into the next round with no reset
+- Add a participant during round 1 — name + 3-combo deck; Swiss and Round Robin slot them in as a free win, or pair them against an existing bye, with no reset
 - Rename any participant after the tournament starts — tap their name in a group's Standings
 - Adjust the total round count mid-tournament — tap "Round X / Y" in a group header; already-played rounds are kept
 - Registered decks pre-fill every match; judges can override per match
@@ -71,10 +73,12 @@ Tournament
 - Parts-usage pie charts at tournament end as an auto-sliding carousel (theme-aware palette)
 
 Revox
-- Dedicated tab and theme, shown only to accounts tagged "Revox Admin"
+- Dedicated tab and theme for accounts tagged "Revox Admin" (full edit); "Revox Member" accounts see the tab view-only
 - The Revox theme turns on automatically when a Revox Admin signs in
-- Revox Admins add, edit, and remove members directly — no password, the account tag is the key
-- Member ranking by points
+- Member ranking by points — no password, the account tag is the key
+- Add Result popup: pick the tournament, date and placing — the placing sets the points (Top 8 scoring: 1st = 8 pts down to 8th = 1)
+- Add a result onto an existing member straight from their row, or as a brand-new member
+- Tap a member's name for their tournament history — every event they joined, newest first, with a scroller
 
 Battle Pass
 - Bluetooth connection to BEYBLADE_TOOL01 launcher (Chrome / Edge on desktop or Android, Bluefy browser on iOS)

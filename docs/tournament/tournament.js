@@ -20,6 +20,7 @@ let swissApplyingRemote = false;
 let swissLiveMatchId = null; // which match (if any) this device is currently live on
 let swissScrollPositions = []; // horizontal scrollLeft of each rounds-scroll strip (groups then bracket)
 let swissSetupWasVisible = false; // tracks setup-form visibility so we only re-fetch open rooms on the hidden→visible edge
+let swissSubHosts = {};      // room's designated sub-host usernames { lowercaseKey: casedName }
 
 function initFirebase() {
   if (swissDb) return swissDb;
@@ -84,6 +85,7 @@ function disconnectSwissRoom() {
   swissViewCode = null;
   swissIsHost = false;
   swissCanEdit = false;
+  swissSubHosts = {};
   swissLiveMatchId = null;
   saveJoinedRoom(null);
   // Drop any match-linked state on the scoreboard so leaving a room doesn't
@@ -93,13 +95,40 @@ function disconnectSwissRoom() {
   }
 }
 
-// Strip metadata fields (viewCode) before persisting remote state locally —
-// they aren't part of the tournament model and shouldn't land in loadSwiss.
+// Strip metadata fields (viewCode, subHosts) before persisting remote state
+// locally — they aren't part of the tournament model and shouldn't land in
+// loadSwiss.
 function stripRoomMetadata(remote) {
   if (!remote) return remote;
-  const { viewCode, ...state } = remote;
+  const { viewCode, subHosts, ...state } = remote;
   return state;
 }
+
+// Normalise a username to a Firebase-safe key for the sub-host map.
+function subHostKey(name) {
+  return String(name || "").trim().toLowerCase().replace(/[.#$/[\]]/g, "_");
+}
+
+// True when the signed-in account's username is on this room's sub-host list.
+function isCurrentUserSubHost() {
+  const uname = (window.getCurrentUsername && window.getCurrentUsername()) || "";
+  const key = subHostKey(uname);
+  return !!(key && swissSubHosts && swissSubHosts[key]);
+}
+
+// Co-host (edit) access goes to the host and to any signed-in user whose
+// username the host added to the room's sub-host list.
+function recomputeSwissCanEdit() {
+  swissCanEdit = swissIsHost || isCurrentUserSubHost();
+}
+
+// The signed-in profile can load after the room — re-evaluate sub-host
+// access (a user may newly match, or stop matching, the list) and re-render.
+window.addEventListener("userprofilechange", () => {
+  if (!swissRoomRef) return;
+  recomputeSwissCanEdit();
+  if (typeof renderSwiss === "function") renderSwiss();
+});
 
 function resolveRoomCode(code, cb) {
   const db = initFirebase();
@@ -174,13 +203,18 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit, roleHint) {
       swissApplyingRemote = true;
       localStorage.setItem(SWISS_KEY, JSON.stringify(stripRoomMetadata(remote)));
       swissApplyingRemote = false;
+      // Pick up the room's sub-host list and (re)grant co-host access to any
+      // signed-in user whose username the host listed.
+      swissSubHosts = remote.subHosts || {};
+      recomputeSwissCanEdit();
       renderSwiss();
       syncTournamentRankingAwards(remote);
-      // Mirror the open-tournaments index while the room is in registering
-      // phase so the lobby's registrant counts stay live. Removal is handled
-      // explicitly by start / reset to avoid re-deleting on every score push
-      // once the tournament is running.
-      if (swissIsHost && remote.phase === "registering") {
+      // Keep the lobby entry alive for BOTH registering and running rooms.
+      // Re-publishing on every host sync means a started tournament that
+      // failed to publish on Start — or got dropped by a stale lobby
+      // refresh — is restored on the next update, so it never vanishes from
+      // the Open Tournaments list while the host stays connected.
+      if (swissIsHost && (remote.phase === "registering" || remote.phase === "running")) {
         publishOpenRoomIndex(editCode, remote);
       }
     } else if (!remote && roomEverPopulated) {
@@ -224,18 +258,19 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit, roleHint) {
 }
 
 // Public lobby index. Hosts publish a small summary record at
-// `openTournaments/{editCode}` whenever a room is in the "registering" phase
-// so the Open Tournaments list can show them; the entry is removed the
-// moment the host starts the tournament (no more new signups) or resets it.
+// `openTournaments/{editCode}` while a room is in the "registering" OR
+// "running" phase so the Open Tournaments list can show both; a running
+// tournament stays listed (viewers/co-hosts can still join) and the entry
+// is removed only when the host resets / closes the room.
 //
 // We DON'T arm a Firebase onDisconnect().remove() handler. Mobile browsers
 // suspend the WebSocket when the app is backgrounded (e.g. host opens
 // YouTube), which would fire that handler and yank the room from the
 // lobby — participants viewing the lobby in that window can't register.
 // Instead we rely on:
-//   * explicit removal on Start / Reset, and
+//   * explicit removal on Reset, and
 //   * reactive stale-pruning in refreshOpenTournamentRooms (drops entries
-//     whose underlying swissRoom no longer has phase === "registering").
+//     whose underlying swissRoom phase is neither registering nor running).
 // Truly abandoned rooms (host force-closed without resetting) will linger
 // in the lobby until the next refresh prunes them.
 
@@ -601,7 +636,7 @@ function appendGroupRound(state, groupIndex) {
   if (roundIndex >= getRoundCount(state)) return false;
   const ordered = roundIndex === 0
     ? shuffleArray(members)
-    : computeStandings(members, state.matches, groupIndex).map(r => r.name);
+    : computeStandings(members, state.matches, groupIndex, state.pairing === "round-robin").map(r => r.name);
   const matchObjs = pairSwissRound(ordered, state.matches, groupIndex, roundIndex);
   matchObjs.forEach(m => { state.matches[m.id] = m; });
   state.groupRounds[groupIndex] = roundIndex + 1;
@@ -1091,7 +1126,7 @@ function startSwissMatch(matchId) {
 
 let swissGroupViews = {}; // gi -> "matches" | "standings"
 
-function renderSwissMatchCard(matchNum, id, m, seedA, seedB) {
+function renderSwissMatchCard(matchNum, id, m, seedA, seedB, isRoundRobin) {
   const done = m.scoreA != null && m.scoreB != null;
   const live = !done && m.startedAt != null;
   const aWin = done && m.scoreA > m.scoreB;
@@ -1100,13 +1135,19 @@ function renderSwissMatchCard(matchNum, id, m, seedA, seedB) {
   const bScore = done ? m.scoreB : (live ? "…" : "");
 
   if (m.bye) {
+    // A Swiss bye is a free win ("W"); a round-robin bye is just a sit-out
+    // this round — no win, since everyone still faces everyone else.
+    const winCls = isRoundRobin ? "" : " swiss-match-row-win";
+    const scoreCell = isRoundRobin
+      ? `<span class="swiss-score-cell">&mdash;</span>`
+      : `<span class="swiss-score-cell swiss-score-win">W</span>`;
     return `<div class="swiss-match-wrap">
       <div class="swiss-match-num">${matchNum}</div>
       <div class="swiss-match-card swiss-match-bye">
-        <div class="swiss-match-row swiss-match-row-win swiss-match-row-bye">
+        <div class="swiss-match-row${winCls} swiss-match-row-bye">
           <span class="swiss-seed">${seedA}</span>
           <span class="swiss-name-cell">${escapeHtml(m.a)} <span class="swiss-bye-tag">BYE</span></span>
-          <span class="swiss-score-cell swiss-score-win">W</span>
+          ${scoreCell}
         </div>
       </div>
     </div>`;
@@ -1161,7 +1202,8 @@ function renderSwissGroupMatches(state, gi) {
   for (let ri = 0; ri < roundsGen; ri++) {
     const roundMatches = groupMatchEntries.filter(([, m]) => m.round === ri);
     const cards = roundMatches.map(([id, m]) =>
-      renderSwissMatchCard(numberFor[id], id, m, seedOf(m.a), m.b ? seedOf(m.b) : "")
+      renderSwissMatchCard(numberFor[id], id, m, seedOf(m.a), m.b ? seedOf(m.b) : "",
+        state.pairing === "round-robin")
     ).join("");
     rounds.push(`<div class="swiss-round-col">
       <div class="swiss-round-title">Round ${ri + 1}</div>
@@ -1178,7 +1220,7 @@ function renderSwissGroupMatches(state, gi) {
 
 function renderSwissGroupStandings(state, gi, canEdit) {
   const members = state.groups[gi];
-  const standings = computeStandings(members, state.matches, gi);
+  const standings = computeStandings(members, state.matches, gi, state.pairing === "round-robin");
   const rows = standings.map((row, idx) => {
     const pd = row.pointsDiff > 0 ? `+${row.pointsDiff}` : `${row.pointsDiff}`;
     // Host / co-host can rename a participant straight from the standings,
@@ -1636,21 +1678,18 @@ function renderSwissTop8Bracket(state) {
 function renderSwissRoomBadge() {
   if (!swissEditCode) return "";
   const pills = [];
-  // Only the Host code is shown — viewers and participants now join via
-  // the Open Tournaments lobby (Rooms list), so the View code isn't
-  // something users need to type or copy by hand.
+  // The badge just identifies the role + signed-in user — no room code is
+  // shown. Viewers/participants join via the Open Tournaments lobby and
+  // co-hosts are granted by username, so there's no code to type or copy.
   if (swissCanEdit) {
     const label = swissIsHost ? "Host" : "Co-host";
-    // Show the signed-in user's profile username alongside the role, so the
-    // badge reads as a person ("Host — Alice") rather than just a code.
     const prof = (typeof getUserProfile === "function") ? getUserProfile() : null;
     const uname = (prof && prof.username) ? prof.username : "";
     const namePill = uname ? `<span class="swiss-room-name">${escapeHtml(uname)}</span>` : "";
     pills.push(`
-      <span class="swiss-room-badge swiss-room-badge-edit" title="${label} — tap to copy the host code">
+      <span class="swiss-room-badge swiss-room-badge-edit">
         <span class="swiss-room-role">${label}</span>
         ${namePill}
-        <button type="button" class="swiss-room-code" data-room="${swissEditCode}">${swissEditCode}</button>
       </span>
     `);
   }
@@ -1676,6 +1715,144 @@ function renderSwissShareButton() {
     <img src="assets/icons/share.png" alt="Share"
          onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21AA;');">
   </button>`;
+}
+
+// --- Sub-hosts: the host designates co-hosts by username. Anyone signed in
+// with a listed username gets full co-host access — no host code needed. ---
+function renderCoHostsButton() {
+  return `<button type="button" id="swiss-cohosts" class="btn btn-icon-sm swiss-cohosts-btn" aria-label="Manage sub-hosts" title="Manage sub-hosts">` +
+    `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>` +
+    `</button>`;
+}
+
+function renderCoHostList() {
+  const listEl = document.getElementById("cohost-list");
+  if (!listEl) return;
+  const keys = Object.keys(swissSubHosts || {});
+  if (!keys.length) {
+    listEl.innerHTML = `<p class="swiss-rooms-empty">No sub-hosts yet — add a username above.</p>`;
+    return;
+  }
+  listEl.innerHTML = keys
+    .sort((a, b) => String(swissSubHosts[a]).localeCompare(String(swissSubHosts[b])))
+    .map(k => `<div class="cohost-row">
+      <span class="cohost-row-name">${escapeHtml(swissSubHosts[k] || k)}</span>
+      <button type="button" class="revox-row-btn revox-row-btn-delete" data-cohost-remove="${escapeHtml(k)}" title="Remove" aria-label="Remove">${REVOX_ICON_DELETE}</button>
+    </div>`).join("");
+  listEl.querySelectorAll("[data-cohost-remove]").forEach(btn => {
+    btn.addEventListener("click", () => removeSubHost(btn.dataset.cohostRemove));
+  });
+}
+
+function addSubHost(name) {
+  const cleaned = String(name || "").trim().slice(0, 30);
+  const key = subHostKey(cleaned);
+  if (!key) return;
+  swissSubHosts = swissSubHosts || {};
+  swissSubHosts[key] = cleaned;
+  if (swissRoomRef) {
+    swissRoomRef.child("subHosts/" + key).set(cleaned)
+      .catch(e => console.warn("Sub-host add failed:", e));
+  }
+  recomputeSwissCanEdit();
+  renderCoHostList();
+}
+
+function removeSubHost(key) {
+  if (!key) return;
+  if (swissSubHosts) delete swissSubHosts[key];
+  if (swissRoomRef) {
+    swissRoomRef.child("subHosts/" + key).set(null)
+      .catch(e => console.warn("Sub-host remove failed:", e));
+  }
+  recomputeSwissCanEdit();
+  renderCoHostList();
+}
+
+// Registered usernames for the sub-host field's type-ahead. Loaded once when
+// the popup opens; the dropdown is filled only as the host types (see
+// updateCoHostUsernameOptions) so the whole list never shows on focus.
+let coHostUsernamePool = [];
+
+function loadCoHostUsernameList() {
+  const db = initFirebase();
+  if (!db) return;
+  db.ref("usernames").once("value").then(snap => {
+    const val = snap.val() || {};
+    coHostUsernamePool = Object.keys(val)
+      .map(k => (val[k] && val[k].username) || "")
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b));
+    // If the host already typed something before the list arrived, refresh.
+    const input = document.getElementById("cohost-username-input");
+    if (input && input.value.trim()) updateCoHostUsernameOptions(input.value);
+  }).catch(() => { coHostUsernamePool = []; });
+}
+
+// Custom type-ahead — a plain suggestion box (no native datalist, so no
+// permanent dropdown arrow). Shown only while the host is typing.
+function updateCoHostUsernameOptions(query) {
+  const box = document.getElementById("cohost-suggest");
+  if (!box) return;
+  const input = document.getElementById("cohost-username-input");
+  const q = String(query || "").trim().toLowerCase();
+  const matches = q
+    ? coHostUsernamePool.filter(n => n.toLowerCase().indexOf(q) >= 0).slice(0, 12)
+    : [];
+  if (!matches.length) {
+    box.innerHTML = "";
+    box.classList.add("hidden");
+    return;
+  }
+  box.innerHTML = matches
+    .map(n => `<button type="button" class="cohost-suggest-item" data-name="${escapeHtml(n)}">${escapeHtml(n)}</button>`)
+    .join("");
+  box.classList.remove("hidden");
+  box.querySelectorAll(".cohost-suggest-item").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if (input) input.value = btn.dataset.name || "";
+      box.innerHTML = "";
+      box.classList.add("hidden");
+      input?.focus();
+    });
+  });
+}
+
+function showCoHostsPopup() {
+  const popup = document.getElementById("tournament-cohosts-popup");
+  if (!popup) return;
+  const input = popup.querySelector("#cohost-username-input");
+  const addBtn = popup.querySelector("#cohost-username-add");
+  const closeBtn = popup.querySelector("#tournament-cohosts-close");
+  if (input) input.value = "";
+  renderCoHostList();
+  // Start with the suggestion box hidden — it shows only as the host types.
+  updateCoHostUsernameOptions("");
+  loadCoHostUsernameList();
+  popup.classList.remove("hidden");
+  setTimeout(() => input?.focus(), 0);
+  const submit = () => {
+    const v = (input?.value || "").trim();
+    if (!v) { input?.focus(); return; }
+    addSubHost(v);
+    if (input) { input.value = ""; input.focus(); }
+    updateCoHostUsernameOptions("");
+  };
+  const close = () => {
+    popup.classList.add("hidden");
+    if (addBtn) addBtn.onclick = null;
+    if (closeBtn) closeBtn.onclick = null;
+    if (input) { input.onkeydown = null; input.oninput = null; }
+    popup.onclick = null;
+  };
+  if (addBtn) addBtn.onclick = submit;
+  if (closeBtn) closeBtn.onclick = close;
+  if (input) input.oninput = () => updateCoHostUsernameOptions(input.value);
+  if (input) input.onkeydown = (e) => {
+    if (e.key === "Enter") { e.preventDefault(); submit(); }
+    else if (e.key === "Escape") { e.preventDefault(); close(); }
+  };
+  popup.onclick = (e) => { if (e.target === popup) close(); };
 }
 
 // Compose the share message in the form:
@@ -2064,6 +2241,7 @@ function renderSwiss() {
         ${showStartKnockoutBtn ? `<button type="button" id="swiss-start-bracket" class="btn">Start Knockout</button>` : ""}
         <div class="swiss-toolbar-actions">
           ${renderSwissShareButton()}
+          ${swissIsHost ? renderCoHostsButton() : ""}
           ${canEdit && canAddParticipant(state) ? `<button type="button" id="swiss-edit-participants" class="btn btn-icon-sm btn-icon-plus" aria-label="Add participant" title="Add participant">+</button>` : ""}
           <button type="button" id="swiss-clear" class="btn btn-reset btn-icon-sm" title="${resetTitle}">
             <img src="assets/icons/exit-button.png" alt="${resetTitle}"
@@ -2099,6 +2277,7 @@ function renderSwiss() {
   bindSwissRoomBadge(view);
   view.querySelector("#swiss-start-bracket")?.addEventListener("click", startSwissBracket);
   view.querySelector("#swiss-edit-participants")?.addEventListener("click", showAddParticipantPopup);
+  view.querySelector("#swiss-cohosts")?.addEventListener("click", showCoHostsPopup);
   view.querySelector("#swiss-edit-name")?.addEventListener("click", showEditTournamentNamePopup);
   bindSwissShareButton(view);
 
@@ -2169,6 +2348,9 @@ function renderSwissRegisteringMarkup(state) {
   // Hosts / co-hosts can tweak the format while still waiting for players —
   // no matches exist yet, so changing groups / rounds / Top-8 is safe.
   const isSwiss = state.mode !== "single-elim";
+  // Round robin has no round count to set — its rounds are generated from the
+  // group size so every participant plays every other one.
+  const isRoundRobin = state.pairing === "round-robin";
   const formatBits = [];
   if (canEdit && isSwiss) {
     formatBits.push(`<button type="button" class="swiss-reg-format-mode swiss-reg-format-editable" id="swiss-edit-mode" title="Tap to change Top 8">${modeLabel}</button>`);
@@ -2178,10 +2360,14 @@ function renderSwissRegisteringMarkup(state) {
   if (isSwiss) {
     if (canEdit) {
       formatBits.push(`<button type="button" class="swiss-reg-format-bit swiss-reg-format-editable" id="swiss-edit-groups" title="Tap to change groups">${getGroupCount(state)} groups</button>`);
-      formatBits.push(`<button type="button" class="swiss-reg-format-bit swiss-reg-format-editable" id="swiss-edit-rounds" title="Tap to change rounds">${getRoundCount(state)} rounds</button>`);
+      if (!isRoundRobin) {
+        formatBits.push(`<button type="button" class="swiss-reg-format-bit swiss-reg-format-editable" id="swiss-edit-rounds" title="Tap to change rounds">${getRoundCount(state)} rounds</button>`);
+      }
     } else {
       formatBits.push(`<span class="swiss-reg-format-bit">${getGroupCount(state)} groups</span>`);
-      formatBits.push(`<span class="swiss-reg-format-bit">${getRoundCount(state)} rounds</span>`);
+      if (!isRoundRobin) {
+        formatBits.push(`<span class="swiss-reg-format-bit">${getRoundCount(state)} rounds</span>`);
+      }
     }
   }
 
@@ -2238,16 +2424,19 @@ function renderSwissRegisteringMarkup(state) {
     <div class="swiss-toolbar">
       <div class="swiss-toolbar-row swiss-toolbar-name-row">
         ${nameHtml}
-        <span class="swiss-reg-pill">Registration open</span>
-      </div>
-      <div class="swiss-toolbar-row swiss-toolbar-info-row">
-        ${renderSwissRoomBadge()}
         <div class="swiss-toolbar-actions">
           ${renderSwissShareButton()}
+          ${swissIsHost ? renderCoHostsButton() : ""}
           <button type="button" id="swiss-clear" class="btn btn-reset btn-icon-sm" title="${isHost ? "Reset Tournament" : "Leave Room"}">
             <img src="assets/icons/exit-button.png" alt="Leave"
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
           </button>
+        </div>
+      </div>
+      <div class="swiss-toolbar-row swiss-toolbar-info-row">
+        <div class="swiss-toolbar-idgroup">
+          ${renderSwissRoomBadge()}
+          <span class="swiss-reg-pill">Registration open</span>
         </div>
       </div>
     </div>
@@ -2280,11 +2469,12 @@ function updateRegisteringSetting(patch) {
 
 function bindSwissRegisteringHandlers(view, state) {
   view.querySelector("#swiss-edit-name")?.addEventListener("click", showEditTournamentNamePopup);
+  view.querySelector("#swiss-cohosts")?.addEventListener("click", showCoHostsPopup);
   view.querySelector("#swiss-clear")?.addEventListener("click", resetSwiss);
   view.querySelector("#swiss-edit-mode")?.addEventListener("click", () => {
     showTopEightPopup((mode) => {
       if (mode) updateRegisteringSetting({ mode });
-    });
+    }, state.pairing === "round-robin");
   });
   view.querySelector("#swiss-edit-groups")?.addEventListener("click", () => {
     showSwissGroupsPopup((gc) => updateRegisteringSetting({ groupCount: gc }));
@@ -2435,6 +2625,9 @@ function startRegisteringTournament() {
   if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
     const payload = { ...generated };
     if (swissViewCode) payload.viewCode = swissViewCode;
+    // The Start push is a full overwrite — carry the sub-host list forward
+    // so designated co-hosts aren't wiped when the tournament begins.
+    if (swissSubHosts && Object.keys(swissSubHosts).length) payload.subHosts = swissSubHosts;
     swissApplyingRemote = true;
     swissRoomRef.set(payload)
       .catch(e => console.warn("Start tournament push failed:", e))
@@ -2459,7 +2652,7 @@ function computeCombinedSwissStandings(state) {
   if (!state || !Array.isArray(state.groups)) return [];
   const all = [];
   state.groups.forEach((members, gi) => {
-    const standings = computeStandings(members, state.matches, gi);
+    const standings = computeStandings(members, state.matches, gi, state.pairing === "round-robin");
     standings.forEach(s => all.push({ ...s, groupIndex: gi }));
   });
   return all.sort((a, b) =>
@@ -2496,14 +2689,20 @@ function renderCombinedSwissStandings(state) {
   `;
 }
 
-function computeStandings(members, matches, groupIndex) {
+function computeStandings(members, matches, groupIndex, isRoundRobin) {
   const stats = {};
   members.forEach(n => {
     stats[n] = { name: n, wins: 0, losses: 0, draws: 0, pointsScored: 0, pointsAgainst: 0, opponents: [] };
   });
   Object.values(matches).forEach(m => {
     if (m.groupIndex !== groupIndex) return;
-    if (m.bye && m.a && stats[m.a]) { stats[m.a].wins++; return; }
+    if (m.bye && m.a && stats[m.a]) {
+      // A Swiss bye is a free win — the player wasn't paired, so they aren't
+      // penalised. A round-robin bye is just a sit-out (everyone still faces
+      // everyone else over the full schedule), so it scores nothing.
+      if (!isRoundRobin) stats[m.a].wins++;
+      return;
+    }
     if (m.scoreA == null || m.scoreB == null) return;
     if (!stats[m.a] || !stats[m.b]) return;
     stats[m.a].pointsScored += m.scoreA;
@@ -2642,7 +2841,7 @@ function bracketSeedingFromStandings(state) {
     // 8 doesn't divide evenly across 3 groups, so we take top 2 from each
     // (6 players) and add the best 2 third-place finishers as wildcards.
     const standings = state.groups.map((members, gi) =>
-      computeStandings(members, state.matches, gi)
+      computeStandings(members, state.matches, gi, state.pairing === "round-robin")
     );
     const top2 = standings.map(st => [st[0]?.name || null, st[1]?.name || null]);
     // Collect 3rd-place finishers across groups, sorted by the same metrics
@@ -2673,7 +2872,7 @@ function bracketSeedingFromStandings(state) {
 
   const topN = SWISS_BRACKET_SIZE / groupCount;
   const top = state.groups.map((members, gi) => {
-    const st = computeStandings(members, state.matches, gi);
+    const st = computeStandings(members, state.matches, gi, state.pairing === "round-robin");
     return Array.from({ length: topN }, (_, i) => (st[i] && st[i].name) || null);
   });
 
@@ -3584,21 +3783,21 @@ function showEditTournamentNamePopup() {
   }
 }
 
-// Whether the "Add Participant" affordance is available. Single-elim and round
-// robin regenerate, so they allow it any time. Swiss only takes new players
-// during round 1 — once any group has generated round 2, the door closes.
+// Whether the "Add Participant" affordance is available. Single-elim
+// regenerates, so it allows it any time. Swiss AND round robin only take new
+// players during round 1 — once any group has generated round 2, it closes.
 function canAddParticipant(state) {
   if (!state) return false;
-  if (state.mode === "single-elim" || state.pairing === "round-robin") return true;
+  if (state.mode === "single-elim") return true;
   if (!Array.isArray(state.groups) || !state.groups.length) return true;
   const maxRound = state.groups.reduce((m, _, gi) => Math.max(m, state.groupRounds[gi] || 0), 0);
   return maxRound <= 1; // 1 = only round 1 (index 0) generated
 }
 
-// Add a participant to a Swiss tournament that's still in round 1, no reset.
-// The newcomer enters round 1 as a free win (a bye) — UNLESS a bye already
-// exists in round 1, in which case they're paired against that bye player,
-// turning the existing free win into a real match. Returns true on success.
+// Add a participant to a Swiss or round-robin tournament still in round 1, no
+// reset. The newcomer enters round 1 as a free win (a bye) — UNLESS a bye
+// already exists in round 1, in which case they're paired against that bye
+// player, turning the existing free win into a real match. True on success.
 function addSwissParticipantRound1(name, deck) {
   const s = loadSwiss();
   if (!Array.isArray(s.groups) || !s.groups.length) return false;
@@ -3750,12 +3949,11 @@ function showAddParticipantPopup() {
       if (!confirm(`"${name}" has no deck slots filled. Add anyway?`)) return;
     }
 
-    // Swiss (standings pairing) slots a player into round 1 as a free win,
-    // no reset. Single-elim (fixed bracket) and round robin (fixed everyone-
-    // vs-everyone schedule) have no open slot, so they regenerate.
+    // Swiss and round robin slot a player into round 1 as a free win (or pair
+    // them against an existing round-1 bye), no reset. Single-elim has a fixed
+    // bracket with no open slot, so it regenerates.
     const hasGroups = Array.isArray(state.groups) && state.groups.length;
-    const canSlotIn = state.mode !== "single-elim"
-      && state.pairing !== "round-robin" && hasGroups;
+    const canSlotIn = state.mode !== "single-elim" && hasGroups;
     if (canSlotIn) {
       if (!addSwissParticipantRound1(name, deck)) return; // helper alerted
       renderSwiss();
@@ -3853,12 +4051,15 @@ function showSwissGroupsPopup(onPick) {
 // Yes / No follow-up that asks whether the Swiss tournament should end in
 // a Top 8 knockout. Resolves the callback with the corresponding mode key
 // ("swiss" = with Top 8, "swiss-only" = without).
-function showTopEightPopup(onPick) {
+function showTopEightPopup(onPick, isRoundRobin) {
   const popup = document.getElementById("tournament-top-eight-popup");
   if (!popup) { onPick("swiss"); return; }
   const yesBtn = popup.querySelector("#tournament-top-eight-yes");
   const noBtn = popup.querySelector("#tournament-top-eight-no");
   const cancelBtn = popup.querySelector("#tournament-top-eight-cancel");
+  // The "No" choice keeps just the group stage — label it for the format.
+  const noName = noBtn && noBtn.querySelector(".tournament-mode-name");
+  if (noName) noName.textContent = isRoundRobin ? "No — Round Robin only" : "No — Swiss only";
   const teardown = () => {
     popup.classList.add("hidden");
     if (yesBtn) yesBtn.onclick = null;
@@ -3908,7 +4109,7 @@ function showTournamentModePopup(onPick) {
     showTopEightPopup((mode) => {
       if (!mode) return;
       showSwissGroupsPopup((gc) => onPick(mode, name, undefined, true, gc, "round-robin"));
-    });
+    }, true);
   };
   singleBtn.onclick = () => {
     const name = nameInput ? nameInput.value.trim() : "";
@@ -4547,6 +4748,26 @@ function renderLobbyRooms(list, rooms) {
 // lobby summary's editCode), participant opens the registration form,
 // viewer connects view-only directly via the lobby's viewCode.
 function showTournamentJoinChoicePopup(room) {
+  // This device hosts the room — rejoin straight as host, no role pick.
+  if (isRoomHosted(room.editCode)) {
+    joinTournamentAsCoHost(room);
+    return;
+  }
+  // A signed-in user on this room's sub-host list joins straight as co-host —
+  // no role pick and no host code. We read just their own subHosts entry.
+  const subHostUname = (window.getCurrentUsername && window.getCurrentUsername()) || "";
+  const subHostDb = subHostUname ? initFirebase() : null;
+  if (subHostDb) {
+    subHostDb.ref("swissRooms/" + room.editCode + "/subHosts/" + subHostKey(subHostUname))
+      .once("value")
+      .then(snap => { if (snap.val()) joinTournamentAsCoHost(room); else openJoinChoicePopup(room); })
+      .catch(() => openJoinChoicePopup(room));
+    return;
+  }
+  openJoinChoicePopup(room);
+}
+
+function openJoinChoicePopup(room) {
   const popup = document.getElementById("tournament-join-choice-popup");
   if (!popup) return;
   const subtitle = popup.querySelector("#tournament-join-choice-subtitle");
@@ -4569,11 +4790,11 @@ function showTournamentJoinChoicePopup(room) {
     if (cancelBtn) cancelBtn.onclick = null;
   };
 
+  // Co-hosts are no longer joined by host code — the host grants co-host
+  // access by listing usernames in the Sub-hosts popup. Hide the option.
   if (cohostBtn) {
-    cohostBtn.onclick = () => {
-      close();
-      showCoHostCodePopup(room);
-    };
+    cohostBtn.style.display = "none";
+    cohostBtn.onclick = null;
   }
   if (participantBtn) {
     // A running tournament has closed registration — co-host and viewer
@@ -5265,10 +5486,11 @@ function isRevoxAdminUnlocked() {
   return typeof window.isRevoxAdmin === "function" && window.isRevoxAdmin();
 }
 
-// Adds points to an entry. If the same name (after key normalization)
-// already exists, the new points are added to the existing total. Uses a
-// transaction so concurrent admin writes can't lose updates.
-function addRevoxEntry(name, points) {
+// Records a tournament result for a member. If the same name (after key
+// normalization) already exists, the new points are added to the running
+// total and the tournament + placing are updated to this latest result.
+// A transaction keeps concurrent admin writes from losing updates.
+function addRevoxEntry(name, points, tournament, placing, date) {
   const db = initFirebase();
   if (!db) return Promise.reject(new Error("firebase not configured"));
   const cleanName = String(name || "").trim();
@@ -5276,24 +5498,92 @@ function addRevoxEntry(name, points) {
   if (!cleanName || !Number.isFinite(pts)) return Promise.reject(new Error("bad input"));
   const key = rankingKey(cleanName);
   if (!key) return Promise.reject(new Error("bad name"));
-  return db.ref("revoxRanking/" + key).transaction(curr => ({
-    name: (curr && curr.name) || cleanName,
-    points: ((curr && Number(curr.points)) || 0) + pts
-  }));
-}
-
-function updateRevoxEntryPoints(key, points) {
-  const db = initFirebase();
-  if (!db || !key) return Promise.reject(new Error("bad input"));
-  const pts = Number(points);
-  if (!Number.isFinite(pts)) return Promise.reject(new Error("bad points"));
-  return db.ref("revoxRanking/" + key + "/points").set(pts);
+  const tour = String(tournament || "").trim().slice(0, 80);
+  const place = Number(placing) || 0;
+  const dt = String(date || "").trim().slice(0, 10);
+  // Each Add appends one result so a member keeps a full tournament history;
+  // the top-level tournament/placing/date mirror this latest result.
+  const entryRef = db.ref("revoxRanking/" + key);
+  const resultId = entryRef.child("results").push().key;
+  return entryRef.transaction(curr => {
+    const results = (curr && curr.results) || {};
+    results[resultId] = { tournament: tour, placing: place, points: pts, date: dt };
+    return {
+      name: (curr && curr.name) || cleanName,
+      points: ((curr && Number(curr.points)) || 0) + pts,
+      tournament: tour || (curr && curr.tournament) || "",
+      placing: place || (curr && curr.placing) || 0,
+      date: dt || (curr && curr.date) || "",
+      results
+    };
+  });
 }
 
 function deleteRevoxEntry(key) {
   const db = initFirebase();
   if (!db || !key) return Promise.reject(new Error("bad input"));
   return db.ref("revoxRanking/" + key).remove();
+}
+
+// "1" -> "1st", "2" -> "2nd", "3" -> "3rd", "4".."8" -> "4th".."8th".
+function ordinalPlace(n) {
+  n = Number(n);
+  if (!n) return "";
+  const s = ["th", "st", "nd", "rd"], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+// "2026-05-16" -> "16/5/2026" for display; "" when not a valid ISO date.
+function formatRevoxDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ""));
+  return m ? Number(m[3]) + "/" + Number(m[2]) + "/" + m[1] : "";
+}
+
+// Today as a local-time YYYY-MM-DD string (default for the date input).
+function todayISO() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+}
+
+// Top 8 scoring: 1st = 8 pts, 2nd = 7 ... 8th = 1. Placing drives Points.
+function revoxPointsForPlacing(placing) {
+  const p = Number(placing);
+  return (p >= 1 && p <= 8) ? 9 - p : 0;
+}
+
+// Inline icons for the Revox action buttons (fill follows currentColor).
+const REVOX_ICON_ADD = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>';
+const REVOX_ICON_DELETE = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
+
+// Set by initRevoxAdminControls so a ranking row can open the Add popup.
+let revoxAddPopupOpener = null;
+
+// Fill the Add-result name dropdown with registered usernames that start
+// with the "RvX-" club prefix, merged with any existing ranking members.
+// Reading the usernames index needs the Developer/Revox-Admin read rule; if
+// that's not granted the dropdown quietly falls back to ranking members only.
+function populateRevoxNameOptions(memberNames) {
+  const datalist = document.getElementById("revox-name-options");
+  if (!datalist) return;
+  const names = new Set((memberNames || []).filter(Boolean));
+  const paint = () => {
+    datalist.innerHTML = Array.from(names)
+      .sort((a, b) => a.localeCompare(b))
+      .map(n => `<option value="${escapeHtml(n)}"></option>`)
+      .join("");
+  };
+  paint(); // existing members show immediately
+  const db = initFirebase();
+  if (!db) return;
+  db.ref("usernames").once("value").then(snap => {
+    const val = snap.val() || {};
+    Object.keys(val).forEach(k => {
+      const u = (val[k] && val[k].username) || "";
+      if (u && u.toLowerCase().startsWith("rvx-")) names.add(u);
+    });
+    paint();
+  }).catch(() => { /* enumeration not permitted — ranking members only */ });
 }
 
 function renderRevoxRanking() {
@@ -5313,54 +5603,52 @@ function renderRevoxRanking() {
         .map(([key, v]) => ({
           key,
           name: (v && v.name) || key,
-          points: (v && Number(v.points)) || 0
+          points: (v && Number(v.points)) || 0,
+          tournament: (v && v.tournament) || "",
+          placing: (v && Number(v.placing)) || 0,
+          date: (v && v.date) || ""
         }))
         .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
-      // Populate the Add-form datalist with existing names so admins can
-      // pick from a dropdown instead of retyping (and risking a typo that
-      // would create a duplicate-looking entry until key-normalization).
-      const datalist = document.getElementById("revox-name-options");
-      if (datalist) {
-        datalist.innerHTML = list
-          .slice()
-          .sort((a, b) => a.name.localeCompare(b.name))
-          .map(r => `<option value="${escapeHtml(r.name)}"></option>`)
-          .join("");
-      }
+      // Fill the Add-form name dropdown: registered "RvX-" usernames plus
+      // any existing ranking members.
+      populateRevoxNameOptions(list.map(r => r.name));
       const isAdmin = isRevoxAdminUnlocked();
       if (!list.length) {
-        container.innerHTML = `<p class="tournament-results-empty">No Revox members yet.${isAdmin ? " Use the form above to add one." : ""}</p>`;
+        container.innerHTML = `<p class="tournament-results-empty">No Revox members yet.${isAdmin ? " Tap Add to record a result." : ""}</p>`;
         return;
       }
       const rows = list.map((r, i) => {
         const placeMod = i < 3 ? ` tournament-results-place-${i + 1}` : "";
         const adminBtns = isAdmin ? `
           <span class="revox-row-actions">
-            <button type="button" class="revox-row-btn" data-revox-edit="${escapeHtml(r.key)}" data-revox-name="${escapeHtml(r.name)}" data-revox-points="${r.points}">Edit</button>
-            <button type="button" class="revox-row-btn revox-row-btn-delete" data-revox-delete="${escapeHtml(r.key)}" data-revox-name="${escapeHtml(r.name)}">Delete</button>
+            <button type="button" class="revox-row-btn" data-revox-add="${escapeHtml(r.name)}" title="Add a result" aria-label="Add a result">${REVOX_ICON_ADD}</button>
+            <button type="button" class="revox-row-btn revox-row-btn-delete" data-revox-delete="${escapeHtml(r.key)}" data-revox-name="${escapeHtml(r.name)}" title="Delete" aria-label="Delete">${REVOX_ICON_DELETE}</button>
           </span>` : "";
+        const dateStr = formatRevoxDate(r.date);
+        const subLines =
+          (r.tournament ? `<span class="revox-row-meta">${escapeHtml(r.tournament)}</span>` : "") +
+          (dateStr ? `<span class="revox-row-meta">${escapeHtml(dateStr)}</span>` : "");
         return `
-          <div class="tournament-results-row tournament-ranking-row${placeMod}">
-            <span class="tournament-results-place">#${i + 1}</span>
-            <span class="tournament-results-player">${escapeHtml(r.name)}</span>
+          <div class="tournament-results-row tournament-ranking-row revox-row${placeMod}">
+            <span class="tournament-results-player"><button type="button" class="revox-name-btn" data-revox-history="${escapeHtml(r.key)}" data-revox-name="${escapeHtml(r.name)}" title="View tournament history">${escapeHtml(r.name)}</button>${subLines}</span>
+            <span class="revox-row-placing">${ordinalPlace(i + 1)}</span>
             <span class="tournament-ranking-points">${r.points} pt${r.points === 1 ? "" : "s"}</span>
             ${adminBtns}
           </div>
         `;
       }).join("");
       container.innerHTML = `<div class="tournament-results-list">${rows}</div>`;
+      // Clicking a name opens that member's tournament history (anyone).
+      container.querySelectorAll("[data-revox-history]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          showRevoxHistory(btn.dataset.revoxHistory, btn.dataset.revoxName);
+        });
+      });
       // Wire row buttons (admin only).
       if (isAdmin) {
-        container.querySelectorAll("[data-revox-edit]").forEach(btn => {
+        container.querySelectorAll("[data-revox-add]").forEach(btn => {
           btn.addEventListener("click", () => {
-            const key = btn.dataset.revoxEdit;
-            const curr = btn.dataset.revoxPoints;
-            const next = prompt(`New points for ${btn.dataset.revoxName}:`, curr);
-            if (next == null) return;
-            const n = Number(next);
-            if (!Number.isFinite(n)) { alert("Points must be a number."); return; }
-            updateRevoxEntryPoints(key, n).then(renderRevoxRanking)
-              .catch(e => alert("Update failed: " + (e?.message || e)));
+            if (revoxAddPopupOpener) revoxAddPopupOpener(btn.dataset.revoxAdd);
           });
         });
         container.querySelectorAll("[data-revox-delete]").forEach(btn => {
@@ -5386,60 +5674,159 @@ function updateRevoxAdminUI() {
   document.getElementById("revox-admin-form")?.classList.toggle("hidden", !isRevoxAdminUnlocked());
 }
 
+// Show one member's recorded tournament results in a popup, newest first.
+function showRevoxHistory(key, name) {
+  const popup = document.getElementById("revox-history-popup");
+  const titleEl = document.getElementById("revox-history-title");
+  const listEl = document.getElementById("revox-history-list");
+  if (!popup || !listEl || !key) return;
+  if (titleEl) titleEl.textContent = name || "Member";
+  listEl.innerHTML = `<p class="tournament-results-loading">Loading…</p>`;
+  popup.classList.remove("hidden");
+  const db = initFirebase();
+  if (!db) {
+    listEl.innerHTML = `<p class="tournament-results-empty">Live sync isn't configured on this build.</p>`;
+    return;
+  }
+  db.ref("revoxRanking/" + key).once("value").then(snap => {
+    const v = snap.val() || {};
+    let results = v.results ? Object.keys(v.results).map(k => v.results[k]) : [];
+    // Older entries kept only the latest result at the top level.
+    if (!results.length && v.tournament) {
+      results = [{ tournament: v.tournament, placing: v.placing,
+                   points: revoxPointsForPlacing(v.placing), date: v.date }];
+    }
+    if (!results.length) {
+      listEl.innerHTML = `<p class="tournament-results-empty">No joined events recorded yet.</p>`;
+      return;
+    }
+    results.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+    listEl.innerHTML =
+      `<p class="revox-history-count">Joined events: ${results.length}</p>` +
+      `<div class="revox-history-scroll">` +
+      results.map(r => {
+      const bits = [];
+      const d = formatRevoxDate(r.date);
+      if (d) bits.push(d);
+      if (Number(r.placing)) bits.push(ordinalPlace(r.placing));
+      const pts = Number(r.points) || 0;
+      bits.push(pts + " pt" + (pts === 1 ? "" : "s"));
+      return `<div class="revox-history-row">
+        <span class="revox-history-tour">${escapeHtml(r.tournament || "Tournament")}</span>
+        <span class="revox-history-meta">${escapeHtml(bits.join(" · "))}</span>
+      </div>`;
+    }).join("") +
+      `</div>`;
+  }).catch(() => {
+    listEl.innerHTML = `<p class="tournament-results-empty">Couldn't load the history right now.</p>`;
+  });
+}
+
 (function initRevoxAdminControls() {
   // Re-render when the signed-in profile (and its tags) finishes loading, so
-  // the add form and per-row controls appear once "Revox Admin" is confirmed.
+  // the Add button and per-row controls appear once "Revox Admin" is confirmed.
   window.addEventListener("userprofilechange", () => {
     if (document.getElementById("revox-ranking-list")) renderRevoxRanking();
   });
-  // Wire the custom themed Points dropdown (matches the Settings dropdown
-  // pattern used elsewhere in the app — guaranteed visible across themes).
-  const pointsDropdown = document.getElementById("revox-add-points");
-  if (pointsDropdown) {
-    const btn = pointsDropdown.querySelector(".setting-dropdown-btn");
-    const text = pointsDropdown.querySelector(".setting-dropdown-text");
-    const menu = pointsDropdown.querySelector(".setting-dropdown-menu");
-    const opts = pointsDropdown.querySelectorAll(".setting-dropdown-option");
+
+  const popup = document.getElementById("revox-add-popup");
+  const placingDropdown = document.getElementById("revox-add-placing");
+  const pointsDisplay = document.getElementById("revox-add-points");
+  const nameEl = document.getElementById("revox-add-name");
+  const tournamentEl = document.getElementById("revox-add-tournament");
+  const dateEl = document.getElementById("revox-add-date");
+  const statusEl = document.getElementById("revox-add-status");
+  const setStatus = (m) => { if (statusEl) statusEl.textContent = m || ""; };
+
+  // Mirror the chosen placing's points into the locked Points display.
+  const syncPoints = () => {
+    if (!pointsDisplay) return;
+    const placing = placingDropdown?.querySelector(".setting-dropdown-btn")?.dataset.value || "";
+    if (!placing) { pointsDisplay.textContent = "—"; return; }
+    const pts = revoxPointsForPlacing(placing);
+    pointsDisplay.textContent = `${pts} pt${pts === 1 ? "" : "s"}`;
+  };
+
+  // Wire the themed Placing dropdown (same pattern as the Settings dropdowns).
+  if (placingDropdown) {
+    const btn = placingDropdown.querySelector(".setting-dropdown-btn");
+    const text = placingDropdown.querySelector(".setting-dropdown-text");
+    const menu = placingDropdown.querySelector(".setting-dropdown-menu");
+    const opts = placingDropdown.querySelectorAll(".setting-dropdown-option");
     btn?.addEventListener("click", e => {
       e.stopPropagation();
       menu?.classList.toggle("hidden");
     });
     opts.forEach(opt => {
       opt.addEventListener("click", () => {
-        const v = opt.dataset.value;
-        if (btn) { btn.dataset.value = v; }
-        if (text) text.textContent = v;
+        if (btn) btn.dataset.value = opt.dataset.value;
+        if (text) text.textContent = opt.textContent;
         opts.forEach(o => o.classList.toggle("active", o === opt));
         menu?.classList.add("hidden");
+        syncPoints();
       });
     });
     document.addEventListener("click", e => {
-      if (!pointsDropdown.contains(e.target)) menu?.classList.add("hidden");
+      if (!placingDropdown.contains(e.target)) menu?.classList.add("hidden");
     });
   }
 
-  const resetPointsDropdown = () => {
-    if (!pointsDropdown) return;
-    const btn = pointsDropdown.querySelector(".setting-dropdown-btn");
-    const text = pointsDropdown.querySelector(".setting-dropdown-text");
+  const resetPlacing = () => {
+    if (!placingDropdown) return;
+    const btn = placingDropdown.querySelector(".setting-dropdown-btn");
+    const text = placingDropdown.querySelector(".setting-dropdown-text");
     if (btn) btn.dataset.value = "";
-    if (text) text.textContent = "Points";
-    pointsDropdown.querySelectorAll(".setting-dropdown-option").forEach(o => o.classList.remove("active"));
+    if (text) text.textContent = "Placing";
+    placingDropdown.querySelectorAll(".setting-dropdown-option").forEach(o => o.classList.remove("active"));
+    syncPoints();
   };
 
-  document.getElementById("revox-add-btn")?.addEventListener("click", () => {
+  const closePopup = () => popup?.classList.add("hidden");
+
+  // Open the Add Result popup (Revox Admins only).
+  const openPopup = (prefillName) => {
+    if (!popup || !isRevoxAdminUnlocked()) return;
+    if (tournamentEl) tournamentEl.value = "";
+    // Opened from a row's Add button — the member is fixed, so lock the name.
+    const locked = typeof prefillName === "string" && prefillName !== "";
+    if (nameEl) {
+      nameEl.value = locked ? prefillName : "";
+      nameEl.readOnly = locked;
+      nameEl.classList.toggle("revox-name-locked", locked);
+    }
+    if (dateEl) dateEl.value = todayISO();
+    resetPlacing();
+    setStatus("");
+    popup.classList.remove("hidden");
+    setTimeout(() => tournamentEl?.focus(), 0);
+  };
+  // Exposed so a ranking row's Add button can open this pre-filled.
+  revoxAddPopupOpener = openPopup;
+
+  document.getElementById("revox-add-btn")?.addEventListener("click", () => openPopup());
+  document.getElementById("revox-add-cancel")?.addEventListener("click", closePopup);
+  // Click the dimmed backdrop (but not the card) to dismiss.
+  popup?.addEventListener("click", e => { if (e.target === popup) closePopup(); });
+
+  document.getElementById("revox-add-confirm")?.addEventListener("click", () => {
     if (!isRevoxAdminUnlocked()) return;
-    const nameEl = document.getElementById("revox-add-name");
+    const tournament = (tournamentEl?.value || "").trim();
     const name = (nameEl?.value || "").trim();
-    const ptsRaw = pointsDropdown?.querySelector(".setting-dropdown-btn")?.dataset.value || "";
-    if (!name) { alert("Enter a name."); return; }
-    if (!ptsRaw) { alert("Pick a points value."); return; }
-    const pts = Number(ptsRaw);
-    if (!Number.isFinite(pts)) { alert("Points must be a number."); return; }
-    addRevoxEntry(name, pts).then(() => {
-      if (nameEl) nameEl.value = "";
-      resetPointsDropdown();
-      renderRevoxRanking();
-    }).catch(e => alert("Add failed: " + (e?.message || e)));
+    const date = (dateEl?.value || "").trim();
+    const placing = placingDropdown?.querySelector(".setting-dropdown-btn")?.dataset.value || "";
+    if (!tournament) { setStatus("Enter a tournament name."); return; }
+    if (!name) { setStatus("Enter a member name."); return; }
+    if (!date) { setStatus("Pick a date."); return; }
+    if (!placing) { setStatus("Pick a placing."); return; }
+    setStatus("Saving…");
+    addRevoxEntry(name, revoxPointsForPlacing(placing), tournament, Number(placing), date)
+      .then(() => { closePopup(); renderRevoxRanking(); })
+      .catch(e => setStatus("Add failed: " + (e?.message || e)));
   });
+
+  // Tournament-history popup — dismissed by the Close button or the backdrop.
+  const historyPopup = document.getElementById("revox-history-popup");
+  const closeHistory = () => historyPopup?.classList.add("hidden");
+  document.getElementById("revox-history-close")?.addEventListener("click", closeHistory);
+  historyPopup?.addEventListener("click", e => { if (e.target === historyPopup) closeHistory(); });
 })();

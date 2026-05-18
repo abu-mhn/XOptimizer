@@ -442,6 +442,12 @@
   // "Revox Admin" tag instead of a separate password login.
   window.isRevoxAdmin = function isRevoxAdmin() { return hasTag("Revox Admin"); };
 
+  // The signed-in account's username ("" when signed out / no profile yet).
+  // Used by the tournament sub-host list to match designated co-hosts.
+  window.getCurrentUsername = function getCurrentUsername() {
+    return (currentProfile && currentProfile.username) || "";
+  };
+
   // ===== Developer area — a tab + page visible only to accounts whose
   // profile carries the "Developer" tag. Lets a developer browse every
   // registered user, search them, and assign tags. =====
@@ -475,10 +481,11 @@
     }
   }
 
-  // The Revox tab is restricted to accounts tagged "Revox Admin". As with the
-  // Developer tab, the current page's own tab is never hidden.
+  // The Revox tab is shown to "Revox Admin" (full edit) and "Revox Member"
+  // (view only) accounts. As with the Developer tab, the current page's own
+  // tab is never hidden. Write access stays gated separately on "Revox Admin".
   function paintRevoxTab() {
-    const show = hasTag("Revox Admin");
+    const show = hasTag("Revox Admin") || hasTag("Revox Member");
     document.querySelectorAll('.tab[data-mode="revox"]').forEach(tab => {
       tab.classList.toggle("hidden", !show && !tab.classList.contains("active"));
     });
