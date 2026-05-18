@@ -90,7 +90,7 @@
         <span class="tab-label">Tournament</span>
       </a>
 
-      <a class="tab" href="revox/" data-mode="revox" aria-label="Revox">
+      <a class="tab hidden" href="revox/" data-mode="revox" aria-label="Revox">
         <img src="assets/icons/revox.webp" alt="Revox">
         <span class="tab-label">Revox</span>
       </a>
@@ -117,6 +117,18 @@
       <a class="tab tab-settings active" href="settings/" data-mode="settings" aria-label="Settings">
         <img src="assets/icons/setting.png" alt="Settings">
         <span class="tab-label">Settings</span>
+      </a>
+
+      <a class="tab" href="account/" data-mode="account" aria-label="Profile">
+        <img id="account-tab-avatar" class="tab-account-avatar" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%2321262d'/%3E%3Ccircle cx='32' cy='24' r='12' fill='%23484f58'/%3E%3Cpath d='M11 57c0-12 10-20 21-20s21 8 21 20z' fill='%23484f58'/%3E%3C/svg%3E" alt="Profile">
+        <span class="tab-label">Profile</span>
+      </a>
+
+      <a class="tab hidden" href="developer/" data-mode="developer" aria-label="Developer">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false" style="width: 18px; height: 18px;">
+          <path d="M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0 4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/>
+        </svg>
+        <span class="tab-label">Developer</span>
       </a>
     </div>
 
@@ -370,11 +382,6 @@
     <section id="form-revox" class="calc-form hidden">
       <fieldset>
         <legend>Revox Members</legend>
-        <div class="revox-admin-bar">
-          <button type="button" id="revox-admin-login" class="btn btn-sm">Admin Login</button>
-          <button type="button" id="revox-admin-logout" class="btn btn-sm btn-reset hidden">Log Out</button>
-          <span id="revox-admin-status" class="revox-admin-status"></span>
-        </div>
         <div id="revox-admin-form" class="revox-admin-form hidden">
           <input type="text" id="revox-add-name" class="revox-input" placeholder="Member name" maxlength="60" autocomplete="off" list="revox-name-options" />
           <datalist id="revox-name-options"></datalist>
@@ -489,6 +496,7 @@
               <div class="setting-dropdown-option" data-value="mono">Monochrome</div>
               <div class="setting-dropdown-option" data-value="love">Love</div>
               <div class="setting-dropdown-option" data-value="forest">Forest</div>
+              <div class="setting-dropdown-option hidden" data-value="revox">Revox</div>
             </div>
           </div>
         </div>
@@ -519,15 +527,6 @@
               <div class="setting-dropdown-option" data-value="meta">Meta</div>
             </div>
           </div>
-        </div>
-
-        <div class="setting-item setting-item-account" id="settings-account-row">
-          <div class="setting-account-info">
-            <span class="setting-label-text">Account</span>
-            <span class="setting-account-email" id="settings-account-email">Not signed in</span>
-          </div>
-          <button type="button" id="settings-signin-btn" class="setting-action-btn">Sign in</button>
-          <button type="button" id="settings-signout-btn" class="setting-action-btn hidden">Sign out</button>
         </div>
 
         <div class="setting-item">
@@ -662,11 +661,21 @@
       <h2 class="popup-title" id="signin-title">Sign in</h2>
       <p class="popup-text" id="signin-subtitle">Sign in with your email to host tournaments.</p>
 
+      <div id="signin-username-row" class="hidden">
+        <label class="tournament-name-label" for="signin-username">Username</label>
+        <input id="signin-username" type="text" class="tournament-name-input" placeholder="Your display name" maxlength="30" autocomplete="off" />
+      </div>
+
       <label class="tournament-name-label" for="signin-email">Email</label>
       <input id="signin-email" type="email" class="tournament-name-input" placeholder="you@example.com" autocomplete="email" />
 
       <label class="tournament-name-label" for="signin-password">Password</label>
       <input id="signin-password" type="password" class="tournament-name-input" placeholder="At least 6 characters" autocomplete="current-password" />
+
+      <div id="signin-password2-row" class="hidden">
+        <label class="tournament-name-label" for="signin-password2">Confirm password</label>
+        <input id="signin-password2" type="password" class="tournament-name-input" placeholder="Re-type your password" autocomplete="new-password" />
+      </div>
 
       <div id="signin-status" class="swiss-join-status"></div>
 
@@ -900,19 +909,6 @@
     </div>
   </div>
 
-  <!-- ================= REVOX ADMIN LOGIN POPUP ================= -->
-  <div id="revox-admin-popup" class="popup-overlay hidden">
-    <div class="popup-card">
-      <h2 class="popup-title">Admin Login</h2>
-      <label class="tournament-name-label" for="revox-admin-input">Admin Password</label>
-      <input id="revox-admin-input" type="password" class="tournament-name-input" placeholder="Enter admin password" maxlength="80" autocomplete="off" />
-      <div id="revox-admin-popup-status" class="tournament-password-status"></div>
-      <div class="popup-actions">
-        <button type="button" id="revox-admin-confirm" class="btn">Log In</button>
-        <button type="button" id="revox-admin-cancel" class="btn popup-cancel">Cancel</button>
-      </div>
-    </div>
-  </div>
   </div>
 
   <!-- ================= SWISS ROUNDS POPUP ================= -->

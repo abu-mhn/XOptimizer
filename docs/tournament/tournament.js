@@ -1641,9 +1641,15 @@ function renderSwissRoomBadge() {
   // something users need to type or copy by hand.
   if (swissCanEdit) {
     const label = swissIsHost ? "Host" : "Co-host";
+    // Show the signed-in user's profile username alongside the role, so the
+    // badge reads as a person ("Host — Alice") rather than just a code.
+    const prof = (typeof getUserProfile === "function") ? getUserProfile() : null;
+    const uname = (prof && prof.username) ? prof.username : "";
+    const namePill = uname ? `<span class="swiss-room-name">${escapeHtml(uname)}</span>` : "";
     pills.push(`
-      <span class="swiss-room-badge swiss-room-badge-edit" title="${label} — tap to copy">
+      <span class="swiss-room-badge swiss-room-badge-edit" title="${label} — tap to copy the host code">
         <span class="swiss-room-role">${label}</span>
+        ${namePill}
         <button type="button" class="swiss-room-code" data-room="${swissEditCode}">${swissEditCode}</button>
       </span>
     `);
@@ -2058,7 +2064,7 @@ function renderSwiss() {
         ${showStartKnockoutBtn ? `<button type="button" id="swiss-start-bracket" class="btn">Start Knockout</button>` : ""}
         <div class="swiss-toolbar-actions">
           ${renderSwissShareButton()}
-          ${canEdit ? `<button type="button" id="swiss-edit-participants" class="btn btn-icon-sm btn-icon-plus" aria-label="Add participant" title="Add participant">+</button>` : ""}
+          ${canEdit && canAddParticipant(state) ? `<button type="button" id="swiss-edit-participants" class="btn btn-icon-sm btn-icon-plus" aria-label="Add participant" title="Add participant">+</button>` : ""}
           <button type="button" id="swiss-clear" class="btn btn-reset btn-icon-sm" title="${resetTitle}">
             <img src="assets/icons/exit-button.png" alt="${resetTitle}"
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
@@ -3578,25 +3584,56 @@ function showEditTournamentNamePopup() {
   }
 }
 
-// Slot a new participant into a running Swiss tournament without resetting it:
-// the player joins the smallest group that still has rounds left and is paired
-// in by that group's next round — all played matches and scores are kept. The
-// player also gets a registrant entry so their deck pre-fills every match.
-// Returns true on success. Swiss + Swiss-only only (both carry `groups`).
-function addSwissParticipantNextRound(name, deck) {
+// Whether the "Add Participant" affordance is available. Single-elim and round
+// robin regenerate, so they allow it any time. Swiss only takes new players
+// during round 1 — once any group has generated round 2, the door closes.
+function canAddParticipant(state) {
+  if (!state) return false;
+  if (state.mode === "single-elim" || state.pairing === "round-robin") return true;
+  if (!Array.isArray(state.groups) || !state.groups.length) return true;
+  const maxRound = state.groups.reduce((m, _, gi) => Math.max(m, state.groupRounds[gi] || 0), 0);
+  return maxRound <= 1; // 1 = only round 1 (index 0) generated
+}
+
+// Add a participant to a Swiss tournament that's still in round 1, no reset.
+// The newcomer enters round 1 as a free win (a bye) — UNLESS a bye already
+// exists in round 1, in which case they're paired against that bye player,
+// turning the existing free win into a real match. Returns true on success.
+function addSwissParticipantRound1(name, deck) {
   const s = loadSwiss();
   if (!Array.isArray(s.groups) || !s.groups.length) return false;
-  const rc = getRoundCount(s);
-  // Eligible groups still have at least one unplayed round to pair into.
-  // Among those, pick the smallest so groups stay balanced.
-  let target = -1;
-  for (let i = 0; i < s.groups.length; i++) {
-    if ((s.groupRounds[i] || 0) >= rc) continue;
-    if (target === -1 || s.groups[i].length < s.groups[target].length) target = i;
-  }
-  if (target === -1) {
-    alert("Every group has already played all its rounds — there's no upcoming round to add a player to.");
+  if (!canAddParticipant(s)) {
+    alert("Participants can only be added during round 1 — round 2 has already started.");
     return false;
+  }
+  // Look for an existing round-1 bye (free win) to pair the newcomer into.
+  let byeMatch = null;
+  for (const m of Object.values(s.matches || {})) {
+    if (m && m.round === 0 && m.bye && m.a && m.b == null) { byeMatch = m; break; }
+  }
+  const updates = {};
+  let target;
+  if (byeMatch) {
+    // A free win already exists — pair the newcomer against that player. The
+    // bye match becomes a real, unscored round-1 match.
+    target = byeMatch.groupIndex;
+    byeMatch.b = name;
+    byeMatch.bye = false;
+    updates[`matches/${byeMatch.id}/b`] = name;
+    updates[`matches/${byeMatch.id}/bye`] = false;
+  } else {
+    // No free win yet — the newcomer joins the smallest group and takes a
+    // round-1 bye (free win) of their own.
+    target = 0;
+    for (let i = 1; i < s.groups.length; i++) {
+      if (s.groups[i].length < s.groups[target].length) target = i;
+    }
+    const idx = Object.values(s.matches || {})
+      .filter(m => m && m.groupIndex === target && m.round === 0).length;
+    const id = `g${target}-r0-m${idx}`;
+    const byeM = { id, groupIndex: target, round: 0, a: name, b: null, scoreA: null, scoreB: null, bye: true };
+    s.matches[id] = byeM;
+    updates[`matches/${id}`] = byeM;
   }
   s.groups[target].push(name);
   // Keep the canonical participant list in sync (getParticipants falls back to
@@ -3607,12 +3644,10 @@ function addSwissParticipantNextRound(name, deck) {
   s.registrants[regId] = { name, deck };
   persistSwiss(s);
   if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
-    // Targeted update — only the touched group, the participant list and the
-    // new registrant. Nothing else in the room is rewritten.
-    const updates = {
-      [`groups/${target}`]: s.groups[target],
-      [`registrants/${regId}`]: { name, deck }
-    };
+    // Targeted update — only the touched group, match, participant list and
+    // the new registrant. Nothing else in the room is rewritten.
+    updates[`groups/${target}`] = s.groups[target];
+    updates[`registrants/${regId}`] = { name, deck };
     if (Array.isArray(s.participants)) updates.participants = s.participants;
     swissRoomRef.update(updates).catch(e => console.warn("Add participant push failed:", e));
   }
@@ -3620,9 +3655,9 @@ function addSwissParticipantNextRound(name, deck) {
 }
 
 // Add a single participant — name + a 3-combo deck — to a running tournament.
-// Swiss tournaments slot the player into the next round with no reset (see
-// addSwissParticipantNextRound). Single-elim has no open slot mid-bracket, so
-// it regenerates from scratch after an explicit confirm.
+// Swiss slots the player into round 1 as a free win, no reset (see
+// addSwissParticipantRound1). Single-elim and round robin have no open slot,
+// so they regenerate from scratch after an explicit confirm.
 function showAddParticipantPopup() {
   const popup = document.getElementById("edit-participants-popup");
   if (!popup) return;
@@ -3715,14 +3750,14 @@ function showAddParticipantPopup() {
       if (!confirm(`"${name}" has no deck slots filled. Add anyway?`)) return;
     }
 
-    // Swiss (standings pairing) can slot a player into the next round with no
-    // reset. Single-elim (fixed bracket) and round robin (fixed everyone-vs-
-    // everyone schedule) have no open slot, so they regenerate.
+    // Swiss (standings pairing) slots a player into round 1 as a free win,
+    // no reset. Single-elim (fixed bracket) and round robin (fixed everyone-
+    // vs-everyone schedule) have no open slot, so they regenerate.
     const hasGroups = Array.isArray(state.groups) && state.groups.length;
     const canSlotIn = state.mode !== "single-elim"
       && state.pairing !== "round-robin" && hasGroups;
     if (canSlotIn) {
-      if (!addSwissParticipantNextRound(name, deck)) return; // helper alerted
+      if (!addSwissParticipantRound1(name, deck)) return; // helper alerted
       renderSwiss();
       close();
       return;
@@ -4196,6 +4231,12 @@ function showTournamentResultsFromHistory(code) {
 
 // Re-join a previously connected room on page load.
 window.addEventListener("load", initSwissRoomOnLoad);
+
+// The room badge shows the signed-in user's profile username — re-render it
+// once the profile loads or changes.
+window.addEventListener("userprofilechange", () => {
+  if (document.getElementById("swiss-view")) renderSwiss();
+});
 
 // Rotating the device (especially through the scoreboard's fullscreen flow)
 // can reset the rounds-scroll containers back to scrollLeft 0. Re-apply the
@@ -5216,30 +5257,12 @@ function renderTournamentRanking() {
 
 // ===================== REVOX MEMBER RANKING (admin-curated) =====================
 // Manually-managed leaderboard, separate from tournament-driven /ranking.
-// Anyone can read; only an admin (gated by a static SHA-256 password) can write.
-
-const REVOX_ADMIN_SESSION_KEY = "beyblade_revox_admin";
+// Anyone can read; write access (add / edit / delete) is reserved for accounts
+// carrying the "Revox Admin" tag — the same tag that unlocks the Revox tab —
+// so no separate password login is needed.
 
 function isRevoxAdminUnlocked() {
-  try { return sessionStorage.getItem(REVOX_ADMIN_SESSION_KEY) === "1"; }
-  catch { return false; }
-}
-
-function setRevoxAdminUnlocked(yes) {
-  try {
-    if (yes) sessionStorage.setItem(REVOX_ADMIN_SESSION_KEY, "1");
-    else sessionStorage.removeItem(REVOX_ADMIN_SESSION_KEY);
-  } catch {}
-}
-
-async function verifyRevoxAdminPassword(password) {
-  const expected = (window.TOURNAMENT_REVOX_ADMIN_SHA256 || "").toLowerCase();
-  if (!expected || !password) return false;
-  try {
-    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(password));
-    const got = [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
-    return got === expected;
-  } catch { return false; }
+  return typeof window.isRevoxAdmin === "function" && window.isRevoxAdmin();
 }
 
 // Adds points to an entry. If the same name (after key normalization)
@@ -5357,55 +5380,17 @@ function renderRevoxRanking() {
 }
 
 function updateRevoxAdminUI() {
-  const isAdmin = isRevoxAdminUnlocked();
-  document.getElementById("revox-admin-login")?.classList.toggle("hidden", isAdmin);
-  document.getElementById("revox-admin-logout")?.classList.toggle("hidden", !isAdmin);
-  document.getElementById("revox-admin-form")?.classList.toggle("hidden", !isAdmin);
-  const status = document.getElementById("revox-admin-status");
-  if (status) {
-    status.textContent = isAdmin ? "Admin mode" : "";
-    status.classList.toggle("is-ok", isAdmin);
-  }
-}
-
-function showRevoxAdminPopup() {
-  const popup = document.getElementById("revox-admin-popup");
-  if (!popup) return;
-  const input = popup.querySelector("#revox-admin-input");
-  const status = popup.querySelector("#revox-admin-popup-status");
-  const confirmBtn = popup.querySelector("#revox-admin-confirm");
-  const cancelBtn = popup.querySelector("#revox-admin-cancel");
-  if (input) input.value = "";
-  if (status) { status.textContent = ""; status.classList.remove("is-ok"); }
-  popup.classList.remove("hidden");
-  setTimeout(() => input?.focus(), 0);
-  const close = () => {
-    popup.classList.add("hidden");
-    confirmBtn.onclick = null;
-    cancelBtn.onclick = null;
-    input?.removeEventListener("keydown", onKey);
-  };
-  const onKey = e => { if (e.key === "Enter") confirmBtn.click(); if (e.key === "Escape") close(); };
-  input?.addEventListener("keydown", onKey);
-  confirmBtn.onclick = async () => {
-    const pw = input ? input.value : "";
-    if (!pw) { if (status) status.textContent = "Password required."; return; }
-    confirmBtn.disabled = true;
-    const ok = await verifyRevoxAdminPassword(pw);
-    confirmBtn.disabled = false;
-    if (!ok) { if (status) status.textContent = "Wrong password."; input?.select(); return; }
-    setRevoxAdminUnlocked(true);
-    close();
-    renderRevoxRanking();
-  };
-  cancelBtn.onclick = () => close();
+  // The add form shows only for Revox-Admin accounts. The Revox tab is
+  // already tag-gated, but a non-admin could still reach /revox/ by URL —
+  // for them the page stays read-only.
+  document.getElementById("revox-admin-form")?.classList.toggle("hidden", !isRevoxAdminUnlocked());
 }
 
 (function initRevoxAdminControls() {
-  document.getElementById("revox-admin-login")?.addEventListener("click", showRevoxAdminPopup);
-  document.getElementById("revox-admin-logout")?.addEventListener("click", () => {
-    setRevoxAdminUnlocked(false);
-    renderRevoxRanking();
+  // Re-render when the signed-in profile (and its tags) finishes loading, so
+  // the add form and per-row controls appear once "Revox Admin" is confirmed.
+  window.addEventListener("userprofilechange", () => {
+    if (document.getElementById("revox-ranking-list")) renderRevoxRanking();
   });
   // Wire the custom themed Points dropdown (matches the Settings dropdown
   // pattern used elsewhere in the app — guaranteed visible across themes).

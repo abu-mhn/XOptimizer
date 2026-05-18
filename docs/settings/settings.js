@@ -71,8 +71,9 @@ Tournament
 - Parts-usage pie charts at tournament end as an auto-sliding carousel (theme-aware palette)
 
 Revox
-- Dedicated top-level tab with its own icon
-- Admin login to add, edit, and remove members
+- Dedicated tab and theme, shown only to accounts tagged "Revox Admin"
+- The Revox theme turns on automatically when a Revox Admin signs in
+- Revox Admins add, edit, and remove members directly — no password, the account tag is the key
 - Member ranking by points
 
 Battle Pass
@@ -87,14 +88,25 @@ History
 - Clickable entries open final placements (cached when the live room is gone)
 
 Settings
-- Themes: Dark, Light, Space, Tropical, Stormy, Monochrome, Love, Forest
+- Themes: Dark, Light, Space, Tropical, Stormy, Monochrome, Love, Forest (plus Revox, for Revox Admins)
 - Stat display: Bar or Radar
 - Additional button mode picker (Random / Meta)
-- Account: sign up / sign in with email + password, forgot-password reset, sign out
+- Account: sign up / sign in with username or email + password, forgot-password reset, sign out
 - Show Features (this list)
 
+Profile
+- Your own profile tab — the profile photo doubles as the tab icon
+- Upload a photo and a banner (tap the image to change it), set a username and a short bio
+- Discord-style profile card; admin-assigned tags show as badges
+- Profile syncs to your account — same photo, name and bio on every device
+
+Developer
+- Extra tab shown only to accounts tagged "Developer"
+- Lists every registered user with a total count, searchable by username or email
+- Developers can add tags to any user (multiple tags per user)
+
 Other
-- Per-tab URLs: /dashboard/, /calculator/, /library/, /deck/, /tournament/, /revox/, /battlepass/, /reel/, /history/, /settings/
+- Per-tab URLs: /dashboard/, /calculator/, /library/, /deck/, /tournament/, /revox/, /battlepass/, /reel/, /history/, /settings/, /account/, /developer/
 - "What's New" landing page at the site root
 - Single-line horizontal tab bar (invisible scrollbar) — each tab shows its icon with a name label below; scroll position preserved across navigation, centered on desktop
 - Live Firebase sync across host / co-host / participant / viewer devices
@@ -130,39 +142,6 @@ Other
   closeBtn?.addEventListener("click", close);
   popup.addEventListener("click", (e) => { if (e.target === popup) close(); });
 
-  // ===== Account row (sign-in / sign-out) =====
-  (function initAccountRow() {
-    const row = document.getElementById("settings-account-row");
-    if (!row) return;
-    const emailEl = row.querySelector("#settings-account-email");
-    const signInBtn = row.querySelector("#settings-signin-btn");
-    const signOutBtn = row.querySelector("#settings-signout-btn");
-    const render = (user) => {
-      if (user) {
-        if (emailEl) emailEl.textContent = user.email || "Signed in";
-        signInBtn?.classList.add("hidden");
-        signOutBtn?.classList.remove("hidden");
-      } else {
-        if (emailEl) emailEl.textContent = "Not signed in";
-        signInBtn?.classList.remove("hidden");
-        signOutBtn?.classList.add("hidden");
-      }
-    };
-    if (typeof window.onAuthChange === "function") {
-      window.onAuthChange(render);
-    } else {
-      render(null);
-    }
-    signInBtn?.addEventListener("click", () => {
-      if (typeof window.showSignInPopup !== "function") return;
-      window.showSignInPopup({}).catch(() => {});
-    });
-    signOutBtn?.addEventListener("click", () => {
-      if (typeof window.signOutCurrentUser !== "function") return;
-      if (!confirm("Sign out of this account?")) return;
-      window.signOutCurrentUser().catch(e => alert("Sign out failed: " + (e?.message || e)));
-    });
-  })();
 
   copyBtn?.addEventListener("click", () => {
     const text = listEl ? listEl.textContent : FEATURES_TEXT;
@@ -191,3 +170,158 @@ Other
     }
   });
 })();
+
+  // ===== Account page (sign in/out + profile: username & photo) =====
+  // The Account tab is its own page (/account/); this wires it. settings.js
+  // loads on every page, so on non-account pages the elements are absent and
+  // this whole block no-ops.
+  (function initAccountPage() {
+    const signedOut = document.getElementById("account-signedout");
+    const signedIn = document.getElementById("account-signedin");
+    if (!signedOut && !signedIn) return;
+    const signInBtn = document.getElementById("account-signin-btn");
+    const signOutBtn = document.getElementById("account-signout-btn");
+    const avatar = document.getElementById("account-profile-avatar");
+    const nameInput = document.getElementById("account-profile-username");
+    const bioInput = document.getElementById("account-bio");
+    const emailEl = document.getElementById("account-email");
+    const tagsEl = document.getElementById("account-tags");
+    const saveBtn = document.getElementById("account-save-btn");
+    const fileInput = document.getElementById("account-profile-file");
+    const banner = document.getElementById("account-banner");
+    const bannerFile = document.getElementById("account-banner-file");
+    const statusEl = document.getElementById("account-status");
+
+    // Neutral person-silhouette placeholder shown until a photo is set,
+    // and a plain dark strip shown until a banner is set.
+    const PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%2321262d'/%3E%3Ccircle cx='32' cy='24' r='12' fill='%23484f58'/%3E%3Cpath d='M11 57c0-12 10-20 21-20s21 8 21 20z' fill='%23484f58'/%3E%3C/svg%3E";
+    const BANNER_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 110'%3E%3Crect width='400' height='110' fill='%2321262d'/%3E%3C/svg%3E";
+
+    let pendingPhoto = "";
+    let pendingBanner = "";
+
+    const setStatus = (msg, kind) => {
+      if (!statusEl) return;
+      statusEl.textContent = msg || "";
+      statusEl.classList.remove("is-ok", "is-err", "is-pending");
+      if (kind) statusEl.classList.add(`is-${kind}`);
+    };
+
+    const fill = (profile) => {
+      pendingPhoto = (profile && profile.photo) || "";
+      pendingBanner = (profile && profile.banner) || "";
+      if (nameInput) nameInput.value = (profile && profile.username) || "";
+      if (bioInput) bioInput.value = (profile && profile.bio) || "";
+      if (tagsEl) {
+        const tags = (profile && profile.tags) || [];
+        tagsEl.textContent = "";
+        tags.forEach(t => {
+          const s = document.createElement("span");
+          s.className = "account-tag";
+          s.textContent = t;
+          tagsEl.appendChild(s);
+        });
+        tagsEl.classList.toggle("hidden", !tags.length);
+      }
+      if (avatar) avatar.src = pendingPhoto || PLACEHOLDER;
+      if (banner) banner.src = pendingBanner || BANNER_PLACEHOLDER;
+    };
+
+    // Toggle the signed-in / signed-out panes and load the profile.
+    const render = (user) => {
+      if (user) {
+        signedOut?.classList.add("hidden");
+        signedIn?.classList.remove("hidden");
+        if (emailEl) emailEl.textContent = user.email || "";
+        setStatus("");
+        if (typeof window.loadUserProfile === "function") {
+          window.loadUserProfile().then(p => fill(p || {}));
+        } else {
+          fill({});
+        }
+      } else {
+        signedIn?.classList.add("hidden");
+        signedOut?.classList.remove("hidden");
+      }
+    };
+
+    if (typeof window.onAuthChange === "function") window.onAuthChange(render);
+    else render(null);
+
+    signInBtn?.addEventListener("click", () => {
+      if (typeof window.showSignInPopup === "function") window.showSignInPopup({}).catch(() => {});
+    });
+    signOutBtn?.addEventListener("click", () => {
+      if (typeof window.signOutCurrentUser !== "function") return;
+      if (!confirm("Sign out of this account?")) return;
+      window.signOutCurrentUser().catch(e => alert("Sign out failed: " + (e?.message || e)));
+    });
+
+    // Downscale a picked image to a small JPEG data-URL so the profile
+    // record stays tiny enough to live in the Realtime Database.
+    const downscale = (file, maxSize) => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("Couldn't read that file."));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("That file isn't a readable image."));
+        img.onload = () => {
+          const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+          const w = Math.max(1, Math.round(img.width * scale));
+          const h = Math.max(1, Math.round(img.height * scale));
+          const canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL("image/jpeg", 0.82));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Tap the avatar / banner image itself to change it.
+    avatar?.addEventListener("click", () => fileInput?.click());
+
+    fileInput?.addEventListener("change", () => {
+      const file = fileInput.files && fileInput.files[0];
+      fileInput.value = ""; // let the same file be re-picked later
+      if (!file) return;
+      setStatus("Processing photo…", "pending");
+      downscale(file, 128)
+        .then(dataUrl => {
+          pendingPhoto = dataUrl;
+          if (avatar) avatar.src = dataUrl;
+          setStatus("Photo ready — tap Save profile to keep it.", "ok");
+        })
+        .catch(e => setStatus(e.message || "Couldn't process that image.", "err"));
+    });
+
+    banner?.addEventListener("click", () => bannerFile?.click());
+
+    bannerFile?.addEventListener("change", () => {
+      const file = bannerFile.files && bannerFile.files[0];
+      bannerFile.value = "";
+      if (!file) return;
+      setStatus("Processing banner…", "pending");
+      downscale(file, 640)
+        .then(dataUrl => {
+          pendingBanner = dataUrl;
+          if (banner) banner.src = dataUrl;
+          setStatus("Banner ready — tap Save profile to keep it.", "ok");
+        })
+        .catch(e => setStatus(e.message || "Couldn't process that image.", "err"));
+    });
+
+    saveBtn?.addEventListener("click", () => {
+      if (typeof window.saveUserProfile !== "function") return;
+      const username = (nameInput?.value || "").trim();
+      if (!username) { setStatus("Enter a username.", "err"); nameInput?.focus(); return; }
+      setStatus("Saving…", "pending");
+      saveBtn.disabled = true;
+      window.saveUserProfile({ username, photo: pendingPhoto, banner: pendingBanner, bio: (bioInput?.value || "").trim() })
+        .then(() => setStatus("Profile saved ✓", "ok"))
+        .catch(e => setStatus(e.message || "Couldn't save your profile.", "err"))
+        .finally(() => { saveBtn.disabled = false; });
+    });
+  })();

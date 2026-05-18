@@ -40,7 +40,7 @@
   <!-- Optional theme color -->
   <meta name="theme-color" content="#0a4797">
 
-  <title>Tournament — X Optimizer</title>
+  <title>Developer — X Optimizer</title>
   <link rel="stylesheet" href="style.css">
 </head>
 
@@ -85,7 +85,7 @@
         <span class="tab-label">Deck</span>
       </a>
 
-      <a class="tab active" href="tournament/" data-mode="swiss" aria-label="Tournament">
+      <a class="tab" href="tournament/" data-mode="swiss" aria-label="Tournament">
         <img src="assets/icons/confrontation.png" alt="Tournament">
         <span class="tab-label">Tournament</span>
       </a>
@@ -124,7 +124,7 @@
         <span class="tab-label">Profile</span>
       </a>
 
-      <a class="tab hidden" href="developer/" data-mode="developer" aria-label="Developer">
+      <a class="tab active" href="developer/" data-mode="developer" aria-label="Developer">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false" style="width: 18px; height: 18px;">
           <path d="M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0 4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/>
         </svg>
@@ -336,7 +336,7 @@
     </section>
 
     <!-- ================= SWISS ================= -->
-    <section id="form-swiss" class="calc-form">
+    <section id="form-swiss" class="calc-form hidden">
       <div class="tournament-sub-tabs" id="tournament-sub-tabs">
         <button type="button" class="tournament-sub-tab active" data-tournament-view="hosting">Hosting</button>
         <button type="button" class="tournament-sub-tab" data-tournament-view="ranking">Ranking</button>
@@ -531,6 +531,25 @@
       </fieldset>
     </section>
 
+    <!-- ================= DEVELOPER ================= -->
+    <section id="form-developer" class="calc-form">
+      <fieldset>
+        <legend>Developer</legend>
+        <div id="developer-locked" class="developer-pane">
+          <p class="account-hint">This area is for accounts with the Developer tag.</p>
+        </div>
+        <div id="developer-main" class="developer-pane hidden">
+          <p class="developer-count" id="developer-count">Registered users: …</p>
+          <div class="developer-search-row">
+            <input type="text" id="developer-search" class="developer-search" placeholder="Search username or email…" autocomplete="off" />
+            <button type="button" id="developer-search-btn" class="btn btn-sm">Search</button>
+          </div>
+          <div id="developer-status" class="swiss-join-status"></div>
+          <div id="developer-user-list" class="developer-user-list"></div>
+        </div>
+      </fieldset>
+    </section>
+
     <!-- ================= RESULT ================= -->
     <div id="result" class="result hidden"></div>
   </div>
@@ -563,7 +582,7 @@
   <div id="edit-participants-popup" class="popup-overlay hidden">
     <div class="popup-card bey-check-card">
       <h2 class="popup-title">Add Participant</h2>
-      <p class="popup-text">Add one player with their deck. In Swiss they join the <strong>next round</strong> — current matches and scores are kept. A single-elimination bracket has no open slot, so it regenerates.</p>
+      <p class="popup-text">Add one player with their deck. In Swiss they join the <strong>next round</strong> &mdash; current matches and scores are kept. A single-elimination bracket has no open slot, so it regenerates.</p>
       <label class="tournament-name-label" for="add-participant-name">Name</label>
       <input id="add-participant-name" type="text" class="tournament-name-input" placeholder="e.g. Alice" maxlength="60" autocomplete="off" />
       <p class="popup-text register-deck-hint">Build the 3-combo deck this player brings. The judge sees this deck at every match. Tip: copy a deck from the Deck tab, then paste it here.</p>

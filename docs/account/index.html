@@ -40,7 +40,7 @@
   <!-- Optional theme color -->
   <meta name="theme-color" content="#0a4797">
 
-  <title>Tournament — X Optimizer</title>
+  <title>Profile — X Optimizer</title>
   <link rel="stylesheet" href="style.css">
 </head>
 
@@ -85,7 +85,7 @@
         <span class="tab-label">Deck</span>
       </a>
 
-      <a class="tab active" href="tournament/" data-mode="swiss" aria-label="Tournament">
+      <a class="tab" href="tournament/" data-mode="swiss" aria-label="Tournament">
         <img src="assets/icons/confrontation.png" alt="Tournament">
         <span class="tab-label">Tournament</span>
       </a>
@@ -119,7 +119,7 @@
         <span class="tab-label">Settings</span>
       </a>
 
-      <a class="tab" href="account/" data-mode="account" aria-label="Profile">
+      <a class="tab active" href="account/" data-mode="account" aria-label="Profile">
         <img id="account-tab-avatar" class="tab-account-avatar" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%2321262d'/%3E%3Ccircle cx='32' cy='24' r='12' fill='%23484f58'/%3E%3Cpath d='M11 57c0-12 10-20 21-20s21 8 21 20z' fill='%23484f58'/%3E%3C/svg%3E" alt="Profile">
         <span class="tab-label">Profile</span>
       </a>
@@ -336,7 +336,7 @@
     </section>
 
     <!-- ================= SWISS ================= -->
-    <section id="form-swiss" class="calc-form">
+    <section id="form-swiss" class="calc-form hidden">
       <div class="tournament-sub-tabs" id="tournament-sub-tabs">
         <button type="button" class="tournament-sub-tab active" data-tournament-view="hosting">Hosting</button>
         <button type="button" class="tournament-sub-tab" data-tournament-view="ranking">Ranking</button>
@@ -531,6 +531,44 @@
       </fieldset>
     </section>
 
+    <!-- ================= ACCOUNT ================= -->
+    <section id="form-account" class="calc-form">
+      <fieldset>
+        <legend>Profile</legend>
+
+        <div id="account-signedout" class="account-pane">
+          <p class="account-hint">Sign in to set up your profile. Your username, photo and banner follow your account on every device you sign in on.</p>
+          <button type="button" id="account-signin-btn" class="btn">Sign in</button>
+        </div>
+
+        <div id="account-signedin" class="account-pane hidden">
+          <div class="account-card">
+            <div class="account-card-cover">
+              <img id="account-banner" class="account-banner" alt="Profile banner" title="Tap to change banner" />
+              <img id="account-profile-avatar" class="account-profile-avatar" alt="Profile photo" title="Tap to change photo" />
+            </div>
+            <div class="account-card-body">
+              <input type="text" id="account-profile-username" class="account-profile-username" placeholder="Username" maxlength="30" autocomplete="off" />
+              <span id="account-email" class="account-email"></span>
+              <span id="account-tags" class="account-tags hidden"></span>
+              <div class="account-bio-field">
+                <label class="account-bio-label" for="account-bio">Bio</label>
+                <textarea id="account-bio" class="account-bio" placeholder="Tell other bladers a bit about yourself…" maxlength="300" rows="3"></textarea>
+              </div>
+            </div>
+          </div>
+          <input type="file" id="account-banner-file" accept="image/*" class="hidden" />
+          <input type="file" id="account-profile-file" accept="image/*" class="hidden" />
+          <p class="account-edit-hint">Tap your photo or banner to change it.</p>
+          <div class="account-actions">
+            <button type="button" id="account-save-btn" class="btn btn-sm">Save profile</button>
+          </div>
+          <div id="account-status" class="swiss-join-status"></div>
+          <button type="button" id="account-signout-btn" class="btn btn-sm btn-reset account-signout">Sign out</button>
+        </div>
+      </fieldset>
+    </section>
+
     <!-- ================= RESULT ================= -->
     <div id="result" class="result hidden"></div>
   </div>
@@ -563,7 +601,7 @@
   <div id="edit-participants-popup" class="popup-overlay hidden">
     <div class="popup-card bey-check-card">
       <h2 class="popup-title">Add Participant</h2>
-      <p class="popup-text">Add one player with their deck. In Swiss they join the <strong>next round</strong> — current matches and scores are kept. A single-elimination bracket has no open slot, so it regenerates.</p>
+      <p class="popup-text">Add one player with their deck. In Swiss they join the <strong>next round</strong> &mdash; current matches and scores are kept. A single-elimination bracket has no open slot, so it regenerates.</p>
       <label class="tournament-name-label" for="add-participant-name">Name</label>
       <input id="add-participant-name" type="text" class="tournament-name-input" placeholder="e.g. Alice" maxlength="60" autocomplete="off" />
       <p class="popup-text register-deck-hint">Build the 3-combo deck this player brings. The judge sees this deck at every match. Tip: copy a deck from the Deck tab, then paste it here.</p>
@@ -982,6 +1020,7 @@
   <script src="history/history.js"></script>
   <script src="reel/reel.js"></script>
   <script type="module" src="battlepass/battlepass-tab.js"></script>
+  <script src="settings/settings.js"></script>
   <script src="dashboard/dashboard.js"></script>
   <script src="app.js"></script>
 </body>

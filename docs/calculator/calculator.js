@@ -1442,12 +1442,26 @@ function initSettingDropdown(id, storageKey, defaultVal, onChange) {
   });
 
   onChange(value);
-  return () => value;
+
+  // The returned getter also carries a `.set` so a value can be applied
+  // programmatically (used by the Revox-Admin theme auto-default in auth.js).
+  const getter = () => value;
+  getter.set = (v) => {
+    const opt = dropdown.querySelector(`.setting-dropdown-option[data-value="${v}"]`);
+    if (!opt || v === value) return;
+    value = v;
+    btn.dataset.value = v;
+    text.textContent = opt.textContent;
+    options.forEach(o => o.classList.toggle("active", o === opt));
+    localStorage.setItem(storageKey, v);
+    onChange(v);
+  };
+  return getter;
 }
 
-// Theme setting
-initSettingDropdown("setting-theme", "theme", "dark", (val) => {
-  document.body.classList.remove("light-mode", "space-mode", "tropical-mode", "stormy-mode", "mono-mode", "love-mode", "forest-mode");
+// Theme setting — exposed so auth.js can apply the Revox-Admin default.
+window.themeSetting = initSettingDropdown("setting-theme", "theme", "dark", (val) => {
+  document.body.classList.remove("light-mode", "space-mode", "tropical-mode", "stormy-mode", "mono-mode", "love-mode", "forest-mode", "revox-mode");
   if (val === "light") document.body.classList.add("light-mode");
   if (val === "space") document.body.classList.add("space-mode");
   if (val === "tropical") document.body.classList.add("tropical-mode");
@@ -1455,6 +1469,7 @@ initSettingDropdown("setting-theme", "theme", "dark", (val) => {
   if (val === "mono") document.body.classList.add("mono-mode");
   if (val === "love") document.body.classList.add("love-mode");
   if (val === "forest") document.body.classList.add("forest-mode");
+  if (val === "revox") document.body.classList.add("revox-mode");
   const titleLogo = document.getElementById("app-title-logo");
   if (titleLogo) {
     // Love and Forest use light surfaces (blush / moss-cream), so they
@@ -1470,6 +1485,7 @@ initSettingDropdown("setting-theme", "theme", "dark", (val) => {
     : val === "mono" ? "#000000"
     : val === "love" ? "#fff0f5"
     : val === "forest" ? "#f0f4e8"
+    : val === "revox" ? "#15151a"
     : "#0a4797";
   document.querySelectorAll('img.footer-logo').forEach(img => {
     img.src = (val === "light" || val === "tropical" || val === "love" || val === "forest") ? "assets/icons/revoxNameLight.webp" : "assets/icons/revoxName.webp";

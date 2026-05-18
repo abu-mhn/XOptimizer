@@ -156,7 +156,8 @@ h1 {
 }
 
 .tab[data-mode="deck"] img,
-.tab[data-mode="swiss"] img {
+.tab[data-mode="swiss"] img,
+.tab[data-mode="revox"] img {
     filter: brightness(0) invert(1);
 }
 
@@ -758,6 +759,235 @@ body.light-mode .result-part-name {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* ===== Account page (profile) ===== */
+.tab img.tab-account-avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.account-pane {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+/* `.account-pane` sets display:flex, which ties the .hidden utility on
+   specificity — this explicit rule lets a hidden pane actually hide. */
+.account-pane.hidden {
+    display: none;
+}
+.account-hint {
+    margin: 0;
+    color: #8b949e;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+/* --- Discord-style profile card --- */
+.account-card {
+    background: #1b1f27;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    overflow: hidden;
+}
+.account-card-cover {
+    position: relative;
+}
+.account-banner {
+    display: block;
+    width: 100%;
+    height: 120px;
+    object-fit: cover;
+    background: #2a2f3a;
+    cursor: pointer;
+    transition: filter 0.15s ease;
+}
+.account-card-cover .account-profile-avatar {
+    position: absolute;
+    left: 18px;
+    bottom: -38px;
+    width: 84px;
+    height: 84px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 5px solid #1b1f27;
+    background: #2a2f3a;
+    cursor: pointer;
+    transition: filter 0.15s ease;
+}
+/* The avatar and banner are tap-to-change — dim them on hover as a cue. */
+.account-banner:hover,
+.account-card-cover .account-profile-avatar:hover {
+    filter: brightness(0.68);
+}
+.account-edit-hint {
+    margin: 0;
+    font-size: 0.78rem;
+    color: #8b949e;
+}
+.account-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 48px 18px 18px;
+}
+.account-profile-username {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: #f0f0f3;
+    font: inherit;
+    font-size: 1.35rem;
+    font-weight: 700;
+    padding: 3px 6px;
+    margin-left: -6px;
+}
+.account-profile-username::placeholder {
+    color: #6e7681;
+    font-weight: 600;
+}
+.account-profile-username:focus {
+    background: #0d1117;
+    border-color: #58a6ff;
+    outline: none;
+}
+.account-email {
+    color: #8b949e;
+    font-size: 0.82rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* Admin-assigned profile badges (e.g. "Developer"). */
+.account-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-self: flex-start;
+}
+.account-tags.hidden {
+    display: none;
+}
+.account-tag {
+    background: #1f6feb;
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 999px;
+}
+.account-tag.hidden {
+    display: none;
+}
+.account-bio-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-top: 4px;
+}
+.account-bio-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #8b949e;
+}
+.account-bio {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #e6edf3;
+    padding: 8px 11px;
+    font: inherit;
+    font-size: 0.9rem;
+    resize: vertical;
+    min-height: 58px;
+}
+.account-bio:focus {
+    border-color: #58a6ff;
+    outline: none;
+}
+.account-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.account-signout {
+    align-self: flex-start;
+}
+
+/* ===== Developer page ===== */
+.developer-pane {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.developer-pane.hidden {
+    display: none;
+}
+.developer-count {
+    margin: 0;
+    font-weight: 600;
+    color: #e6edf3;
+}
+.developer-search-row {
+    display: flex;
+    gap: 8px;
+}
+.developer-search {
+    flex: 1 1 auto;
+    min-width: 0;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #e6edf3;
+    padding: 8px 11px;
+    font: inherit;
+    font-size: 0.9rem;
+}
+.developer-search:focus {
+    border-color: #58a6ff;
+    outline: none;
+}
+.developer-user-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.developer-user-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 8px 10px;
+}
+.developer-user-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.developer-user-name {
+    font-weight: 600;
+    color: #e6edf3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.developer-user-email {
+    font-size: 0.78rem;
+    color: #8b949e;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.developer-tag-btn {
+    flex: 0 0 auto;
 }
 
 /* ===== Settings → inline action buttons (sized like the dropdowns) ===== */
@@ -3978,6 +4208,352 @@ body.space-mode .scoreboard-play.is-playing {
 }
 
 /* =======================
+   REVOX THEME
+   Team Revox brand palette — Night Black background, Balistic Red primary
+   accent, Purple Blue secondary, Muted Red on hovers, white text. A dark
+   theme like Space, recoloured to the team's identity.
+======================= */
+body.revox-mode {
+    background: #15151a;
+    background-image:
+        radial-gradient(circle at 12% 0%, rgba(232, 64, 46, 0.16) 0%, transparent 42%),
+        radial-gradient(circle at 88% 3%, rgba(71, 51, 168, 0.17) 0%, transparent 42%),
+        radial-gradient(circle at 50% 100%, rgba(232, 64, 46, 0.07) 0%, transparent 55%);
+    background-attachment: fixed;
+    color: #e4e4ea;
+}
+
+body.revox-mode .app-header {
+    border-bottom-color: #34343f;
+}
+
+body.revox-mode .mode-tabs,
+body.revox-mode .sub-tabs,
+body.revox-mode .history-sub-tabs,
+body.revox-mode .tournament-sub-tabs {
+    background: rgba(14, 14, 18, 0.88);
+    border-bottom-color: #34343f;
+    box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.6);
+}
+
+body.revox-mode .tab,
+body.revox-mode .sub-tab,
+body.revox-mode .tournament-sub-tab,
+body.revox-mode .history-sub-tab,
+body.revox-mode .reel-sub-tab,
+body.revox-mode .bey-check-mode-tab {
+    border-color: #34343f;
+    background: #1f1f27;
+    color: #9a9aa8;
+}
+
+body.revox-mode .tab.active,
+body.revox-mode .tournament-sub-tab.active,
+body.revox-mode .history-sub-tab.active,
+body.revox-mode .reel-sub-tab.active {
+    background: linear-gradient(135deg, #e8402e, #b8301f);
+    color: #fff;
+    border-color: #e8402e;
+}
+
+/* The calculator / Bey Check line sub-tabs carry the red "CX" line logo,
+   which would vanish on a red active state — give them the Purple Blue
+   accent instead so the logo stays legible. */
+body.revox-mode .sub-tab.active,
+body.revox-mode .bey-check-mode-tab.active {
+    background: linear-gradient(135deg, #4733a8, #2f2080);
+    color: #fff;
+    border-color: #5a48c0;
+}
+
+body.revox-mode .tab:hover:not(.active),
+body.revox-mode .sub-tab:hover:not(.active),
+body.revox-mode .sub-tab:focus-visible,
+body.revox-mode .tournament-sub-tab:hover:not(.active),
+body.revox-mode .tournament-sub-tab:focus-visible,
+body.revox-mode .history-sub-tab:hover:not(.active),
+body.revox-mode .history-sub-tab:focus-visible,
+body.revox-mode .reel-sub-tab:hover:not(.active),
+body.revox-mode .reel-sub-tab:focus-visible,
+body.revox-mode .bey-check-mode-tab:hover:not(.active) {
+    background: #2c2c37;
+    border-color: #4a4a58;
+    color: #e4e4ea;
+}
+
+body.revox-mode fieldset {
+    border-color: #34343f;
+    background: rgba(31, 31, 39, 0.6);
+}
+
+body.revox-mode legend,
+body.revox-mode .combo-name,
+body.revox-mode .popup-title,
+body.revox-mode .tournament-results-heading,
+body.revox-mode .tournament-mode-name,
+body.revox-mode .part-usage-title,
+body.revox-mode .part-usage-pct,
+body.revox-mode .bp-value,
+body.revox-mode .bp-launch-value {
+    color: #ff6a4d;
+}
+
+body.revox-mode label,
+body.revox-mode .popup-list li,
+body.revox-mode .setting-dropdown-option {
+    color: #b9b9c6;
+}
+
+body.revox-mode .setting-label-text,
+body.revox-mode .separator,
+body.revox-mode .app-footer,
+body.revox-mode .reel-empty,
+body.revox-mode .tournament-history-empty,
+body.revox-mode .tournament-history-time,
+body.revox-mode .tournament-history-mode,
+body.revox-mode .bp-label,
+body.revox-mode .bp-status,
+body.revox-mode .bp-help,
+body.revox-mode .scoreboard-round,
+body.revox-mode .scoreboard-hint {
+    color: #9a9aa8;
+}
+
+body.revox-mode .search-dropdown input,
+body.revox-mode #library-search,
+body.revox-mode .deck-name-input,
+body.revox-mode .tournament-name-input,
+body.revox-mode .tournament-share-card .tournament-name-input,
+body.revox-mode .revox-input,
+body.revox-mode .btn,
+body.revox-mode .btn-small,
+body.revox-mode .setting-dropdown-btn,
+body.revox-mode .share-dropdown .setting-dropdown-btn,
+body.revox-mode .setting-action-btn,
+body.revox-mode .sort-btn,
+body.revox-mode .filter-btn,
+body.revox-mode .sb-btn,
+body.revox-mode .scoreboard-reset,
+body.revox-mode .scoreboard-play {
+    background: #1f1f27;
+    border-color: #34343f;
+    color: #e4e4ea;
+}
+
+body.revox-mode #library-search:focus,
+body.revox-mode .deck-name-input:focus,
+body.revox-mode .tournament-name-input:focus {
+    border-color: #e8402e;
+}
+
+body.revox-mode .btn:hover,
+body.revox-mode .btn-small:hover,
+body.revox-mode .setting-action-btn:hover,
+body.revox-mode .setting-action-btn:focus-visible,
+body.revox-mode .sb-btn:active {
+    background: #2c2c37;
+    border-color: #4a4a58;
+}
+
+body.revox-mode .btn-reset {
+    background: rgba(71, 51, 168, 0.22);
+    border-color: #4733a8;
+    color: #c9c2f0;
+}
+
+body.revox-mode .btn-reset:hover {
+    background: rgba(71, 51, 168, 0.42);
+}
+
+/* Icon images render white on the dark surface. */
+body.revox-mode .btn-lucky img,
+body.revox-mode .part-img,
+body.revox-mode .swiss-toolbar .swiss-share-btn img {
+    filter: brightness(0) invert(1);
+}
+
+body.revox-mode .search-dropdown .dd-list,
+body.revox-mode .setting-dropdown-menu,
+body.revox-mode .popup-card,
+body.revox-mode .image-popup-content,
+body.revox-mode .features-list {
+    background: #1b1b22;
+    border-color: #34343f;
+    color: #e4e4ea;
+}
+
+body.revox-mode .dd-item:hover,
+body.revox-mode .dd-item.active,
+body.revox-mode .setting-dropdown-option:hover {
+    background: rgba(232, 64, 46, 0.16);
+}
+
+body.revox-mode .setting-dropdown-option.active {
+    background: rgba(232, 64, 46, 0.32);
+    color: #fff;
+}
+
+body.revox-mode .result,
+body.revox-mode .search-item,
+body.revox-mode .history-item,
+body.revox-mode .tournament-history-item,
+body.revox-mode .result-part-img-box,
+body.revox-mode .part-usage-card,
+body.revox-mode .updates-card,
+body.revox-mode .bp-summary > div,
+body.revox-mode .bp-launches,
+body.revox-mode .bp-launch {
+    background: rgba(31, 31, 39, 0.6);
+    border-color: #34343f;
+}
+
+body.revox-mode .result th {
+    background: rgba(232, 64, 46, 0.16);
+    color: #ff6a4d;
+}
+
+body.revox-mode .result td {
+    border-color: #34343f;
+    color: #e4e4ea;
+}
+
+body.revox-mode .result-part-name,
+body.revox-mode .part-usage-name,
+body.revox-mode .part-usage-count {
+    color: #e4e4ea;
+}
+
+body.revox-mode .history-section,
+body.revox-mode .library-sort {
+    border-color: #34343f;
+}
+
+body.revox-mode .stat-bar-bg {
+    background: #2a2a34;
+}
+
+body.revox-mode .sort-btn.active,
+body.revox-mode .filter-btn.active {
+    background: linear-gradient(135deg, #e8402e, #b8301f);
+    color: #fff;
+    border-color: #e8402e;
+}
+
+body.revox-mode .popup-overlay {
+    background: rgba(5, 5, 8, 0.85);
+}
+
+body.revox-mode .popup-ok {
+    background: linear-gradient(135deg, #e8402e, #b8301f);
+    color: #fff;
+}
+
+body.revox-mode .popup-ok:hover {
+    background: linear-gradient(135deg, #f0796b, #e8402e);
+}
+
+body.revox-mode .tournament-mode-btn {
+    background: #1f1f27;
+    border-color: #34343f;
+}
+
+body.revox-mode .tournament-mode-btn:hover,
+body.revox-mode .tournament-mode-btn:focus-visible {
+    background: #2c2c37;
+    border-color: #e8402e;
+}
+
+body.revox-mode .tournament-results-row {
+    border-color: #34343f;
+}
+
+body.revox-mode .deck-pill {
+    background: #1f1f27;
+    border-color: #34343f;
+    color: #b9b9c6;
+}
+
+body.revox-mode .deck-pill.active {
+    background: linear-gradient(135deg, #e8402e, #b8301f);
+    color: #fff;
+    border-color: #e8402e;
+}
+
+body.revox-mode .deck-pill:hover:not(.active) {
+    background: #2c2c37;
+    border-color: #4a4a58;
+}
+
+body.revox-mode .bp-launch span:first-child {
+    color: #e4e4ea;
+}
+
+body.revox-mode .bp-launch span:last-child {
+    color: #9a9aa8;
+}
+
+/* Scoreboard — Balistic Red vs Purple Blue sides. */
+body.revox-mode .scoreboard-overlay,
+body.revox-mode .scoreboard-divider {
+    background: #0e0e12;
+}
+
+body.revox-mode .scoreboard-left {
+    background: rgba(232, 64, 46, 0.2);
+}
+
+body.revox-mode .scoreboard-right {
+    background: rgba(71, 51, 168, 0.22);
+}
+
+body.revox-mode .scoreboard-divider {
+    color: #e8402e;
+}
+
+body.revox-mode .scoreboard-score {
+    color: #fff;
+}
+
+body.revox-mode .scoreboard-close {
+    color: #9a9aa8;
+}
+
+body.revox-mode .scoreboard-close:hover {
+    color: #fff;
+}
+
+body.revox-mode .scoreboard-play.is-playing {
+    background: linear-gradient(135deg, #e8402e, #b8301f);
+    border-color: #e8402e;
+    color: #fff;
+}
+
+body.revox-mode .reel-video,
+body.revox-mode .reel-embed iframe.instagram-media {
+    border-color: #34343f;
+    background: #1f1f27;
+}
+
+body.revox-mode .reel-embed blockquote.instagram-media {
+    background: #1f1f27 !important;
+    border-color: #34343f !important;
+    color: #e4e4ea !important;
+}
+
+body.revox-mode .reel-embed blockquote.instagram-media a {
+    color: #ff6a4d !important;
+}
+
+body.revox-mode .reel-empty code {
+    background: #2a2a34;
+    color: #ff6a4d;
+}
+
+body.revox-mode .swiss-reg-format-editable {
+    border-color: #e8402e;
+}
+
+/* =======================
    TROPICAL THEME
    Palette: sand cream bg, ocean teal primary, sunset coral secondary, palm green accent
 ======================= */
@@ -5224,6 +5800,14 @@ body.mono-mode .popup-ok:hover {
     letter-spacing: 0.03em;
 }
 
+.swiss-room-name {
+    font-weight: 600;
+    max-width: 12em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .swiss-room-code {
     background: none;
     border: none;
@@ -5234,6 +5818,7 @@ body.mono-mode .popup-ok:hover {
     font-weight: 700;
     letter-spacing: 0.08em;
     cursor: pointer;
+    opacity: 0.85;
 }
 
 .swiss-room-code:hover {

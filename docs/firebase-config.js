@@ -25,6 +25,13 @@
 //                         Tournaments" works on any device they sign in on.
 //                         Keyed by Firebase Auth uid; needs read on the $uid
 //                         node so a device can enumerate that account's rooms.
+//    - users            — per-account profile (username + bio + downscaled
+//                         photo + downscaled banner + an admin-set `tag`
+//                         badge). Keyed by uid; private to its owner.
+//    - usernames        — index of taken usernames -> { uid, email }, keyed
+//                         by the lowercased username. Powers username-or-email
+//                         sign-in and the username uniqueness check. Read is
+//                         per-key (no enumeration of all usernames/emails).
 //    - ranking          — global Beyblade-X tournament leaderboard.
 //    - revoxRanking     — Revox club leaderboard.
 //
@@ -45,15 +52,9 @@ window.FIREBASE_CONFIG = {
 
 // Host password rotates daily and is derived in tournament.js.
 
-// SHA-256 of the Revox-admin password. Unlocks add/edit/delete on the
-// Revox member ranking tab. Default password is "revoxadmin".
-//
-// To change: in any browser console, run
-//   crypto.subtle.digest("SHA-256", new TextEncoder().encode("YOUR_PASSWORD"))
-//     .then(b => console.log([...new Uint8Array(b)].map(x => x.toString(16).padStart(2,"0")).join("")));
-// then paste the resulting hex string below.
-window.TOURNAMENT_REVOX_ADMIN_SHA256 =
-  "e466afc350e05dc5a73887167512284874e477041b7c728aa586a0e012080339";
+// The Revox member ranking is now gated by the "Revox Admin" account tag
+// (assigned from the Developer tab) — the same tag that unlocks the Revox
+// tab — so there is no longer a separate Revox-admin password.
 
 // Replace the rules in Firebase Console with this block:
 //   {
@@ -62,6 +63,21 @@ window.TOURNAMENT_REVOX_ADMIN_SHA256 =
 //       "swissViewCodes":  { "$code": { ".read": true, ".write": true } },
 //       "openTournaments": { ".read": true, "$code": { ".write": true } },
 //       "userTournaments": { "$uid": { ".read": "auth != null && auth.uid === $uid", ".write": "auth != null && auth.uid === $uid" } },
+//       "users": {
+//         ".read": "auth != null && (root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')",
+//         "$uid": {
+//           ".read": "auth != null && auth.uid === $uid",
+//           ".write": "auth != null && auth.uid === $uid",
+//           "tags": {
+//             ".write": "auth != null && (root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')",
+//             "$tag": { ".validate": "newData.isBoolean()" }
+//           }
+//         }
+//       },
+//       "usernames": {
+//         ".read": "auth != null && (root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')",
+//         "$key": { ".read": true, ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid)" }
+//       },
 //       "ranking":         { ".read": true, "$name": { ".write": true } },
 //       "revoxRanking":    { ".read": true, "$name": { ".write": true } }
 //     }
@@ -75,6 +91,20 @@ window.TOURNAMENT_REVOX_ADMIN_SHA256 =
 //   room's code; the host writes when opening registration and clears it
 //   on Start / Reset. Same trust model as `swissRooms` — knowing the
 //   editCode is the credential.
+//
+// Notes on `users` and the Developer tab:
+// - Each account owns `users/$uid` (read/write own profile only).
+// - `users/$uid/tags` is a map of `{ TagName: true }`. A Developer-tagged
+//   account may write tags onto ANY user — that's the `tags/.write` rule.
+//   Write rules cascade down, so the owner still writes their own `tags`
+//   via the `$uid/.write` rule; the `tags/.write` rule only ADDS the
+//   developer's cross-account access.
+// - The parent `users/.read` and `usernames/.read` are granted to
+//   Developer-tagged accounts so the Developer tab can enumerate every
+//   registered user. Non-developers fall back to per-node `$uid/.read`
+//   and per-key `$key/.read`.
+// - The Developer check honours both the new `tags/Developer === true`
+//   map entry and the legacy single `tag === 'Developer'` string.
 
 
 // // Import the functions you need from the SDKs you need
