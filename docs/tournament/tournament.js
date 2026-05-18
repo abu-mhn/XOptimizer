@@ -227,12 +227,14 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit, roleHint) {
 function publishOpenRoomIndex(editCode, state) {
   const db = initFirebase();
   if (!db || !editCode || !state) return;
+  // `pairing` is deliberately NOT stored here — the lobby reads it live from
+  // the room when it needs the label, so this summary stays within whatever
+  // field whitelist the DB rules enforce (no rules change needed per field).
   const summary = {
     editCode,
     viewCode: swissViewCode || null,
     name: state.tournamentName || "",
     mode: state.mode || "swiss",
-    pairing: state.pairing || null,
     roundCount: state.roundCount || null,
     groupCount: state.groupCount || null,
     registrantCount: Object.keys(state.registrants || {}).length,
@@ -4254,12 +4256,13 @@ function publishUserTournament(uid, editCode, state) {
   // the tournament) — the host already indexed the room when they created it.
   const user = (typeof getCurrentUser === "function") ? getCurrentUser() : null;
   if (!user || user.uid !== uid) return;
+  // No `pairing` field — see publishOpenRoomIndex; refreshMyTournaments reads
+  // it from the live room so this stays inside the DB rules' field whitelist.
   db.ref(`userTournaments/${uid}/${editCode}`).set({
     editCode,
     viewCode: swissViewCode || state.viewCode || null,
     name: state.tournamentName || "",
     mode: state.mode || "swiss",
-    pairing: state.pairing || null,
     phase: state.phase || "running",
     createdAt: state.createdAt || new Date().toISOString()
   }).catch(e => console.warn("My-tournament publish failed:", e));
@@ -4292,17 +4295,19 @@ function refreshMyTournaments() {
     .then(snap => {
       const rooms = Object.values(snap.val() || {}).filter(r => r && r.editCode);
       if (!rooms.length) return;
-      // Cross-check each entry against the live room; prune ones whose room
-      // is gone (host reset / closed it).
+      // Cross-check each entry against the live room: prune ones whose room
+      // is gone, and read `pairing` live (it isn't kept in the summary).
       return Promise.all(rooms.map(r =>
-        db.ref("swissRooms/" + r.editCode + "/phase").once("value")
-          .then(s => s.val()).catch(() => null)
-          .then(phase => ({ room: r, phase }))
+        Promise.all([
+          db.ref("swissRooms/" + r.editCode + "/phase").once("value").then(s => s.val()).catch(() => null),
+          db.ref("swissRooms/" + r.editCode + "/pairing").once("value").then(s => s.val()).catch(() => null)
+        ]).then(([phase, pairing]) => ({ room: r, phase, pairing }))
       )).then(results => {
         const live = [];
-        results.forEach(({ room, phase }) => {
+        results.forEach(({ room, phase, pairing }) => {
           if (phase === "registering" || phase === "running") {
             room.phase = phase;
+            room.pairing = pairing || null;
             live.push(room);
           } else {
             removeUserTournament(user.uid, room.editCode);
@@ -4399,12 +4404,16 @@ function refreshOpenTournamentRooms() {
         const regP = db.ref("swissRooms/" + r.editCode + "/registrants").once("value")
           .then(s => s.numChildren())
           .catch(() => null);
-        return Promise.all([phaseP, regP]).then(([phase, count]) => ({
-          room: r, phase, count
+        // `pairing` lives on the room, not the lobby summary — read it live.
+        const pairP = db.ref("swissRooms/" + r.editCode + "/pairing").once("value")
+          .then(s => s.val())
+          .catch(() => null);
+        return Promise.all([phaseP, regP, pairP]).then(([phase, count, pairing]) => ({
+          room: r, phase, count, pairing
         }));
       })).then(results => {
         const live = [];
-        results.forEach(({ room, phase, count }) => {
+        results.forEach(({ room, phase, count, pairing }) => {
           // Registering AND running rooms stay listed — running ones just
           // can't take new registrations. Only a vanished room (phase is
           // null because the host reset/deleted it) gets pruned.
@@ -4416,6 +4425,7 @@ function refreshOpenTournamentRooms() {
               room.registrantCount = count;
             }
             room.phase = phase;
+            room.pairing = pairing || null;
             live.push(room);
           } else {
             // Underlying room is gone — drop the stale lobby entry.
