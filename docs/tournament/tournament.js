@@ -155,9 +155,14 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit, roleHint) {
     createdAt: new Date().toISOString()
   });
 
+  // Tracks whether this connection has ever seen the room populated. Lets the
+  // listener tell "the room was just deleted" (follow it) apart from "the room
+  // doesn't exist yet" (first-time creation — push it).
+  let roomEverPopulated = false;
   swissRoomRef.on("value", snap => {
     const remote = snap.val();
     if (isPopulatedRemote(remote)) {
+      roomEverPopulated = true;
       if (remote.viewCode && !swissViewCode) swissViewCode = remote.viewCode;
       saveTournamentHistoryEntry({
         editCode: isViewer ? null : editCode,
@@ -178,9 +183,20 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit, roleHint) {
       if (swissIsHost && remote.phase === "registering") {
         publishOpenRoomIndex(editCode, remote);
       }
+    } else if (!remote && roomEverPopulated) {
+      // The room was deleted on another device (a host reset / closed it).
+      // Every other connected device — host, co-host or viewer — follows:
+      // drop the dead room and fall back to the tournament landing page
+      // (setup form + Open Tournaments list). Without this, a second host
+      // device would hit the branch below and resurrect the room.
+      swissApplyingRemote = true;
+      localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [], phase: "running", registrants: {} }));
+      swissApplyingRemote = false;
+      disconnectSwissRoom();
+      renderSwiss();
     } else if (!remote && swissIsHost) {
-      // Room was wiped remotely (or first-time creation). Push our local state
-      // together with the viewCode metadata and publish the viewer mapping.
+      // First-time creation: the room doesn't exist yet. Push our local state
+      // with the viewCode metadata and publish the viewer mapping.
       const local = loadSwiss();
       if (isPopulatedLocal(local) && swissViewCode) {
         swissApplyingRemote = true;
@@ -193,9 +209,8 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit, roleHint) {
           .catch(e => console.warn("Initial room push failed:", e))
           .finally(() => { swissApplyingRemote = false; });
       }
-    } else if (!remote && !swissIsHost) {
-      // Non-host: room was wiped (or doesn't exist yet). Clear local view so
-      // we don't keep showing stale groups after a host reset.
+    } else if (!remote) {
+      // Non-host connected to a code with no room yet — clear any stale view.
       swissApplyingRemote = true;
       localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [] }));
       swissApplyingRemote = false;
