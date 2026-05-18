@@ -67,46 +67,56 @@
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false" style="width: 18px; height: 18px;">
           <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/>
         </svg>
+        <span class="tab-label">Dashboard</span>
       </a>
 
       <a class="tab" href="calculator/" data-mode="calculator" aria-label="Calculator">
         <img src="assets/icons/calculator.png" alt="Calculator">
+        <span class="tab-label">Calculator</span>
       </a>
 
       <a class="tab" href="library/" data-mode="library" aria-label="Library">
         <img src="assets/icons/book1.webp" alt="Library">
+        <span class="tab-label">Library</span>
       </a>
 
       <a class="tab" href="deck/" data-mode="deck" aria-label="Deck">
         <img src="assets/icons/cards.png" alt="Deck">
+        <span class="tab-label">Deck</span>
       </a>
 
       <a class="tab active" href="tournament/" data-mode="swiss" aria-label="Tournament">
         <img src="assets/icons/confrontation.png" alt="Tournament">
+        <span class="tab-label">Tournament</span>
       </a>
 
       <a class="tab" href="revox/" data-mode="revox" aria-label="Revox">
         <img src="assets/icons/revox.webp" alt="Revox">
+        <span class="tab-label">Revox</span>
       </a>
 
       <a class="tab" href="battlepass/" data-mode="battlepass" aria-label="Battle Pass">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false" style="width: 18px; height: 18px;">
           <path d="M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88z"/>
         </svg>
+        <span class="tab-label">Battle Pass</span>
       </a>
 
       <a class="tab" href="reel/" data-mode="reel" aria-label="Buzz Bey">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false" style="width: 18px; height: 18px;">
           <path d="M8 5v14l11-7z"/>
         </svg>
+        <span class="tab-label">Buzz Bey</span>
       </a>
 
       <a class="tab" href="history/" data-mode="history" aria-label="History">
         <img src="assets/icons/history1.webp" alt="History">
+        <span class="tab-label">History</span>
       </a>
 
       <a class="tab tab-settings" href="settings/" data-mode="settings" aria-label="Settings">
         <img src="assets/icons/setting.png" alt="Settings">
+        <span class="tab-label">Settings</span>
       </a>
     </div>
 
@@ -327,7 +337,7 @@
             <div class="swiss-actions">
               <button type="button" id="swiss-generate" class="btn">Create Tournament</button>
             </div>
-            <div class="swiss-rooms-section" id="my-tournaments-section">
+            <div class="swiss-rooms-section hidden" id="my-tournaments-section">
               <div class="swiss-rooms-section-header">
                 <h3 class="swiss-rooms-heading">My Tournaments</h3>
               </div>

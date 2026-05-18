@@ -4275,31 +4275,23 @@ function removeUserTournament(uid, editCode) {
 }
 
 function refreshMyTournaments() {
+  const section = document.getElementById("my-tournaments-section");
   const list = document.getElementById("my-tournaments-list");
-  const status = document.getElementById("my-tournaments-status");
   if (!list) return;
-  const setStatus = msg => { if (status) status.textContent = msg || ""; };
+  // The section only surfaces when there's a real choice to make — the host
+  // has 2+ live tournaments. With 0 it's just noise (Create is right there),
+  // and with 1 the host is auto-entered, so it stays hidden in both cases.
+  const showSection = visible => {
+    if (section) section.classList.toggle("hidden", !visible);
+  };
+  showSection(false);
   const user = (typeof getCurrentUser === "function") ? getCurrentUser() : null;
-  if (!user) {
-    list.innerHTML = `<p class="swiss-rooms-empty">Sign in (Settings → Account) to see the tournaments you host on every device.</p>`;
-    setStatus("");
-    return;
-  }
-  if (!firebaseReady()) {
-    list.innerHTML = "";
-    setStatus("Live sync isn't configured on this build.");
-    return;
-  }
-  setStatus("Loading…");
+  if (!user || !firebaseReady()) return;
   const db = initFirebase();
   db.ref("userTournaments/" + user.uid).once("value")
     .then(snap => {
       const rooms = Object.values(snap.val() || {}).filter(r => r && r.editCode);
-      if (!rooms.length) {
-        list.innerHTML = `<p class="swiss-rooms-empty">No tournaments yet. Create one and it'll show here on every device you sign in on.</p>`;
-        setStatus("");
-        return;
-      }
+      if (!rooms.length) return;
       // Cross-check each entry against the live room; prune ones whose room
       // is gone (host reset / closed it).
       return Promise.all(rooms.map(r =>
@@ -4317,26 +4309,20 @@ function refreshMyTournaments() {
           }
         });
         live.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
-        if (!live.length) {
-          list.innerHTML = `<p class="swiss-rooms-empty">No active tournaments. Create one and it'll show here on every device you sign in on.</p>`;
-          setStatus("");
-          return;
-        }
-        // Auto-enter: if the host has exactly one live tournament and isn't
-        // already in a room, drop straight into it instead of showing a card
-        // to tap. Two or more still list, since there's a real choice to make.
+        if (!live.length) return;
+        // Auto-enter: one live tournament and not already in a room → drop
+        // straight in. Section stays hidden.
         if (live.length === 1 && !swissEditCode) {
-          setStatus("Entering your tournament…");
           joinMyTournament(live[0]);
           return;
         }
+        // 2+ live tournaments → a genuine choice, so reveal the pick list.
         renderMyTournamentRooms(list, live);
-        setStatus("");
+        showSection(true);
       });
     })
     .catch(err => {
       console.warn("My-tournaments fetch failed:", err);
-      setStatus("Couldn't load your tournaments. Check your connection.");
     });
 }
 

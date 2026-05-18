@@ -96,7 +96,7 @@ Settings
 Other
 - Per-tab URLs: /dashboard/, /calculator/, /library/, /deck/, /tournament/, /revox/, /battlepass/, /reel/, /history/, /settings/
 - "What's New" landing page at the site root
-- Single-line horizontal tab bar (invisible scrollbar) — scroll position preserved across navigation, centered on desktop
+- Single-line horizontal tab bar (invisible scrollbar) — each tab shows its icon with a name label below; scroll position preserved across navigation, centered on desktop
 - Live Firebase sync across host / co-host / participant / viewer devices
 - Multi-mode part images (Eclipse, Dual, Turbo, Operate, Scorpio Spear, Lightning L-Drago) display correctly everywhere — defaults to mode 0 when no mode is recorded
 - Broken-image fallback hides only the image (rank chip + name stay), so Best Parts 1st / 2nd / 3rd rows never shift out of alignment

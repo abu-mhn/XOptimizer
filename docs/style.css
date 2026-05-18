@@ -98,8 +98,9 @@ h1 {
 }
 
 .tab {
-    flex: 1;
-    padding: 10px;
+    flex: 0 0 auto;
+    min-width: 76px;
+    padding: 8px 8px;
     border: 1px solid #30363d;
     background: #161b22;
     color: #8b949e;
@@ -108,15 +109,24 @@ h1 {
     font-size: .9rem;
     transition: .15s;
 
-    /* ✅ FIX: safe flex layout */
+    /* Icon stacked above its name label */
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 4px;
 
     min-height: 42px;
     /* prevents height shift issues */
     position: relative;
+}
+
+.tab-label {
+    font-size: 0.6rem;
+    line-height: 1;
+    font-weight: 500;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
 }
 
 .tab.active {
@@ -170,7 +180,7 @@ h1 {
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
     position: sticky;
-    top: 63px;
+    top: 71px;
     z-index: 49;
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.5);
 }
@@ -5868,7 +5878,7 @@ button.swiss-reg-name-edit:focus-visible {
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
     position: sticky;
-    top: 63px;
+    top: 71px;
     z-index: 49;
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.5);
 }
