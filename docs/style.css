@@ -3138,6 +3138,26 @@ body.forest-mode .bey-check-mode-tab.active {
     filter: brightness(0) invert(1);
 }
 
+.btn-share {
+    background: #2ea043;
+    flex: 0 0 auto;
+    padding: 6px 8px;
+    font-size: 0;
+    gap: 0;
+    line-height: 0;
+}
+
+.btn-share:hover {
+    background: #3fb950;
+}
+
+.btn-share img {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+}
+
 .btn-row {
     display: flex;
     gap: 10px;
@@ -3488,6 +3508,15 @@ body.light-mode .btn-copy {
 
 body.light-mode .btn-copy:hover {
     background: #e6b14d;
+}
+
+body.light-mode .btn-share {
+    background: #6cc77d;
+    color: #1f2328;
+}
+
+body.light-mode .btn-share:hover {
+    background: #57b869;
 }
 
 body.light-mode .btn-mode {
@@ -4426,7 +4455,6 @@ body.revox-mode .btn-reset:hover {
 
 /* Icon images render white on the dark surface. */
 body.revox-mode .btn-lucky img,
-body.revox-mode .part-img,
 body.revox-mode .swiss-toolbar .swiss-share-btn img {
     filter: brightness(0) invert(1);
 }
@@ -4781,6 +4809,15 @@ body.tropical-mode .btn-copy {
 
 body.tropical-mode .btn-copy:hover {
     background: #d97706;
+}
+
+body.tropical-mode .btn-share {
+    background: #14b8a6;
+    color: #fff;
+}
+
+body.tropical-mode .btn-share:hover {
+    background: #0d9488;
 }
 
 body.tropical-mode .popup-ok {
@@ -5513,6 +5550,15 @@ body.mono-mode .btn-copy:hover {
     background: #d0d0d0;
 }
 
+body.mono-mode .btn-share {
+    background: #ffffff;
+    color: #000000;
+}
+
+body.mono-mode .btn-share:hover {
+    background: #d0d0d0;
+}
+
 body.mono-mode .btn-add-deck {
     background: #ffffff;
     color: #000000;
@@ -5545,7 +5591,9 @@ body.mono-mode .btn-row .calc-btn:not(:disabled) img,
 body.mono-mode .deck-toolbar .btn-download img,
 body.mono-mode .btn-download img,
 body.mono-mode .deck-toolbar .btn-copy img,
-body.mono-mode .btn-copy img {
+body.mono-mode .btn-copy img,
+body.mono-mode .deck-toolbar .btn-share img,
+body.mono-mode .btn-share img {
     filter: brightness(0);
 }
 
@@ -8660,6 +8708,13 @@ body.love-mode .btn-copy  {
 body.love-mode .btn-copy:hover  {
     background: #d6326d;
 }
+body.love-mode .btn-share  {
+    background: #ff8fb3;
+    color: #fff;
+}
+body.love-mode .btn-share:hover  {
+    background: #ff6b9d;
+}
 body.love-mode .popup-ok  {
     background: #e63978;
     color: #fff;
@@ -9131,6 +9186,13 @@ body.forest-mode .btn-copy  {
 }
 body.forest-mode .btn-copy:hover  {
     background: #8b4513;
+}
+body.forest-mode .btn-share  {
+    background: #386641;
+    color: #fff;
+}
+body.forest-mode .btn-share:hover  {
+    background: #2a4f31;
 }
 body.forest-mode .popup-ok  {
     background: #386641;

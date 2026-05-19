@@ -368,7 +368,10 @@ function renderDeck() {
   });
 }
 
-function downloadDeckPNG() {
+// Render the current deck to a square PNG canvas off-screen and hand it to
+// `onReady(canvas, deckName)`. Shared by Download (saves the PNG) and Share
+// (hands the PNG to the Web Share API).
+function renderDeckCanvas(onReady) {
   const deckList = document.getElementById("deck-list");
   if (!deckList) return;
   const deck = loadDeck();
@@ -425,14 +428,60 @@ function downloadDeckPNG() {
     ctx.fillRect(0, 0, side, side);
     ctx.drawImage(canvas, Math.floor((side - canvas.width) / 2), Math.floor((side - canvas.height) / 2));
 
-    const link = document.createElement("a");
-    const safeName = deckName.replace(/[^a-zA-Z0-9_-]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
-    link.download = (safeName || "deck") + ".png";
-    link.href = square.toDataURL("image/png");
-    link.click();
+    onReady(square, deckName);
   }).catch(() => {
     if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
     alert("Failed to generate deck image.");
+  });
+}
+
+// Turn the deck name into a filesystem-safe PNG filename.
+function deckPngFileName(deckName) {
+  const safeName = (deckName || "").replace(/[^a-zA-Z0-9_-]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+  return (safeName || "deck") + ".png";
+}
+
+function downloadDeckPNG() {
+  renderDeckCanvas((square, deckName) => {
+    const link = document.createElement("a");
+    link.download = deckPngFileName(deckName);
+    link.href = square.toDataURL("image/png");
+    link.click();
+  });
+}
+
+// Share the deck image via the Web Share API. Falls back to a plain download
+// when the browser can't share files (e.g. most desktop browsers).
+function shareDeck() {
+  renderDeckCanvas((square, deckName) => {
+    const fileName = deckPngFileName(deckName);
+    const title = deckName ? `Deck — ${deckName}` : "Deck";
+
+    const downloadFallback = () => {
+      const link = document.createElement("a");
+      link.download = fileName;
+      link.href = square.toDataURL("image/png");
+      link.click();
+    };
+
+    if (!square.toBlob || !navigator.share) {
+      downloadFallback();
+      return;
+    }
+
+    square.toBlob(blob => {
+      if (!blob) { downloadFallback(); return; }
+      const file = new File([blob], fileName, { type: "image/png" });
+      if (navigator.canShare && !navigator.canShare({ files: [file] })) {
+        downloadFallback();
+        return;
+      }
+      navigator.share({ files: [file], title }).catch(err => {
+        // AbortError = user dismissed the share sheet; not a failure.
+        if (err && err.name === "AbortError") return;
+        downloadFallback();
+      });
+    }, "image/png");
   });
 }
 
@@ -452,6 +501,7 @@ function shuffleDeck() {
 }
 
 document.getElementById("deck-download")?.addEventListener("click", downloadDeckPNG);
+document.getElementById("deck-share")?.addEventListener("click", shareDeck);
 document.getElementById("deck-reset")?.addEventListener("click", resetDeck);
 document.getElementById("deck-shuffle")?.addEventListener("click", shuffleDeck);
 document.getElementById("deck-copy")?.addEventListener("click", copyDeckForTournamentRegistration);
