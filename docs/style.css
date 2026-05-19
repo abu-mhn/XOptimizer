@@ -5838,14 +5838,26 @@ body.mono-mode .popup-ok:hover {
     color: #2ea043;
 }
 
+/* Host + co-host pills sit on one line and scroll horizontally (invisible
+   scrollbar) when there are many co-hosts. */
 .swiss-room-badges {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 6px;
     margin-right: auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.swiss-room-badges::-webkit-scrollbar {
+    display: none;
 }
 
 .swiss-room-badge {
+    flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -10414,6 +10426,18 @@ body.mono-mode     .swiss-reg-format-editable { border-color: #4a4a4a; }
     background: rgba(63, 185, 80, 0.18);
     color: #3fb950;
     border: 1px solid rgba(63, 185, 80, 0.4);
+}
+
+.swiss-room-cohost-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    vertical-align: middle;
+    background: rgba(88, 166, 255, 0.18);
+    color: #58a6ff;
 }
 
 .swiss-room-running-badge {

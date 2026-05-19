@@ -21,6 +21,8 @@ let swissLiveMatchId = null; // which match (if any) this device is currently li
 let swissScrollPositions = []; // horizontal scrollLeft of each rounds-scroll strip (groups then bracket)
 let swissSetupWasVisible = false; // tracks setup-form visibility so we only re-fetch open rooms on the hidden→visible edge
 let swissSubHosts = {};      // room's designated sub-host usernames { lowercaseKey: casedName }
+let swissHostNameCache = {};     // hostUid -> resolved username (rooms with no stored hostName)
+let swissHostNameResolving = {}; // hostUid -> in-flight resolve guard
 
 function initFirebase() {
   if (swissDb) return swissDb;
@@ -216,6 +218,14 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit, roleHint) {
       // the Open Tournaments list while the host stays connected.
       if (swissIsHost && (remote.phase === "registering" || remote.phase === "running")) {
         publishOpenRoomIndex(editCode, remote);
+      }
+      // Keep the room's stored host name in step with the host's account
+      // (backfills older rooms and follows a profile rename).
+      if (swissIsHost && !swissApplyingRemote) {
+        const hn = (window.getCurrentUsername && window.getCurrentUsername()) || "";
+        if (hn && remote.hostName !== hn) {
+          swissRoomRef.child("hostName").set(hn).catch(() => {});
+        }
       }
     } else if (!remote && roomEverPopulated) {
       // The room was deleted on another device (a host reset / closed it).
@@ -1675,41 +1685,66 @@ function renderSwissTop8Bracket(state) {
   `;
 }
 
+// Resolve a host's account id to their username — used for older rooms that
+// have no stored hostName. Caches the result and re-renders. Needs the users
+// read rule; fails quietly (and marks the uid tried) without it.
+function resolveHostName(uid) {
+  if (!uid || (uid in swissHostNameCache) || swissHostNameResolving[uid]) return;
+  const db = initFirebase();
+  if (!db) return;
+  swissHostNameResolving[uid] = true;
+  db.ref("users/" + uid + "/username").once("value").then(snap => {
+    swissHostNameResolving[uid] = false;
+    swissHostNameCache[uid] = snap.val() || "";
+    if (swissHostNameCache[uid] && document.getElementById("swiss-view")) renderSwiss();
+  }).catch(() => {
+    swissHostNameResolving[uid] = false;
+    swissHostNameCache[uid] = "";
+  });
+}
+
 function renderSwissRoomBadge() {
   if (!swissEditCode) return "";
   const pills = [];
-  // The badge just identifies the role + signed-in user — no room code is
-  // shown. Viewers/participants join via the Open Tournaments lobby and
-  // co-hosts are granted by username, so there's no code to type or copy.
-  if (swissCanEdit) {
-    const label = swissIsHost ? "Host" : "Co-host";
-    const prof = (typeof getUserProfile === "function") ? getUserProfile() : null;
-    const uname = (prof && prof.username) ? prof.username : "";
-    const namePill = uname ? `<button type="button" class="swiss-room-name swiss-profile-link" data-username="${escapeHtml(uname)}">${escapeHtml(uname)}</button>` : "";
+  const st = loadSwiss();
+  const prof = (typeof getUserProfile === "function") ? getUserProfile() : null;
+  const myName = (prof && prof.username) ? prof.username : "";
+  const namePill = (uname) => uname
+    ? `<button type="button" class="swiss-room-name swiss-profile-link" data-username="${escapeHtml(uname)}">${escapeHtml(uname)}</button>`
+    : "";
+  // Host pill — names whoever hosts this room; shown to everyone. The host's
+  // own device falls back to their profile name until the room syncs it.
+  let hostName = (st && st.hostName) || "";
+  if (!hostName && swissIsHost) hostName = myName;
+  if (!hostName) {
+    // Older rooms have no stored hostName — resolve it from the host's uid.
+    const hostUid = (st && st.hostUid) || "";
+    if (hostUid) {
+      hostName = swissHostNameCache[hostUid] || "";
+      if (!hostName) resolveHostName(hostUid);
+    }
+  }
+  if (hostName) {
     pills.push(`
       <span class="swiss-room-badge swiss-room-badge-edit">
-        <span class="swiss-room-role">${label}</span>
-        ${namePill}
+        <span class="swiss-room-role">Host</span>
+        ${namePill(hostName)}
       </span>
     `);
   }
-  // Show the room's designated sub-hosts so the host and co-hosts can see who
-  // has been granted co-host access for this room.
-  const subNames = Object.keys(swissSubHosts || {})
+  // Co-host pills (blue) — one for each of the room's designated sub-hosts.
+  Object.keys(swissSubHosts || {})
     .map(k => swissSubHosts[k])
     .filter(Boolean)
-    .sort((a, b) => String(a).localeCompare(String(b)));
-  if (swissCanEdit && subNames.length) {
-    const subLinks = subNames.map(n =>
-      `<button type="button" class="swiss-profile-link swiss-room-subname" data-username="${escapeHtml(n)}">${escapeHtml(n)}</button>`
-    ).join(", ");
-    pills.push(`
-      <span class="swiss-room-badge swiss-room-badge-sub" title="Sub-hosts for this room">
-        <span class="swiss-room-role">Sub-host${subNames.length > 1 ? "s" : ""}</span>
-        <span class="swiss-room-subnames">${subLinks}</span>
-      </span>
-    `);
-  }
+    .sort((a, b) => String(a).localeCompare(String(b)))
+    .forEach(n => {
+      pills.push(`
+        <span class="swiss-room-badge swiss-room-badge-view">
+          <span class="swiss-room-role">Co-host</span>
+          ${namePill(n)}
+        </span>
+      `);
+    });
   if (!pills.length) return "";
   return `<div class="swiss-room-badges">${pills.join("")}</div>`;
 }
@@ -2762,6 +2797,7 @@ function startRegisteringTournament() {
   generated.phase = "running";
   generated.ranked = state.ranked;
   generated.hostUid = state.hostUid || null;
+  generated.hostName = state.hostName || null;
   if (state.mode === "swiss-only") generated.mode = "swiss-only";
   if (state.createdAt) generated.createdAt = state.createdAt;
   persistSwiss(generated);
@@ -4403,7 +4439,10 @@ function createRegisteringTournamentState({ mode, tournamentName, roundCount, ra
     phase: "registering",
     registrants: {},
     createdAt: new Date().toISOString(),
-    hostUid: hostUid || null
+    hostUid: hostUid || null,
+    // The host's username, so the room badge can name the host on every
+    // device. Kept in step by the host's listener (handles renames).
+    hostName: (window.getCurrentUsername && window.getCurrentUsername()) || null
   };
   if (safeMode !== "single-elim") {
     state.groupCount = SWISS_GROUP_OPTIONS.includes(Number(groupCount))
@@ -4805,16 +4844,19 @@ function refreshOpenTournamentRooms() {
         const regP = db.ref("swissRooms/" + r.editCode + "/registrants").once("value")
           .then(s => s.numChildren())
           .catch(() => null);
-        // `pairing` lives on the room, not the lobby summary — read it live.
+        // `pairing` and `subHosts` live on the room, not the lobby summary.
         const pairP = db.ref("swissRooms/" + r.editCode + "/pairing").once("value")
           .then(s => s.val())
           .catch(() => null);
-        return Promise.all([phaseP, regP, pairP]).then(([phase, count, pairing]) => ({
-          room: r, phase, count, pairing
+        const subP = db.ref("swissRooms/" + r.editCode + "/subHosts").once("value")
+          .then(s => s.val() || {})
+          .catch(() => ({}));
+        return Promise.all([phaseP, regP, pairP, subP]).then(([phase, count, pairing, subHosts]) => ({
+          room: r, phase, count, pairing, subHosts
         }));
       })).then(results => {
         const live = [];
-        results.forEach(({ room, phase, count, pairing }) => {
+        results.forEach(({ room, phase, count, pairing, subHosts }) => {
           // Registering AND running rooms stay listed — running ones just
           // can't take new registrations. Only a vanished room (phase is
           // null because the host reset/deleted it) gets pruned.
@@ -4827,6 +4869,7 @@ function refreshOpenTournamentRooms() {
             }
             room.phase = phase;
             room.pairing = pairing || null;
+            room.subHosts = subHosts || {};
             live.push(room);
           } else {
             // Underlying room is gone — drop the stale lobby entry.
@@ -4851,10 +4894,12 @@ function refreshOpenTournamentRooms() {
 }
 
 function renderLobbyRooms(list, rooms) {
-  // Tag rooms the signed-in account hosts so the user can spot their own
-  // tournaments in the lobby.
+  // Tag rooms the signed-in account hosts, or has been added to as a
+  // sub-host, so the user can spot them in the lobby.
   const myUid = (typeof getCurrentUser === "function" && getCurrentUser())
     ? getCurrentUser().uid : null;
+  const myUname = (window.getCurrentUsername && window.getCurrentUsername()) || "";
+  const myKey = myUname ? subHostKey(myUname) : "";
   list.innerHTML = rooms.map(r => {
     const name = (r.name || "").trim() || "(unnamed tournament)";
     const modeLabel = tournamentFormatLabel(r.mode, r.pairing, true);
@@ -4867,12 +4912,16 @@ function renderLobbyRooms(list, rooms) {
     const hostingBadge = (myUid && r.hostUid && r.hostUid === myUid)
       ? `<span class="swiss-room-hosting-badge">Hosting</span>`
       : "";
+    // You were added to this room's sub-host list — you'll join as co-host.
+    const cohostBadge = (myKey && r.subHosts && r.subHosts[myKey])
+      ? `<span class="swiss-room-cohost-badge">Co-host</span>`
+      : "";
     const runningBadge = isRunning
       ? `<span class="swiss-room-running-badge">In progress</span>`
       : "";
     return `
       <button type="button" class="swiss-room-card" data-edit-code="${escapeHtml(r.editCode)}">
-        <div class="swiss-room-card-name">${escapeHtml(name)}${hostingBadge}${runningBadge}</div>
+        <div class="swiss-room-card-name">${escapeHtml(name)}${hostingBadge}${cohostBadge}${runningBadge}</div>
         <div class="swiss-room-card-mode">${modeLabel}</div>
         <div class="swiss-room-card-meta">${meta.map(escapeHtml).join(" · ")}</div>
       </button>
