@@ -4851,12 +4851,17 @@ function refreshOpenTournamentRooms() {
         const subP = db.ref("swissRooms/" + r.editCode + "/subHosts").once("value")
           .then(s => s.val() || {})
           .catch(() => ({}));
-        return Promise.all([phaseP, regP, pairP, subP]).then(([phase, count, pairing, subHosts]) => ({
-          room: r, phase, count, pairing, subHosts
+        // Read the name live — a rename (especially by a co-host) doesn't
+        // re-publish the lobby summary, so the summary's `name` can be stale.
+        const nameP = db.ref("swissRooms/" + r.editCode + "/tournamentName").once("value")
+          .then(s => s.val())
+          .catch(() => undefined);
+        return Promise.all([phaseP, regP, pairP, subP, nameP]).then(([phase, count, pairing, subHosts, liveName]) => ({
+          room: r, phase, count, pairing, subHosts, liveName
         }));
       })).then(results => {
         const live = [];
-        results.forEach(({ room, phase, count, pairing, subHosts }) => {
+        results.forEach(({ room, phase, count, pairing, subHosts, liveName }) => {
           // Registering AND running rooms stay listed — running ones just
           // can't take new registrations. Only a vanished room (phase is
           // null because the host reset/deleted it) gets pruned.
@@ -4870,6 +4875,7 @@ function refreshOpenTournamentRooms() {
             room.phase = phase;
             room.pairing = pairing || null;
             room.subHosts = subHosts || {};
+            if (liveName !== undefined) room.name = liveName || "";
             live.push(room);
           } else {
             // Underlying room is gone — drop the stale lobby entry.
@@ -4919,9 +4925,13 @@ function renderLobbyRooms(list, rooms) {
     const runningBadge = isRunning
       ? `<span class="swiss-room-running-badge">In progress</span>`
       : "";
+    const badges = hostingBadge + cohostBadge + runningBadge;
     return `
       <button type="button" class="swiss-room-card" data-edit-code="${escapeHtml(r.editCode)}">
-        <div class="swiss-room-card-name">${escapeHtml(name)}${hostingBadge}${cohostBadge}${runningBadge}</div>
+        <div class="swiss-room-card-name">
+          <span class="swiss-room-card-title">${escapeHtml(name)}</span>
+          ${badges ? `<span class="swiss-room-card-badges">${badges}</span>` : ""}
+        </div>
         <div class="swiss-room-card-mode">${modeLabel}</div>
         <div class="swiss-room-card-meta">${meta.map(escapeHtml).join(" · ")}</div>
       </button>

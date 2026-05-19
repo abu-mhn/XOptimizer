@@ -6508,12 +6508,36 @@ button.swiss-reg-name-edit:focus-visible {
     border-color: rgba(110, 118, 129, 0.55);
     outline: none;
 }
-.swiss-room-card-name { grid-area: name; font-weight: 600; }
+.swiss-room-card-name {
+    grid-area: name;
+    font-weight: 600;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+.swiss-room-card-title {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.swiss-room-card-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+/* Badges carry a left margin for inline use elsewhere — not needed in the
+   card's badge row, which spaces them with `gap`. */
+.swiss-room-card-badges > * {
+    margin-left: 0;
+}
 .swiss-room-card-mode {
     grid-area: mode;
     font-size: 0.78rem;
     color: #f59e0b;
-    align-self: center;
+    align-self: start;
 }
 .swiss-room-card-meta {
     grid-area: meta;
