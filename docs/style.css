@@ -5806,6 +5806,12 @@ body.mono-mode .popup-ok:hover {
     justify-content: flex-end;
 }
 
+/* Running-view action buttons sit on their own row, left-aligned, below
+   the host / co-host badges. */
+.swiss-toolbar-actions-row {
+    justify-content: flex-start;
+}
+
 /* Host badge + status pill grouped on the left of the info row; the action
    buttons stay pushed to the right. */
 .swiss-toolbar-idgroup {

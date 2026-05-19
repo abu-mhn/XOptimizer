@@ -2417,6 +2417,8 @@ function renderSwiss() {
       ${nameRowHtml}
       <div class="swiss-toolbar-row swiss-toolbar-info-row">
         ${renderSwissRoomBadge()}
+      </div>
+      <div class="swiss-toolbar-row swiss-toolbar-actions-row">
         ${showStartKnockoutBtn ? `<button type="button" id="swiss-start-bracket" class="btn">Start Knockout</button>` : ""}
         <div class="swiss-toolbar-actions">
           ${renderSwissShareButton()}
@@ -5711,12 +5713,19 @@ function addRevoxEntry(name, points, tournament, placing, date) {
   return entryRef.transaction(curr => {
     const results = (curr && curr.results) || {};
     results[resultId] = { tournament: tour, placing: place, points: pts, date: dt };
+    // The row mirror is the most recent result by date — not whichever was
+    // added last (results can be entered out of chronological order).
+    let latest = null;
+    Object.keys(results).forEach(k => {
+      const r = results[k] || {};
+      if (!latest || String(r.date || "") > String(latest.date || "")) latest = r;
+    });
     return {
       name: (curr && curr.name) || cleanName,
       points: ((curr && Number(curr.points)) || 0) + pts,
-      tournament: tour || (curr && curr.tournament) || "",
-      placing: place || (curr && curr.placing) || 0,
-      date: dt || (curr && curr.date) || "",
+      tournament: (latest && latest.tournament) || "",
+      placing: (latest && Number(latest.placing)) || 0,
+      date: (latest && latest.date) || "",
       results
     };
   });
@@ -5804,14 +5813,25 @@ function renderRevoxRanking() {
     .then(snap => {
       const data = snap.val() || {};
       const list = Object.entries(data)
-        .map(([key, v]) => ({
-          key,
-          name: (v && v.name) || key,
-          points: (v && Number(v.points)) || 0,
-          tournament: (v && v.tournament) || "",
-          placing: (v && Number(v.placing)) || 0,
-          date: (v && v.date) || ""
-        }))
+        .map(([key, v]) => {
+          // The tournament + date shown are the member's most recent result
+          // (by date), derived from their results history — so it stays
+          // correct even if results were entered out of order.
+          let latest = null;
+          const results = (v && v.results) || {};
+          Object.keys(results).forEach(k => {
+            const r = results[k] || {};
+            if (!latest || String(r.date || "") > String(latest.date || "")) latest = r;
+          });
+          return {
+            key,
+            name: (v && v.name) || key,
+            points: (v && Number(v.points)) || 0,
+            tournament: latest ? (latest.tournament || "") : ((v && v.tournament) || ""),
+            placing: latest ? (Number(latest.placing) || 0) : ((v && Number(v.placing)) || 0),
+            date: latest ? (latest.date || "") : ((v && v.date) || "")
+          };
+        })
         .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
       // Fill the Add-form name dropdown: registered "RvX-" usernames plus
       // any existing ranking members.
