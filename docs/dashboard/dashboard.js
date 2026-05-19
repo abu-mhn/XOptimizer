@@ -430,6 +430,16 @@ function bindDashboardImagePopup(root) {
     const img = e.target.closest(".dashboard-part-img");
     if (!img) return;
     e.stopPropagation();
+    // A combined CX / CX Expand tile opens the carousel popup (shared from
+    // library.js) showing all of its parts.
+    const combinedBox = img.closest(".result-part-img-box-combined");
+    if (combinedBox && typeof window.openCombinedImagePopup === "function") {
+      const layers = [...combinedBox.querySelectorAll(".result-part-layer")]
+        .reverse()
+        .map(l => ({ src: l.src, name: l.dataset.partName || l.alt || "" }));
+      window.openCombinedImagePopup(layers);
+      return;
+    }
     dashboardOpenImagePopup(img.src, img.dataset.partName || img.alt || "");
   });
 
@@ -457,8 +467,18 @@ function dashboardRenderCard(title, combo, field) {
       <div class="dashboard-card-empty">No combo available.</div>
     </div>`;
   }
-  const partsHtml = Object.entries(combo.parts)
-    .filter(([, v]) => !!v)
+  // CX / CX Expand combos show the lock chip + blade(s) + assist blade
+  // stacked into one combined thumbnail.
+  const resolvePart = (key, name) => {
+    const folder = DASHBOARD_PART_FOLDER[key];
+    const rec = (DATA[folder] || []).find(p => p.name === name) || null;
+    const modeIdx = (rec && Array.isArray(rec.modes) && rec.modes.length > 0) ? 0 : null;
+    return { src: dashboardResolvePartImg(key, name), codename: partRecordCodename(folder, name, modeIdx) };
+  };
+  const combined = combinedBladeTileHTML(combo.parts, resolvePart, "dashboard-part-img");
+  let partsHtml = combined ? combined.html : "";
+  partsHtml += Object.entries(combo.parts)
+    .filter(([k, v]) => !!v && !(combined && combined.usedKeys.has(k)))
     .map(([k, v]) => dashboardPartImgHtml(k, v))
     .join("");
   const showValue = field !== null;

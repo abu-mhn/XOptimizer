@@ -24,6 +24,84 @@ function partImgPath(folder, name, modeIndex) {
   return `assets/${folder}/${suffix}`;
 }
 
+// --- Title case ("HELLS" -> "Hells", "GEAR BALL" -> "Gear Ball") ---
+function titleCaseName(str) {
+  return (str || "").toLowerCase().replace(/(^|\s)\w/g, c => c.toUpperCase());
+}
+
+// Resolve a part's (mode-aware) codename from DATA.
+function partRecordCodename(folder, name, modeIndex) {
+  const rec = (typeof DATA !== "undefined" && DATA[folder] || []).find(p => p.name === name) || null;
+  if (!rec) return name || "";
+  if (modeIndex != null && Array.isArray(rec.modes) && rec.modes[modeIndex]) {
+    return rec.modes[modeIndex].codename || rec.codename || name;
+  }
+  return rec.codename || name;
+}
+
+// --- Combined CX / CX Expand blade tile -------------------------------
+// CX and CX Expand combos assemble several parts into one blade, so the
+// lock chip + blade(s) + assist blade are shown as a single stacked
+// thumbnail. Shared by the calculator, history, deck and dashboard.
+// `parts` is a { key: name } map; `resolvePart(key, name)` must return
+// { src, codename }. Returns null when `parts` isn't a CX/CX Expand combo,
+// otherwise { html, usedKeys } — usedKeys are the part keys it consumed.
+function combinedBladeTileHTML(parts, resolvePart, extraImgClass) {
+  if (!parts) return null;
+  const lc = parts.lockChip;
+  const ab = parts.assistBlade;
+  const hasMain = !!parts.mainBlade;
+  const hasMetal = !!parts.metalBlade;
+  if (!lc || !ab || (!hasMain && !hasMetal)) return null;
+
+  const extra = extraImgClass ? " " + extraImgClass : "";
+  const lcP = resolvePart("lockChip", lc);
+  const abP = resolvePart("assistBlade", ab);
+  const usedKeys = new Set(["lockChip", "assistBlade"]);
+
+  let layers, label;
+  if (hasMetal && parts.overBlade) {
+    // CX Expand: lock chip + over blade + metal blade + assist blade.
+    usedKeys.add("metalBlade");
+    usedKeys.add("overBlade");
+    const mbP = resolvePart("metalBlade", parts.metalBlade);
+    const obP = resolvePart("overBlade", parts.overBlade);
+    layers = [
+      { src: abP.src, cls: "result-layer-x4-assist", name: ab },
+      { src: mbP.src, cls: "result-layer-x4-metal", name: parts.metalBlade },
+      { src: obP.src, cls: "result-layer-x4-over", name: parts.overBlade },
+      { src: lcP.src, cls: "result-layer-x4-lock", name: lc },
+    ];
+    label = `${titleCaseName(lcP.codename)} ${titleCaseName(mbP.codename)} ${obP.codename}${abP.codename}`;
+  } else {
+    // CX (or CX Expand with no over blade): lock chip + blade + assist blade.
+    const bladeKey = hasMetal ? "metalBlade" : "mainBlade";
+    usedKeys.add(bladeKey);
+    const mbP = resolvePart(bladeKey, parts[bladeKey]);
+    layers = [
+      { src: abP.src, cls: "result-layer-assist", name: ab },
+      { src: mbP.src, cls: "result-layer-main", name: parts[bladeKey] },
+      { src: lcP.src, cls: "result-layer-lock", name: lc },
+    ];
+    label = `${titleCaseName(lcP.codename)} ${titleCaseName(mbP.codename)} ${abP.codename}`;
+  }
+
+  const wideCls = layers.length >= 4 ? " result-part-img-box-x4" : "";
+  const layersHtml = layers.map(L =>
+    `<img src="${L.src}" alt="${L.name}" data-part-name="${L.name}"`
+    + ` class="result-part-img result-part-layer ${L.cls}${extra}"`
+    + ` onerror="this.style.display='none'">`
+  ).join("");
+
+  return {
+    usedKeys,
+    html: `<div class="result-part result-part-combined">`
+      + `<div class="result-part-img-box result-part-img-box-combined${wideCls}">${layersHtml}</div>`
+      + `<span class="result-part-name">${label}</span>`
+      + `</div>`
+  };
+}
+
 // --- Utility ---
 function getType(totalAtk, totalDef, totalSta, isRatchetBit) {
   if (isRatchetBit) {

@@ -244,15 +244,32 @@ function renderHistory() {
       metalBlade: "metalBlades", overBlade: "overBlades",
       ratchet: "ratchets", bit: "bits", ratchetBit: "ratchetBits"
     };
+    // Fixed top -> bottom display order, regardless of how `parts` was keyed.
+    const PART_ORDER = [
+      "blade", "lockChip", "mainBlade", "metalBlade", "overBlade",
+      "assistBlade", "ratchet", "ratchetBit", "bit"
+    ];
     const bitFolderFor = (name) => {
       const found = DATA.bits?.find(b => b.name === name);
       return found?._folder || "bits";
     };
-    let partsHtml = "";
-    for (const [key, name] of Object.entries(parts)) {
-      if (!name || !PART_FOLDER[key]) continue;
+    const folderFor = (key, name) => (key === "bit" ? bitFolderFor(name) : PART_FOLDER[key]);
+    const resolvePart = (key, name) => {
       const modeIdx = partModes[key] != null ? partModes[key] : null;
-      const folder = key === "bit" ? bitFolderFor(name) : PART_FOLDER[key];
+      const folder = folderFor(key, name);
+      return { src: partImgPath(folder, name, modeIdx), codename: partRecordCodename(folder, name, modeIdx) };
+    };
+    let partsHtml = "";
+    // CX / CX Expand combos show the lock chip + blade(s) + assist blade
+    // stacked into one combined thumbnail.
+    const combined = combinedBladeTileHTML(parts, resolvePart);
+    if (combined) partsHtml += combined.html;
+    for (const key of PART_ORDER) {
+      const name = parts[key];
+      if (!name || !PART_FOLDER[key]) continue;
+      if (combined && combined.usedKeys.has(key)) continue;
+      const modeIdx = partModes[key] != null ? partModes[key] : null;
+      const folder = folderFor(key, name);
       const src = partImgPath(folder, name, modeIdx);
       partsHtml += `<div class="result-part">
         <div class="result-part-img-box">

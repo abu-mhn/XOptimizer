@@ -309,6 +309,11 @@ function renderDeck() {
     metalBlade: "metalBlades", overBlade: "overBlades",
     ratchet: "ratchets", bit: "bits", ratchetBit: "ratchetBits"
   };
+  // Fixed top -> bottom display order, regardless of how `parts` was keyed.
+  const PART_ORDER = [
+    "blade", "lockChip", "mainBlade", "metalBlade", "overBlade",
+    "assistBlade", "ratchet", "ratchetBit", "bit"
+  ];
 
   deck.forEach((item, idx) => {
     const div = document.createElement("div");
@@ -328,9 +333,20 @@ function renderDeck() {
 
     const parts = data.parts || {};
     const partModes = data.partModes || {};
+    const resolvePart = (key, name) => {
+      const modeIdx = partModes[key] != null ? partModes[key] : null;
+      const folder = PART_FOLDER[key];
+      return { src: partImgPath(folder, name, modeIdx), codename: partRecordCodename(folder, name, modeIdx) };
+    };
     let partsHtml = "";
-    for (const [key, name] of Object.entries(parts)) {
+    // CX / CX Expand combos show the lock chip + blade(s) + assist blade
+    // stacked into one combined thumbnail.
+    const combined = combinedBladeTileHTML(parts, resolvePart);
+    if (combined) partsHtml += combined.html;
+    for (const key of PART_ORDER) {
+      const name = parts[key];
       if (!name || !PART_FOLDER[key]) continue;
+      if (combined && combined.usedKeys.has(key)) continue;
       const modeIdx = partModes[key] != null ? partModes[key] : null;
       const src = partImgPath(PART_FOLDER[key], name, modeIdx);
       partsHtml += `<div class="result-part">
@@ -345,7 +361,13 @@ function renderDeck() {
     div.innerHTML = `
       <div class="deck-slot-header">
         <strong class="deck-slot-label">Slot ${idx + 1}</strong>
-        <button type="button" class="btn-deck-remove" data-slot="${idx}" aria-label="Remove slot ${idx + 1}" title="Remove">&times;</button>
+        <div class="deck-slot-actions">
+          <button type="button" class="btn-deck-edit" data-slot="${idx}" aria-label="Edit slot ${idx + 1}" title="Edit combo">
+            <img src="assets/icons/pencil.png" alt="Edit"
+                 onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x270E;');">
+          </button>
+          <button type="button" class="btn-deck-remove" data-slot="${idx}" aria-label="Remove slot ${idx + 1}" title="Remove">&times;</button>
+        </div>
       </div>
       <div class="history-header">
         <strong class="history-name">${data.comboName || "Unknown Combo"}</strong>
@@ -365,6 +387,9 @@ function renderDeck() {
 
   container.querySelectorAll(".btn-deck-remove").forEach(btn => {
     btn.addEventListener("click", () => removeDeckSlot(Number(btn.dataset.slot)));
+  });
+  container.querySelectorAll(".btn-deck-edit").forEach(btn => {
+    btn.addEventListener("click", () => openDeckEdit(Number(btn.dataset.slot)));
   });
 }
 
@@ -533,7 +558,9 @@ function copyDeckForTournamentRegistration() {
     type: TOURNAMENT_DECK_CLIPBOARD_TYPE,
     v: TOURNAMENT_DECK_CLIPBOARD_VERSION,
     name: (loadDeckName() || "").trim() || null,
-    deck
+    deck,
+    // Full slot objects so Paste can restore the deck (stats included).
+    slots
   });
   const btn = document.getElementById("deck-copy");
   const flash = (ok) => {
@@ -570,6 +597,298 @@ function copyDeckForTournamentRegistration() {
   } catch (e) {
     flash(false);
   }
+}
+
+const BEY_CHECK_TO_CALC_MODE = { standard: "BX", cx: "CX", cxExpand: "CX_EXPAND" };
+
+// Inverse of deckSlotToBeyCheckShape: rebuild a deck slot from a bey-check
+// shape ({ mode, parts }). That shape carries no stats, so a slot built this
+// way shows no totals (used only when a payload has no full `slots`).
+function beyCheckShapeToDeckSlot(shape) {
+  if (!shape || !shape.parts || Object.keys(shape.parts).length === 0) return null;
+  return {
+    mode: BEY_CHECK_TO_CALC_MODE[shape.mode] || "BX",
+    time: new Date().toISOString(),
+    data: { parts: { ...shape.parts }, partModes: {}, grandTotal: {} }
+  };
+}
+
+// Read a copied deck from the clipboard and load it into the active deck.
+function pasteDeckFromClipboard() {
+  const btn = document.getElementById("deck-paste");
+  const flash = (ok) => {
+    if (!btn) return;
+    const origHtml = btn.innerHTML;
+    btn.innerHTML = ok
+      ? `<img src="assets/icons/thumbs-up.png" alt="Pasted"
+           onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x2713;');">`
+      : `<img src="assets/icons/delete.png" alt="Failed"
+           onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x2715;');">`;
+    btn.disabled = true;
+    setTimeout(() => { btn.innerHTML = origHtml; btn.disabled = false; }, 1200);
+  };
+
+  const apply = (text) => {
+    let payload = null;
+    try { payload = JSON.parse(text); } catch (e) {}
+    if (!payload || payload.type !== TOURNAMENT_DECK_CLIPBOARD_TYPE) {
+      alert("Clipboard doesn't contain a copied deck. Use Copy on a deck first.");
+      flash(false);
+      return;
+    }
+    let slots = Array.isArray(payload.slots) ? payload.slots.slice() : null;
+    if (!slots && Array.isArray(payload.deck)) {
+      slots = payload.deck.map(beyCheckShapeToDeckSlot);
+    }
+    if (!slots) {
+      alert("Couldn't read the copied deck.");
+      flash(false);
+      return;
+    }
+    slots = slots.slice(0, DECK_SIZE);
+    while (slots.length < DECK_SIZE) slots.push(null);
+
+    const current = loadDeck();
+    if (current.some(s => s != null) &&
+        !confirm("Replace the current deck with the pasted one?")) return;
+
+    persistDeck(slots);
+    if (payload.name) saveDeckName(payload.name);
+    const input = document.getElementById("deck-name");
+    if (input) input.value = loadDeckName();
+    renderDeck();
+    flash(true);
+  };
+
+  if (navigator.clipboard && navigator.clipboard.readText) {
+    navigator.clipboard.readText()
+      .then(apply)
+      .catch(() => {
+        const text = prompt("Paste the copied deck here:");
+        if (text != null) apply(text);
+      });
+  } else {
+    const text = prompt("Paste the copied deck here:");
+    if (text != null) apply(text);
+  }
+}
+
+document.getElementById("deck-paste")?.addEventListener("click", pasteDeckFromClipboard);
+
+// =========================
+// EDIT A DECK SLOT'S COMBO
+// =========================
+const DECK_EDIT_FIELD_ARR = {
+  blade: "blades", ratchet: "ratchets", bit: "bits",
+  lockChip: "lockChips", mainBlade: "mainBlades", assistBlade: "assistBlades",
+  metalBlade: "metalBlades", overBlade: "overBlades"
+};
+
+const DECK_EDIT_FIELDS = {
+  BX: [["blade", "Blade"], ["ratchet", "Ratchet"], ["bit", "Bit"]],
+  CX: [["lockChip", "Lock Chip"], ["mainBlade", "Main Blade"], ["assistBlade", "Assist Blade"],
+       ["ratchet", "Ratchet"], ["bit", "Bit"]],
+  CX_EXPAND: [["lockChip", "Lock Chip"], ["metalBlade", "Metal Blade"], ["overBlade", "Over Blade"],
+              ["assistBlade", "Assist Blade"], ["ratchet", "Ratchet"], ["bit", "Bit"]]
+};
+
+let deckEditSlotIdx = -1;
+let deckEditMode = "BX";
+// Current chosen value per field key (index string, or NO_RATCHET). Survives
+// mode switches so shared fields (ratchet/bit/lock chip/assist blade) keep
+// their selection.
+let deckEditValues = {};
+
+function buildDeckEditPopup() {
+  if (document.getElementById("deck-edit-popup")) return;
+  const overlay = document.createElement("div");
+  overlay.id = "deck-edit-popup";
+  overlay.className = "popup-overlay hidden";
+  overlay.innerHTML = `
+    <div class="popup-card deck-edit-card">
+      <h2 class="popup-title">Edit Combo</h2>
+      <p class="popup-text" id="deck-edit-subtitle"></p>
+      <div class="deck-edit-modes" id="deck-edit-modes">
+        <button type="button" class="sub-tab deck-edit-mode-tab" data-mode="BX" aria-label="Basic / Unique Line" title="Basic / Unique Line">
+          <img src="assets/line/Basic_Line_Logo.webp" alt="Basic Line"> /
+          <img src="assets/line/Unique_Line_Logo.webp" alt="Unique Line">
+        </button>
+        <button type="button" class="sub-tab deck-edit-mode-tab" data-mode="CX" aria-label="Custom Line" title="Custom Line">
+          <img src="assets/line/Custom_Line_Logo.webp" alt="Custom Line">
+        </button>
+        <button type="button" class="sub-tab deck-edit-mode-tab" data-mode="CX_EXPAND" aria-label="Custom Line Expand" title="Custom Line Expand">
+          <img src="assets/line/Custom_Line_Logo.webp" alt="Custom Line">
+          <img src="assets/line/Expand_Blade_Logo.webp" alt="Expand Blade">
+        </button>
+      </div>
+      <div id="deck-edit-fields" class="deck-edit-fields"></div>
+      <div class="popup-actions">
+        <button type="button" class="btn popup-ok" id="deck-edit-save" aria-label="Save" title="Save">&#x2713;</button>
+        <button type="button" class="btn popup-cancel" id="deck-edit-cancel" aria-label="Cancel" title="Cancel">&#x2715;</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", e => { if (e.target === overlay) closeDeckEdit(); });
+  document.getElementById("deck-edit-cancel").addEventListener("click", closeDeckEdit);
+  document.getElementById("deck-edit-save").addEventListener("click", saveDeckEdit);
+  document.querySelectorAll("#deck-edit-modes .deck-edit-mode-tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      if (tab.dataset.mode === deckEditMode) return;
+      captureDeckEditValues();
+      deckEditMode = tab.dataset.mode;
+      setDeckEditModeTab();
+      renderDeckEditFields();
+    });
+  });
+}
+
+function setDeckEditModeTab() {
+  document.querySelectorAll("#deck-edit-modes .deck-edit-mode-tab").forEach(tab => {
+    tab.classList.toggle("active", tab.dataset.mode === deckEditMode);
+  });
+}
+
+function closeDeckEdit() {
+  deckEditSlotIdx = -1;
+  document.getElementById("deck-edit-popup")?.classList.add("hidden");
+}
+
+// Read the current dropdown selections back into deckEditValues.
+function captureDeckEditValues() {
+  document.querySelectorAll("#deck-edit-fields select[data-field]").forEach(sel => {
+    deckEditValues[sel.dataset.field] = sel.value;
+  });
+}
+
+// Render the part dropdowns for the currently chosen mode, using the same
+// searchable dropdowns as the calculator. Pre-selects from deckEditValues so
+// a mode switch keeps whatever still applies.
+function renderDeckEditFields() {
+  const fields = DECK_EDIT_FIELDS[deckEditMode] || DECK_EDIT_FIELDS.BX;
+  const host = document.getElementById("deck-edit-fields");
+  host.innerHTML = fields.map(([key, label]) =>
+    `<label class="deck-edit-field">
+      <span class="deck-edit-field-label">${label}</span>
+      <select data-field="${key}"></select>
+    </label>`
+  ).join("");
+
+  fields.forEach(([key]) => {
+    const sel = host.querySelector(`select[data-field="${key}"]`);
+    if (!sel) return;
+    const list = DATA[DECK_EDIT_FIELD_ARR[key]] || [];
+    const prepend = key === "ratchet" ? [{ value: NO_RATCHET, label: "No Ratchet" }] : [];
+    if (typeof makeSearchable === "function") makeSearchable(sel, list, p => p.name, prepend);
+    const wrapper = sel.nextElementSibling;
+    const cur = deckEditValues[key];
+    if (wrapper && wrapper._select) {
+      if (cur === NO_RATCHET) wrapper._select(NO_RATCHET);
+      else if (cur != null && cur !== "" && list[Number(cur)]) wrapper._select(Number(cur));
+    }
+    sel.addEventListener("change", () => { deckEditValues[key] = sel.value; });
+  });
+}
+
+function openDeckEdit(slotIdx) {
+  const deck = loadDeck();
+  const slot = deck[slotIdx];
+  if (!slot) return;
+
+  buildDeckEditPopup();
+  deckEditSlotIdx = slotIdx;
+  deckEditMode = DECK_EDIT_FIELDS[slot.mode] ? slot.mode : "BX";
+
+  // Start with every dropdown empty — the combo is rebuilt from scratch.
+  deckEditValues = {};
+
+  document.getElementById("deck-edit-subtitle").textContent = `Slot ${slotIdx + 1}`;
+  setDeckEditModeTab();
+  renderDeckEditFields();
+  document.getElementById("deck-edit-popup").classList.remove("hidden");
+}
+
+function saveDeckEdit() {
+  if (deckEditSlotIdx < 0) return;
+  const deck = loadDeck();
+  const slot = deck[deckEditSlotIdx];
+  if (!slot) { closeDeckEdit(); return; }
+  const mode = deckEditMode;
+  const formId = mode === "CX" ? "form-cx" : mode === "CX_EXPAND" ? "form-cxExpand" : "form-standard";
+  const form = document.getElementById(formId);
+  const calcFn = mode === "CX" ? (typeof calcCX === "function" && calcCX)
+    : mode === "CX_EXPAND" ? (typeof calcCXExpand === "function" && calcCXExpand)
+    : (typeof calcStandard === "function" && calcStandard);
+  if (!form || !calcFn) { alert("Calculator isn't available on this page."); return; }
+
+  const slotPartModes = (slot.data && slot.data.partModes) || {};
+  const selects = [...document.querySelectorAll("#deck-edit-fields select[data-field]")];
+
+  // Every part except the ratchet must be chosen.
+  if (selects.some(s => s.dataset.field !== "ratchet" && (s.value === "" || s.value == null))) {
+    alert("Please choose every part.");
+    return;
+  }
+
+  // Push the chosen parts into the hidden calculator form, and set the mode
+  // index for any multi-mode part (kept from the slot, clamped to range).
+  selects.forEach(sel => {
+    const field = sel.dataset.field;
+    const target = form.querySelector(`[name="${field}"]`);
+    if (target) target.value = sel.value;
+    const arrKey = DECK_EDIT_FIELD_ARR[field];
+    const part = (sel.value !== NO_RATCHET && sel.value !== "" && DATA[arrKey]) ? DATA[arrKey][sel.value] : null;
+    if (part && Array.isArray(part.modes) && part.modes.length) {
+      const m = slotPartModes[field];
+      part._modeIndex = (typeof m === "number" && m >= 0) ? Math.min(m, part.modes.length - 1) : 0;
+    }
+  });
+
+  // Recalculate through the calculator, snapshotting history + result so the
+  // edit doesn't leak into either.
+  const HKEY = "beyblade_history";
+  const histBefore = localStorage.getItem(HKEY);
+  const resultEl = document.getElementById("result");
+  const resultWasHidden = resultEl ? resultEl.classList.contains("hidden") : true;
+
+  let fresh = null;
+  try {
+    calcFn(form);
+    fresh = (JSON.parse(localStorage.getItem(HKEY) || "[]"))[0] || null;
+  } catch (e) {
+    fresh = null;
+  }
+
+  localStorage.setItem(HKEY, histBefore || "[]");
+  if (resultEl && resultWasHidden) resultEl.classList.add("hidden");
+
+  if (!fresh || !fresh.data) {
+    alert("Couldn't recalculate this combo.");
+    return;
+  }
+
+  // Honour the deck's no-duplicate-parts rule against the other slots.
+  const usedOther = new Set();
+  deck.forEach((s, i) => {
+    if (i === deckEditSlotIdx || !s || !s.data || !s.data.parts) return;
+    Object.entries(s.data.parts).forEach(([k, n]) => {
+      if (isCountedPart(k, n)) usedOther.add(n);
+    });
+  });
+  const freshParts = fresh.data.parts || {};
+  const clash = Object.entries(freshParts).find(([k, n]) => isCountedPart(k, n) && usedOther.has(n));
+  if (clash) {
+    alert(`Can't save — "${clash[1]}" is already used in another slot.`);
+    return;
+  }
+
+  deck[deckEditSlotIdx] = {
+    mode: fresh.mode,
+    time: new Date().toISOString(),
+    data: fresh.data
+  };
+  persistDeck(deck);
+  renderDeck();
+  closeDeckEdit();
 }
 
 (function initDeckName() {

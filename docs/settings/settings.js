@@ -20,6 +20,9 @@ Calculator
 - Searchable part dropdowns
 - Reset, "I'm Feeling Lucky" random pick
 - Additional button modes: Random, Meta
+- CX / CX Expand results show the lock chip, blade(s) and assist blade assembled into one combined image (also used in the Deck, History and Dashboard)
+- Tap the combined blade to flip through its parts in an auto-sliding, swipeable carousel
+- Share the result as an image — Web Share on mobile, download fallback on desktop
 
 Library
 - Search Beyblade X parts by name
@@ -32,7 +35,10 @@ Deck (3 Slots)
 - Shuffle slot order
 - Reset / clear the deck
 - Download the deck as a PNG (background follows your theme)
+- Share the deck as an image — Web Share on mobile, download fallback on desktop
 - Copy a deck to paste into a tournament registration
+- Paste a copied deck straight into the active deck with the Paste button
+- Edit any slot's combo in place — tap the pencil to rebuild it: swap parts or switch its mode (BX / CX / CX Expand)
 - Cross-device sync when signed in — decks follow your account everywhere
 
 Tournament

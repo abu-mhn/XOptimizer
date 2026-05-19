@@ -185,13 +185,29 @@ function renderResult(res) {
   if (res.partImages && res.partImages.length > 0) {
     html += `<div class="result-parts">`;
     for (const p of res.partImages) {
-      html += `<div class="result-part">
-        <div class="result-part-img-box">
-          <img src="${p.src}" alt="${p.name}" class="result-part-img"
-               onerror="this.closest('.result-part').style.display='none'">
-        </div>
-        <span class="result-part-name">${p.name}</span>
-      </div>`;
+      if (p.layers && p.layers.length) {
+        // Combined part: several images stacked into one thumbnail.
+        const layersHtml = p.layers.map(L =>
+          `<img src="${L.src}" alt="${L.name || p.name}" data-part-name="${L.name || ""}"
+                class="result-part-img result-part-layer ${L.cls}"
+                onerror="this.style.display='none'">`
+        ).join("");
+        const wideCls = p.layers.length >= 4 ? " result-part-img-box-x4" : "";
+        html += `<div class="result-part result-part-combined">
+          <div class="result-part-img-box result-part-img-box-combined${wideCls}">
+            ${layersHtml}
+          </div>
+          <span class="result-part-name">${p.name}</span>
+        </div>`;
+      } else {
+        html += `<div class="result-part">
+          <div class="result-part-img-box">
+            <img src="${p.src}" alt="${p.name}" class="result-part-img"
+                 onerror="this.closest('.result-part').style.display='none'">
+          </div>
+          <span class="result-part-name">${p.name}</span>
+        </div>`;
+      }
     }
     html += `</div>`;
   }
@@ -209,6 +225,10 @@ function renderResult(res) {
       <img src="assets/icons/download.png" alt="Download"
            onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x2B07;');">
     </button>
+    <button type="button" class="btn btn-share" aria-label="Share" title="Share">
+      <img src="assets/icons/share.png" alt="Share"
+           onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x1F517;');">
+    </button>
     <button type="button" class="btn btn-add-deck" aria-label="Add to Deck" title="Add to Deck">
       <span class="btn-add-deck-plus">+</span>
       <img src="assets/icons/cards.png" alt="Deck"
@@ -218,13 +238,16 @@ function renderResult(res) {
 
   el.innerHTML = html;
 
-  // Wire up download button
+  // Wire up action buttons
   el.querySelector(".btn-download")?.addEventListener("click", () => downloadResultPNG(el));
+  el.querySelector(".btn-share")?.addEventListener("click", () => shareResult(el));
   el.querySelector(".btn-add-deck")?.addEventListener("click", () => addCurrentToDeck());
 }
 
-function downloadResultPNG(el) {
-  // Temporarily hide the download button during capture
+// Render the result element to a square PNG canvas off-screen and hand it
+// to onReady(canvas, name). Shared by Download (saves it) and Share.
+function renderResultCanvas(el, onReady) {
+  // Temporarily hide the action buttons during capture
   const dlBtn = el.querySelector(".download-row");
   if (dlBtn) dlBtn.style.display = "none";
 
@@ -299,13 +322,10 @@ function downloadResultPNG(el) {
     ctx.fillRect(0, 0, side, side);
     ctx.drawImage(canvas, Math.floor((side - canvas.width) / 2), Math.floor((side - canvas.height) / 2));
 
-    const link = document.createElement("a");
     // Use combo name for filename if available
     const comboEl = el.querySelector(".combo-name, .combo-header");
     const name = comboEl ? comboEl.textContent.trim().replace(/[^a-zA-Z0-9_-]/g, "_").replace(/_+/g, "_") : "result";
-    link.download = `${name}.png`;
-    link.href = square.toDataURL("image/png");
-    link.click();
+    onReady(square, name || "result");
   }).catch(() => {
     el.style.position = origPos;
     el.style.left = origLeft;
@@ -314,6 +334,48 @@ function downloadResultPNG(el) {
     footer.remove();
     restoreParts();
     alert("Failed to generate image.");
+  });
+}
+
+function downloadResultPNG(el) {
+  renderResultCanvas(el, (square, name) => {
+    const link = document.createElement("a");
+    link.download = `${name}.png`;
+    link.href = square.toDataURL("image/png");
+    link.click();
+  });
+}
+
+// Share the result image via the Web Share API. Falls back to a plain
+// download when the browser can't share files (e.g. most desktop browsers).
+function shareResult(el) {
+  renderResultCanvas(el, (square, name) => {
+    const fileName = `${name}.png`;
+    const downloadFallback = () => {
+      const link = document.createElement("a");
+      link.download = fileName;
+      link.href = square.toDataURL("image/png");
+      link.click();
+    };
+
+    if (!square.toBlob || !navigator.share) {
+      downloadFallback();
+      return;
+    }
+
+    square.toBlob(blob => {
+      if (!blob) { downloadFallback(); return; }
+      const file = new File([blob], fileName, { type: "image/png" });
+      if (navigator.canShare && !navigator.canShare({ files: [file] })) {
+        downloadFallback();
+        return;
+      }
+      navigator.share({ files: [file], title: name }).catch(err => {
+        // AbortError = user dismissed the share sheet; not a failure.
+        if (err && err.name === "AbortError") return;
+        downloadFallback();
+      });
+    }, "image/png");
   });
 }
 
@@ -723,10 +785,19 @@ function calcCX(form) {
   });
 
   // ================= PART IMAGES =================
+  // The lock chip, main blade and assist blade assemble into a single CX
+  // blade, so show them stacked as one combined thumbnail (bottom -> top:
+  // assist blade, main blade, lock chip).
   const partImages = [
-    { name: lc.name, src: partImgPath("lockChips", lc.name) },
-    { name: mb.name, src: partImgPath("mainBlades", mb.name, mbModes ? mb._modeIndex : null) },
-    { name: ab.name, src: partImgPath("assistBlades", ab.name, abModes ? ab._modeIndex : null) },
+    {
+      // Lock chip + main blade in title case; assist blade code kept as-is.
+      name: `${titleCaseName(lc.codename)} ${titleCaseName(mbA.codename)} ${abA.codename}`,
+      layers: [
+        { src: partImgPath("assistBlades", ab.name, abModes ? ab._modeIndex : null), cls: "result-layer-assist", name: ab.name },
+        { src: partImgPath("mainBlades", mb.name, mbModes ? mb._modeIndex : null), cls: "result-layer-main", name: mb.name },
+        { src: partImgPath("lockChips", lc.name), cls: "result-layer-lock", name: lc.name },
+      ],
+    },
   ];
   if (isRB && rb) {
     partImages.push({ name: rb.name, src: partImgPath(rb._folder || "ratchetBits", rb.name, rbModes ? rb._modeIndex : null) });
@@ -972,12 +1043,37 @@ function calcCXExpand(form) {
   });
 
   // ================= PART IMAGES =================
+  // Lock chip + over blade + metal blade + assist blade assemble into a
+  // single CX-Expand blade, so show them stacked as one combined thumbnail.
+  const assistSrc = partImgPath("assistBlades", ab.name, abModes ? (ab._modeIndex || 0) : null);
+  const metalSrc = partImgPath("metalBlades", mb.name, mbModes ? (mb._modeIndex || 0) : null);
+  const lockSrc = partImgPath("lockChips", lc.name);
+  let blendLayers;
+  if (ob) {
+    // 4-part cascade left -> right: lock chip, over blade, metal blade,
+    // assist blade (DOM bottom -> top: assist, metal, over, lock).
+    const overSrc = partImgPath("overBlades", ob.name, obModes ? (ob._modeIndex || 0) : null);
+    blendLayers = [
+      { src: assistSrc, cls: "result-layer-x4-assist", name: ab.name },
+      { src: metalSrc, cls: "result-layer-x4-metal", name: mb.name },
+      { src: overSrc, cls: "result-layer-x4-over", name: ob.name },
+      { src: lockSrc, cls: "result-layer-x4-lock", name: lc.name },
+    ];
+  } else {
+    // No over blade: same 3-part layout as a plain CX blade.
+    blendLayers = [
+      { src: assistSrc, cls: "result-layer-assist", name: ab.name },
+      { src: metalSrc, cls: "result-layer-main", name: mb.name },
+      { src: lockSrc, cls: "result-layer-lock", name: lc.name },
+    ];
+  }
+
   const partImages = [
-    { name: lc.name, src: partImgPath("lockChips", lc.name) },
-    { name: mb.name, src: partImgPath("metalBlades", mb.name, mbModes ? (mb._modeIndex || 0) : null) },
+    {
+      name: `${titleCaseName(lc.codename)} ${titleCaseName(mbA.codename)} ${ob ? obA.codename : ""}${abA.codename}`,
+      layers: blendLayers,
+    },
   ];
-  if (ob) partImages.push({ name: ob.name, src: partImgPath("overBlades", ob.name, obModes ? (ob._modeIndex || 0) : null) });
-  partImages.push({ name: ab.name, src: partImgPath("assistBlades", ab.name, abModes ? (ab._modeIndex || 0) : null) });
   if (isRB && rb) {
     partImages.push({ name: rb.name, src: partImgPath(rb._folder || "ratchetBits", rb.name, rbModes ? (rb._modeIndex || 0) : null) });
   } else {

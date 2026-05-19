@@ -559,6 +559,79 @@ select {
     cursor: pointer;
 }
 
+/* Combined CX blade thumbnail: lock chip + main blade + assist blade
+   stacked into one assembled-looking image. */
+.result-part-img-box-combined {
+    position: relative;
+    width: 96px;
+}
+
+.result-part-layer {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    max-width: none;
+    max-height: none;
+    cursor: pointer;
+}
+
+/* Assist blade sits behind, nudged to the right so it stays visible. */
+.result-layer-assist {
+    width: 50px;
+    height: 50px;
+    transform: translate(calc(-50% + 14.5px), -50%);
+}
+
+/* Main / metal blade slightly left of centre. */
+.result-layer-main {
+    width: 52px;
+    height: 52px;
+    transform: translate(calc(-50% - 9.5px), -50%);
+}
+
+/* CX Expand: four parts cascaded left -> right in one wider tile
+   (lock chip, over blade, metal blade, assist blade). */
+.result-part-img-box-x4 {
+    width: 140px;
+}
+
+.result-layer-x4-lock {
+    width: 30px;
+    height: 30px;
+    transform: translate(calc(-50% - 43px), -50%);
+}
+
+.result-layer-x4-over {
+    width: 46px;
+    height: 46px;
+    transform: translate(calc(-50% - 17px), -50%);
+}
+
+.result-layer-x4-metal {
+    width: 46px;
+    height: 46px;
+    transform: translate(calc(-50% + 9px), -50%);
+}
+
+.result-layer-x4-assist {
+    width: 46px;
+    height: 46px;
+    transform: translate(calc(-50% + 35px), -50%);
+}
+
+/* Keep a combined tile's label on a single line. */
+.result-part-combined .result-part-name {
+    max-width: none;
+    white-space: nowrap;
+}
+
+/* Lock chip on the main blade, nudged a little to the left. */
+.result-layer-lock {
+    width: 24px;
+    height: 24px;
+    transform: translate(calc(-50% - 27.5px), -50%);
+}
+
 .result-part-name {
     font-size: 0.65rem;
     color: #8b949e;
@@ -2779,6 +2852,116 @@ body.forest-mode .bey-check-mode-tab.active {
     text-align: center;
 }
 
+/* Combined-part popup: parts shown as an auto-sliding carousel. */
+.image-popup-combined {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.image-popup-carousel {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 220px;
+    min-height: 230px;
+    touch-action: pan-y;
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.image-popup-carousel:active {
+    cursor: grabbing;
+}
+
+.image-popup-carousel img {
+    -webkit-user-drag: none;
+    user-select: none;
+    pointer-events: none;
+}
+
+.image-popup-slide {
+    margin: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.image-popup-slide.active {
+    display: flex;
+    animation: imagePopupSlideIn 0.35s ease;
+}
+
+@keyframes imagePopupSlideIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+.image-popup-content .image-popup-slide img {
+    max-width: 200px;
+    max-height: 46vh;
+}
+
+.image-popup-slide figcaption {
+    font-size: 14px;
+    font-weight: 600;
+    color: #c9d1d9;
+    text-align: center;
+}
+
+.image-popup-dots {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.image-popup-dot {
+    width: 8px;
+    height: 8px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: #484f58;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.image-popup-dot.active {
+    background: #e6edf3;
+    transform: scale(1.25);
+}
+
+body.light-mode .image-popup-slide figcaption,
+body.tropical-mode .image-popup-slide figcaption {
+    color: #1f2328;
+}
+
+body.love-mode .image-popup-slide figcaption {
+    color: #4a1d2a;
+}
+
+body.forest-mode .image-popup-slide figcaption {
+    color: #2d3e1f;
+}
+
+body.light-mode .image-popup-dot,
+body.tropical-mode .image-popup-dot,
+body.love-mode .image-popup-dot,
+body.forest-mode .image-popup-dot {
+    background: #c0c8d0;
+}
+
+body.light-mode .image-popup-dot.active,
+body.tropical-mode .image-popup-dot.active,
+body.love-mode .image-popup-dot.active,
+body.forest-mode .image-popup-dot.active {
+    background: #1f2328;
+}
+
 .image-popup-close {
     position: absolute;
     top: 8px;
@@ -2874,6 +3057,7 @@ body.forest-mode .bey-check-mode-tab.active {
     }
 
     .download-row .btn-download,
+    .download-row .btn-share,
     .download-row .btn-add-deck {
         width: 44px;
         justify-content: center;
@@ -3067,6 +3251,12 @@ body.forest-mode .bey-check-mode-tab.active {
     font-style: italic;
 }
 
+.deck-slot-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .btn-deck-remove {
     background: transparent;
     color: #e74c3c;
@@ -3081,6 +3271,71 @@ body.forest-mode .bey-check-mode-tab.active {
 .btn-deck-remove:hover {
     background: #e74c3c;
     color: #fff;
+}
+
+.btn-deck-edit {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: #58a6ff;
+    border: 1px solid #1f6feb;
+    border-radius: 4px;
+    padding: 3px 8px;
+    cursor: pointer;
+    line-height: 0;
+}
+
+.btn-deck-edit img {
+    width: 13px;
+    height: 13px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+}
+
+.btn-deck-edit:hover {
+    background: #1f6feb;
+}
+
+/* ===== Deck slot combo editor popup ===== */
+.deck-edit-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 10px 0 4px;
+}
+
+.deck-edit-modes {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    margin: 10px 0 2px;
+}
+
+/* Save / Cancel show a check / cross glyph instead of a text label. */
+#deck-edit-save,
+#deck-edit-cancel {
+    font-size: 1.3rem;
+    line-height: 1;
+}
+
+.deck-edit-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.deck-edit-field-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #8b949e;
+}
+
+body.light-mode .deck-edit-field-label,
+body.tropical-mode .deck-edit-field-label,
+body.love-mode .deck-edit-field-label,
+body.forest-mode .deck-edit-field-label {
+    color: #57606a;
 }
 
 .deck-slot-stats {
@@ -3156,6 +3411,49 @@ body.forest-mode .bey-check-mode-tab.active {
     height: 16px;
     object-fit: contain;
     filter: brightness(0) invert(1);
+}
+
+.btn-paste {
+    background: #6e40c9;
+    flex: 0 0 auto;
+    padding: 6px 8px;
+    font-size: 0;
+    gap: 0;
+    line-height: 0;
+}
+
+.btn-paste:hover {
+    background: #8253d6;
+}
+
+.btn-paste img {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+}
+
+body.light-mode .btn-paste,
+body.tropical-mode .btn-paste,
+body.love-mode .btn-paste,
+body.forest-mode .btn-paste {
+    background: #a78bda;
+    color: #1f2328;
+}
+
+body.light-mode .btn-paste:hover,
+body.tropical-mode .btn-paste:hover,
+body.love-mode .btn-paste:hover,
+body.forest-mode .btn-paste:hover {
+    background: #9576cf;
+}
+
+body.mono-mode .btn-paste {
+    background: #ffffff;
+}
+
+body.mono-mode .btn-paste:hover {
+    background: #d0d0d0;
 }
 
 .btn-row {
@@ -5593,7 +5891,9 @@ body.mono-mode .btn-download img,
 body.mono-mode .deck-toolbar .btn-copy img,
 body.mono-mode .btn-copy img,
 body.mono-mode .deck-toolbar .btn-share img,
-body.mono-mode .btn-share img {
+body.mono-mode .btn-share img,
+body.mono-mode .deck-toolbar .btn-paste img,
+body.mono-mode .btn-paste img {
     filter: brightness(0);
 }
 

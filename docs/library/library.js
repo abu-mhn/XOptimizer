@@ -371,15 +371,123 @@ function initLibrarySearch() {
   const imagePopupImg = document.getElementById("image-popup-img");
   const imagePopupName = document.getElementById("image-popup-name");
 
+  // --- Combined-part carousel state ---
+  let combinedSlideEls = [];
+  let combinedDotEls = [];
+  let combinedIndex = 0;
+  let combinedAutoTimer = null;
+
+  function getCombinedGrid() {
+    const content = imagePopup.querySelector(".image-popup-content");
+    let grid = content.querySelector(".image-popup-combined");
+    if (!grid) {
+      grid = document.createElement("div");
+      grid.className = "image-popup-combined";
+      content.appendChild(grid);
+
+      // Swipe / drag to change slide; any interaction restarts the 3s
+      // idle countdown.
+      let dragStartX = null;
+      const resetIdle = () => {
+        if (combinedAutoTimer !== null) scheduleCombinedAuto();
+      };
+      grid.addEventListener("pointerdown", (e) => {
+        dragStartX = e.clientX;
+        try { grid.setPointerCapture(e.pointerId); } catch (err) {}
+        resetIdle();
+      });
+      grid.addEventListener("pointerup", (e) => {
+        if (dragStartX !== null) {
+          const dx = e.clientX - dragStartX;
+          dragStartX = null;
+          if (Math.abs(dx) > 35) showCombinedSlide(combinedIndex + (dx < 0 ? 1 : -1));
+        }
+        resetIdle();
+      });
+      grid.addEventListener("pointercancel", () => { dragStartX = null; });
+      grid.addEventListener("mousemove", resetIdle);
+    }
+    return grid;
+  }
+
+  function showCombinedSlide(i) {
+    if (!combinedSlideEls.length) return;
+    combinedIndex = (i + combinedSlideEls.length) % combinedSlideEls.length;
+    combinedSlideEls.forEach((el, n) => el.classList.toggle("active", n === combinedIndex));
+    combinedDotEls.forEach((el, n) => el.classList.toggle("active", n === combinedIndex));
+  }
+
+  function stopCombinedAuto() {
+    if (combinedAutoTimer !== null) {
+      clearInterval(combinedAutoTimer);
+      combinedAutoTimer = null;
+    }
+  }
+
+  // Auto-advance the carousel once it has been idle for 3 seconds, then keep
+  // sliding every 3 seconds. Any interaction calls this again to restart it.
+  function scheduleCombinedAuto() {
+    if (combinedAutoTimer !== null) clearInterval(combinedAutoTimer);
+    combinedAutoTimer = setInterval(() => showCombinedSlide(combinedIndex + 1), 3000);
+  }
+
   function openImagePopup(src, name) {
+    stopCombinedAuto();
     imagePopupImg.src = src;
+    imagePopupImg.style.display = "";
+    imagePopupName.style.display = "";
     imagePopupName.textContent = name || "";
+    const grid = imagePopup.querySelector(".image-popup-combined");
+    if (grid) grid.style.display = "none";
     imagePopup.classList.remove("hidden");
   }
 
+  // Show several parts in the popup as an auto-sliding carousel
+  // (e.g. a combined CX blade: lock chip + main blade + assist blade).
+  function openCombinedImagePopup(parts) {
+    imagePopupImg.style.display = "none";
+    imagePopupName.style.display = "none";
+    const grid = getCombinedGrid();
+    grid.innerHTML = `
+      <div class="image-popup-carousel">
+        ${parts.map((p, i) => `
+          <figure class="image-popup-slide${i === 0 ? " active" : ""}">
+            <img src="${p.src}" alt="${p.name}">
+            <figcaption>${p.name}</figcaption>
+          </figure>
+        `).join("")}
+      </div>
+      <div class="image-popup-dots">
+        ${parts.map((_, i) =>
+          `<button type="button" class="image-popup-dot${i === 0 ? " active" : ""}" data-slide="${i}" aria-label="Part ${i + 1}"></button>`
+        ).join("")}
+      </div>
+    `;
+    grid.style.display = "";
+    combinedSlideEls = [...grid.querySelectorAll(".image-popup-slide")];
+    combinedDotEls = [...grid.querySelectorAll(".image-popup-dot")];
+    combinedIndex = 0;
+    showCombinedSlide(0);
+
+    combinedDotEls.forEach(dot => {
+      dot.addEventListener("click", () => {
+        showCombinedSlide(Number(dot.dataset.slide));
+        scheduleCombinedAuto(); // interaction restarts the idle countdown
+      });
+    });
+
+    imagePopup.classList.remove("hidden");
+    scheduleCombinedAuto();
+  }
+
   function closeImagePopup() {
+    stopCombinedAuto();
     imagePopup.classList.add("hidden");
     imagePopupImg.src = "";
+    imagePopupImg.style.display = "";
+    imagePopupName.style.display = "";
+    const grid = imagePopup.querySelector(".image-popup-combined");
+    if (grid) grid.style.display = "none";
   }
 
   imagePopup.querySelector(".image-popup-backdrop").addEventListener("click", closeImagePopup);
@@ -399,38 +507,35 @@ function initLibrarySearch() {
     openImagePopup(img.src, name);
   });
 
-  document.getElementById("result")?.addEventListener("click", (e) => {
+  // Clicking a part thumbnail opens the image popup. A combined tile
+  // (e.g. a CX lock chip + main blade + assist blade) opens the carousel
+  // popup showing all of its parts together.
+  function handlePartImgClick(e) {
     const img = e.target.closest(".result-part-img");
     if (!img) return;
 
     e.stopPropagation();
 
-    const part = img.closest(".result-part");
-    const name = part ? part.querySelector(".result-part-name")?.textContent || "" : "";
-    openImagePopup(img.src, name);
-  });
-
-  document.getElementById("history-list")?.addEventListener("click", (e) => {
-    const img = e.target.closest(".result-part-img");
-    if (!img) return;
-
-    e.stopPropagation();
+    const combinedBox = img.closest(".result-part-img-box-combined");
+    if (combinedBox) {
+      const layers = [...combinedBox.querySelectorAll(".result-part-layer")]
+        .reverse() // DOM order is back-to-front; show front-to-back
+        .map(l => ({ src: l.src, name: l.dataset.partName || l.alt || "" }));
+      openCombinedImagePopup(layers);
+      return;
+    }
 
     const part = img.closest(".result-part");
     const name = part ? part.querySelector(".result-part-name")?.textContent || "" : "";
     openImagePopup(img.src, name);
-  });
+  }
 
-  document.getElementById("deck-list")?.addEventListener("click", (e) => {
-    const img = e.target.closest(".result-part-img");
-    if (!img) return;
+  ["result", "history-list", "deck-list"].forEach(id =>
+    document.getElementById(id)?.addEventListener("click", handlePartImgClick)
+  );
 
-    e.stopPropagation();
-
-    const part = img.closest(".result-part");
-    const name = part ? part.querySelector(".result-part-name")?.textContent || "" : "";
-    openImagePopup(img.src, name);
-  });
+  // Expose the carousel popup so other pages (e.g. the dashboard) can reuse it.
+  window.openCombinedImagePopup = openCombinedImagePopup;
 
   // =========================
   // EVENTS
