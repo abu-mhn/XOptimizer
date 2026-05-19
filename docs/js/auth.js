@@ -491,27 +491,27 @@
     });
   }
 
-  // The Revox theme is reserved for "Revox Admin" accounts: while such an
-  // account is signed in, the Revox theme is applied automatically. For
-  // everyone else the "Revox" entry in the Settings theme menu is hidden and
-  // any lingering "revox" selection falls back to Dark.
+  // The Revox theme is for Revox club accounts — "Revox Admin" and "Revox
+  // Member" both get it applied automatically while signed in. For everyone
+  // else the "Revox" entry in the Settings theme menu is hidden and any
+  // lingering "revox" selection falls back to Dark.
   function applyRevoxThemeGate() {
-    const isRevoxAdmin = hasTag("Revox Admin");
+    const isRevoxUser = hasTag("Revox Admin") || hasTag("Revox Member");
 
     // Show / hide the Revox entry in the theme menu on every page.
     document.querySelectorAll(
       '#setting-theme .setting-dropdown-option[data-value="revox"]'
-    ).forEach(opt => opt.classList.toggle("hidden", !isRevoxAdmin));
+    ).forEach(opt => opt.classList.toggle("hidden", !isRevoxUser));
 
     const theme = window.themeSetting;
     let stored = null;
     try { stored = localStorage.getItem("theme"); } catch (e) {}
 
-    if (isRevoxAdmin) {
-      // A signed-in Revox Admin always gets the Revox theme.
+    if (isRevoxUser) {
+      // A signed-in Revox account always gets the Revox theme.
       if (stored !== "revox" && theme && theme.set) theme.set("revox");
     } else if (stored === "revox") {
-      // Not a Revox Admin (any more) — drop the restricted theme.
+      // Not a Revox account (any more) — drop the restricted theme.
       if (theme && theme.set) theme.set("dark");
       else {
         document.body.classList.remove("revox-mode");
@@ -528,7 +528,8 @@
 
   let developerUsers = [];
 
-  // Load every registered user from the usernames index into developerUsers.
+  // Load every registered user from the usernames index, plus each user's
+  // current tags, into developerUsers.
   function loadDeveloperUsers() {
     const listEl = document.getElementById("developer-user-list");
     const countEl = document.getElementById("developer-count");
@@ -544,22 +545,32 @@
       developerUsers = Object.keys(val).map(k => ({
         uid: (val[k] && val[k].uid) || "",
         email: (val[k] && val[k].email) || "",
-        username: (val[k] && val[k].username) || k
+        username: (val[k] && val[k].username) || k,
+        tags: []
       })).filter(u => u.uid);
       developerUsers.sort((a, b) => a.username.localeCompare(b.username));
-      if (countEl) {
-        const n = developerUsers.length;
-        countEl.textContent = "Registered users: " + n;
-      }
+      if (countEl) countEl.textContent = "Registered users: " + developerUsers.length;
+      // Pull each user's tag map (the Developer read rule covers users/*).
+      return Promise.all(developerUsers.map(u =>
+        db.ref("users/" + u.uid + "/tags").once("value")
+          .then(s => s.val() || {})
+          .catch(() => ({}))
+      ));
+    }).then(tagMaps => {
+      (developerUsers || []).forEach((u, i) => {
+        const m = (tagMaps && tagMaps[i]) || {};
+        u.tags = Object.keys(m).filter(t => m[t]);
+      });
       setStatus("");
-      renderDeveloperList(document.getElementById("developer-search") &&
-        document.getElementById("developer-search").value || "");
+      const search = document.getElementById("developer-search");
+      renderDeveloperList(search ? search.value : "");
     }).catch(() => {
       setStatus("Couldn't load users — make sure the Developer read rule is published.");
     });
   }
 
-  // Render the (optionally filtered) user list with a per-row tag button.
+  // Render the (optionally filtered) user list — each row shows the user's
+  // current tags (each removable) plus an Add tag button.
   function renderDeveloperList(filter) {
     const listEl = document.getElementById("developer-user-list");
     if (!listEl) return;
@@ -573,20 +584,52 @@
         '</p>';
       return;
     }
-    listEl.innerHTML = rows.map(u =>
-      '<div class="developer-user-row" data-uid="' + devEscHtml(u.uid) +
-        '" data-username="' + devEscHtml(u.username) + '">' +
-        '<div class="developer-user-info">' +
-          '<span class="developer-user-name">' + devEscHtml(u.username) + '</span>' +
-          '<span class="developer-user-email">' + devEscHtml(u.email) + '</span>' +
-        '</div>' +
-        '<button type="button" class="btn btn-sm developer-tag-btn">Add tag</button>' +
-      '</div>'
-    ).join("");
+    listEl.innerHTML = rows.map(u => {
+      const tagsHtml = (u.tags || []).map(t =>
+        '<span class="developer-tag-chip">' + devEscHtml(t) +
+          '<button type="button" class="developer-tag-remove" data-tag="' + devEscHtml(t) +
+          '" title="Remove tag" aria-label="Remove ' + devEscHtml(t) + ' tag">&times;</button>' +
+        '</span>'
+      ).join("");
+      return '<div class="developer-user-row" data-uid="' + devEscHtml(u.uid) +
+          '" data-username="' + devEscHtml(u.username) + '">' +
+          '<div class="developer-user-info">' +
+            '<span class="developer-user-name developer-name-link">' + devEscHtml(u.username) + '</span>' +
+            '<span class="developer-user-email">' + devEscHtml(u.email) + '</span>' +
+            (tagsHtml ? '<div class="developer-user-tags">' + tagsHtml + '</div>' : '') +
+          '</div>' +
+          '<button type="button" class="btn btn-sm developer-tag-btn">Add tag</button>' +
+        '</div>';
+    }).join("");
     listEl.querySelectorAll(".developer-tag-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         const row = btn.closest(".developer-user-row");
         if (row) addDeveloperTag(row.dataset.uid, row.dataset.username);
+      });
+    });
+    listEl.querySelectorAll(".developer-tag-remove").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const row = btn.closest(".developer-user-row");
+        if (row) removeDeveloperTag(row.dataset.uid, btn.dataset.tag, row.dataset.username);
+      });
+    });
+    // Hover or click a username to open that account's profile. The profile
+    // dropdown + helpers live in tournament.js (loaded on every page).
+    listEl.querySelectorAll(".developer-user-row").forEach(row => {
+      const nameEl = row.querySelector(".developer-user-name");
+      const uname = row.dataset.username || "";
+      if (!nameEl || !uname) return;
+      const show = () => {
+        if (typeof window.showProfileByUsername === "function") {
+          window.showProfileByUsername(uname, nameEl);
+        }
+      };
+      nameEl.addEventListener("click", show);
+      nameEl.addEventListener("mouseenter", show);
+      nameEl.addEventListener("mouseleave", () => {
+        if (typeof window.scheduleProfileDropdownHide === "function") {
+          window.scheduleProfileDropdownHide();
+        }
       });
     });
   }
@@ -610,9 +653,34 @@
       if (!tag) return null;
       return userRef.child("tags").child(tag).set(true).then(() => tag);
     }).then(tag => {
-      if (tag) alert('Added the "' + tag + '" tag to ' + username + '.');
+      if (tag) {
+        alert('Added the "' + tag + '" tag to ' + username + '.');
+        loadDeveloperUsers();
+      }
     }).catch(e => {
       alert("Couldn't add the tag: " + ((e && e.message) || e));
+    });
+  }
+
+  // Remove a tag from one user — clears it from the users/{uid}/tags map and,
+  // if it matches the legacy single `tag` string, clears that too.
+  function removeDeveloperTag(uid, tag, username) {
+    if (!uid || !tag) return;
+    if (!confirm('Remove the "' + tag + '" tag from ' + (username || "this user") + '?')) return;
+    let db;
+    try { db = firebase.database(); } catch (e) { db = null; }
+    if (!db) return;
+    const userRef = db.ref("users/" + uid);
+    const key = String(tag).replace(/[.#$/[\]]/g, "");
+    const updates = {};
+    if (key) updates["tags/" + key] = null;
+    userRef.child("tag").once("value").then(snap => {
+      if (snap.val() === tag) updates["tag"] = null;
+      return userRef.update(updates);
+    }).then(() => {
+      loadDeveloperUsers();
+    }).catch(e => {
+      alert("Couldn't remove the tag: " + ((e && e.message) || e));
     });
   }
 

@@ -1685,11 +1685,28 @@ function renderSwissRoomBadge() {
     const label = swissIsHost ? "Host" : "Co-host";
     const prof = (typeof getUserProfile === "function") ? getUserProfile() : null;
     const uname = (prof && prof.username) ? prof.username : "";
-    const namePill = uname ? `<span class="swiss-room-name">${escapeHtml(uname)}</span>` : "";
+    const namePill = uname ? `<button type="button" class="swiss-room-name swiss-profile-link" data-username="${escapeHtml(uname)}">${escapeHtml(uname)}</button>` : "";
     pills.push(`
       <span class="swiss-room-badge swiss-room-badge-edit">
         <span class="swiss-room-role">${label}</span>
         ${namePill}
+      </span>
+    `);
+  }
+  // Show the room's designated sub-hosts so the host and co-hosts can see who
+  // has been granted co-host access for this room.
+  const subNames = Object.keys(swissSubHosts || {})
+    .map(k => swissSubHosts[k])
+    .filter(Boolean)
+    .sort((a, b) => String(a).localeCompare(String(b)));
+  if (swissCanEdit && subNames.length) {
+    const subLinks = subNames.map(n =>
+      `<button type="button" class="swiss-profile-link swiss-room-subname" data-username="${escapeHtml(n)}">${escapeHtml(n)}</button>`
+    ).join(", ");
+    pills.push(`
+      <span class="swiss-room-badge swiss-room-badge-sub" title="Sub-hosts for this room">
+        <span class="swiss-room-role">Sub-host${subNames.length > 1 ? "s" : ""}</span>
+        <span class="swiss-room-subnames">${subLinks}</span>
       </span>
     `);
   }
@@ -2078,21 +2095,148 @@ function wireShareDropdown(root, options, initial) {
   };
 }
 
+// Placeholders for the profile-view popup when an account has no photo/banner.
+const PROFILE_VIEW_PHOTO_PH = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%2321262d'/%3E%3Ccircle cx='32' cy='24' r='12' fill='%23484f58'/%3E%3Cpath d='M11 57c0-12 10-20 21-20s21 8 21 20z' fill='%23484f58'/%3E%3C/svg%3E";
+const PROFILE_VIEW_BANNER_PH = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+
+// Render a profile's tags as coloured badge spans (Revox red, Developer
+// black-blue, Revox Admin gold-bordered); honours the legacy single `tag`.
+function revoxTagBadges(profile) {
+  const tagsMap = (profile && profile.tags) || {};
+  const tags = Object.keys(tagsMap).filter(t => tagsMap[t]);
+  if (profile && profile.tag && tags.indexOf(profile.tag) < 0) tags.push(profile.tag);
+  return tags.map(t => {
+    const lower = String(t).toLowerCase();
+    let cls = "account-tag";
+    if (lower.indexOf("revox") >= 0) {
+      cls += " account-tag-revox";
+      if (lower === "revox admin") cls += " account-tag-revox-admin";
+    } else if (lower === "developer") {
+      cls += " account-tag-developer";
+    }
+    return `<span class="${cls}">${escapeHtml(t)}</span>`;
+  }).join("");
+}
+
+// The profile dropdown is dismissed by an outside click or by hovering away;
+// these hold the active document listener and the hover grace-period timer.
+let profileDropdownOutsideHandler = null;
+let profileDropdownHideTimer = null;
+
+function hideProfileDropdown() {
+  clearTimeout(profileDropdownHideTimer);
+  profileDropdownHideTimer = null;
+  const panel = document.getElementById("profile-view-popup");
+  if (panel) panel.classList.add("hidden");
+  if (profileDropdownOutsideHandler) {
+    document.removeEventListener("click", profileDropdownOutsideHandler, true);
+    profileDropdownOutsideHandler = null;
+  }
+}
+
+// A short grace period lets the mouse travel from the username to the
+// dropdown (across the small gap) without it closing.
+function scheduleProfileDropdownHide() {
+  clearTimeout(profileDropdownHideTimer);
+  profileDropdownHideTimer = setTimeout(hideProfileDropdown, 220);
+}
+function cancelProfileDropdownHide() {
+  clearTimeout(profileDropdownHideTimer);
+  profileDropdownHideTimer = null;
+}
+
+// Anchor the fixed-position dropdown just below the clicked username, kept
+// inside the viewport (flips above when there isn't room below).
+function positionProfileDropdown(panel, anchorEl) {
+  if (!panel || !anchorEl) return;
+  const r = anchorEl.getBoundingClientRect();
+  const pw = panel.offsetWidth || 250;
+  const ph = panel.offsetHeight || 220;
+  let left = r.left;
+  if (left + pw > window.innerWidth - 8) left = window.innerWidth - 8 - pw;
+  if (left < 8) left = 8;
+  let top = r.bottom + 6;
+  if (top + ph > window.innerHeight - 8 && r.top - ph - 6 >= 8) {
+    top = r.top - ph - 6;
+  }
+  panel.style.left = left + "px";
+  panel.style.top = top + "px";
+}
+
+// Resolve a username to its account and show that profile in a read-only
+// dropdown (photo, banner, bio, tags) anchored to the clicked name. Reading
+// another account's profile needs the public users read rule.
+function showProfileByUsername(username, anchorEl) {
+  const panel = document.getElementById("profile-view-popup");
+  if (!panel || !username) return;
+  const nameEl = document.getElementById("profile-view-name");
+  const photoEl = document.getElementById("profile-view-photo");
+  const bannerEl = document.getElementById("profile-view-banner");
+  const bioEl = document.getElementById("profile-view-bio");
+  const tagsEl = document.getElementById("profile-view-tags");
+  const statusEl = document.getElementById("profile-view-status");
+  if (nameEl) nameEl.textContent = username;
+  if (bioEl) bioEl.textContent = "";
+  if (tagsEl) tagsEl.innerHTML = "";
+  if (photoEl) photoEl.src = PROFILE_VIEW_PHOTO_PH;
+  if (bannerEl) bannerEl.src = PROFILE_VIEW_BANNER_PH;
+  if (statusEl) statusEl.textContent = "Loading…";
+  panel.classList.remove("hidden");
+  positionProfileDropdown(panel, anchorEl);
+  // Keep it open while the pointer is over the dropdown itself.
+  cancelProfileDropdownHide();
+  panel.onmouseenter = cancelProfileDropdownHide;
+  panel.onmouseleave = scheduleProfileDropdownHide;
+  // Dismiss on an outside click — deferred so the opening click doesn't count.
+  if (profileDropdownOutsideHandler) {
+    document.removeEventListener("click", profileDropdownOutsideHandler, true);
+  }
+  profileDropdownOutsideHandler = (e) => {
+    if (panel.contains(e.target)) return;
+    if (anchorEl && anchorEl.contains(e.target)) return;
+    hideProfileDropdown();
+  };
+  setTimeout(() => {
+    if (profileDropdownOutsideHandler) {
+      document.addEventListener("click", profileDropdownOutsideHandler, true);
+    }
+  }, 0);
+
+  const db = initFirebase();
+  if (!db) { if (statusEl) statusEl.textContent = "Live sync isn't configured on this build."; return; }
+  db.ref("usernames/" + subHostKey(username)).once("value").then(snap => {
+    const v = snap.val();
+    if (!v || !v.uid) {
+      if (statusEl) statusEl.textContent = "No registered account uses that username.";
+      return null;
+    }
+    return db.ref("users/" + v.uid).once("value");
+  }).then(snap => {
+    if (!snap) { positionProfileDropdown(panel, anchorEl); return; }
+    const p = snap.val() || {};
+    if (statusEl) statusEl.textContent = "";
+    if (nameEl) nameEl.textContent = p.username || username;
+    if (photoEl) photoEl.src = p.photo || PROFILE_VIEW_PHOTO_PH;
+    if (bannerEl) bannerEl.src = p.banner || PROFILE_VIEW_BANNER_PH;
+    if (bioEl) bioEl.textContent = p.bio || "";
+    if (tagsEl) tagsEl.innerHTML = revoxTagBadges(p);
+    // Content height changed — re-anchor to the username.
+    positionProfileDropdown(panel, anchorEl);
+  }).catch(() => {
+    if (statusEl) statusEl.textContent = "Couldn't load that profile.";
+    positionProfileDropdown(panel, anchorEl);
+  });
+}
+
 function bindSwissRoomBadge(view) {
-  view.querySelectorAll(".swiss-room-code").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const code = btn.dataset.room || "";
-      if (!code) return;
-      // Copy the bare code — no URL, no message. Co-hosts paste it into
-      // the Co-host code prompt from the Open Tournaments lobby.
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(code).then(() => {
-          const prev = btn.textContent;
-          btn.textContent = "Copied!";
-          setTimeout(() => { btn.textContent = prev; }, 1200);
-        }).catch(() => {});
-      }
-    });
+  // A username in the room badge opens that account's profile — on hover or
+  // on click (click also covers touch devices, where hover doesn't exist).
+  view.querySelectorAll(".swiss-profile-link").forEach(el => {
+    const uname = el.dataset.username || "";
+    if (!uname) return;
+    el.addEventListener("click", () => showProfileByUsername(uname, el));
+    el.addEventListener("mouseenter", () => showProfileByUsername(uname, el));
+    el.addEventListener("mouseleave", () => scheduleProfileDropdownHide());
   });
 }
 
@@ -5555,6 +5699,7 @@ function revoxPointsForPlacing(placing) {
 // Inline icons for the Revox action buttons (fill follows currentColor).
 const REVOX_ICON_ADD = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>';
 const REVOX_ICON_DELETE = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
+const REVOX_ICON_EDIT = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
 
 // Set by initRevoxAdminControls so a ranking row can open the Add popup.
 let revoxAddPopupOpener = null;
@@ -5630,7 +5775,7 @@ function renderRevoxRanking() {
           (dateStr ? `<span class="revox-row-meta">${escapeHtml(dateStr)}</span>` : "");
         return `
           <div class="tournament-results-row tournament-ranking-row revox-row${placeMod}">
-            <span class="tournament-results-player"><button type="button" class="revox-name-btn" data-revox-history="${escapeHtml(r.key)}" data-revox-name="${escapeHtml(r.name)}" title="View tournament history">${escapeHtml(r.name)}</button>${subLines}</span>
+            <span class="tournament-results-player"><button type="button" class="revox-name-btn" data-revox-history="${escapeHtml(r.key)}" data-revox-name="${escapeHtml(r.name)}">${escapeHtml(r.name)}</button>${subLines}</span>
             <span class="revox-row-placing">${ordinalPlace(i + 1)}</span>
             <span class="tournament-ranking-points">${r.points} pt${r.points === 1 ? "" : "s"}</span>
             ${adminBtns}
@@ -5638,11 +5783,16 @@ function renderRevoxRanking() {
         `;
       }).join("");
       container.innerHTML = `<div class="tournament-results-list">${rows}</div>`;
-      // Clicking a name opens that member's tournament history (anyone).
+      // Hovering a member name shows that account's profile; clicking opens
+      // their tournament history (both available to anyone).
       container.querySelectorAll("[data-revox-history]").forEach(btn => {
         btn.addEventListener("click", () => {
           showRevoxHistory(btn.dataset.revoxHistory, btn.dataset.revoxName);
         });
+        btn.addEventListener("mouseenter", () => {
+          showProfileByUsername(btn.dataset.revoxName, btn);
+        });
+        btn.addEventListener("mouseleave", () => scheduleProfileDropdownHide());
       });
       // Wire row buttons (admin only).
       if (isAdmin) {
@@ -5675,12 +5825,95 @@ function updateRevoxAdminUI() {
 }
 
 // Show one member's recorded tournament results in a popup, newest first.
+// Recompute a member's total points and latest-result mirror from their full
+// results history — run after a result is edited or deleted.
+function recomputeRevoxMember(key) {
+  const db = initFirebase();
+  if (!db || !key) return Promise.resolve();
+  const ref = db.ref("revoxRanking/" + key);
+  return ref.child("results").once("value").then(snap => {
+    const results = snap.val() || {};
+    let total = 0, latest = null;
+    Object.keys(results).forEach(k => {
+      const r = results[k] || {};
+      total += Number(r.points) || 0;
+      if (!latest || String(r.date || "") > String(latest.date || "")) latest = r;
+    });
+    return ref.update({
+      points: total,
+      tournament: (latest && latest.tournament) || "",
+      placing: (latest && Number(latest.placing)) || 0,
+      date: (latest && latest.date) || ""
+    });
+  });
+}
+
+// Overwrite one recorded result, then recompute the member's totals.
+function updateRevoxResult(key, resultId, result) {
+  const db = initFirebase();
+  if (!db || !key || !resultId) return Promise.reject(new Error("bad input"));
+  return db.ref("revoxRanking/" + key + "/results/" + resultId).set({
+    tournament: String(result.tournament || "").trim().slice(0, 80),
+    placing: Number(result.placing) || 0,
+    points: Number(result.points) || 0,
+    date: String(result.date || "").trim().slice(0, 10)
+  }).then(() => recomputeRevoxMember(key));
+}
+
+// Delete one recorded result, recompute the member, and refresh both views.
+function deleteRevoxResult(key, resultId, name) {
+  if (!key || !resultId) return;
+  if (!confirm("Delete this tournament result?")) return;
+  const db = initFirebase();
+  if (!db) return;
+  db.ref("revoxRanking/" + key + "/results/" + resultId).set(null)
+    .then(() => recomputeRevoxMember(key))
+    .then(() => { renderRevoxRanking(); showRevoxHistory(key, name); })
+    .catch(e => alert("Delete failed: " + ((e && e.message) || e)));
+}
+
+// Load the member's profile (photo + tags) into the history popup header.
+function loadRevoxHeaderProfile(name) {
+  const photoEl = document.getElementById("revox-history-photo");
+  const bannerEl = document.getElementById("revox-history-banner");
+  const tagsEl = document.getElementById("revox-history-tags");
+  const bioEl = document.getElementById("revox-history-bio");
+  const db = initFirebase();
+  if (!db || !name) return;
+  db.ref("usernames/" + subHostKey(name)).once("value").then(snap => {
+    const v = snap.val();
+    if (!v || !v.uid) return null;
+    return db.ref("users/" + v.uid).once("value");
+  }).then(snap => {
+    if (!snap) return;
+    const p = snap.val() || {};
+    if (photoEl && p.photo) photoEl.src = p.photo;
+    if (bannerEl && p.banner) bannerEl.src = p.banner;
+    if (tagsEl) tagsEl.innerHTML = revoxTagBadges(p);
+    if (bioEl) {
+      bioEl.textContent = p.bio || "";
+      bioEl.style.display = p.bio ? "" : "none";
+    }
+  }).catch(() => {});
+}
+
 function showRevoxHistory(key, name) {
   const popup = document.getElementById("revox-history-popup");
   const titleEl = document.getElementById("revox-history-title");
   const listEl = document.getElementById("revox-history-list");
   if (!popup || !listEl || !key) return;
   if (titleEl) titleEl.textContent = name || "Member";
+  // Reset the header, then load this member's profile photo + tags above the
+  // joined-events list.
+  const photoEl = document.getElementById("revox-history-photo");
+  const bannerEl = document.getElementById("revox-history-banner");
+  const tagsEl = document.getElementById("revox-history-tags");
+  const bioEl = document.getElementById("revox-history-bio");
+  if (photoEl) photoEl.src = PROFILE_VIEW_PHOTO_PH;
+  if (bannerEl) bannerEl.src = PROFILE_VIEW_BANNER_PH;
+  if (tagsEl) tagsEl.innerHTML = "";
+  if (bioEl) { bioEl.textContent = ""; bioEl.style.display = "none"; }
+  loadRevoxHeaderProfile(name);
   listEl.innerHTML = `<p class="tournament-results-loading">Loading…</p>`;
   popup.classList.remove("hidden");
   const db = initFirebase();
@@ -5690,7 +5923,9 @@ function showRevoxHistory(key, name) {
   }
   db.ref("revoxRanking/" + key).once("value").then(snap => {
     const v = snap.val() || {};
-    let results = v.results ? Object.keys(v.results).map(k => v.results[k]) : [];
+    let results = v.results
+      ? Object.keys(v.results).map(k => Object.assign({ id: k }, v.results[k]))
+      : [];
     // Older entries kept only the latest result at the top level.
     if (!results.length && v.tournament) {
       results = [{ tournament: v.tournament, placing: v.placing,
@@ -5701,22 +5936,53 @@ function showRevoxHistory(key, name) {
       return;
     }
     results.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+    const isAdmin = isRevoxAdminUnlocked();
     listEl.innerHTML =
       `<p class="revox-history-count">Joined events: ${results.length}</p>` +
       `<div class="revox-history-scroll">` +
       results.map(r => {
-      const bits = [];
-      const d = formatRevoxDate(r.date);
-      if (d) bits.push(d);
-      if (Number(r.placing)) bits.push(ordinalPlace(r.placing));
-      const pts = Number(r.points) || 0;
-      bits.push(pts + " pt" + (pts === 1 ? "" : "s"));
-      return `<div class="revox-history-row">
-        <span class="revox-history-tour">${escapeHtml(r.tournament || "Tournament")}</span>
-        <span class="revox-history-meta">${escapeHtml(bits.join(" · "))}</span>
-      </div>`;
-    }).join("") +
+        const bits = [];
+        const d = formatRevoxDate(r.date);
+        if (d) bits.push(d);
+        if (Number(r.placing)) bits.push(ordinalPlace(r.placing));
+        const pts = Number(r.points) || 0;
+        bits.push(pts + " pt" + (pts === 1 ? "" : "s"));
+        // Edit / delete are offered to Revox Admins on real recorded results
+        // (legacy entries with no result id stay read-only).
+        const acts = (isAdmin && r.id) ? `
+          <span class="revox-history-actions">
+            <button type="button" class="revox-row-btn" data-rh-edit="${escapeHtml(r.id)}" data-rh-tour="${escapeHtml(r.tournament || "")}" data-rh-placing="${Number(r.placing) || ""}" data-rh-date="${escapeHtml(r.date || "")}" title="Edit" aria-label="Edit result">${REVOX_ICON_EDIT}</button>
+            <button type="button" class="revox-row-btn revox-row-btn-delete" data-rh-del="${escapeHtml(r.id)}" title="Delete" aria-label="Delete result">${REVOX_ICON_DELETE}</button>
+          </span>` : "";
+        return `<div class="revox-history-row">
+          <div class="revox-history-main">
+            <span class="revox-history-tour">${escapeHtml(r.tournament || "Tournament")}</span>
+            <span class="revox-history-meta">${escapeHtml(bits.join(" · "))}</span>
+          </div>
+          ${acts}
+        </div>`;
+      }).join("") +
       `</div>`;
+    if (isAdmin) {
+      listEl.querySelectorAll("[data-rh-del]").forEach(btn => {
+        btn.addEventListener("click", () => deleteRevoxResult(key, btn.dataset.rhDel, name));
+      });
+      listEl.querySelectorAll("[data-rh-edit]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          // Close the history popup and open the Add popup in edit mode.
+          document.getElementById("revox-history-popup")?.classList.add("hidden");
+          if (revoxAddPopupOpener) {
+            revoxAddPopupOpener(name, {
+              key: key,
+              resultId: btn.dataset.rhEdit,
+              tournament: btn.dataset.rhTour || "",
+              placing: btn.dataset.rhPlacing || "",
+              date: btn.dataset.rhDate || ""
+            });
+          }
+        });
+      });
+    }
   }).catch(() => {
     listEl.innerHTML = `<p class="tournament-results-empty">Couldn't load the history right now.</p>`;
   });
@@ -5781,21 +6047,47 @@ function showRevoxHistory(key, name) {
     syncPoints();
   };
 
+  // Set the placing dropdown to a specific value (used when editing a result).
+  const setPlacing = (value) => {
+    if (!placingDropdown) return;
+    const btn = placingDropdown.querySelector(".setting-dropdown-btn");
+    const text = placingDropdown.querySelector(".setting-dropdown-text");
+    let matched = null;
+    placingDropdown.querySelectorAll(".setting-dropdown-option").forEach(o => {
+      const on = o.dataset.value === String(value);
+      o.classList.toggle("active", on);
+      if (on) matched = o;
+    });
+    if (btn) btn.dataset.value = matched ? String(value) : "";
+    if (text) text.textContent = matched ? matched.textContent : "Placing";
+    syncPoints();
+  };
+
   const closePopup = () => popup?.classList.add("hidden");
 
-  // Open the Add Result popup (Revox Admins only).
-  const openPopup = (prefillName) => {
+  // When set, the Add popup is editing this existing result instead of adding.
+  let revoxEditCtx = null;
+
+  // Open the Add Result popup. With editCtx it edits an existing result for
+  // that member; without it, adds a new one. Revox Admins only.
+  const openPopup = (prefillName, editCtx) => {
     if (!popup || !isRevoxAdminUnlocked()) return;
-    if (tournamentEl) tournamentEl.value = "";
-    // Opened from a row's Add button — the member is fixed, so lock the name.
-    const locked = typeof prefillName === "string" && prefillName !== "";
+    revoxEditCtx = editCtx || null;
+    const titleEl = popup.querySelector(".popup-title");
+    const confirmBtn = document.getElementById("revox-add-confirm");
+    if (titleEl) titleEl.textContent = editCtx ? "Edit Result" : "Add Result";
+    if (confirmBtn) confirmBtn.textContent = editCtx ? "Save" : "Add";
+    if (tournamentEl) tournamentEl.value = editCtx ? (editCtx.tournament || "") : "";
+    // The member is fixed when pre-filled (row Add) or editing — lock the name.
+    const locked = (typeof prefillName === "string" && prefillName !== "") || !!editCtx;
     if (nameEl) {
-      nameEl.value = locked ? prefillName : "";
+      nameEl.value = locked ? (prefillName || "") : "";
       nameEl.readOnly = locked;
       nameEl.classList.toggle("revox-name-locked", locked);
     }
-    if (dateEl) dateEl.value = todayISO();
-    resetPlacing();
+    if (dateEl) dateEl.value = (editCtx && editCtx.date) ? editCtx.date : todayISO();
+    if (editCtx && editCtx.placing) setPlacing(String(editCtx.placing));
+    else resetPlacing();
     setStatus("");
     popup.classList.remove("hidden");
     setTimeout(() => tournamentEl?.focus(), 0);
@@ -5818,10 +6110,17 @@ function showRevoxHistory(key, name) {
     if (!name) { setStatus("Enter a member name."); return; }
     if (!date) { setStatus("Pick a date."); return; }
     if (!placing) { setStatus("Pick a placing."); return; }
+    const pts = revoxPointsForPlacing(placing);
     setStatus("Saving…");
-    addRevoxEntry(name, revoxPointsForPlacing(placing), tournament, Number(placing), date)
-      .then(() => { closePopup(); renderRevoxRanking(); })
-      .catch(e => setStatus("Add failed: " + (e?.message || e)));
+    const done = () => { closePopup(); renderRevoxRanking(); };
+    if (revoxEditCtx) {
+      const ctx = revoxEditCtx;
+      updateRevoxResult(ctx.key, ctx.resultId, { tournament, placing: Number(placing), points: pts, date })
+        .then(done).catch(e => setStatus("Save failed: " + (e?.message || e)));
+    } else {
+      addRevoxEntry(name, pts, tournament, Number(placing), date)
+        .then(done).catch(e => setStatus("Add failed: " + (e?.message || e)));
+    }
   });
 
   // Tournament-history popup — dismissed by the Close button or the backdrop.

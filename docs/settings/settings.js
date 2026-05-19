@@ -51,6 +51,7 @@ Tournament
 - My Tournaments: a signed-in host is dropped straight back into the tournament they host on any device — the room index follows your account, not the device (a pick list appears only if you host more than one)
 - Join from the lobby as Participant (register name + deck) or Viewer (watch only)
 - Sub-hosts: the host lists co-host usernames in a "Sub-hosts" popup — anyone signed in with a listed username gets full co-host powers (no host code) and joins straight as co-host from the lobby
+- The room badge shows the host and the room's designated sub-hosts
 - Hosts AND co-hosts can play (+ Register myself), start the tournament, add participants, and remove registrants
 - Edit the format while waiting for players — tap the Top 8 / groups / rounds chips during registration to change them, no reset needed
 - Test button (host / co-host): bulk-adds synthetic participants (default 10) with meta-random decks, one batched Firebase write
@@ -74,11 +75,13 @@ Tournament
 
 Revox
 - Dedicated tab and theme for accounts tagged "Revox Admin" (full edit); "Revox Member" accounts see the tab view-only
-- The Revox theme turns on automatically when a Revox Admin signs in
+- The Revox theme turns on automatically for signed-in Revox Admin and Revox Member accounts
 - Member ranking by points — no password, the account tag is the key
 - Add Result popup: pick the tournament, date and placing — the placing sets the points (Top 8 scoring: 1st = 8 pts down to 8th = 1)
 - Add a result onto an existing member straight from their row, or as a brand-new member
-- Tap a member's name for their tournament history — every event they joined, newest first, with a scroller
+- Hover a member's name for their profile card; tap it for their full tournament history
+- The history popup leads with the member's profile (banner, photo, tags, bio), then every event they joined, newest first
+- Revox Admins can edit or delete any recorded result — the member's points re-total automatically
 
 Battle Pass
 - Bluetooth connection to BEYBLADE_TOOL01 launcher (Chrome / Edge on desktop or Android, Bluefy browser on iOS)
@@ -101,13 +104,15 @@ Settings
 Profile
 - Your own profile tab — the profile photo doubles as the tab icon
 - Upload a photo and a banner (tap the image to change it), set a username and a short bio
-- Discord-style profile card; admin-assigned tags show as badges
+- Discord-style profile card; admin-assigned tags show as colour-coded badges (Revox red, Developer black-and-blue, Revox Admin gold-bordered)
 - Profile syncs to your account — same photo, name and bio on every device
+- Anyone's profile opens as a card when you hover or click their username — in a tournament room, the Revox member list, or the Developer page
 
 Developer
 - Extra tab shown only to accounts tagged "Developer"
-- Lists every registered user with a total count, searchable by username or email
-- Developers can add tags to any user (multiple tags per user)
+- Lists every registered user with a total count, searchable by username or email; each user's current tags show as badges
+- Developers can add AND remove tags on any user (multiple tags per user)
+- Hover or click a username in the list to open that account's profile card
 
 Other
 - Per-tab URLs: /dashboard/, /calculator/, /library/, /deck/, /tournament/, /revox/, /battlepass/, /reel/, /history/, /settings/, /account/, /developer/
@@ -221,7 +226,17 @@ Other
         tagsEl.textContent = "";
         tags.forEach(t => {
           const s = document.createElement("span");
-          s.className = "account-tag";
+          // Colour the badge by tag family: Revox tags use the Revox theme
+          // colour, the Developer tag uses a black-and-blue badge.
+          const lower = String(t || "").toLowerCase();
+          let variant = "";
+          if (lower.indexOf("revox") >= 0) {
+            variant = " account-tag-revox";
+            if (lower === "revox admin") variant += " account-tag-revox-admin";
+          } else if (lower === "developer") {
+            variant = " account-tag-developer";
+          }
+          s.className = "account-tag" + variant;
           s.textContent = t;
           tagsEl.appendChild(s);
         });

@@ -877,10 +877,26 @@ body.light-mode .result-part-name {
     letter-spacing: 0.04em;
     text-transform: uppercase;
     padding: 3px 10px;
+    border: 1px solid #58a6ff;
     border-radius: 999px;
 }
 .account-tag.hidden {
     display: none;
+}
+/* Tag badges are coloured by family — Revox tags use the Revox theme's
+   red accent; the Developer tag uses a black-and-blue badge. Each carries
+   a matching outline. */
+.account-tag-revox {
+    background: linear-gradient(135deg, #e8402e, #b8301f);
+    border-color: #ff6b52;
+}
+/* Revox Admin keeps the red badge but gets a golden outline to mark it. */
+.account-tag-revox-admin {
+    border-color: #e3b341;
+}
+.account-tag-developer {
+    background: linear-gradient(135deg, #2f81f7, #0d1117);
+    border-color: #58a6ff;
 }
 .account-bio-field {
     display: flex;
@@ -979,6 +995,13 @@ body.light-mode .result-part-name {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+/* The username opens that account's profile on hover / click. */
+.developer-name-link {
+    cursor: pointer;
+}
+.developer-name-link:hover {
+    text-decoration: underline;
+}
 .developer-user-email {
     font-size: 0.78rem;
     color: #8b949e;
@@ -988,6 +1011,42 @@ body.light-mode .result-part-name {
 }
 .developer-tag-btn {
     flex: 0 0 auto;
+}
+
+/* A user's current tags in the Developer list — each chip is removable. */
+.developer-user-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.developer-tag-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 3px 1px 8px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    background: rgba(88, 166, 255, 0.15);
+    color: #58a6ff;
+}
+
+.developer-tag-remove {
+    appearance: none;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: 0.95rem;
+    line-height: 1;
+    padding: 0 3px;
+    cursor: pointer;
+    opacity: 0.7;
+}
+
+.developer-tag-remove:hover {
+    opacity: 1;
 }
 
 /* ===== Settings → inline action buttons (sized like the dropdowns) ===== */
@@ -5816,6 +5875,108 @@ body.mono-mode .popup-ok:hover {
     color: #58a6ff;
 }
 
+.swiss-room-badge-sub {
+    background: rgba(139, 148, 158, 0.14);
+    border-color: rgba(139, 148, 158, 0.4);
+}
+
+.swiss-room-badge-sub .swiss-room-role {
+    color: #8b949e;
+}
+
+.swiss-room-subnames {
+    font-weight: 600;
+    max-width: 16em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Usernames in the room badge are clickable buttons that open a profile. */
+.swiss-profile-link {
+    appearance: none;
+    border: 0;
+    background: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+}
+
+.swiss-profile-link:hover {
+    text-decoration: underline;
+}
+
+/* Read-only profile dropdown shown when a username is clicked — a fixed-
+   position panel anchored just below the name (not a modal). */
+.profile-view-dropdown {
+    position: fixed;
+    z-index: 300;
+    width: 250px;
+    max-width: calc(100vw - 16px);
+    box-sizing: border-box;
+    padding: 14px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    text-align: center;
+}
+
+.profile-view-dropdown.hidden {
+    display: none;
+}
+
+.profile-view-cover {
+    position: relative;
+    margin-bottom: 34px;
+}
+
+.profile-view-banner {
+    width: 100%;
+    height: 78px;
+    object-fit: cover;
+    border-radius: 8px;
+    background: #21262d;
+    display: block;
+}
+
+.profile-view-photo {
+    position: absolute;
+    left: 50%;
+    bottom: -26px;
+    transform: translateX(-50%);
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #161b22;
+    background: #21262d;
+}
+
+.profile-view-name {
+    margin: 0 0 6px;
+    font-size: 1rem;
+    word-break: break-word;
+}
+
+.profile-view-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    margin-bottom: 8px;
+}
+
+.profile-view-bio {
+    font-size: 0.85rem;
+    color: #8b949e;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+}
+
 .swiss-room-role {
     font-weight: 700;
     letter-spacing: 0.03em;
@@ -6860,6 +7021,12 @@ button.swiss-reg-name-edit:focus-visible {
     align-items: center;
 }
 
+/* `.revox-admin-form` sets its own display, so a plain `.hidden` loses the
+   specificity tie — this explicit rule actually hides it for non-admins. */
+.revox-admin-form.hidden {
+    display: none;
+}
+
 .revox-admin-form .revox-input,
 .revox-admin-form .setting-dropdown-btn,
 .revox-admin-form .btn {
@@ -7018,12 +7185,27 @@ button.swiss-reg-name-edit:focus-visible {
     text-overflow: ellipsis;
 }
 
+/* Even floor height so single-line rows don't look cramped next to rows
+   that carry a tournament + date. */
+.revox-row {
+    min-height: 52px;
+}
+
+/* Placing and points are fixed-width columns pinned to the right so they
+   line up cleanly down the list; the name takes the remaining space. */
 .revox-row-placing {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
+    min-width: 42px;
     text-align: center;
     font-weight: 600;
     font-size: 0.9rem;
     white-space: nowrap;
+}
+
+.revox-row .tournament-ranking-points {
+    flex: 0 0 auto;
+    min-width: 52px;
+    text-align: right;
 }
 
 /* The member name is a button that opens that member's tournament history;
@@ -7047,13 +7229,27 @@ button.swiss-reg-name-edit:focus-visible {
 /* One past tournament result inside the history popup. */
 .revox-history-row {
     display: flex;
-    flex-direction: column;
-    gap: 2px;
+    align-items: center;
+    gap: 8px;
     padding: 8px 10px;
     margin-bottom: 6px;
     border: 1px solid #30363d;
     border-radius: 6px;
     background: rgba(127, 127, 127, 0.08);
+}
+
+.revox-history-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.revox-history-actions {
+    flex: 0 0 auto;
+    display: inline-flex;
+    gap: 4px;
 }
 
 .revox-history-count {
@@ -7062,20 +7258,92 @@ button.swiss-reg-name-edit:focus-visible {
     color: #8b949e;
 }
 
-/* Show ~3 joined events at a time; scroll for the rest (newest on top). */
+/* Member profile header above the joined-events list — banner with the
+   photo overlapping its lower-left, then the name + tags. */
+.revox-history-profile {
+    margin-bottom: 8px;
+}
+
+.revox-history-cover {
+    position: relative;
+}
+
+.revox-history-banner {
+    width: 100%;
+    height: 72px;
+    object-fit: cover;
+    border-radius: 8px;
+    background: #21262d;
+    display: block;
+}
+
+.revox-history-photo {
+    position: absolute;
+    left: 12px;
+    bottom: -22px;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #161b22;
+    background: #21262d;
+}
+
+/* Name + tags sit on one line below the photo (not beside it). */
+.revox-history-id {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 26px 0 0;
+}
+
+.revox-history-id .popup-title {
+    margin: 0;
+    padding-right: 0;
+}
+
+.revox-history-bio {
+    margin: 10px 0 0;
+    font-size: 0.82rem;
+    color: #8b949e;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.revox-history-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+/* Show ~3 joined events at a time; scroll for the rest (newest on top).
+   The scrollbar is hidden — scrolling (wheel / drag / touch) still works. */
 .revox-history-scroll {
     max-height: 192px;
     overflow-y: auto;
+    scrollbar-width: none;        /* Firefox */
+    -ms-overflow-style: none;     /* legacy Edge */
+}
+
+.revox-history-scroll::-webkit-scrollbar {
+    display: none;                /* Chrome / Edge / Safari */
 }
 
 .revox-history-tour {
     font-weight: 600;
     font-size: 0.95rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .revox-history-meta {
     font-size: 0.8rem;
     color: #8b949e;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .btn-sm {

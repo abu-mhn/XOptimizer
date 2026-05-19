@@ -918,7 +918,17 @@
   <!-- ================= REVOX HISTORY POPUP ================= -->
   <div id="revox-history-popup" class="popup-overlay hidden">
     <div class="popup-card">
-      <h2 class="popup-title" id="revox-history-title">Member</h2>
+      <div class="revox-history-profile">
+        <div class="revox-history-cover">
+          <img id="revox-history-banner" class="revox-history-banner" alt="" />
+          <img id="revox-history-photo" class="revox-history-photo" alt="" />
+        </div>
+        <div class="revox-history-id">
+          <h2 class="popup-title" id="revox-history-title">Member</h2>
+          <div id="revox-history-tags" class="revox-history-tags"></div>
+        </div>
+        <p id="revox-history-bio" class="revox-history-bio"></p>
+      </div>
       <div id="revox-history-list"></div>
       <div class="popup-actions">
         <button type="button" id="revox-history-close" class="btn popup-cancel">Close</button>
@@ -942,6 +952,18 @@
         <button type="button" id="tournament-cohosts-close" class="btn popup-cancel">Close</button>
       </div>
     </div>
+  </div>
+
+  <!-- ================= PROFILE VIEW DROPDOWN ================= -->
+  <div id="profile-view-popup" class="profile-view-dropdown hidden">
+    <div class="profile-view-cover">
+      <img id="profile-view-banner" class="profile-view-banner" alt="" />
+      <img id="profile-view-photo" class="profile-view-photo" alt="" />
+    </div>
+    <h2 id="profile-view-name" class="profile-view-name">Profile</h2>
+    <div id="profile-view-tags" class="profile-view-tags"></div>
+    <p id="profile-view-bio" class="profile-view-bio"></p>
+    <div id="profile-view-status" class="tournament-password-status"></div>
   </div>
 
   <!-- ================= SWISS ROUNDS POPUP ================= -->
