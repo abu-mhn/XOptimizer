@@ -5902,6 +5902,9 @@ function showRevoxHistory(key, name) {
   const titleEl = document.getElementById("revox-history-title");
   const listEl = document.getElementById("revox-history-list");
   if (!popup || !listEl || !key) return;
+  // The name was hovered before this click — close that hover profile card
+  // so it doesn't float over the history popup.
+  hideProfileDropdown();
   if (titleEl) titleEl.textContent = name || "Member";
   // Reset the header, then load this member's profile photo + tags above the
   // joined-events list.
