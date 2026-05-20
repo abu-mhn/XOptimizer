@@ -6330,6 +6330,7 @@ body.mono-mode .popup-ok:hover {
 
 .swiss-toolbar-idgroup .swiss-room-badges {
     margin-right: 0;
+    flex-basis: 100%;
 }
 
 /* The pill carries a left margin for inline use elsewhere; inside the
@@ -10145,6 +10146,14 @@ body.forest-mode .share-dropdown .setting-dropdown-btn  {
   scroll-behavior: smooth;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
+  cursor: grab;
+  user-select: none;
+}
+
+.dashboard-carousel-track.is-dragging {
+  cursor: grabbing;
+  scroll-behavior: auto;
+  scroll-snap-type: none;
 }
 .dashboard-carousel-track::-webkit-scrollbar {
   display: none;

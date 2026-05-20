@@ -554,8 +554,32 @@ function setupDashboardCarousel(carouselEl) {
   });
 
   track.addEventListener("touchstart", pauseAndScheduleResume, { passive: true });
-  track.addEventListener("mousedown", pauseAndScheduleResume);
   track.addEventListener("wheel", pauseAndScheduleResume, { passive: true });
+
+  // Click-and-drag the carousel horizontally with a mouse. Touch swipes are
+  // already handled natively by the browser's horizontal-scroll.
+  let drag = null;
+  track.addEventListener("mousedown", (e) => {
+    pauseAndScheduleResume();
+    // Don't hijack drags on interactive elements inside a card.
+    if (e.target.closest("button, a, input, select, textarea")) return;
+    drag = { x: e.clientX, scroll: track.scrollLeft, moved: false };
+    track.classList.add("is-dragging");
+    e.preventDefault();
+  });
+  const onDragMove = (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x;
+    if (Math.abs(dx) > 3) drag.moved = true;
+    track.scrollLeft = drag.scroll - dx;
+  };
+  const onDragEnd = () => {
+    if (!drag) return;
+    drag = null;
+    track.classList.remove("is-dragging");
+  };
+  window.addEventListener("mousemove", onDragMove);
+  window.addEventListener("mouseup", onDragEnd);
 
   let scrollIdleTimer = null;
   track.addEventListener("scroll", () => {

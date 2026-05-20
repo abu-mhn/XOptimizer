@@ -5131,7 +5131,7 @@ function openJoinChoicePopup(room) {
       if (desc) desc.textContent = "Sign up with your name and deck. Your deck pre-fills every match you play.";
       participantBtn.onclick = () => {
         close();
-        showRegistrationPopup(room);
+        showParticipantModeChoice(room);
       };
     }
   }
@@ -5142,6 +5142,70 @@ function openJoinChoicePopup(room) {
     };
   }
   if (cancelBtn) cancelBtn.onclick = close;
+  popup.classList.remove("hidden");
+}
+
+// After Participant is picked, ask the user whether to sign in (so their
+// finish earns global ranking points) or play as a guest (no ranking).
+function buildParticipantModePopup() {
+  if (document.getElementById("participant-mode-popup")) return;
+  const overlay = document.createElement("div");
+  overlay.id = "participant-mode-popup";
+  overlay.className = "popup-overlay hidden";
+  overlay.innerHTML = `
+    <div class="popup-card">
+      <h2 class="popup-title">Join as Participant</h2>
+      <p class="popup-text" id="participant-mode-subtitle"></p>
+      <div class="tournament-mode-grid">
+        <button type="button" id="participant-mode-signin" class="tournament-mode-btn">
+          <span class="tournament-mode-title">Sign in</span>
+          <span class="tournament-mode-desc">Your final placing counts toward the global ranking.</span>
+        </button>
+        <button type="button" id="participant-mode-guest" class="tournament-mode-btn">
+          <span class="tournament-mode-title">Become Guest</span>
+          <span class="tournament-mode-desc">Play this tournament without earning any ranking points.</span>
+        </button>
+      </div>
+      <button type="button" id="participant-mode-cancel" class="btn popup-cancel">Cancel</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", e => { if (e.target === overlay) overlay.classList.add("hidden"); });
+}
+
+function showParticipantModeChoice(room) {
+  buildParticipantModePopup();
+  const popup = document.getElementById("participant-mode-popup");
+  const subtitle = popup.querySelector("#participant-mode-subtitle");
+  if (subtitle) {
+    const name = (room.name || "").trim() || "(unnamed tournament)";
+    const modeLabel = tournamentFormatLabel(room.mode, room.pairing, true);
+    subtitle.textContent = `${name} · ${modeLabel}`;
+  }
+  const close = () => popup.classList.add("hidden");
+  const signinBtn = popup.querySelector("#participant-mode-signin");
+  const guestBtn = popup.querySelector("#participant-mode-guest");
+  const cancelBtn = popup.querySelector("#participant-mode-cancel");
+
+  signinBtn.onclick = () => {
+    close();
+    const user = (typeof window.getCurrentUser === "function") ? window.getCurrentUser() : null;
+    if (user && user.uid) {
+      // Already signed in — proceed to a ranked registration.
+      showRegistrationPopup(room);
+    } else if (typeof window.showSignInPopup === "function") {
+      window.showSignInPopup({})
+        .then(() => showRegistrationPopup(room))
+        .catch(() => { /* user cancelled the sign-in popup */ });
+    } else {
+      // Auth isn't wired on this build — fall through to ranked registration.
+      showRegistrationPopup(room);
+    }
+  };
+  guestBtn.onclick = () => {
+    close();
+    showRegistrationPopup(room, { asGuest: true });
+  };
+  cancelBtn.onclick = close;
   popup.classList.remove("hidden");
 }
 
@@ -5250,6 +5314,9 @@ function showRegistrationPopup(room, options = {}) {
   // Edit mode is implicitly self-managed too (writes via swissRoomRef,
   // no disconnect/reconnect).
   const isEdit = !!editRegistrantId;
+  // Guest registrants play normally but don't earn ranking points when
+  // the tournament finishes.
+  const asGuest = !!options.asGuest;
 
   const setStatus = (msg, kind) => {
     if (!status) return;
@@ -5355,7 +5422,7 @@ function showRegistrationPopup(room, options = {}) {
         : "You haven't built any deck slots yet. Register without a deck?";
       if (!confirm(msg)) return;
     }
-    submitRegistration(room, name, deck, setStatus, close, { selfRegister, editRegistrantId });
+    submitRegistration(room, name, deck, setStatus, close, { selfRegister, editRegistrantId, asGuest });
   };
   submitBtn.onclick = submit;
   if (nameInput) {
@@ -5562,6 +5629,7 @@ function submitRegistration(room, name, deck, setStatus, onSuccess, options = {}
   const selfRegister = !!options.selfRegister;
   const editRegistrantId = options.editRegistrantId || null;
   const isEdit = !!editRegistrantId;
+  const asGuest = !!options.asGuest;
   const db = initFirebase();
   if (!db) { setStatus("Firebase not available.", "err"); return; }
   setStatus(isEdit ? "Saving…" : "Looking up tournament…", "pending");
@@ -5585,6 +5653,7 @@ function submitRegistration(room, name, deck, setStatus, onSuccess, options = {}
 
       const id = editRegistrantId || generateRegistrantId();
       const payload = { name: name.trim(), deck };
+      if (asGuest) payload.isGuest = true;
       if (!isEdit) setStatus("Submitting…", "pending");
       return roomRef.child("registrants/" + id).set(payload)
         .then(() => {
@@ -5708,6 +5777,13 @@ function tournamentIsDecided(state) {
 //   1st = 5, 2nd = 4, 3rd = 3, top 8 (4th–8th) = 2, anyone else = 1.
 function computeTournamentRankingAwards(state) {
   const matches = state?.matches || {};
+  const registrants = state?.registrants || {};
+  // Guests play the bracket like normal participants but never earn ranking
+  // points — collect their names so set() can short-circuit on them.
+  const guestNames = new Set();
+  Object.values(registrants).forEach(r => {
+    if (r && r.isGuest && typeof r.name === "string") guestNames.add(r.name);
+  });
   const matchResult = m => {
     if (!m || m.scoreA == null || m.scoreB == null || m.scoreA === m.scoreB) return null;
     const aWon = m.scoreA > m.scoreB;
@@ -5716,6 +5792,7 @@ function computeTournamentRankingAwards(state) {
   const awards = {};
   const set = (name, pts) => {
     if (!name || !pts) return;
+    if (guestNames.has(name)) return;
     if (awards[name] == null || pts > awards[name]) awards[name] = pts;
   };
   // Podium
@@ -5753,9 +5830,11 @@ function computeTournamentRankingAwards(state) {
     }
   }
   topEight.forEach(name => set(name, 2));
-  // Everyone else who participated → +1.
+  // Everyone else who participated → +1. Guests still play but skip the
+  // participation point so they stay off the leaderboard entirely.
   getParticipants(state).forEach(name => {
-    if (name && awards[name] == null) awards[name] = 1;
+    if (!name || guestNames.has(name)) return;
+    if (awards[name] == null) awards[name] = 1;
   });
   return awards;
 }
