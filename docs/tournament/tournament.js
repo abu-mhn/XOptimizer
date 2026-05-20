@@ -4677,6 +4677,47 @@ document.addEventListener("webkitfullscreenchange", scheduleSwissScrollRestore);
     refreshOpenTournamentRooms();
     refreshMyTournaments();
   });
+  document.getElementById("swiss-rooms-qr")?.addEventListener("click", showTournamentQrPopup);
+
+  // Build (once) and show a popup with a QR code pointing to /tournament/
+  // so participants can scan and open the lobby on their phone.
+  function buildTournamentQrPopup() {
+    if (document.getElementById("tournament-qr-popup")) return;
+    const overlay = document.createElement("div");
+    overlay.id = "tournament-qr-popup";
+    overlay.className = "popup-overlay hidden";
+    overlay.innerHTML = `
+      <div class="popup-card tournament-qr-card">
+        <h2 class="popup-title">Tournament QR</h2>
+        <p class="popup-text">Scan to open the tournament page on another device.</p>
+        <div class="tournament-qr-image-wrap">
+          <img id="tournament-qr-image" alt="Tournament QR code">
+        </div>
+        <p class="tournament-qr-url" id="tournament-qr-url"></p>
+        <div class="popup-actions">
+          <button type="button" class="btn popup-cancel" id="tournament-qr-close">Close</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", e => { if (e.target === overlay) closeTournamentQrPopup(); });
+    document.getElementById("tournament-qr-close").addEventListener("click", closeTournamentQrPopup);
+  }
+
+  function closeTournamentQrPopup() {
+    document.getElementById("tournament-qr-popup")?.classList.add("hidden");
+  }
+
+  function showTournamentQrPopup() {
+    buildTournamentQrPopup();
+    // Resolve /tournament/ relative to the current page so it works whether
+    // the app is hosted at the domain root or under a subfolder.
+    const url = new URL("../tournament/", window.location.href).href;
+    document.getElementById("tournament-qr-image").src =
+      "https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=10&data=" + encodeURIComponent(url);
+    document.getElementById("tournament-qr-url").textContent = url;
+    document.getElementById("tournament-qr-popup").classList.remove("hidden");
+  }
+
   // Re-list the host's own tournaments whenever auth resolves or changes —
   // this also fires once at boot, populating the list on first load.
   if (typeof onAuthChange === "function") {
