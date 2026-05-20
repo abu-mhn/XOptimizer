@@ -291,14 +291,20 @@ Other
         const img = new Image();
         img.onerror = () => reject(new Error("That file isn't a readable image."));
         img.onload = () => {
-          const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
-          const w = Math.max(1, Math.round(img.width * scale));
-          const h = Math.max(1, Math.round(img.height * scale));
-          const canvas = document.createElement("canvas");
-          canvas.width = w;
-          canvas.height = h;
-          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-          resolve(canvas.toDataURL("image/jpeg", 0.82));
+          // iOS Safari can fire `load` before the bitmap is fully decoded,
+          // so drawImage() ends up painting blank. Wait for decode() first.
+          const finish = () => {
+            const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+            const w = Math.max(1, Math.round(img.width * scale));
+            const h = Math.max(1, Math.round(img.height * scale));
+            const canvas = document.createElement("canvas");
+            canvas.width = w;
+            canvas.height = h;
+            canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL("image/jpeg", 0.82));
+          };
+          if (img.decode) img.decode().then(finish, finish);
+          else finish();
         };
         img.src = reader.result;
       };
