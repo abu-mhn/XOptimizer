@@ -41,6 +41,58 @@ function awaitImagesReady(el) {
   }));
 }
 
+// iOS Safari + html2canvas often draws WebP-source <img> elements as blanks
+// (especially when they're positioned off-screen), even after decode(). The
+// reliable workaround: re-encode every image as a same-origin PNG data URL
+// before the capture, then restore the originals afterwards. Returns the
+// originals so the caller can call restoreImageSources() when done.
+function inlineImagesAsDataUrls(el) {
+  const imgs = [...el.querySelectorAll("img")];
+  const originals = imgs.map(img => img.src);
+  return Promise.all(imgs.map(img => convertOneImageToPngDataUrl(img))).then(() => originals);
+}
+
+function convertOneImageToPngDataUrl(img) {
+  const src = img.src;
+  if (!src || src.startsWith("data:")) return Promise.resolve();
+  return fetch(src, { credentials: "omit" })
+    .then(r => r.ok ? r.blob() : null)
+    .then(blob => {
+      if (!blob) return;
+      const objUrl = URL.createObjectURL(blob);
+      const tmp = new Image();
+      return new Promise(resolve => {
+        tmp.onerror = () => { URL.revokeObjectURL(objUrl); resolve(); };
+        tmp.onload = () => {
+          const finish = () => {
+            try {
+              const c = document.createElement("canvas");
+              c.width = tmp.naturalWidth || tmp.width;
+              c.height = tmp.naturalHeight || tmp.height;
+              c.getContext("2d").drawImage(tmp, 0, 0);
+              img.src = c.toDataURL("image/png");
+              const after = img.decode ? img.decode().catch(() => {}) : Promise.resolve();
+              after.then(() => { URL.revokeObjectURL(objUrl); resolve(); });
+            } catch (e) {
+              URL.revokeObjectURL(objUrl);
+              resolve();
+            }
+          };
+          if (tmp.decode) tmp.decode().then(finish, finish);
+          else finish();
+        };
+        tmp.src = objUrl;
+      });
+    })
+    .catch(() => {});
+}
+
+function restoreImageSources(el, originals) {
+  if (!originals) return;
+  const imgs = [...el.querySelectorAll("img")];
+  imgs.forEach((img, i) => { if (originals[i] != null) img.src = originals[i]; });
+}
+
 // --- Title case ("HELLS" -> "Hells", "GEAR BALL" -> "Gear Ball") ---
 function titleCaseName(str) {
   return (str || "").toLowerCase().replace(/(^|\s)\w/g, c => c.toUpperCase());

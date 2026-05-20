@@ -6356,6 +6356,12 @@ body.mono-mode .popup-ok:hover {
     white-space: nowrap;
 }
 
+.swiss-room-name-pending {
+    opacity: 0.6;
+    font-style: italic;
+    font-weight: 500;
+}
+
 .swiss-room-code {
     background: none;
     border: none;

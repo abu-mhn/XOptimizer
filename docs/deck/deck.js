@@ -441,23 +441,27 @@ function renderDeckCanvas(onReady) {
 
   document.body.appendChild(wrap);
 
-  awaitImagesReady(wrap).then(() => html2canvas(wrap, { backgroundColor: pageBg, scale: 2, useCORS: true, width: 800 })).then(canvas => {
-    document.body.removeChild(wrap);
+  awaitImagesReady(wrap)
+    .then(() => inlineImagesAsDataUrls(wrap))
+    .then(() => html2canvas(wrap, { backgroundColor: pageBg, scale: 2, useCORS: true, width: 800 }))
+    .then(canvas => {
+      document.body.removeChild(wrap);
 
-    const side = Math.max(canvas.width, canvas.height);
-    const square = document.createElement("canvas");
-    square.width = side;
-    square.height = side;
-    const ctx = square.getContext("2d");
-    ctx.fillStyle = pageBg;
-    ctx.fillRect(0, 0, side, side);
-    ctx.drawImage(canvas, Math.floor((side - canvas.width) / 2), Math.floor((side - canvas.height) / 2));
+      const side = Math.max(canvas.width, canvas.height);
+      const square = document.createElement("canvas");
+      square.width = side;
+      square.height = side;
+      const ctx = square.getContext("2d");
+      ctx.fillStyle = pageBg;
+      ctx.fillRect(0, 0, side, side);
+      ctx.drawImage(canvas, Math.floor((side - canvas.width) / 2), Math.floor((side - canvas.height) / 2));
 
-    onReady(square, deckName);
-  }).catch(() => {
-    if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
-    alert("Failed to generate deck image.");
-  });
+      onReady(square, deckName);
+    })
+    .catch(() => {
+      if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+      alert("Failed to generate deck image.");
+    });
 }
 
 // Turn the deck name into a filesystem-safe PNG filename.

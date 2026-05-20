@@ -301,40 +301,48 @@ function renderResultCanvas(el, onReady) {
   el.style.position = "fixed";
   el.style.left = "-9999px";
 
-  awaitImagesReady(el).then(() => html2canvas(el, {
-    backgroundColor: pageBg,
-    scale: 2,
-    useCORS: true,
-    width: captureWidth
-  })).then(canvas => {
+  let savedSrcs = null;
+  const restore = () => {
     el.style.position = origPos;
     el.style.left = origLeft;
     el.style.width = origWidth;
     if (dlBtn) dlBtn.style.display = "";
     footer.remove();
     restoreParts();
-    const side = Math.max(canvas.width, canvas.height);
-    const square = document.createElement("canvas");
-    square.width = side;
-    square.height = side;
-    const ctx = square.getContext("2d");
-    ctx.fillStyle = pageBg;
-    ctx.fillRect(0, 0, side, side);
-    ctx.drawImage(canvas, Math.floor((side - canvas.width) / 2), Math.floor((side - canvas.height) / 2));
+    if (savedSrcs) restoreImageSources(el, savedSrcs);
+  };
 
-    // Use combo name for filename if available
-    const comboEl = el.querySelector(".combo-name, .combo-header");
-    const name = comboEl ? comboEl.textContent.trim().replace(/[^a-zA-Z0-9_-]/g, "_").replace(/_+/g, "_") : "result";
-    onReady(square, name || "result");
-  }).catch(() => {
-    el.style.position = origPos;
-    el.style.left = origLeft;
-    el.style.width = origWidth;
-    if (dlBtn) dlBtn.style.display = "";
-    footer.remove();
-    restoreParts();
-    alert("Failed to generate image.");
-  });
+  awaitImagesReady(el)
+    .then(() => inlineImagesAsDataUrls(el))
+    .then(originals => {
+      savedSrcs = originals;
+      return html2canvas(el, {
+        backgroundColor: pageBg,
+        scale: 2,
+        useCORS: true,
+        width: captureWidth
+      });
+    })
+    .then(canvas => {
+      restore();
+      const side = Math.max(canvas.width, canvas.height);
+      const square = document.createElement("canvas");
+      square.width = side;
+      square.height = side;
+      const ctx = square.getContext("2d");
+      ctx.fillStyle = pageBg;
+      ctx.fillRect(0, 0, side, side);
+      ctx.drawImage(canvas, Math.floor((side - canvas.width) / 2), Math.floor((side - canvas.height) / 2));
+
+      // Use combo name for filename if available
+      const comboEl = el.querySelector(".combo-name, .combo-header");
+      const name = comboEl ? comboEl.textContent.trim().replace(/[^a-zA-Z0-9_-]/g, "_").replace(/_+/g, "_") : "result";
+      onReady(square, name || "result");
+    })
+    .catch(() => {
+      restore();
+      alert("Failed to generate image.");
+    });
 }
 
 function downloadResultPNG(el) {
