@@ -441,7 +441,7 @@ function renderDeckCanvas(onReady) {
 
   document.body.appendChild(wrap);
 
-  html2canvas(wrap, { backgroundColor: pageBg, scale: 2, useCORS: true, width: 800 }).then(canvas => {
+  awaitImagesReady(wrap).then(() => html2canvas(wrap, { backgroundColor: pageBg, scale: 2, useCORS: true, width: 800 })).then(canvas => {
     document.body.removeChild(wrap);
 
     const side = Math.max(canvas.width, canvas.height);

@@ -301,12 +301,12 @@ function renderResultCanvas(el, onReady) {
   el.style.position = "fixed";
   el.style.left = "-9999px";
 
-  html2canvas(el, {
+  awaitImagesReady(el).then(() => html2canvas(el, {
     backgroundColor: pageBg,
     scale: 2,
     useCORS: true,
     width: captureWidth
-  }).then(canvas => {
+  })).then(canvas => {
     el.style.position = origPos;
     el.style.left = origLeft;
     el.style.width = origWidth;

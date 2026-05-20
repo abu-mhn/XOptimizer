@@ -24,6 +24,23 @@ function partImgPath(folder, name, modeIndex) {
   return `assets/${folder}/${suffix}`;
 }
 
+// Wait for every <img> inside `el` to be loaded AND fully decoded. iOS Safari
+// is much stricter than other browsers — it considers an image "loaded"
+// before it has decoded the bitmap into canvas-readable memory, so html2canvas
+// captures it as blank. Call this before any html2canvas() to avoid that.
+function awaitImagesReady(el) {
+  const imgs = [...el.querySelectorAll("img")];
+  return Promise.all(imgs.map(img => {
+    const decode = () => (img.decode ? img.decode().catch(() => {}) : Promise.resolve());
+    if (img.complete && img.naturalWidth > 0) return decode();
+    return new Promise(resolve => {
+      const done = () => decode().then(resolve);
+      img.addEventListener("load", done, { once: true });
+      img.addEventListener("error", resolve, { once: true });
+    });
+  }));
+}
+
 // --- Title case ("HELLS" -> "Hells", "GEAR BALL" -> "Gear Ball") ---
 function titleCaseName(str) {
   return (str || "").toLowerCase().replace(/(^|\s)\w/g, c => c.toUpperCase());
