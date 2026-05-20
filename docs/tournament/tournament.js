@@ -1704,18 +1704,18 @@ function resolveHostName(uid) {
 }
 
 function renderSwissRoomBadge() {
-  // Shown to anyone connected to a room — hosts, co-hosts, participants AND
-  // viewers — so everyone can see who's running the tournament.
-  if (!swissEditCode && !swissViewCode) return "";
+  // Only the host and co-hosts see this badge — participants and viewers
+  // don't need to know who's running the room.
+  if (!swissCanEdit) return "";
   const pills = [];
   const st = loadSwiss();
   const prof = (typeof getUserProfile === "function") ? getUserProfile() : null;
   const myName = (prof && prof.username) ? prof.username : "";
   const namePill = (uname) => uname
     ? `<button type="button" class="swiss-room-name swiss-profile-link" data-username="${escapeHtml(uname)}">${escapeHtml(uname)}</button>`
-    : `<span class="swiss-room-name swiss-room-name-pending">…</span>`;
-  // Host pill — names whoever hosts this room; shown to everyone. The host's
-  // own device falls back to their profile name until the room syncs it.
+    : "";
+  // Host pill — the host's own device falls back to their profile name until
+  // the room syncs it.
   let hostName = (st && st.hostName) || "";
   if (!hostName && swissIsHost) hostName = myName;
   if (!hostName) {
@@ -1726,14 +1726,14 @@ function renderSwissRoomBadge() {
       if (!hostName) resolveHostName(hostUid);
     }
   }
-  // Always emit the host pill — participants and viewers see at minimum that
-  // there IS a host, with a placeholder name until it resolves.
-  pills.push(`
-    <span class="swiss-room-badge swiss-room-badge-edit">
-      <span class="swiss-room-role">Host</span>
-      ${namePill(hostName)}
-    </span>
-  `);
+  if (hostName) {
+    pills.push(`
+      <span class="swiss-room-badge swiss-room-badge-edit">
+        <span class="swiss-room-role">Host</span>
+        ${namePill(hostName)}
+      </span>
+    `);
+  }
   // Co-host pills (blue) — one for each of the room's designated sub-hosts.
   Object.keys(swissSubHosts || {})
     .map(k => swissSubHosts[k])
@@ -1747,6 +1747,7 @@ function renderSwissRoomBadge() {
         </span>
       `);
     });
+  if (!pills.length) return "";
   return `<div class="swiss-room-badges">${pills.join("")}</div>`;
 }
 
