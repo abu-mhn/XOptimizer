@@ -9828,7 +9828,16 @@ body.forest-mode .share-dropdown .setting-dropdown-btn  {
   cursor: pointer;
   transition: transform 0.15s;
 }
-.dashboard-part-img:hover {
+/* Don't apply the hover-scale to layered imgs in a combined tile — their
+   `transform` is doing positioning work, and the whole tile scales as one
+   via .result-part-img-box-combined:hover below. */
+.dashboard-part-img:not(.result-part-layer):hover {
+  transform: scale(1.05);
+}
+.dashboard-card .result-part-img-box-combined {
+  transition: transform 0.15s;
+}
+.dashboard-card .result-part-img-box-combined:hover {
   transform: scale(1.05);
 }
 .dashboard-rank {
