@@ -17,8 +17,9 @@ Dashboard
 
 Calculator
 - Three combo modes: Standard, CX (Custom), CX Expand
+- One combined fieldset per mode (Top + Bottom merged) for a cleaner form
 - Searchable part dropdowns
-- Reset, "I'm Feeling Lucky" random pick
+- Action buttons (Calculate / Reset / Random) show icon + label inline
 - Additional button modes: Random, Meta
 - CX / CX Expand results show the lock chip, blade(s) and assist blade assembled into one combined image (also used in the Deck, History and Dashboard)
 - Tap the combined blade to flip through its parts in an auto-sliding, swipeable carousel
@@ -58,9 +59,13 @@ Tournament
 - Join from the lobby as Participant (register name + deck) or Viewer (watch only)
 - Sub-hosts: the host lists co-host usernames in a "Sub-hosts" popup — anyone signed in with a listed username gets full co-host powers (no host code) and joins straight as co-host from the lobby
 - The room badge shows the host and the room's designated sub-hosts
-- Hosts AND co-hosts can play (+ Register myself), start the tournament, add participants, and remove registrants
+- Hosts AND co-hosts can play (+ Register Myself), start the tournament, add participants, and remove registrants
+- Register Myself pre-fills your account's username and locks the name field, so no one can register under someone else's name from your device
+- Register Others (host / co-host): add a participant manually by name + deck, no need for them to self-register
+- QR button in the Open Tournaments header shows a scannable QR code that opens /tournament/ on any phone
+- Lobby cards flag a tournament you've been invited to co-host with a small "!" alert badge
 - Edit the format while waiting for players — tap the Top 8 / groups / rounds chips during registration to change them, no reset needed
-- Test button (host / co-host): bulk-adds synthetic participants (default 10) with meta-random decks, one batched Firebase write
+- Test button: bulk-adds synthetic participants for QA — visible only to accounts tagged "Tester"
 - Test decks obey "one of each part per deck" across all 3 slots (only light lock chips can repeat; Emperor / Valkyrie cannot)
 - Test deck mode mix is weighted realistic: ~75% Standard, ~13% CX, ~12% CX Expand
 - Test registrants never earn global ranking points or appear on the leaderboard
@@ -91,14 +96,17 @@ Revox
 
 Battle Pass
 - Bluetooth connection to BEYBLADE_TOOL01 launcher (Chrome / Edge on desktop or Android, Bluefy browser on iOS)
+- Connect, Disconnect and Clear Data buttons each carry an icon — link, unlink, and a trash can — so the action reads at a glance
 
 Buzz Bey
 - Local, International, and Japan video embeds
+- Region sub-tabs show a recognisable icon: KLCC (Local), globe (International), Mt. Fuji (Japan)
 
 History
 - Last 3 calculated combos
 - Tournament history with role badges: Host, Co-host, Participant, Viewer
 - Clickable entries open final placements (cached when the live room is gone)
+- Sub-tabs show icons next to "Last 3 Combos" and "Tournaments" for quick scanning
 
 Settings
 - Themes: Dark, Light, Space, Tropical, Stormy, Monochrome, Love, Forest (plus Revox, for Revox Admins)
@@ -241,6 +249,8 @@ Other
             if (lower === "revox admin") variant += " account-tag-revox-admin";
           } else if (lower === "developer") {
             variant = " account-tag-developer";
+          } else if (lower === "tester") {
+            variant = " account-tag-tester";
           }
           s.className = "account-tag" + variant;
           s.textContent = t;

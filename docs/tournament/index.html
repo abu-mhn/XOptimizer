@@ -6,6 +6,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
   <base href="../">
 
+  <!-- ================= OPEN GRAPH (link-preview card in chat apps) ================= -->
+  <title>X Optimizer — Tournament</title>
+  <meta name="description" content="Open Beyblade X tournaments — join as participant, watch as viewer, or host your own.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://abu-mhn.github.io/XOptimizer/tournament/">
+  <meta property="og:site_name" content="X Optimizer">
+  <meta property="og:title" content="X Optimizer — Tournament">
+  <meta property="og:description" content="Open Beyblade X tournaments — join as participant, watch as viewer, or host your own.">
+  <meta property="og:image" content="https://abu-mhn.github.io/XOptimizer/assets/icons/XOptimizerDark.webp">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="X Optimizer — Tournament">
+  <meta name="twitter:description" content="Open Beyblade X tournaments — join as participant, watch as viewer, or host your own.">
+  <meta name="twitter:image" content="https://abu-mhn.github.io/XOptimizer/assets/icons/XOptimizerDark.webp">
+
   <!-- ================= FAVICON ================= -->
   <link id="app-favicon" rel="icon" type="image/png" href="assets/icons/M.webp">
   <link id="app-apple-icon" rel="apple-touch-icon" href="assets/icons/M.webp">
@@ -135,16 +149,16 @@
     <!-- ================= CALCULATOR SUB-TABS ================= -->
     <div class="sub-tabs hidden" id="sub-tabs">
       <button class="sub-tab active" data-mode="standard" aria-label="Basic / Unique Line" title="Basic / Unique Line">
-        <img src="assets/line/Basic_Line_Logo.webp" alt="Basic Line"> /
+<img src="assets/line/Basic_Line_Logo.webp" alt="Basic Line"> /
         <img src="assets/line/Unique_Line_Logo.webp" alt="Unique Line">
       </button>
 
       <button class="sub-tab" data-mode="cx" aria-label="Custom Line" title="Custom Line">
-        <img src="assets/line/Custom_Line_Logo.webp" alt="Custom Line">
+<img src="assets/line/Custom_Line_Logo.webp" alt="Custom Line">
       </button>
 
       <button class="sub-tab" data-mode="cxExpand" aria-label="Custom Line Expand" title="Custom Line Expand">
-        <img src="assets/line/Custom_Line_Logo.webp" alt="Custom Line">
+<img src="assets/line/Custom_Line_Logo.webp" alt="Custom Line">
         <img src="assets/line/Expand_Blade_Logo.webp" alt="Expand Blade">
       </button>
     </div>
@@ -152,14 +166,10 @@
     <!-- ================= STANDARD ================= -->
     <form id="form-standard" class="calc-form hidden">
       <fieldset>
-        <legend>Top</legend>
         <label>Blade
           <select name="blade" required></select>
         </label>
-      </fieldset>
-
-      <fieldset>
-        <legend>Bottom</legend>
+      
         <label>Ratchet
           <select name="ratchet"></select>
         </label>
@@ -171,12 +181,15 @@
       <div class="btn-row">
         <button type="submit" class="btn calc-btn" data-mode="standard" aria-label="Calculate" title="Calculate">
           <img src="assets/icons/calculator.png" alt="Calculate">
+          <span class="btn-label">Calculate</span>
         </button>
         <button type="button" class="btn btn-reset" aria-label="Reset" title="Reset">
           <img src="assets/icons/undo.png" alt="Reset">
+          <span class="btn-label">Reset</span>
         </button>
         <button type="button" class="btn btn-lucky" aria-label="I'm Feeling Lucky">
           <img src="assets/icons/dice.png" alt="Random">
+          <span class="btn-label">Random</span>
         </button>
       </div>
     </form>
@@ -184,7 +197,6 @@
     <!-- ================= CX ================= -->
     <form id="form-cx" class="calc-form hidden">
       <fieldset>
-        <legend>Top</legend>
 
         <div class="inline-group">
           <label>Lock Chip
@@ -199,10 +211,7 @@
             <select name="assistBlade" required></select>
           </label>
         </div>
-      </fieldset>
-
-      <fieldset>
-        <legend>Bottom</legend>
+      
         <label>Ratchet
           <select name="ratchet"></select>
         </label>
@@ -214,12 +223,15 @@
       <div class="btn-row">
         <button type="submit" class="btn calc-btn" data-mode="cx" aria-label="Calculate" title="Calculate">
           <img src="assets/icons/calculator.png" alt="Calculate">
+          <span class="btn-label">Calculate</span>
         </button>
         <button type="button" class="btn btn-reset" aria-label="Reset" title="Reset">
           <img src="assets/icons/undo.png" alt="Reset">
+          <span class="btn-label">Reset</span>
         </button>
         <button type="button" class="btn btn-lucky" aria-label="I'm Feeling Lucky">
           <img src="assets/icons/dice.png" alt="Random">
+          <span class="btn-label">Random</span>
         </button>
       </div>
     </form>
@@ -227,7 +239,6 @@
     <!-- ================= CX EXPAND ================= -->
     <form id="form-cxExpand" class="calc-form hidden">
       <fieldset>
-        <legend>Top</legend>
 
         <div class="inline-group">
           <label>Lock Chip
@@ -246,10 +257,7 @@
             <select name="assistBlade" required></select>
           </label>
         </div>
-      </fieldset>
-
-      <fieldset>
-        <legend>Bottom</legend>
+      
         <label>Ratchet
           <select name="ratchet"></select>
         </label>
@@ -261,12 +269,15 @@
       <div class="btn-row">
         <button type="submit" class="btn calc-btn" data-mode="cxExpand" aria-label="Calculate" title="Calculate">
           <img src="assets/icons/calculator.png" alt="Calculate">
+          <span class="btn-label">Calculate</span>
         </button>
         <button type="button" class="btn btn-reset" aria-label="Reset" title="Reset">
           <img src="assets/icons/undo.png" alt="Reset">
+          <span class="btn-label">Reset</span>
         </button>
         <button type="button" class="btn btn-lucky" aria-label="I'm Feeling Lucky">
           <img src="assets/icons/dice.png" alt="Random">
+          <span class="btn-label">Random</span>
         </button>
       </div>
     </form>
@@ -318,8 +329,8 @@
     <!-- ================= HISTORY ================= -->
     <section id="form-history" class="calc-form hidden">
       <div class="history-sub-tabs" id="history-sub-tabs">
-        <button type="button" class="history-sub-tab active" data-history-view="combos">Last 3 Combos</button>
-        <button type="button" class="history-sub-tab" data-history-view="tournaments">Tournaments</button>
+        <button type="button" class="history-sub-tab active" data-history-view="combos"><img src="assets/icons/calculator.png" alt="" onerror="this.style.display='none'"><span>Last 3 Combos</span></button>
+        <button type="button" class="history-sub-tab" data-history-view="tournaments"><img src="assets/icons/tournament.png" alt="" onerror="this.style.display='none'"><span>Tournaments</span></button>
       </div>
       <div id="history-panel-combos" class="history-panel">
         <fieldset>
@@ -338,8 +349,14 @@
     <!-- ================= SWISS ================= -->
     <section id="form-swiss" class="calc-form">
       <div class="tournament-sub-tabs" id="tournament-sub-tabs">
-        <button type="button" class="tournament-sub-tab active" data-tournament-view="hosting">Hosting</button>
-        <button type="button" class="tournament-sub-tab" data-tournament-view="ranking">Ranking</button>
+        <button type="button" class="tournament-sub-tab active" data-tournament-view="hosting">
+          <img src="assets/icons/game.png" alt="" onerror="this.style.display='none'">
+          <span>Hosting</span>
+        </button>
+        <button type="button" class="tournament-sub-tab" data-tournament-view="ranking">
+          <img src="assets/icons/ranking.png" alt="" onerror="this.style.display='none'">
+          <span>Ranking</span>
+        </button>
       </div>
       <div id="tournament-panel-hosting" class="tournament-panel">
         <fieldset>
@@ -347,7 +364,11 @@
           <div id="swiss-setup">
             <p class="swiss-hint">Create a tournament and share the room code — players self-register with their decks from the Open Tournaments list below.</p>
             <div class="swiss-actions">
-              <button type="button" id="swiss-generate" class="btn">Create Tournament</button>
+              <button type="button" id="swiss-generate" class="btn">
+              <img src="assets/icons/tournament.png" alt=""
+                   onerror="this.style.display='none';">
+              <span>Create Tournament</span>
+            </button>
             </div>
             <div class="swiss-rooms-section hidden" id="my-tournaments-section">
               <div class="swiss-rooms-section-header">
@@ -360,8 +381,16 @@
             <div class="swiss-rooms-section">
               <div class="swiss-rooms-section-header">
                 <h3 class="swiss-rooms-heading">Open Tournaments</h3>
-                <button type="button" id="swiss-rooms-qr" class="btn btn-sm" title="Show QR for the tournament page" aria-label="Show tournament QR">QR</button>
-                <button type="button" id="swiss-rooms-refresh" class="btn btn-sm">Refresh</button>
+                <button type="button" id="swiss-rooms-qr" class="btn btn-sm" title="Show QR for the tournament page" aria-label="Show tournament QR">
+                  <img src="assets/icons/qr-code.png" alt=""
+                       onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','QR');">
+                  <span>QR</span>
+                </button>
+                <button type="button" id="swiss-rooms-refresh" class="btn btn-sm">
+                  <img src="assets/icons/refresh-page-option.png" alt=""
+                       onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BB;');">
+                  <span>Refresh</span>
+                </button>
               </div>
               <p class="swiss-rooms-hint">Tap a tournament to join — as co-host (with the host code), participant (register your name + deck), or viewer (watch only).</p>
               <span id="swiss-rooms-status" class="swiss-join-status"></span>
@@ -410,9 +439,10 @@
           <button type="button" id="deck-reset" class="btn btn-reset" aria-label="Reset Deck" title="Reset Deck">
             <img src="assets/icons/undo.png" alt="Reset"
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
-          </button>
+          <span class="btn-label">Reset</span>
+        </button>
           <button type="button" id="deck-shuffle" class="btn btn-shuffle" aria-label="Shuffle Deck" title="Shuffle Deck">
-            <img src="assets/icons/dice.png" alt="Shuffle"
+            <img src="assets/icons/shuffle.png" alt="Shuffle"
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x1F3B2;');">
           </button>
           <button type="button" id="deck-download" class="btn btn-download" aria-label="Download Deck as PNG" title="Download Deck as PNG">
@@ -441,9 +471,9 @@
       <fieldset>
         <legend>Buzz Bey</legend>
         <div class="reel-sub-tabs" id="reel-sub-tabs">
-          <button type="button" class="reel-sub-tab active" data-reel-region="local">Local</button>
-          <button type="button" class="reel-sub-tab" data-reel-region="international">International</button>
-          <button type="button" class="reel-sub-tab" data-reel-region="japan">Japan</button>
+          <button type="button" class="reel-sub-tab active" data-reel-region="local"><img src="assets/icons/petronas-twin-tower.png" alt="" onerror="this.style.display='none'"><span>Local</span></button>
+          <button type="button" class="reel-sub-tab" data-reel-region="international"><img src="assets/icons/international.png" alt="" onerror="this.style.display='none'"><span>International</span></button>
+          <button type="button" class="reel-sub-tab" data-reel-region="japan"><img src="assets/icons/fuji.png" alt="" onerror="this.style.display='none'"><span>Japan</span></button>
         </div>
         <div id="reel-list-local" class="reel-embed reel-panel"></div>
         <div id="reel-list-international" class="reel-embed reel-panel hidden"></div>
@@ -458,12 +488,21 @@
         <p class="bp-help">Connect to a <strong>BEYBLADE_TOOL01</strong> launcher over Bluetooth to read your launch data. Requires Chrome or Edge on desktop / Android, or the <a href="https://apps.apple.com/app/bluefy-web-ble-browser/id1492822055" target="_blank" rel="noopener">Bluefy</a> browser on iOS (Safari and Chrome iOS don't support Web Bluetooth).</p>
 
         <div class="bp-actions">
-          <button type="button" id="bp-connect" class="btn">Connect</button>
-          <button type="button" id="bp-disconnect" class="btn btn-reset" disabled>Disconnect</button>
+          <button type="button" id="bp-connect" class="btn">
+            <img src="assets/icons/link.png" alt="" onerror="this.style.display='none'">
+            <span class="btn-label">Connect</span>
+          </button>
+          <button type="button" id="bp-disconnect" class="btn btn-reset" disabled>
+            <img src="assets/icons/unlink.png" alt="" onerror="this.style.display='none'">
+            <span class="btn-label">Disconnect</span>
+          </button>
         </div>
         <div id="bp-status" class="bp-status">Not connected.</div>
         <div class="bp-actions">
-          <button type="button" id="bp-clear" class="btn btn-reset" disabled>Clear Data</button>
+          <button type="button" id="bp-clear" class="btn btn-reset" disabled>
+            <img src="assets/icons/delete.png" alt="" onerror="this.style.display='none'">
+            <span class="btn-label">Clear Data</span>
+          </button>
         </div>
         <div id="bp-results" class="bp-results"></div>
       </fieldset>
@@ -620,12 +659,12 @@
       <p class="popup-text register-deck-hint">Build the 3-combo deck you'll bring. The judge sees this deck at every match. Tip: copy a deck from the Deck tab, then paste it here.</p>
       <div class="bey-check-slots" id="register-deck-slots"></div>
       <div class="register-deck-actions">
-        <button type="button" id="register-paste" class="btn btn-sm">Paste from Deck tab</button>
+        <button type="button" id="register-paste" class="btn btn-sm"><img src="assets/icons/paste.png" alt="" onerror="this.style.display='none'"><span class="btn-label">Paste from Deck tab</span></button>
       </div>
       <div id="register-status" class="swiss-join-status"></div>
       <div class="popup-actions bey-check-actions">
         <button type="button" id="register-submit" class="btn">Register</button>
-        <button type="button" id="register-cancel" class="btn popup-cancel">Cancel</button>
+        <button type="button" id="register-cancel" class="btn popup-cancel"><img src="assets/icons/exit-button.png" alt="" onerror="this.style.display='none'"><span class="btn-label">Cancel</span></button>
       </div>
     </div>
   </div>
@@ -705,13 +744,10 @@
 
       <form id="bey-check-form-standard" class="bey-check-mode-form" data-mode="standard" onsubmit="return false;">
         <fieldset>
-          <legend>Top</legend>
           <label>Blade
             <select name="blade"></select>
           </label>
-        </fieldset>
-        <fieldset>
-          <legend>Bottom</legend>
+        
           <label>Ratchet
             <select name="ratchet"></select>
           </label>
@@ -723,7 +759,6 @@
 
       <form id="bey-check-form-cx" class="bey-check-mode-form hidden" data-mode="cx" onsubmit="return false;">
         <fieldset>
-          <legend>Top</legend>
           <div class="inline-group">
             <label>Lock Chip
               <select name="lockChip"></select>
@@ -735,9 +770,7 @@
               <select name="assistBlade"></select>
             </label>
           </div>
-        </fieldset>
-        <fieldset>
-          <legend>Bottom</legend>
+        
           <label>Ratchet
             <select name="ratchet"></select>
           </label>
@@ -749,7 +782,6 @@
 
       <form id="bey-check-form-cxExpand" class="bey-check-mode-form hidden" data-mode="cxExpand" onsubmit="return false;">
         <fieldset>
-          <legend>Top</legend>
           <div class="inline-group">
             <label>Lock Chip
               <select name="lockChip"></select>
@@ -764,9 +796,7 @@
               <select name="assistBlade"></select>
             </label>
           </div>
-        </fieldset>
-        <fieldset>
-          <legend>Bottom</legend>
+        
           <label>Ratchet
             <select name="ratchet"></select>
           </label>
@@ -779,16 +809,19 @@
       <div id="bey-check-slot-status" class="bey-check-slot-status"></div>
       <div class="popup-actions bey-check-slot-actions">
         <button type="button" id="bey-check-slot-save" class="btn bey-check-slot-action-btn" aria-label="Save" title="Save">
-          <img src="assets/icons/thumbs-up.png" alt="Save"
+          <img src="assets/icons/diskette.png" alt="Save"
                onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x2713;');">
+          <span class="btn-label">Save</span>
         </button>
         <button type="button" id="bey-check-slot-clear" class="btn btn-reset bey-check-slot-action-btn" aria-label="Clear" title="Clear">
           <img src="assets/icons/delete.png" alt="Clear"
                onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x232B;');">
+          <span class="btn-label">Reset</span>
         </button>
         <button type="button" id="bey-check-slot-cancel" class="btn popup-cancel bey-check-slot-action-btn" aria-label="Cancel" title="Cancel">
           <img src="assets/icons/exit-button.png" alt="Cancel"
                onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x2715;');">
+          <span class="btn-label">Cancel</span>
         </button>
       </div>
     </div>
@@ -876,6 +909,7 @@
 
       <label class="tournament-name-label" for="share-remark-input">Remark</label>
       <textarea id="share-remark-input" class="tournament-name-input tournament-share-remark" rows="3" placeholder="Anything else to mention..."></textarea>
+
 
       <div class="popup-actions">
         <button type="button" id="tournament-share-submit" class="btn">Share</button>

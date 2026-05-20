@@ -1615,11 +1615,11 @@ const getRandomMode = initSettingDropdown("setting-random-mode", "randomMode", "
 function updateLuckyButtons() {
   document.querySelectorAll(".btn-lucky").forEach(btn => {
     if (randomModeValue === "meta") {
-      btn.innerHTML = '<img src="assets/icons/confrontation.png" alt="Meta" class="icon-meta">';
+      btn.innerHTML = '<img src="assets/icons/confrontation.png" alt="Meta" class="icon-meta"><span class="btn-label">Meta</span>';
       btn.setAttribute("aria-label", "Meta Combo");
       btn.title = "Meta Combo";
     } else {
-      btn.innerHTML = '<img src="assets/icons/dice.png" alt="Random">';
+      btn.innerHTML = '<img src="assets/icons/dice.png" alt="Random"><span class="btn-label">Random</span>';
       btn.setAttribute("aria-label", "Random Combo");
       btn.title = "Random Combo";
     }

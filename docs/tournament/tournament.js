@@ -2063,13 +2063,30 @@ function showShareDetailsPopup(triggerBtn) {
   if (timeInput) timeInput.value = details.time || "";
   if (remarkInput) remarkInput.value = details.remark || "";
 
-  const stadiumCtrl = wireShareDropdown(stadiumDd, STADIUM_OPTIONS, details.stadium);
-  const ruleCtrl = wireShareDropdown(ruleDd, RULE_OPTIONS, details.rule);
+  // Auto-advance the focus through Date -> Time -> Stadium -> Rule -> Remark
+  // so the host fills the popup without tapping each field.
+  const openDropdownMenu = (root) => {
+    const ddBtn = root?.querySelector(".setting-dropdown-btn");
+    const ddMenu = root?.querySelector(".setting-dropdown-menu");
+    if (!ddBtn || !ddMenu) return;
+    ddMenu.classList.remove("hidden");
+    ddBtn.focus();
+  };
+  const stadiumCtrl = wireShareDropdown(stadiumDd, STADIUM_OPTIONS, details.stadium, () => {
+    openDropdownMenu(ruleDd);
+  });
+  const ruleCtrl = wireShareDropdown(ruleDd, RULE_OPTIONS, details.rule, () => {
+    setTimeout(() => remarkInput?.focus(), 0);
+  });
+  if (dateInput) dateInput.onchange = () => { if (timeInput) timeInput.focus(); };
+  if (timeInput) timeInput.onchange = () => openDropdownMenu(stadiumDd);
 
   const close = () => {
     popup.classList.add("hidden");
     if (submitBtn) submitBtn.onclick = null;
     if (cancelBtn) cancelBtn.onclick = null;
+    if (dateInput) dateInput.onchange = null;
+    if (timeInput) timeInput.onchange = null;
   };
 
   if (submitBtn) {
@@ -2095,7 +2112,7 @@ function showShareDetailsPopup(triggerBtn) {
 // behaviour of initSettingDropdown from calculator.js but doesn't
 // persist to localStorage (we save the picked value onto state.eventDetails
 // after the user hits Share). Returns { getValue, setValue }.
-function wireShareDropdown(root, options, initial) {
+function wireShareDropdown(root, options, initial, onPick) {
   if (!root) return null;
   const btn = root.querySelector(".setting-dropdown-btn");
   const text = root.querySelector(".setting-dropdown-text");
@@ -2119,6 +2136,7 @@ function wireShareDropdown(root, options, initial) {
     opt.onclick = () => {
       apply(opt.dataset.value);
       menu.classList.add("hidden");
+      if (typeof onPick === "function") onPick(opt.dataset.value);
     };
   });
   // Close when clicking outside (one-shot per popup-open is fine — the
@@ -2150,6 +2168,8 @@ function revoxTagBadges(profile) {
       if (lower === "revox admin") cls += " account-tag-revox-admin";
     } else if (lower === "developer") {
       cls += " account-tag-developer";
+    } else if (lower === "tester") {
+      cls += " account-tag-tester";
     }
     return `<span class="${cls}">${escapeHtml(t)}</span>`;
   }).join("");
@@ -2590,9 +2610,15 @@ function renderSwissRegisteringMarkup(state) {
     : `<li class="swiss-reg-empty">No one has registered yet. Players can find this tournament under Open Tournaments and sign up there.</li>`;
 
   const selfRegBtnHtml = canRegisterSelf
-    ? `<button type="button" id="swiss-reg-self" class="swiss-reg-self">+ Register myself</button>`
+    ? `<button type="button" id="swiss-reg-self" class="swiss-reg-self">+ Register Myself</button>`
     : "";
-  const testRegBtnHtml = canEdit
+  const othersRegBtnHtml = canEdit
+    ? `<button type="button" id="swiss-reg-others" class="swiss-reg-self">+ Register Others</button>`
+    : "";
+  // The Test button bulk-adds synthetic participants — gate it on the
+  // "Tester" tag so regular hosts don't see (or accidentally use) it.
+  const isTesterAcct = typeof window.isTester === "function" && window.isTester();
+  const testRegBtnHtml = (canEdit && isTesterAcct)
     ? `<button type="button" id="swiss-reg-test" class="swiss-reg-self swiss-reg-test">Test</button>`
     : "";
   const startBtnHtml = canEdit
@@ -2618,8 +2644,8 @@ function renderSwissRegisteringMarkup(state) {
       </div>
       <div class="swiss-toolbar-row swiss-toolbar-info-row">
         <div class="swiss-toolbar-idgroup">
-          ${renderSwissRoomBadge()}
           <span class="swiss-reg-pill">Registration open</span>
+          ${renderSwissRoomBadge()}
         </div>
       </div>
     </div>
@@ -2628,8 +2654,8 @@ function renderSwissRegisteringMarkup(state) {
       <div class="swiss-reg-heading-row">
         <h3 class="swiss-reg-heading">Registrants <span class="swiss-reg-count">(${registrants.length}${minTotal ? ` / ${minTotal} min` : ""})</span></h3>
       </div>
-      ${(selfRegBtnHtml || testRegBtnHtml)
-        ? `<div class="swiss-reg-host-actions">${selfRegBtnHtml}${testRegBtnHtml}</div>`
+      ${(selfRegBtnHtml || othersRegBtnHtml || testRegBtnHtml)
+        ? `<div class="swiss-reg-host-actions">${selfRegBtnHtml}${othersRegBtnHtml}${testRegBtnHtml}</div>`
         : ""}
       <ul class="swiss-reg-list">${registrantRows}</ul>
       <div class="swiss-reg-actions">${startBtnHtml}</div>
@@ -2667,6 +2693,7 @@ function bindSwissRegisteringHandlers(view, state) {
   });
   view.querySelector("#swiss-reg-start")?.addEventListener("click", startRegisteringTournament);
   view.querySelector("#swiss-reg-self")?.addEventListener("click", showSelfRegisterPopup);
+  view.querySelector("#swiss-reg-others")?.addEventListener("click", showOthersRegisterPopup);
   view.querySelector("#swiss-reg-test")?.addEventListener("click", () => {
     const raw = prompt("How many test registrants?", "10");
     if (raw == null) return;
@@ -2733,7 +2760,28 @@ function showSelfRegisterPopup() {
     roundCount: state.roundCount || null,
     groupCount: state.groupCount || null
   };
-  showRegistrationPopup(room, { selfRegister: true });
+  // Pre-fill the name with the signed-in user's username and lock the field —
+  // the host can't impersonate another player from their own device.
+  const myUname = (window.getCurrentUsername && window.getCurrentUsername()) || "";
+  showRegistrationPopup(room, { selfRegister: true, lockName: true, initialName: myUname });
+}
+
+// Host / co-host registers someone else manually (name + deck). Same write
+// path as selfRegister (no disconnect/reconnect, host stays host), but with
+// the name field editable for any free-form participant name.
+function showOthersRegisterPopup() {
+  if (!swissCanEdit || !swissEditCode) return;
+  const state = loadSwiss();
+  if (!isRegisteringPhase(state)) return;
+  const room = {
+    editCode: swissEditCode,
+    viewCode: swissViewCode,
+    name: state.tournamentName || "",
+    mode: state.mode || "swiss",
+    roundCount: state.roundCount || null,
+    groupCount: state.groupCount || null
+  };
+  showRegistrationPopup(room, { selfRegister: true, lockName: false });
 }
 
 // Minimum registrants needed before Start can fire. Mirrors the same checks
@@ -3438,8 +3486,27 @@ function beyCheckPartImg(field, name) {
 function renderBeyCheckSlotParts(slot) {
   const mode = (slot && BEY_CHECK_MODES.includes(slot.mode)) ? slot.mode : "standard";
   const parts = (slot && slot.parts) || {};
-  return BEY_CHECK_FIELDS[mode]
-    .filter(f => parts[f] && parts[f] !== NO_RATCHET)
+
+  // CX / CX Expand: render the lock chip + blade(s) + assist blade as one
+  // combined thumbnail (matches the calculator / deck / history view).
+  let combinedHtml = "";
+  let usedKeys = new Set();
+  if (typeof combinedBladeTileHTML === "function") {
+    const resolvePart = (key, name) => ({
+      src: beyCheckPartImg(key, name),
+      codename: typeof partRecordCodename === "function"
+        ? partRecordCodename(BEY_CHECK_FIELD_FOLDER[key], name, null)
+        : (name || "")
+    });
+    const combined = combinedBladeTileHTML(parts, resolvePart);
+    if (combined) {
+      combinedHtml = combined.html;
+      usedKeys = combined.usedKeys;
+    }
+  }
+
+  const tilesHtml = BEY_CHECK_FIELDS[mode]
+    .filter(f => parts[f] && parts[f] !== NO_RATCHET && !usedKeys.has(f))
     .map(f => {
       const name = parts[f];
       const src = beyCheckPartImg(f, name);
@@ -3453,6 +3520,8 @@ function renderBeyCheckSlotParts(slot) {
         </div>`;
     })
     .join("");
+
+  return combinedHtml + tilesHtml;
 }
 
 function renderBeyCheckSlot(slotIdx, slot) {
@@ -3705,12 +3774,10 @@ function showBeyCheckSlotPopup(slotIdx, slot, deck, onSave) {
 
   tabs.forEach(t => {
     t.onclick = () => {
-      // Switching modes wipes the working draft for the new mode — the user
-      // is picking a different combo line, not editing the same parts.
-      const next = t.dataset.mode;
-      const nextForm = popup.querySelector(`.bey-check-mode-form[data-mode="${next}"]`);
-      clearBeyCheckForm(nextForm);
-      showMode(next);
+      // Switching modes shows the other form but keeps whatever's been
+      // filled in — flipping back to the original mode keeps that slot's
+      // original parts intact.
+      showMode(t.dataset.mode);
     };
   });
 
@@ -4964,21 +5031,25 @@ function renderLobbyRooms(list, rooms) {
       ? `<span class="swiss-room-hosting-badge">Hosting</span>`
       : "";
     // You were added to this room's sub-host list — you'll join as co-host.
+    // Show a "!" alert badge so the user spots the invitation at a glance.
     const cohostBadge = (myKey && r.subHosts && r.subHosts[myKey])
-      ? `<span class="swiss-room-cohost-badge">Co-host</span>`
+      ? `<span class="swiss-room-cohost-badge swiss-room-cohost-alert" title="You're invited as co-host" aria-label="You're invited as co-host">!</span>`
       : "";
     const runningBadge = isRunning
       ? `<span class="swiss-room-running-badge">In progress</span>`
       : "";
-    const badges = hostingBadge + cohostBadge + runningBadge;
     return `
       <button type="button" class="swiss-room-card" data-edit-code="${escapeHtml(r.editCode)}">
         <div class="swiss-room-card-name">
           <span class="swiss-room-card-title">${escapeHtml(name)}</span>
-          ${badges ? `<span class="swiss-room-card-badges">${badges}</span>` : ""}
         </div>
         <div class="swiss-room-card-mode">${modeLabel}</div>
-        <div class="swiss-room-card-meta">${meta.map(escapeHtml).join(" · ")}</div>
+        <div class="swiss-room-card-meta">
+          ${hostingBadge}
+          <span class="swiss-room-card-meta-text">${meta.map(escapeHtml).join(" · ")}</span>
+          ${runningBadge}
+          ${cohostBadge}
+        </div>
       </button>
     `;
   }).join("");
@@ -5192,8 +5263,21 @@ function showRegistrationPopup(room, options = {}) {
     const modeLabel = tournamentFormatLabel(room.mode, room.pairing, true);
     subtitle.textContent = `${name} · ${modeLabel}`;
   }
-  if (nameInput) nameInput.value = options.initialName || "";
-  if (submitBtn) submitBtn.textContent = isEdit ? "Save" : "Register";
+  // `lockName` makes the name field read-only (used by the "Register myself"
+  // flow so the host can't impersonate someone else from their own device).
+  const lockName = !!options.lockName;
+  if (nameInput) {
+    nameInput.value = options.initialName || "";
+    nameInput.readOnly = lockName;
+    nameInput.classList.toggle("is-readonly", lockName);
+  }
+  if (submitBtn) {
+    // Submit button shows an icon next to its label; the label flips between
+    // Save (when editing a registrant) and Register (for new registrations).
+    const submitIcon = isEdit ? "assets/icons/diskette.png" : "assets/icons/verify.png";
+    const submitLabel = isEdit ? "Save" : "Register";
+    submitBtn.innerHTML = `<img src="${submitIcon}" alt="" onerror="this.style.display='none'"><span class="btn-label">${submitLabel}</span>`;
+  }
   setStatus("");
   let deck = options.initialDeck && Array.isArray(options.initialDeck)
     ? normalizeBeyCheckDeck(options.initialDeck)
@@ -5215,7 +5299,8 @@ function showRegistrationPopup(room, options = {}) {
   renderSlots();
 
   popup.classList.remove("hidden");
-  setTimeout(() => nameInput?.focus(), 0);
+  // No auto-focus when the name field is locked — nothing to type there.
+  if (!lockName) setTimeout(() => nameInput?.focus(), 0);
 
   const close = () => {
     popup.classList.add("hidden");
@@ -6219,6 +6304,32 @@ function showRevoxHistory(key, name) {
   };
   // Exposed so a ranking row's Add button can open this pre-filled.
   revoxAddPopupOpener = openPopup;
+
+  // Auto-advance the focus through Tournament -> Date -> Name -> Placing so
+  // the admin doesn't have to tap each field as they go.
+  const openPlacingDropdown = () => {
+    const ddBtn = placingDropdown?.querySelector(".setting-dropdown-btn");
+    const ddMenu = placingDropdown?.querySelector(".setting-dropdown-menu");
+    if (!ddBtn || !ddMenu) return;
+    ddMenu.classList.remove("hidden");
+    ddBtn.focus();
+  };
+  if (tournamentEl) {
+    tournamentEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); dateEl?.focus(); }
+    });
+  }
+  if (dateEl) {
+    dateEl.addEventListener("change", () => {
+      if (nameEl && !nameEl.readOnly) nameEl.focus();
+      else openPlacingDropdown();
+    });
+  }
+  if (nameEl) {
+    nameEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); openPlacingDropdown(); }
+    });
+  }
 
   document.getElementById("revox-add-btn")?.addEventListener("click", () => openPopup());
   document.getElementById("revox-add-cancel")?.addEventListener("click", closePopup);

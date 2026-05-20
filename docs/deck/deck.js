@@ -727,8 +727,16 @@ function buildDeckEditPopup() {
       </div>
       <div id="deck-edit-fields" class="deck-edit-fields"></div>
       <div class="popup-actions">
-        <button type="button" class="btn popup-ok" id="deck-edit-save" aria-label="Save" title="Save">&#x2713;</button>
-        <button type="button" class="btn popup-cancel" id="deck-edit-cancel" aria-label="Cancel" title="Cancel">&#x2715;</button>
+        <button type="button" class="btn popup-ok" id="deck-edit-save" aria-label="Save" title="Save">
+          <img src="assets/icons/diskette.png" alt="Save"
+               onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x2713;');">
+          <span class="btn-label">Save</span>
+        </button>
+        <button type="button" class="btn popup-cancel" id="deck-edit-cancel" aria-label="Cancel" title="Cancel">
+          <img src="assets/icons/exit-button.png" alt="Cancel"
+               onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x2715;');">
+          <span class="btn-label">Cancel</span>
+        </button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
@@ -801,9 +809,18 @@ function openDeckEdit(slotIdx) {
   buildDeckEditPopup();
   deckEditSlotIdx = slotIdx;
   deckEditMode = DECK_EDIT_FIELDS[slot.mode] ? slot.mode : "BX";
+  const parts = (slot.data && slot.data.parts) || {};
 
-  // Start with every dropdown empty — the combo is rebuilt from scratch.
+  // Pre-fill every dropdown from the slot's current combo (name -> index).
   deckEditValues = {};
+  Object.keys(DECK_EDIT_FIELD_ARR).forEach(key => {
+    const name = parts[key];
+    if (!name) return;
+    const list = DATA[DECK_EDIT_FIELD_ARR[key]] || [];
+    const i = list.findIndex(p => p.name === name);
+    if (i >= 0) deckEditValues[key] = String(i);
+  });
+  if (!parts.ratchet) deckEditValues.ratchet = NO_RATCHET;
 
   document.getElementById("deck-edit-subtitle").textContent = `Slot ${slotIdx + 1}`;
   setDeckEditModeTab();

@@ -442,6 +442,10 @@
   // "Revox Admin" tag instead of a separate password login.
   window.isRevoxAdmin = function isRevoxAdmin() { return hasTag("Revox Admin"); };
 
+  // Exposed so the Tournament tab can hide the "Test" button (which bulk-adds
+  // synthetic participants) from accounts that aren't on the QA team.
+  window.isTester = function isTester() { return hasTag("Tester"); };
+
   // The signed-in account's username ("" when signed out / no profile yet).
   // Used by the tournament sub-host list to match designated co-hosts.
   window.getCurrentUsername = function getCurrentUsername() {

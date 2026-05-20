@@ -971,6 +971,11 @@ body.light-mode .result-part-name {
     background: linear-gradient(135deg, #2f81f7, #0d1117);
     border-color: #58a6ff;
 }
+/* Tester tag — teal, distinct from the Developer / Revox families. */
+.account-tag-tester {
+    background: linear-gradient(135deg, #0e7490, #155e75);
+    border-color: #22d3ee;
+}
 .account-bio-field {
     display: flex;
     flex-direction: column;
@@ -1161,6 +1166,87 @@ body.light-mode .result-part-name {
     font-family: inherit;
     resize: vertical;
     min-height: 60px;
+}
+
+/* Image upload row: a styled "Choose image…" button (the native file input
+   is hidden), plus an X clear button when an image has been picked. */
+.tournament-share-image-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.tournament-share-image-row.hidden {
+    display: none;
+}
+
+.tournament-share-image-file {
+    display: none;
+}
+
+.tournament-share-image-pick {
+    display: inline-block;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #30363d;
+    background: #0d1117;
+    color: #e6edf3;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.tournament-share-image-pick:hover {
+    background: #161b22;
+    border-color: #58a6ff;
+}
+
+.tournament-share-image-preview-wrap {
+    position: relative;
+    margin-top: 8px;
+    display: inline-block;
+    max-width: 100%;
+}
+
+.tournament-share-image-preview-wrap.hidden {
+    display: none;
+}
+
+.tournament-share-image-preview {
+    display: block;
+    max-width: 100%;
+    max-height: 180px;
+    border-radius: 8px;
+    object-fit: contain;
+    background: #0d1117;
+    border: 1px solid #30363d;
+}
+
+/* Remove (X) overlays the top-right corner of the picked preview image. */
+.tournament-share-image-clear {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid rgba(0, 0, 0, 0.4);
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 0.95rem;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+}
+
+.tournament-share-image-clear:hover {
+    background: #e74c3c;
+    border-color: #e74c3c;
 }
 /* Hint browsers about the form-control colour scheme so the native
    date/time picker icons render light on dark themes (otherwise mono
@@ -1589,6 +1675,12 @@ body.forest-mode .features-list {
    just compact the padding and force the icon to a fixed size. */
 .bey-check-slot-action-btn {
     padding: 10px 12px;
+    gap: 6px;
+}
+
+.bey-check-slot-action-btn .btn-label {
+    font-size: 0.9rem;
+    font-weight: 600;
 }
 .bey-check-slot-action-btn img {
     width: 18px;
@@ -2208,6 +2300,32 @@ body.forest-mode .bey-check-mode-tab.active {
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 6px;
+}
+
+.reel-sub-tab img {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+    flex: 0 0 auto;
+    filter: brightness(0) invert(1);
+}
+
+/* On light-family themes, inactive tabs sit on a light background — a white
+   icon would disappear. Use the original artwork (dark) there instead. */
+body.light-mode .reel-sub-tab:not(.active) img,
+body.tropical-mode .reel-sub-tab:not(.active) img,
+body.love-mode .reel-sub-tab:not(.active) img,
+body.forest-mode .reel-sub-tab:not(.active) img {
+    filter: brightness(0);
+}
+
+/* Mono mode: black-and-white only — match the tab text colour exactly. */
+body.mono-mode .reel-sub-tab:not(.active) img {
+    filter: brightness(0) invert(1);
+}
+body.mono-mode .reel-sub-tab.active img {
+    filter: brightness(0);
 }
 
 .reel-sub-tab:hover:not(.active),
@@ -3312,11 +3430,26 @@ body.forest-mode .image-popup-dot.active {
     margin: 10px 0 2px;
 }
 
-/* Save / Cancel show a check / cross glyph instead of a text label. */
+/* Save / Cancel show an icon next to their text label. */
 #deck-edit-save,
 #deck-edit-cancel {
-    font-size: 1.3rem;
+    gap: 8px;
     line-height: 1;
+}
+
+#deck-edit-save img,
+#deck-edit-cancel img {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+    flex: 0 0 auto;
+    filter: brightness(0) invert(1);
+}
+
+#deck-edit-save .btn-label,
+#deck-edit-cancel .btn-label {
+    font-size: 0.95rem;
+    font-weight: 600;
 }
 
 .deck-edit-field {
@@ -3471,20 +3604,44 @@ body.mono-mode .btn-paste:hover {
     padding: 10px 0;
 }
 
-.btn-row .btn {
-    flex: 1;
-    height: 48px;
-    padding: 0;
-    display: flex;
-    align-items: center;
+.btn-row .btn,
+.btn-row .btn-reset,
+.btn-row .btn-lucky,
+.btn-row .calc-btn {
+    flex: 1 1 0 !important;
+    height: 44px;
+    padding: 0 4px;
+    gap: 4px;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
     justify-content: center;
     box-sizing: border-box;
+    min-width: 0;
+    font-size: 0.72rem;
+    line-height: 1;
 }
 
 .btn-row .btn img {
-    width: 22px;
-    height: 22px;
+    width: 14px;
+    height: 14px;
     object-fit: contain;
+    flex: 0 0 auto;
+    align-self: center;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.btn-row .btn .btn-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    align-self: center;
 }
 
 .tab-settings {
@@ -6175,6 +6332,12 @@ body.mono-mode .popup-ok:hover {
     margin-right: 0;
 }
 
+/* The pill carries a left margin for inline use elsewhere; inside the
+   toolbar idgroup it aligns with the badges row below, which has no margin. */
+.swiss-toolbar-idgroup .swiss-reg-pill {
+    margin-left: 0;
+}
+
 .swiss-round-indicator {
     margin-right: auto;
     font-size: 0.85rem;
@@ -6197,6 +6360,7 @@ body.mono-mode .popup-ok:hover {
 .swiss-room-badges {
     display: flex;
     flex-wrap: nowrap;
+    align-items: center;
     gap: 6px;
     margin-right: auto;
     min-width: 0;
@@ -6822,10 +6986,15 @@ button.swiss-reg-name-edit:focus-visible {
 }
 .swiss-rooms-section-header {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
     margin-bottom: 4px;
+}
+
+.swiss-rooms-heading {
+    white-space: nowrap;
 }
 
 /* Push QR + Refresh to the right edge together; the heading stays left. */
@@ -6930,6 +7099,17 @@ button.swiss-reg-name-edit:focus-visible {
     grid-area: meta;
     font-size: 0.78rem;
     color: #8b949e;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+/* Badges have a left margin for inline use elsewhere — not needed in the
+   card's meta row, which spaces with `gap`. */
+.swiss-room-card-meta > .swiss-room-hosting-badge,
+.swiss-room-card-meta > .swiss-room-cohost-badge,
+.swiss-room-card-meta > .swiss-room-running-badge {
+    margin-left: 0;
 }
 
 /* Registration popup deck hint */
@@ -7153,6 +7333,16 @@ button.swiss-reg-name-edit:focus-visible {
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 6px;
+}
+
+.tournament-sub-tab img,
+.history-sub-tab img {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+    flex: 0 0 auto;
+    filter: brightness(0) invert(1);
 }
 
 .history-sub-tab:hover:not(.active),
@@ -7774,6 +7964,60 @@ button.swiss-reg-name-edit:focus-visible {
     font-size: 0.85rem;
 }
 
+/* Tournament header + Create Tournament buttons: icon next to text. */
+#swiss-rooms-qr,
+#swiss-rooms-refresh,
+#register-paste,
+#register-submit,
+#register-cancel,
+#account-save-btn,
+#account-signout-btn,
+#bp-connect,
+#bp-disconnect,
+#bp-clear,
+#features-copy,
+#features-close {
+    gap: 6px;
+}
+
+#register-paste img,
+#register-submit img,
+#register-cancel img,
+#account-save-btn img,
+#account-signout-btn img,
+#bp-connect img,
+#bp-disconnect img,
+#bp-clear img,
+#features-copy img,
+#features-close img {
+    width: 14px;
+    height: 14px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+    flex: 0 0 auto;
+}
+
+#swiss-rooms-qr img,
+#swiss-rooms-refresh img {
+    width: 14px;
+    height: 14px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+    flex: 0 0 auto;
+}
+
+#swiss-generate {
+    gap: 8px;
+}
+
+#swiss-generate img {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+    flex: 0 0 auto;
+}
+
 .btn-clear-history {
     display: inline-flex;
     align-items: center;
@@ -7828,6 +8072,19 @@ button.swiss-reg-name-edit:focus-visible {
     outline: none;
     border-color: #58a6ff;
     background: #0d1117;
+}
+
+/* Self-registration locks the name field to the user's username. */
+.tournament-name-input.is-readonly,
+.tournament-name-input[readonly] {
+    opacity: 0.7;
+    cursor: not-allowed;
+    background: #161b22;
+}
+
+.tournament-name-input.is-readonly:focus,
+.tournament-name-input[readonly]:focus {
+    border-color: #30363d;
 }
 
 .tournament-password-status {
@@ -10817,9 +11074,20 @@ body.forest-mode .swiss-rounds-btn.active {
 /* ===== Host actions under the Registrants heading ===== */
 .swiss-reg-host-actions {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 8px;
     margin-top: -4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+
+.swiss-reg-host-actions::-webkit-scrollbar {
+    display: none;
+}
+
+.swiss-reg-host-actions > * {
+    flex: 0 0 auto;
 }
 
 /* ===== Editable format bits in the registering view ===== */
@@ -10872,6 +11140,21 @@ body.mono-mode     .swiss-reg-format-editable { border-color: #4a4a4a; }
     vertical-align: middle;
     background: rgba(88, 166, 255, 0.18);
     color: #58a6ff;
+}
+
+/* Compact "!" co-host invitation alert on lobby cards. */
+.swiss-room-cohost-alert {
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78rem;
+    line-height: 1;
+    background: #1f6feb;
+    color: #fff;
+    border: 1px solid #58a6ff;
 }
 
 .swiss-room-running-badge {
