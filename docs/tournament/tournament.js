@@ -4790,7 +4790,22 @@ document.addEventListener("webkitfullscreenchange", scheduleSwissScrollRestore);
   // Re-list the host's own tournaments whenever auth resolves or changes —
   // this also fires once at boot, populating the list on first load.
   if (typeof onAuthChange === "function") {
-    onAuthChange(() => refreshMyTournaments());
+    onAuthChange(user => {
+      refreshMyTournaments();
+      // Hosting / co-hosting requires a signed-in account. On sign-out, drop
+      // the local room state unconditionally — even when this page's runtime
+      // didn't have an active swissRoomRef (sign-out can come from another
+      // tab, leaving stale localStorage that would auto-reconnect the next
+      // time the user opens the Tournament tab). The Firebase room data
+      // stays intact, so signing back in puts the host straight back in.
+      if (!user) {
+        if (swissRoomRef) disconnectSwissRoom();
+        saveJoinedRoom(null);
+        localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [] }));
+        if (typeof renderSwiss === "function") renderSwiss();
+        if (typeof refreshOpenTournamentRooms === "function") refreshOpenTournamentRooms();
+      }
+    });
   }
 })();
 
@@ -5068,9 +5083,14 @@ function renderLobbyRooms(list, rooms) {
 // viewer connects view-only directly via the lobby's viewCode.
 function showTournamentJoinChoicePopup(room) {
   // This device hosts the room — rejoin straight as host, no role pick.
+  // Skipped when signed out: hosting is account-scoped, so a signed-out
+  // user falls through to the participant / viewer choice instead.
   if (isRoomHosted(room.editCode)) {
-    joinTournamentAsCoHost(room);
-    return;
+    const u = (typeof window.getCurrentUser === "function") ? window.getCurrentUser() : null;
+    if (u && u.uid) {
+      joinTournamentAsCoHost(room);
+      return;
+    }
   }
   // A signed-in user on this room's sub-host list joins straight as co-host —
   // no role pick and no host code. We read just their own subHosts entry.
@@ -5186,15 +5206,32 @@ function showParticipantModeChoice(room) {
   const guestBtn = popup.querySelector("#participant-mode-guest");
   const cancelBtn = popup.querySelector("#participant-mode-cancel");
 
+  // After sign-in, if the signed-in account is THIS room's host, drop them
+  // straight into the host view instead of going through registration; any
+  // other account proceeds to ranked participant registration as normal.
+  const enterAfterSignin = (signedInUser) => {
+    if (signedInUser && room.hostUid && signedInUser.uid === room.hostUid) {
+      // Mark this room as hosted on the local device so joinTournamentAsCoHost
+      // wires it up with full host rights — covers the case where the host
+      // is signing in on a fresh device.
+      if (typeof markRoomHosted === "function") markRoomHosted(room.editCode);
+      joinTournamentAsCoHost(room);
+      return;
+    }
+    showRegistrationPopup(room);
+  };
+
   signinBtn.onclick = () => {
     close();
     const user = (typeof window.getCurrentUser === "function") ? window.getCurrentUser() : null;
     if (user && user.uid) {
-      // Already signed in — proceed to a ranked registration.
-      showRegistrationPopup(room);
+      enterAfterSignin(user);
     } else if (typeof window.showSignInPopup === "function") {
       window.showSignInPopup({})
-        .then(() => showRegistrationPopup(room))
+        .then(() => {
+          const u = (typeof window.getCurrentUser === "function") ? window.getCurrentUser() : null;
+          enterAfterSignin(u);
+        })
         .catch(() => { /* user cancelled the sign-in popup */ });
     } else {
       // Auth isn't wired on this build — fall through to ranked registration.
@@ -5203,7 +5240,28 @@ function showParticipantModeChoice(room) {
   };
   guestBtn.onclick = () => {
     close();
-    showRegistrationPopup(room, { asGuest: true });
+    const user = (typeof window.getCurrentUser === "function") ? window.getCurrentUser() : null;
+    if (user && user.uid) {
+      showRegistrationPopup(room, { asGuest: true });
+      return;
+    }
+    // Sign in anonymously so Firebase rules requiring `auth != null` let
+    // the registrant write succeed. The registrant payload still carries
+    // isGuest: true, so the global ranking skips this entry on award.
+    const auth = (typeof firebase !== "undefined" && firebase.auth) ? firebase.auth() : null;
+    if (!auth || typeof auth.signInAnonymously !== "function") {
+      showRegistrationPopup(room, { asGuest: true });
+      return;
+    }
+    auth.signInAnonymously()
+      .then(() => showRegistrationPopup(room, { asGuest: true }))
+      .catch(err => {
+        // Anonymous sign-in must be enabled in the Firebase console for this
+        // path to succeed. If it isn't, try registering anyway — the rules
+        // may still allow the write — and surface the error in the popup.
+        console.warn("Anonymous sign-in failed:", err);
+        showRegistrationPopup(room, { asGuest: true });
+      });
   };
   cancelBtn.onclick = close;
   popup.classList.remove("hidden");

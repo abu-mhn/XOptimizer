@@ -8147,6 +8147,13 @@ button.swiss-tournament-name-editable:focus-visible {
     margin: 14px 0;
 }
 
+.tournament-mode-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 6px 0 12px;
+}
+
 .tournament-mode-btn {
     display: flex;
     flex-direction: column;

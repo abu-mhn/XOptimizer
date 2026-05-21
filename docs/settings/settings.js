@@ -57,6 +57,9 @@ Tournament
 - Running tournaments stay listed in the Open Tournaments lobby with an "In progress" badge — registration is closed, but co-hosts and viewers can still join
 - My Tournaments: a signed-in host is dropped straight back into the tournament they host on any device — the room index follows your account, not the device (a pick list appears only if you host more than one)
 - Join from the lobby as Participant (register name + deck) or Viewer (watch only)
+- Joining as Participant asks "Sign in" or "Become Guest" — signed-in players earn ranking points on finish; guests play normally but stay off the leaderboard
+- Signing in as the room's host (matched on hostUid) drops you straight into the host view, even on a fresh device
+- Signing out while inside a tournament returns you to the Open Tournaments lobby; the room itself stays alive in Firebase, so signing back in puts you back inside
 - Sub-hosts: the host lists co-host usernames in a "Sub-hosts" popup — anyone signed in with a listed username gets full co-host powers (no host code) and joins straight as co-host from the lobby
 - The room badge shows the host and the room's designated sub-hosts
 - Hosts AND co-hosts can play (+ Register Myself), start the tournament, add participants, and remove registrants
