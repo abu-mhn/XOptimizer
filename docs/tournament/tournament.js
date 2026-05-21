@@ -5208,7 +5208,8 @@ function showParticipantModeChoice(room) {
 
   // After sign-in, if the signed-in account is THIS room's host, drop them
   // straight into the host view instead of going through registration; any
-  // other account proceeds to ranked participant registration as normal.
+  // other account proceeds to ranked participant registration with the name
+  // pre-filled (and locked) to their account's username.
   const enterAfterSignin = (signedInUser) => {
     if (signedInUser && room.hostUid && signedInUser.uid === room.hostUid) {
       // Mark this room as hosted on the local device so joinTournamentAsCoHost
@@ -5218,7 +5219,12 @@ function showParticipantModeChoice(room) {
       joinTournamentAsCoHost(room);
       return;
     }
-    showRegistrationPopup(room);
+    const myUname = (window.getCurrentUsername && window.getCurrentUsername()) || "";
+    if (myUname) {
+      showRegistrationPopup(room, { initialName: myUname, lockName: true });
+    } else {
+      showRegistrationPopup(room);
+    }
   };
 
   signinBtn.onclick = () => {
