@@ -99,7 +99,8 @@ Revox
 - The Revox theme turns on automatically for signed-in Revox Admin and Revox Member accounts
 - Member ranking by points — no password, the account tag is the key
 - Add Result popup: pick the tournament, date and placing — the placing sets the points (Top 8 scoring: 1st = 8 pts down to 8th = 1)
-- Auto-entry: any RvX- / Rvx- prefixed username who finishes in the Top 8 of a ranked tournament is added to the Revox ranking automatically with placing-based points (1st = 8 pts down to 8th = 1) — guests and test registrants are skipped, and each placing is awarded only once per tournament
+- Add Result's Name dropdown lists accounts tagged "Revox Member" or "Revox Admin" (sourced from the public revoxAccounts index — maintained automatically when a Developer adds/removes either tag, and back-filled whenever a Developer opens the Developer tab), merged with anyone who already has a ranking entry
+- Auto-entry: any participant whose account is tagged "Revox Member" or "Revox Admin" (matched via the public revoxAccounts index) and finishes in the Top 8 of a ranked tournament is added to the Revox ranking automatically with placing-based points (1st = 8 pts down to 8th = 1) — guests and test registrants are skipped, and each placing is awarded only once per tournament
 - Add a result onto an existing member straight from their row, or as a brand-new member
 - Hover a member's name for their profile card; tap it for their full tournament history
 - The history popup leads with the member's profile (banner, photo, tags, bio), then every event they joined, newest first

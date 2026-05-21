@@ -300,6 +300,40 @@
   function usernameKey(name) {
     return String(name || "").trim().toLowerCase().replace(/[.#$/\[\]]/g, "_");
   }
+
+  // Map of "user tag" → "public Firebase index node" that other tabs
+  // read without needing access to the whole users tree:
+  //   Judge          → judges/{usernameKey}: username
+  //   Revox Member   → revoxAccounts/{usernameKey}: username
+  //   Revox Admin    → revoxAccounts/{usernameKey}: username
+  //
+  // Two tags can target the same node (Revox Member / Admin both feed
+  // the Revox tab's Add-Result dropdown), so the helpers below collapse
+  // duplicates and only clear an index entry when the user no longer
+  // carries ANY tag pointing at it.
+  const PUBLIC_TAG_INDEXES = {
+    "Judge":        "judges",
+    "Revox Member": "revoxAccounts",
+    "Revox Admin":  "revoxAccounts"
+  };
+  function publicIndexesForTag(tag) {
+    const node = PUBLIC_TAG_INDEXES[tag];
+    return node ? [node] : [];
+  }
+  function publicIndexesForTagList(tagList) {
+    const set = new Set();
+    (tagList || []).forEach(t => {
+      const node = PUBLIC_TAG_INDEXES[t];
+      if (node) set.add(node);
+    });
+    return Array.from(set);
+  }
+  function allPublicIndexNodes() {
+    return Array.from(new Set(Object.values(PUBLIC_TAG_INDEXES)));
+  }
+  // Exposed so other tabs (e.g. the Revox tab's Add-Result dropdown) can
+  // read the public index node names without re-encoding them.
+  window.PUBLIC_TAG_INDEX_NODES = Object.freeze({ ...PUBLIC_TAG_INDEXES });
   function usernamesDbRef() {
     try {
       if (typeof firebase === "undefined" || !firebase.database) return null;
@@ -569,20 +603,27 @@
         const m = (tagMaps && tagMaps[i]) || {};
         u.tags = Object.keys(m).filter(t => m[t]);
       });
-      // Sync the public `judges` index with whatever the users tree says —
-      // every visit by a Developer brings the index back in line (covers
-      // any existing Judges that were tagged before the judges-index code
-      // landed). Firebase only writes the diff.
-      const judgesPatch = {};
+      // Sync every public tag-index node (judges, revoxAccounts, …) with
+      // whatever the users tree says — each visit by a Developer brings
+      // the indexes back in line (covers users whose tags predate any
+      // particular index's introduction). Firebase only writes the diff.
+      const indexPatches = {};
+      allPublicIndexNodes().forEach(node => { indexPatches[node] = {}; });
       (developerUsers || []).forEach(u => {
         if (!u.username) return;
         const key = usernameKey(u.username);
         if (!key) return;
-        judgesPatch[key] = (u.tags.indexOf("Judge") >= 0) ? u.username : null;
+        const coveredIndexes = new Set(publicIndexesForTagList(u.tags));
+        Object.keys(indexPatches).forEach(node => {
+          indexPatches[node][key] = coveredIndexes.has(node) ? u.username : null;
+        });
       });
-      if (Object.keys(judgesPatch).length) {
-        db.ref("judges").update(judgesPatch).catch(() => {});
-      }
+      Object.keys(indexPatches).forEach(node => {
+        const patch = indexPatches[node];
+        if (Object.keys(patch).length) {
+          db.ref(node).update(patch).catch(() => {});
+        }
+      });
       setStatus("");
       const search = document.getElementById("developer-search");
       renderDeveloperList(search ? search.value : "");
@@ -657,10 +698,11 @@
   }
 
   // Add a tag to one user — appends to their users/{uid}/tags map without
-  // disturbing the tags they already have. When the tag is "Judge" we also
-  // write a public `judges/{usernameKey}` entry so the tournament tab's
-  // sub-host typeahead can list Judges without needing read access to the
-  // whole users tree.
+  // disturbing the tags they already have. For tags in PUBLIC_TAG_INDEXES
+  // we also mirror the assignment into the corresponding public index node
+  // (e.g. Judge → `judges/{usernameKey}`, Revox Member / Admin →
+  // `revoxAccounts/{usernameKey}`) so other tabs can list those users
+  // without needing read access to the whole users tree.
   function addDeveloperTag(uid, username) {
     if (!uid) return;
     let db;
@@ -679,9 +721,11 @@
       return userRef.child("tags").child(tag).set(true).then(() => tag);
     }).then(tag => {
       if (!tag) return;
-      if (tag === "Judge") {
-        const jkey = usernameKey(username || "");
-        if (jkey) db.ref("judges/" + jkey).set(username || "").catch(() => {});
+      const ukey = usernameKey(username || "");
+      if (ukey) {
+        publicIndexesForTag(tag).forEach(node => {
+          db.ref(node + "/" + ukey).set(username || "").catch(() => {});
+        });
       }
       alert('Added the "' + tag + '" tag to ' + username + '.');
       loadDeveloperUsers();
@@ -691,8 +735,11 @@
   }
 
   // Remove a tag from one user — clears it from the users/{uid}/tags map and,
-  // if it matches the legacy single `tag` string, clears that too. Mirrors
-  // the Judge tag removal into the public `judges/{usernameKey}` index.
+  // if it matches the legacy single `tag` string, clears that too. For tags
+  // in PUBLIC_TAG_INDEXES, we also clear the corresponding public index
+  // entry — but only when the user no longer carries any OTHER tag that
+  // maps to the same node (so removing "Revox Member" from a user who's
+  // still "Revox Admin" keeps them in the revoxAccounts index).
   function removeDeveloperTag(uid, tag, username) {
     if (!uid || !tag) return;
     if (!confirm('Remove the "' + tag + '" tag from ' + (username || "this user") + '?')) return;
@@ -703,13 +750,26 @@
     const key = String(tag).replace(/[.#$/[\]]/g, "");
     const updates = {};
     if (key) updates["tags/" + key] = null;
+    let remainingTags = [];
     userRef.child("tag").once("value").then(snap => {
       if (snap.val() === tag) updates["tag"] = null;
+      return userRef.child("tags").once("value");
+    }).then(snap => {
+      const m = snap.val() || {};
+      remainingTags = Object.keys(m).filter(t => m[t] && t !== tag);
       return userRef.update(updates);
     }).then(() => {
-      if (tag === "Judge") {
-        const jkey = usernameKey(username || "");
-        if (jkey) db.ref("judges/" + jkey).set(null).catch(() => {});
+      const removedIndexes = publicIndexesForTag(tag);
+      if (removedIndexes.length) {
+        const stillCoveredIndexes = new Set(publicIndexesForTagList(remainingTags));
+        const ukey = usernameKey(username || "");
+        if (ukey) {
+          removedIndexes.forEach(node => {
+            if (!stillCoveredIndexes.has(node)) {
+              db.ref(node + "/" + ukey).set(null).catch(() => {});
+            }
+          });
+        }
       }
       loadDeveloperUsers();
     }).catch(e => {

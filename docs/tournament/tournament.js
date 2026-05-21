@@ -6225,13 +6225,39 @@ function syncTournamentRankingAwards(state) {
   if (!tournamentIsDecided(state)) return; // wait until final + 3rd-place are settled
   const awards = computeTournamentRankingAwards(state);
   Object.entries(awards).forEach(([name, points]) => awardPlayerIfNew(name, points));
-  // Any participant whose username starts with "RvX-" or "Rvx-" and finishes
-  // in the Top 8 also gets a Revox ranking entry, scored Top-8-style.
+  // Any participant whose account is tagged "Revox Member" or "Revox Admin"
+  // (looked up via the public `revoxAccounts` index — see auth.js
+  // PUBLIC_TAG_INDEXES) and finishes in the Top 8 also gets a Revox ranking
+  // entry, scored Top-8-style. Fetch the index once and pass the resolved
+  // name-set down so we don't fan out one read per placing.
   const placings = computeTournamentRevoxPlacings(state);
+  if (!Object.keys(placings).length) return;
   const tName = (state.tournamentName || "").trim();
   const dateStr = todayISO();
-  Object.entries(placings).forEach(([name, placing]) => {
-    awardRevoxIfNew(name, placing, tName, dateStr);
+  fetchRevoxAccountNameSet().then(revoxNameSet => {
+    Object.entries(placings).forEach(([name, placing]) => {
+      awardRevoxIfNew(name, placing, tName, dateStr, revoxNameSet);
+    });
+  }).catch(e => console.warn("Revox auto-award lookup failed:", e));
+}
+
+// Read the public `revoxAccounts` index once and return a Set of
+// case-folded usernames covered by it. Used to gate auto-Revox-ranking
+// entries on the Revox Member / Revox Admin tags. Falls back to an
+// empty set on read failure (rule not published, offline, etc.) so a
+// failed lookup never accidentally awards everyone.
+function fetchRevoxAccountNameSet() {
+  const db = initFirebase();
+  if (!db) return Promise.resolve(new Set());
+  const indexMap = window.PUBLIC_TAG_INDEX_NODES || {};
+  const node = indexMap["Revox Member"] || indexMap["Revox Admin"] || "revoxAccounts";
+  return db.ref(node).once("value").then(snap => {
+    const v = snap.val() || {};
+    const set = new Set();
+    Object.values(v).forEach(u => {
+      if (typeof u === "string" && u) set.add(u.trim().toLowerCase());
+    });
+    return set;
   });
 }
 
@@ -6288,19 +6314,16 @@ function computeTournamentRevoxPlacings(state) {
   return placings;
 }
 
-// True when the username carries a Revox prefix ("RvX-" or "Rvx-").
-function isRevoxUsername(name) {
-  return /^Rv[Xx]-/.test(String(name || "").trim());
-}
-
 // Award Revox ranking once per tournament per player, guarded by an
 // `awarded/revox/{key}` slot inside the room so a re-firing listener
-// can't double-count.
-function awardRevoxIfNew(name, placing, tournamentName, dateStr) {
+// can't double-count. Gated on the `revoxAccounts` index (= accounts
+// tagged "Revox Member" or "Revox Admin") — `revoxNameSet` is the
+// lowercased Set produced by fetchRevoxAccountNameSet.
+function awardRevoxIfNew(name, placing, tournamentName, dateStr, revoxNameSet) {
   if (!swissRoomRef || !placing) return;
   const cleanName = String(name || "").trim();
   if (!cleanName) return;
-  if (!isRevoxUsername(cleanName)) return;
+  if (!revoxNameSet || !revoxNameSet.has(cleanName.toLowerCase())) return;
   if (isTestRegistrant(cleanName)) return;
   const key = rankingKey(cleanName);
   if (!key) return;
@@ -6451,10 +6474,13 @@ const REVOX_ICON_EDIT = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidde
 // Set by initRevoxAdminControls so a ranking row can open the Add popup.
 let revoxAddPopupOpener = null;
 
-// Fill the Add-result name dropdown with registered usernames that start
-// with the "RvX-" club prefix, merged with any existing ranking members.
-// Reading the usernames index needs the Developer/Revox-Admin read rule; if
-// that's not granted the dropdown quietly falls back to ranking members only.
+// Fill the Add-result name dropdown with accounts tagged "Revox Member"
+// or "Revox Admin", merged with any existing ranking members. The list is
+// sourced from the public `revoxAccounts` index node (maintained by the
+// Developer page's tag controls — see auth.js PUBLIC_TAG_INDEXES) so this
+// works without read access to the whole users tree. If the read fails
+// (rule not yet published, offline, etc.) the dropdown quietly falls
+// back to existing ranking members only.
 function populateRevoxNameOptions(memberNames) {
   const datalist = document.getElementById("revox-name-options");
   if (!datalist) return;
@@ -6465,17 +6491,20 @@ function populateRevoxNameOptions(memberNames) {
       .map(n => `<option value="${escapeHtml(n)}"></option>`)
       .join("");
   };
-  paint(); // existing members show immediately
+  paint(); // existing ranking members show immediately
   const db = initFirebase();
   if (!db) return;
-  db.ref("usernames").once("value").then(snap => {
+  // Resolve the index node from the shared tag→index map so the key never
+  // drifts between auth.js and this read site.
+  const indexMap = window.PUBLIC_TAG_INDEX_NODES || {};
+  const node = indexMap["Revox Member"] || indexMap["Revox Admin"] || "revoxAccounts";
+  db.ref(node).once("value").then(snap => {
     const val = snap.val() || {};
-    Object.keys(val).forEach(k => {
-      const u = (val[k] && val[k].username) || "";
-      if (u && u.toLowerCase().startsWith("rvx-")) names.add(u);
+    Object.values(val).forEach(u => {
+      if (typeof u === "string" && u) names.add(u);
     });
     paint();
-  }).catch(() => { /* enumeration not permitted — ranking members only */ });
+  }).catch(() => { /* index not readable yet — ranking members only */ });
 }
 
 function renderRevoxRanking() {
