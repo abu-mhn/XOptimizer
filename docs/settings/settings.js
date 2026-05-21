@@ -10,8 +10,8 @@ Dashboard
 - Auto-sliding carousel: Combo of the Day, Heaviest Bey, Max ATK / DEF / STA
 - Combo names computed exactly like the calculator (e.g. BULLETGRIFFONY) — codename + ratchet name + bit codename
 - Tap any part image for a larger preview
-- Best Parts carousel: top 3 most-used parts per type (Blade, Lock Chip, Ratchet, Bit, etc.) in the current tournament, ranked 1st (gold) / 2nd (silver) / 3rd (bronze)
-- Best Parts persist across tournament resets via a saved snapshot
+- Best Parts carousel: top 3 most-used parts per type (Blade, Lock Chip, Ratchet, Bit, etc.) from the most recently FINISHED tournament, ranked 1st (gold) / 2nd (silver) / 3rd (bronze) — sourced from the top entry in Tournament History (any format: Swiss, Round Robin, or Single Elimination)
+- Best Parts survive a tournament reset — once a tournament finishes, its cached entry in Tournament History keeps feeding the panel until a newer tournament finishes on top of it
 - Respects calculator constraints: Bullet Griffon's built-in ratchet (no ratchet slot), Clock Mirage's -5 ratchet requirement
 - Combo of the Day is seeded by today's date — every visitor sees the same combo until local midnight
 
@@ -21,6 +21,7 @@ Calculator
 - Searchable part dropdowns
 - Action buttons (Calculate / Reset / Random) show icon + label inline
 - Additional button modes: Random, Meta
+- Meta picker for Clock Mirage picks a -5 ratchet uniformly at random (no -5 ratchet is flagged meta, so the previous meta-first preference was dead code); same rule now applies to Test mode's auto-generated decks
 - CX / CX Expand results show the lock chip, blade(s) and assist blade assembled into one combined image (also used in the Deck, History and Dashboard)
 - Tap the combined blade to flip through its parts in an auto-sliding, swipeable carousel
 - Share the result as an image — Web Share on mobile, download fallback on desktop
@@ -53,6 +54,7 @@ Tournament
 - Hosting requires a free email account (Settings → Account, or prompted on Create Tournament)
 - Every tournament is ranked automatically — no host password
 - Self-registration via the Open Tournaments lobby (no manual name list)
+- Deck is mandatory on registration — every registrant (self, Register Others, edit-in-place, and host-added during a running tournament) must fill all 3 deck slots before submit; the judge needs a full 3-combo deck to bey-check at each match. Error inline names the missing slot(s)
 - Tournaments you host show a "Hosting" badge in the Open Tournaments lobby when you're signed in
 - Running tournaments stay listed in the Open Tournaments lobby with an "In progress" badge — registration is closed, but co-hosts and viewers can still join
 - My Tournaments: a signed-in host is dropped straight back into the tournament they host on any device — the room index follows your account, not the device (a pick list appears only if you host more than one)
@@ -64,7 +66,7 @@ Tournament
 - The room badge shows the host and the room's designated sub-hosts
 - Hosts AND co-hosts can play (+ Register Myself), start the tournament, add participants, and remove registrants
 - Register Myself pre-fills your account's username and locks the name field, so no one can register under someone else's name from your device
-- Register Others (host / co-host): add a participant manually by name + deck, no need for them to self-register
+- Register Others (host / co-host): add a participant manually by name + deck, no need for them to self-register — these entries are treated as guests (no account attached) and don't earn global ranking points on finish; Register Myself stays tied to your account and does earn points
 - QR button in the Open Tournaments header shows a scannable QR code that opens /tournament/ on any phone
 - Tutorial button next to QR / Refresh opens an 8-slide illustrated walkthrough of how to participate — auto-opens after 3 seconds of idle on the Tournament tab; auto-slides, swipeable, with dot navigation
 - Header buttons (Tutorial / QR / Refresh / Create Tournament) sit on a single horizontal row with an invisible scroller
@@ -89,6 +91,7 @@ Tournament
 - Share button opens a popup for date, time, stadium (Xtreme / Infinity / Double Xtreme), rule (Official / Unofficial), and remark — date renders as "14 May 2026 (Thursday)", and the message points participants at the Deck tab's Copy → Paste flow
 - Share message lists the registered participants (numbered) when anyone has signed up
 - Past tournaments stay viewable in history after reset (cached snapshot)
+- Cleaner finish view: once a tournament reaches "Tournament Complete" the running-view toolbar drops the Share, Co-hosts and Add Participant buttons — only the Close button stays, since none of those actions apply after the final is decided
 - Parts-usage pie charts at tournament end as an auto-sliding carousel (theme-aware palette)
 
 Revox

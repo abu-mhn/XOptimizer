@@ -1899,10 +1899,16 @@ function selectMeta(form, mode) {
         getWrapper(form, "bit")._select(idx);
       }
     } else if (codename === "CLOCKMIRAGE") {
-      const validMeta = DATA.ratchets.map((r, i) => ({ r, i })).filter(x => x.r.name.endsWith("5") && x.r.meta === true);
-      const validAny = DATA.ratchets.map((r, i) => ({ r, i })).filter(x => x.r.name.endsWith("5"));
-      const pool = validMeta.length > 0 ? validMeta : validAny;
-      getWrapper(form, "ratchet")._select(pool[Math.floor(Math.random() * pool.length)].i);
+      // Clock Mirage requires a ratchet ending in "5", and no -5 ratchet is
+      // flagged meta in DATA — so the usual meta-first preference would just
+      // fall through to a uniform random pick anyway. Skip the dead branch
+      // and pick uniformly from the -5 pool directly.
+      const valid = DATA.ratchets
+        .map((r, i) => ({ r, i }))
+        .filter(x => x.r.name.endsWith("5") && !isExclusive(x.r));
+      if (valid.length) {
+        getWrapper(form, "ratchet")._select(valid[Math.floor(Math.random() * valid.length)].i);
+      }
       const bIdx = pickMetaBit();
       if (bIdx >= 0) getWrapper(form, "bit")._select(bIdx);
     } else {

@@ -215,8 +215,10 @@ const DASHBOARD_PART_TYPE_LABEL = {
   bit: "Bit"
 };
 
-// Snapshot the last non-empty Best Parts result so resetting / finishing a
-// tournament doesn't wipe what's shown on the dashboard.
+// Snapshot the parts usage at the moment a tournament FINISHES, so the
+// dashboard's Best Parts panel keeps showing that finished result while
+// the next tournament is registering / running — and survives a reset.
+// Live (in-progress) tournaments don't update the snapshot.
 const DASHBOARD_BEST_PARTS_KEY = "dashboard_best_parts_snapshot";
 
 function dashboardSaveBestPartsSnapshot(groups) {
@@ -232,12 +234,49 @@ function dashboardLoadBestPartsSnapshot() {
   } catch (e) { return null; }
 }
 
+// Resolve "the most recently finished tournament" the same way the
+// Tournament History popup picks its top entry, but only counting
+// entries whose cached state actually reads as complete:
+//   1. If the LIVE Swiss state is itself complete (host just finished
+//      a match and hasn't reset yet), use that.
+//   2. Otherwise walk `loadTournamentHistory()` newest-first and grab
+//      the first entry with a `cachedState` that completes.
+//   3. If nothing qualifies, return null — caller falls back to the
+//      stored snapshot (or "No tournament data yet" if even that's
+//      empty).
+function dashboardMostRecentCompletedState() {
+  const isCompleteFn = typeof window.isTournamentComplete === "function"
+    ? window.isTournamentComplete
+    : null;
+  if (!isCompleteFn) return null;
+  if (typeof loadSwiss === "function") {
+    try {
+      const live = loadSwiss();
+      if (live && isCompleteFn(live)) return live;
+    } catch (e) { /* fall through to history walk */ }
+  }
+  if (typeof loadTournamentHistory === "function") {
+    let list = [];
+    try { list = loadTournamentHistory(); } catch (e) { list = []; }
+    for (const entry of list) {
+      const cached = entry && entry.cachedState;
+      if (cached && isCompleteFn(cached)) return cached;
+    }
+  }
+  return null;
+}
+
 function dashboardBuildTopParts(limit) {
   if (typeof loadSwiss !== "function" || typeof aggregatePartUsage !== "function") {
     return dashboardLoadBestPartsSnapshot();
   }
-  let state;
-  try { state = loadSwiss(); } catch (e) { return dashboardLoadBestPartsSnapshot(); }
+
+  // Best Parts mirrors the top entry in Tournament History — the most
+  // recently FINISHED tournament — across every format (Swiss, Round
+  // Robin, Single Elimination). In-progress tournaments don't change
+  // it, and the live room being reset doesn't either (history keeps
+  // the cached state).
+  const state = dashboardMostRecentCompletedState();
   if (!state) return dashboardLoadBestPartsSnapshot();
 
   const usage = aggregatePartUsage(state);

@@ -2379,7 +2379,7 @@ function renderSwiss() {
     : ["bracket-f-0", "bracket-3rd-0", "bracket-5th-0", "bracket-7th-0"];
   const allPlacementsDone = bracketActive && placementIds.every(id => isMatchDecided(state.matches[id]));
   const isSwissOnly = state.mode === "swiss-only";
-  const tournamentComplete = isSwissOnly ? groupStageDone : (bracketActive && allPlacementsDone);
+  const tournamentComplete = isTournamentComplete(state);
   const canEdit = !inRoom || swissCanEdit;
 
   const groupsHtml = hasGroups ? state.groups.map((members, gi) => {
@@ -2448,9 +2448,9 @@ function renderSwiss() {
       <div class="swiss-toolbar-row swiss-toolbar-actions-row">
         ${showStartKnockoutBtn ? `<button type="button" id="swiss-start-bracket" class="btn">Start Knockout</button>` : ""}
         <div class="swiss-toolbar-actions">
-          ${renderSwissShareButton()}
-          ${swissIsHost ? renderCoHostsButton() : ""}
-          ${canEdit && canAddParticipant(state) ? `<button type="button" id="swiss-edit-participants" class="btn btn-icon-sm btn-icon-plus" aria-label="Add participant" title="Add participant">+</button>` : ""}
+          ${tournamentComplete ? "" : renderSwissShareButton()}
+          ${swissIsHost && !tournamentComplete ? renderCoHostsButton() : ""}
+          ${canEdit && !tournamentComplete && canAddParticipant(state) ? `<button type="button" id="swiss-edit-participants" class="btn btn-icon-sm btn-icon-plus" aria-label="Add participant" title="Add participant">+</button>` : ""}
           <button type="button" id="swiss-clear" class="btn btn-reset btn-icon-sm" title="${resetTitle}">
             <img src="assets/icons/exit-button.png" alt="${resetTitle}"
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
@@ -2463,6 +2463,15 @@ function renderSwiss() {
     ${isSwissOnly && groupStageDone ? renderCombinedSwissStandings(state) : ""}
     ${tournamentComplete ? renderPartUsageCharts(state) : ""}
   `;
+
+  // The instant we render a "complete" state — Swiss, Round Robin, or
+  // Single Elimination — push the parts-usage snapshot the Dashboard's
+  // Best Parts panel reads from. This decouples the snapshot from the
+  // Dashboard being open at the right moment: a host can finish a
+  // tournament here, hit Reset, then open Dashboard and still see the
+  // just-finished result. Mirrors aggregatePartUsage + the sort/slice
+  // the Dashboard does in dashboardBuildTopParts.
+  if (tournamentComplete) snapshotBestPartsForDashboard(state);
 
   // Auto-scroll each rounds strip after render. Group strips snap to the
   // rightmost (latest round). The Swiss top-8 bracket strip advances column
@@ -2774,6 +2783,11 @@ function showSelfRegisterPopup() {
 // Host / co-host registers someone else manually (name + deck). Same write
 // path as selfRegister (no disconnect/reconnect, host stays host), but with
 // the name field editable for any free-form participant name.
+//
+// "Register Others" entries are flagged isGuest because no account is
+// attached to them — the host is typing a free-form name on someone else's
+// behalf, so we treat them like guest registrants and skip them from
+// global ranking awards on finish.
 function showOthersRegisterPopup() {
   if (!swissCanEdit || !swissEditCode) return;
   const state = loadSwiss();
@@ -2786,7 +2800,7 @@ function showOthersRegisterPopup() {
     roundCount: state.roundCount || null,
     groupCount: state.groupCount || null
   };
-  showRegistrationPopup(room, { selfRegister: true, lockName: false });
+  showRegistrationPopup(room, { selfRegister: true, lockName: false, asGuest: true });
 }
 
 // Minimum registrants needed before Start can fire. Mirrors the same checks
@@ -3268,6 +3282,18 @@ function isBeyCheckDeckEmpty(deck) {
   return !Array.isArray(deck) || deck.every(isBeyCheckSlotEmpty);
 }
 
+// Registration requires all 3 slots built (the bey-check / format pages
+// expect a 3-combo deck per registrant). Returns the 1-based index list
+// of slots that still read empty so callers can name them in the error.
+function emptyBeyCheckDeckSlotNumbers(deck) {
+  if (!Array.isArray(deck)) return [1, 2, 3];
+  const out = [];
+  for (let i = 0; i < BEY_CHECK_DECK_SIZE; i++) {
+    if (isBeyCheckSlotEmpty(deck[i])) out.push(i + 1);
+  }
+  return out;
+}
+
 // Aggregate part usage across the tournament. Counts each participant's
 // most recent saved deck once (via findLatestDeckForParticipant) so that a
 // player who plays many matches with the same deck doesn't dominate the
@@ -3286,6 +3312,67 @@ const BEY_CHECK_FIELD_ORDER = [
   "blade", "lockChip", "mainBlade", "metalBlade",
   "overBlade", "assistBlade", "ratchet", "bit"
 ];
+
+// Mirror of the inline completion check in renderSwiss. Works for every
+// supported format: Swiss, Round Robin (a `pairing: "round-robin"`
+// variant of Swiss / Swiss-only), and Single Elimination. The shared
+// `state` shape means the same placement-match / group-stage logic
+// applies across all three. Exposed on window so the Dashboard's Best
+// Parts panel can snapshot parts usage at the moment a tournament
+// finishes — and only then.
+//   - mode === "swiss-only"      → group stage fully resolved
+//   - mode === "single-elim"     → final (+ any present 3rd / 5th / 7th
+//                                  place playoff) decided
+//   - otherwise (swiss + top 8)  → all four placement matches decided
+function isTournamentComplete(state) {
+  if (!state) return false;
+  const isSwissOnly = state.mode === "swiss-only";
+  const isSingleElim = state.mode === "single-elim";
+  const bracketActive = typeof hasSwissBracket === "function" ? hasSwissBracket(state) : !!state.bracket;
+  if (isSwissOnly) {
+    return typeof isGroupStageComplete === "function" ? isGroupStageComplete(state) : false;
+  }
+  if (!bracketActive) return false;
+  const matches = state.matches || {};
+  const decided = (m) => m && m.scoreA != null && m.scoreB != null && m.scoreA !== m.scoreB;
+  const placementIds = isSingleElim
+    ? ["bracket-f-0"]
+        .concat(matches["bracket-3rd-0"] ? ["bracket-3rd-0"] : [])
+        .concat(matches["bracket-5th-0"] ? ["bracket-5th-0"] : [])
+        .concat(matches["bracket-7th-0"] ? ["bracket-7th-0"] : [])
+    : ["bracket-f-0", "bracket-3rd-0", "bracket-5th-0", "bracket-7th-0"];
+  return placementIds.every(id => decided(matches[id]));
+}
+window.isTournamentComplete = isTournamentComplete;
+
+// Write the Best Parts panel snapshot the Dashboard reads, using the
+// finished tournament's parts usage. The storage key MUST match the
+// one in dashboard.js (which already owns its own
+// `const DASHBOARD_BEST_PARTS_KEY = "dashboard_best_parts_snapshot"`
+// at script scope; declaring it again here would collide and throw a
+// SyntaxError on every page that loads both files). Sort/slice mirrors
+// dashboardBuildTopParts (top 3 per field, by raw count desc). Safe to
+// call from any renderSwiss tick — only writes when there's at least
+// one non-empty group.
+function snapshotBestPartsForDashboard(state) {
+  try {
+    const usage = aggregatePartUsage(state);
+    const fieldOrder = typeof BEY_CHECK_FIELD_ORDER !== "undefined"
+      ? BEY_CHECK_FIELD_ORDER
+      : ["lockChip", "blade", "mainBlade", "metalBlade", "overBlade", "assistBlade", "ratchet", "bit"];
+    const groups = [];
+    for (const field of fieldOrder) {
+      const counts = usage[field];
+      if (!counts) continue;
+      const parts = Object.entries(counts)
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 3);
+      if (parts.length) groups.push({ field, parts });
+    }
+    if (groups.length) localStorage.setItem("dashboard_best_parts_snapshot", JSON.stringify(groups));
+  } catch (e) { /* non-fatal — Dashboard falls back to its prior snapshot */ }
+}
 
 function aggregatePartUsage(state) {
   const usage = {};
@@ -4200,9 +4287,18 @@ function showAddParticipantPopup() {
       setStatus("That name is already in the tournament.", "err");
       return;
     }
-    if (isBeyCheckDeckEmpty(deck)) {
-      // Soft-warn but allow — the judge can still fill the deck at match time.
-      if (!confirm(`"${name}" has no deck slots filled. Add anyway?`)) return;
+    const missingSlots = emptyBeyCheckDeckSlotNumbers(deck);
+    if (missingSlots.length) {
+      // Hard block — every participant needs all 3 slots built (same
+      // rule as the registration popup). Empty / partial decks break
+      // bey-check at match time.
+      const slotList = missingSlots.length === 1
+        ? `Slot ${missingSlots[0]}`
+        : missingSlots.length === BEY_CHECK_DECK_SIZE
+          ? "all 3 slots"
+          : "Slots " + missingSlots.join(" & ");
+      setStatus(`"${name}" needs a full 3-combo deck — fill ${slotList} before adding.`, "err");
+      return;
     }
 
     // Swiss and round robin slot a player into round 1 as a free win (or pair
@@ -5661,12 +5757,22 @@ function showRegistrationPopup(room, options = {}) {
       nameInput?.focus();
       return;
     }
-    if (isBeyCheckDeckEmpty(deck)) {
-      // Soft-warn but allow — host can still start with an empty deck if needed.
+    const missingSlots = emptyBeyCheckDeckSlotNumbers(deck);
+    if (missingSlots.length) {
+      // Hard block — every registrant needs all 3 slots built. The judge
+      // sees this 3-combo deck at every match, so a partial registration
+      // breaks the bey-check flow. Tap any empty slot to build it, or
+      // paste a copied 3-slot deck from the Deck tab.
+      const slotList = missingSlots.length === 1
+        ? `Slot ${missingSlots[0]}`
+        : missingSlots.length === BEY_CHECK_DECK_SIZE
+          ? "all 3 slots"
+          : "Slots " + missingSlots.join(" & ");
       const msg = isEdit
-        ? "This deck has no slots filled. Save anyway?"
-        : "You haven't built any deck slots yet. Register without a deck?";
-      if (!confirm(msg)) return;
+        ? `Fill ${slotList} before saving — every registrant needs a full 3-combo deck.`
+        : `Fill ${slotList} before registering — every registrant needs a full 3-combo deck. Tap an empty slot, or paste from the Deck tab.`;
+      setStatus(msg, "err");
+      return;
     }
     submitRegistration(room, name, deck, setStatus, close, { selfRegister, editRegistrantId, asGuest });
   };
@@ -5705,6 +5811,23 @@ function pickMetaFrom(arr, used, extraFilter) {
     arr.filter(notUsed),                              // any eligible + unused
     arr.filter(p => baseFilter(p) && p.meta === true),// meta (used pool exhausted)
     arr.filter(baseFilter)                            // anything eligible
+  ];
+  for (const pool of tiers) {
+    if (pool.length) return pool[Math.floor(Math.random() * pool.length)];
+  }
+  return null;
+}
+
+// Uniform random ratchet ending in "5", honouring the per-deck `used`
+// exclusion. Falls back to ignoring `used` only when every -5 ratchet has
+// already been taken by another slot — better to repeat than to leave a
+// Clock Mirage slot with no ratchet at all.
+function pickClockMirageRatchet(used) {
+  const arr = DATA.ratchets || [];
+  const baseFilter = p => p && !isExclusive(p) && p.name && p.name.endsWith("5");
+  const tiers = [
+    arr.filter(p => baseFilter(p) && !used.has(p.name)),
+    arr.filter(baseFilter)
   ];
   for (const pool of tiers) {
     if (pool.length) return pool[Math.floor(Math.random() * pool.length)];
@@ -5777,7 +5900,13 @@ function buildMetaSlot(mode, used) {
     return { mode, parts: { blade: blade.name, bit: bitName } };
   }
   if (codename === "CLOCKMIRAGE") {
-    const ratchet = pickMetaFrom(DATA.ratchets || [], used, r => r.name.endsWith("5"));
+    // Clock Mirage requires a ratchet ending in "5", and no -5 ratchet is
+    // flagged meta in DATA. The generic pickMetaFrom would just churn
+    // through empty meta tiers before falling back to a uniform pick from
+    // the -5 pool — short-circuit straight to that pool (still honouring
+    // the deck-wide `used` exclusion so a Clock Mirage slot can't repeat
+    // a ratchet already locked in by another slot in the same deck).
+    const ratchet = pickClockMirageRatchet(used);
     return { mode, parts: { blade: blade.name, ratchet: ratchet?.name || null, bit: bitName } };
   }
   const ratchet = pickMetaFrom(DATA.ratchets || [], used);
@@ -5899,7 +6028,12 @@ function submitRegistration(room, name, deck, setStatus, onSuccess, options = {}
 
       const id = editRegistrantId || generateRegistrantId();
       const payload = { name: name.trim(), deck };
-      if (asGuest) payload.isGuest = true;
+      // Preserve the existing guest flag when editing in place — the
+      // edit popup doesn't carry asGuest, but the overwrite below would
+      // otherwise drop the flag and silently grant ranking points to
+      // someone who was registered as a guest or via Register Others.
+      const prevReg = (remote.registrants && remote.registrants[id]) || null;
+      if (asGuest || (isEdit && prevReg && prevReg.isGuest)) payload.isGuest = true;
       if (!isEdit) setStatus("Submitting…", "pending");
       return roomRef.child("registrants/" + id).set(payload)
         .then(() => {
