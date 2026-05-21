@@ -89,6 +89,7 @@ function disconnectSwissRoom() {
   swissCanEdit = false;
   swissSubHosts = {};
   swissLiveMatchId = null;
+  swissCoHostUidWritten = false;
   saveJoinedRoom(null);
   // Drop any match-linked state on the scoreboard so leaving a room doesn't
   // leave stale match names / score / save callback on the overlay.
@@ -97,12 +98,13 @@ function disconnectSwissRoom() {
   }
 }
 
-// Strip metadata fields (viewCode, subHosts) before persisting remote state
-// locally — they aren't part of the tournament model and shouldn't land in
-// loadSwiss.
+// Strip metadata fields (viewCode, subHosts, coHostUids) before persisting
+// remote state locally — they aren't part of the tournament model and
+// shouldn't land in loadSwiss. coHostUids is a rule-layer permission map
+// (UID → true) that lets Firebase rules gate match writes to host + co-hosts.
 function stripRoomMetadata(remote) {
   if (!remote) return remote;
-  const { viewCode, subHosts, ...state } = remote;
+  const { viewCode, subHosts, coHostUids, ...state } = remote;
   return state;
 }
 
@@ -122,6 +124,46 @@ function isCurrentUserSubHost() {
 // username the host added to the room's sub-host list.
 function recomputeSwissCanEdit() {
   swissCanEdit = swissIsHost || isCurrentUserSubHost();
+  syncCoHostUidWrite();
+}
+
+// Tracks whether THIS device has already written its UID into the room's
+// `coHostUids` map for the current session — keeps `syncCoHostUidWrite`
+// idempotent so it doesn't churn Firebase on every render. Reset on
+// disconnect.
+let swissCoHostUidWritten = false;
+
+// Mirror the current user's co-host status into `swissRooms/<code>/coHostUids/<uid>`
+// so the security rules can rule-gate match / state writes on host + co-hosts
+// (the rules can't read the username-keyed `subHosts` list because that
+// requires resolving username → UID at write time, which rules can't do).
+// Self-write only — auth.uid must equal the key the rule will accept.
+function syncCoHostUidWrite() {
+  if (!swissRoomRef) return;
+  const user = (window.getCurrentUser && window.getCurrentUser()) || null;
+  const uid = user && user.uid;
+  if (!uid) {
+    swissCoHostUidWritten = false;
+    return;
+  }
+  // The host is already authorised via hostUid; no need to also list them
+  // as a co-host. If they were previously stored there (e.g. they used
+  // to be a co-host before taking the room over), clear that entry.
+  if (swissIsHost) {
+    if (swissCoHostUidWritten) {
+      swissRoomRef.child("coHostUids/" + uid).set(null).catch(() => {});
+      swissCoHostUidWritten = false;
+    }
+    return;
+  }
+  const isSub = isCurrentUserSubHost();
+  if (isSub && !swissCoHostUidWritten) {
+    swissRoomRef.child("coHostUids/" + uid).set(true).catch(() => {});
+    swissCoHostUidWritten = true;
+  } else if (!isSub && swissCoHostUidWritten) {
+    swissRoomRef.child("coHostUids/" + uid).set(null).catch(() => {});
+    swissCoHostUidWritten = false;
+  }
 }
 
 // The signed-in profile can load after the room — re-evaluate sub-host
@@ -1814,10 +1856,27 @@ function addSubHost(name) {
 
 function removeSubHost(key) {
   if (!key) return;
+  // Capture the removed username before mutating the local map — we use it
+  // below to look up the matching UID in `usernames/{key}/uid` and clear
+  // that uid from `coHostUids`, otherwise the rule-level co-host check
+  // would keep trusting them even after the host revoked them.
+  const removedName = (swissSubHosts && swissSubHosts[key]) || "";
   if (swissSubHosts) delete swissSubHosts[key];
   if (swissRoomRef) {
     swissRoomRef.child("subHosts/" + key).set(null)
       .catch(e => console.warn("Sub-host remove failed:", e));
+    const roomRefAtRemove = swissRoomRef;
+    const ukeyFn = (typeof window.usernameKey === "function") ? window.usernameKey : null;
+    const ukey = ukeyFn && removedName ? ukeyFn(removedName) : "";
+    const db = initFirebase();
+    if (db && ukey) {
+      db.ref("usernames/" + ukey + "/uid").once("value").then(snap => {
+        const uid = snap.val();
+        if (typeof uid === "string" && uid && roomRefAtRemove) {
+          roomRefAtRemove.child("coHostUids/" + uid).set(null).catch(() => {});
+        }
+      }).catch(() => { /* read denied or user has no account — nothing to clear */ });
+    }
   }
   recomputeSwissCanEdit();
   renderCoHostList();
@@ -4183,13 +4242,20 @@ function addSwissParticipantRound1(name, deck) {
   if (Array.isArray(s.participants)) s.participants.push(name);
   if (!s.registrants || typeof s.registrants !== "object") s.registrants = {};
   const regId = generateRegistrantId();
-  s.registrants[regId] = { name, deck };
+  // Stamp the host/co-host's UID onto the entry — this path only fires
+  // during a running tournament where the registrants rule already
+  // requires host/co-host, but recording createdBy keeps the data
+  // consistent with how submitRegistration writes new entries.
+  const writerUid = (window.getCurrentUser && window.getCurrentUser()?.uid) || null;
+  const entry = { name, deck };
+  if (writerUid) entry.createdBy = writerUid;
+  s.registrants[regId] = entry;
   persistSwiss(s);
   if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
     // Targeted update — only the touched group, match, participant list and
     // the new registrant. Nothing else in the room is rewritten.
     updates[`groups/${target}`] = s.groups[target];
-    updates[`registrants/${regId}`] = { name, deck };
+    updates[`registrants/${regId}`] = entry;
     if (Array.isArray(s.participants)) updates.participants = s.participants;
     swissRoomRef.update(updates).catch(e => console.warn("Add participant push failed:", e));
   }
@@ -5977,6 +6043,12 @@ function addTestRegistrants(count) {
         .filter(Boolean)
     );
 
+    // The host (or co-host) running Test mode owns every synthetic entry —
+    // stamp their UID so the registrants/$regId rule treats these like any
+    // other host-created registrant (host/co-host can edit/delete them
+    // anytime, the originating account additionally retains "creator"
+    // rights during registering).
+    const writerUid = (window.getCurrentUser && window.getCurrentUser()?.uid) || null;
     const updates = {};
     let added = 0;
     let nextNum = 1;
@@ -5985,7 +6057,9 @@ function addTestRegistrants(count) {
       if (usedNames.has(name.toLowerCase())) continue;
       usedNames.add(name.toLowerCase());
       const id = generateRegistrantId();
-      updates[`registrants/${id}`] = { name, deck: buildMetaDeck() };
+      const entry = { name, deck: buildMetaDeck() };
+      if (writerUid) entry.createdBy = writerUid;
+      updates[`registrants/${id}`] = entry;
       added++;
     }
 
@@ -6034,6 +6108,17 @@ function submitRegistration(room, name, deck, setStatus, onSuccess, options = {}
       // someone who was registered as a guest or via Register Others.
       const prevReg = (remote.registrants && remote.registrants[id]) || null;
       if (asGuest || (isEdit && prevReg && prevReg.isGuest)) payload.isGuest = true;
+      // Stamp the writer's UID onto the entry so the registrants/$regId
+      // rule can scope edits during the registering phase to the
+      // original creator (otherwise any authed user could rewrite anyone
+      // else's deck/name before Start). On edit we preserve the existing
+      // createdBy — host/co-host edits must NOT change the owner.
+      const writerUid = (window.getCurrentUser && window.getCurrentUser()?.uid) || null;
+      if (prevReg && typeof prevReg.createdBy === "string" && prevReg.createdBy) {
+        payload.createdBy = prevReg.createdBy;
+      } else if (writerUid) {
+        payload.createdBy = writerUid;
+      }
       if (!isEdit) setStatus("Submitting…", "pending");
       return roomRef.child("registrants/" + id).set(payload)
         .then(() => {

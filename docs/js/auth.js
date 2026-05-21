@@ -300,6 +300,8 @@
   function usernameKey(name) {
     return String(name || "").trim().toLowerCase().replace(/[.#$/\[\]]/g, "_");
   }
+  // Exposed so other tabs can derive the same key without re-encoding it.
+  window.usernameKey = usernameKey;
 
   // Map of "user tag" → "public Firebase index node" that other tabs
   // read without needing access to the whole users tree:
