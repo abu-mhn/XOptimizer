@@ -932,12 +932,26 @@ body.light-mode .result-part-name {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-/* Admin-assigned profile badges (e.g. "Developer"). */
+/* Admin-assigned profile badges (e.g. "Developer"). Single row that scrolls
+   horizontally when there are more tags than fit; scrollbar is hidden. */
 .account-tags {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 6px;
-    align-self: flex-start;
+    align-self: stretch;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.account-tags::-webkit-scrollbar {
+    display: none;
+}
+
+.account-tags > .account-tag {
+    flex: 0 0 auto;
 }
 .account-tags.hidden {
     display: none;
@@ -975,6 +989,12 @@ body.light-mode .result-part-name {
 .account-tag-tester {
     background: linear-gradient(135deg, #0e7490, #155e75);
     border-color: #22d3ee;
+}
+/* Judge tag — monochrome (black text on white with a black border). */
+.account-tag-judge {
+    background: #ffffff;
+    color: #000000;
+    border-color: #000000;
 }
 .account-bio-field {
     display: flex;
@@ -1094,9 +1114,22 @@ body.light-mode .result-part-name {
 /* A user's current tags in the Developer list — each chip is removable. */
 .developer-user-tags {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 4px;
     margin-top: 4px;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.developer-user-tags::-webkit-scrollbar {
+    display: none;
+}
+
+.developer-user-tags > .developer-tag-chip {
+    flex: 0 0 auto;
 }
 
 .developer-tag-chip {
@@ -6215,6 +6248,10 @@ body.mono-mode .popup-ok:hover {
     margin-top: 10px;
 }
 
+.swiss-actions.hidden {
+    display: none;
+}
+
 .swiss-rounds {
     display: flex;
     align-items: center;
@@ -6494,10 +6531,23 @@ body.mono-mode .popup-ok:hover {
 
 .profile-view-tags {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 6px;
-    justify-content: center;
+    justify-content: flex-start;
     margin-bottom: 8px;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.profile-view-tags::-webkit-scrollbar {
+    display: none;
+}
+
+.profile-view-tags > .account-tag {
+    flex: 0 0 auto;
 }
 
 .profile-view-bio {
@@ -6985,6 +7035,15 @@ button.swiss-reg-name-edit:focus-visible {
     padding-top: 14px;
     border-top: 1px dashed rgba(110, 118, 129, 0.35);
 }
+
+/* When the Create Tournament block is hidden (non-Judge / signed-out users)
+   there's nothing above the rooms sections to separate them from — drop the
+   dashed divider and its spacing too. */
+.swiss-actions.hidden ~ .swiss-rooms-section {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
 .swiss-rooms-section-header {
     display: flex;
     flex-wrap: wrap;
@@ -6996,12 +7055,37 @@ button.swiss-reg-name-edit:focus-visible {
 
 .swiss-rooms-heading {
     white-space: nowrap;
+    flex: 0 0 100%;
+    margin: 0;
 }
 
-/* Push QR + Refresh to the right edge together; the heading stays left. */
-#swiss-rooms-qr {
-    margin-left: auto;
+/* All header action buttons (Tutorial / QR / Refresh) sit on a second row
+   below the heading, in a single horizontal-scrolling line with an
+   invisible scrollbar. */
+.swiss-rooms-actions {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    flex: 1 1 100%;
+    min-width: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }
+
+.swiss-rooms-actions::-webkit-scrollbar {
+    display: none;
+}
+
+.swiss-rooms-actions > .btn {
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: center;
+}
+
+/* QR / Refresh / Tutorial now share their own row inside .swiss-rooms-actions,
+   so no auto-margin is needed. */
 
 /* ===== Tournament QR popup ===== */
 .tournament-qr-image-wrap {
@@ -7785,8 +7869,13 @@ button.swiss-reg-name-edit:focus-visible {
 
 /* Revox ranking row: a big member name with the tournament + date stacked
    beneath it, the placing centered in its own column, points on the right. */
+.revox-row {
+    gap: 6px;
+    padding: 8px;
+}
+
 .revox-row .tournament-results-player {
-    font-size: 1.1rem;
+    font-size: 1rem;
 }
 
 .revox-row-meta {
@@ -7809,7 +7898,7 @@ button.swiss-reg-name-edit:focus-visible {
    line up cleanly down the list; the name takes the remaining space. */
 .revox-row-placing {
     flex: 0 0 auto;
-    min-width: 42px;
+    min-width: 32px;
     text-align: center;
     font-weight: 600;
     font-size: 0.9rem;
@@ -7818,7 +7907,7 @@ button.swiss-reg-name-edit:focus-visible {
 
 .revox-row .tournament-ranking-points {
     flex: 0 0 auto;
-    min-width: 52px;
+    min-width: 44px;
     text-align: right;
 }
 
@@ -7927,8 +8016,21 @@ button.swiss-reg-name-edit:focus-visible {
 
 .revox-history-tags {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 6px;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.revox-history-tags::-webkit-scrollbar {
+    display: none;
+}
+
+.revox-history-tags > .account-tag {
+    flex: 0 0 auto;
 }
 
 /* Show ~3 joined events at a time; scroll for the rest (newest on top).
@@ -7968,6 +8070,7 @@ button.swiss-reg-name-edit:focus-visible {
 /* Tournament header + Create Tournament buttons: icon next to text. */
 #swiss-rooms-qr,
 #swiss-rooms-refresh,
+#swiss-rooms-tutorial,
 #register-paste,
 #register-submit,
 #register-cancel,
@@ -7977,7 +8080,8 @@ button.swiss-reg-name-edit:focus-visible {
 #bp-disconnect,
 #bp-clear,
 #features-copy,
-#features-close {
+#features-close,
+#tutorial-close {
     gap: 6px;
 }
 
@@ -7990,12 +8094,124 @@ button.swiss-reg-name-edit:focus-visible {
 #bp-disconnect img,
 #bp-clear img,
 #features-copy img,
-#features-close img {
+#features-close img,
+#swiss-rooms-tutorial img,
+#tutorial-close img {
     width: 14px;
     height: 14px;
     object-fit: contain;
     filter: brightness(0) invert(1);
     flex: 0 0 auto;
+}
+
+/* ===== Tutorial popup: auto-sliding image carousel ===== */
+.tutorial-card {
+    max-width: min(560px, 92vw);
+}
+
+.tutorial-carousel {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4 / 5;
+    max-height: 60vh;
+    margin: 10px 0 6px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    touch-action: pan-y;
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.tutorial-carousel:active { cursor: grabbing; }
+
+.tutorial-slide {
+    margin: 0;
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 12px;
+    box-sizing: border-box;
+}
+
+.tutorial-slide.active {
+    display: flex;
+    animation: tutorialSlideIn 0.35s ease;
+}
+
+@keyframes tutorialSlideIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+.tutorial-slide img {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    -webkit-user-drag: none;
+    pointer-events: none;
+}
+
+.tutorial-caption {
+    flex: 0 0 auto;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    text-align: center;
+    color: #c9d1d9;
+    padding: 0 4px;
+}
+
+body.light-mode .tutorial-caption,
+body.tropical-mode .tutorial-caption,
+body.love-mode .tutorial-caption,
+body.forest-mode .tutorial-caption {
+    color: #1f2328;
+}
+
+.tutorial-dots {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.tutorial-dot {
+    width: 8px;
+    height: 8px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: #484f58;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.2s;
+}
+
+.tutorial-dot.active {
+    background: #e6edf3;
+    transform: scale(1.25);
+}
+
+body.light-mode .tutorial-dot,
+body.tropical-mode .tutorial-dot,
+body.love-mode .tutorial-dot,
+body.forest-mode .tutorial-dot {
+    background: #c0c8d0;
+}
+
+body.light-mode .tutorial-dot.active,
+body.tropical-mode .tutorial-dot.active,
+body.love-mode .tutorial-dot.active,
+body.forest-mode .tutorial-dot.active {
+    background: #1f2328;
 }
 
 #swiss-rooms-qr img,

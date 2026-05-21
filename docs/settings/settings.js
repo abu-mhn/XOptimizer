@@ -66,6 +66,10 @@ Tournament
 - Register Myself pre-fills your account's username and locks the name field, so no one can register under someone else's name from your device
 - Register Others (host / co-host): add a participant manually by name + deck, no need for them to self-register
 - QR button in the Open Tournaments header shows a scannable QR code that opens /tournament/ on any phone
+- Tutorial button next to QR / Refresh opens an 8-slide illustrated walkthrough of how to participate — auto-opens after 3 seconds of idle on the Tournament tab; auto-slides, swipeable, with dot navigation
+- Header buttons (Tutorial / QR / Refresh / Create Tournament) sit on a single horizontal row with an invisible scroller
+- Only accounts tagged "Judge" can Create Tournament — the button hides entirely for signed-out or non-Judge accounts
+- Sub-hosts typeahead lists only accounts tagged "Judge" (via a public judges index synced from the Developer page)
 - Lobby cards flag a tournament you've been invited to co-host with a small "!" alert badge
 - Edit the format while waiting for players — tap the Top 8 / groups / rounds chips during registration to change them, no reset needed
 - Test button: bulk-adds synthetic participants for QA — visible only to accounts tagged "Tester"
@@ -92,6 +96,7 @@ Revox
 - The Revox theme turns on automatically for signed-in Revox Admin and Revox Member accounts
 - Member ranking by points — no password, the account tag is the key
 - Add Result popup: pick the tournament, date and placing — the placing sets the points (Top 8 scoring: 1st = 8 pts down to 8th = 1)
+- Auto-entry: any RvX- / Rvx- prefixed username who finishes in the Top 8 of a ranked tournament is added to the Revox ranking automatically with placing-based points (1st = 8 pts down to 8th = 1) — guests and test registrants are skipped, and each placing is awarded only once per tournament
 - Add a result onto an existing member straight from their row, or as a brand-new member
 - Hover a member's name for their profile card; tap it for their full tournament history
 - The history popup leads with the member's profile (banner, photo, tags, bio), then every event they joined, newest first
@@ -121,7 +126,8 @@ Settings
 Profile
 - Your own profile tab — the profile photo doubles as the tab icon
 - Upload a photo and a banner (tap the image to change it), set a username and a short bio
-- Discord-style profile card; admin-assigned tags show as colour-coded badges (Revox red, Developer black-and-blue, Revox Admin gold-bordered)
+- Discord-style profile card; admin-assigned tags show as colour-coded badges (Revox red, Developer black-and-blue, Revox Admin gold-bordered, Tester teal, Judge black-on-white)
+- Tag chips render on a single horizontal line with an invisible scroller — same treatment in the profile page, the profile hover card, the Revox history popup and the Developer page rows
 - Profile syncs to your account — same photo, name and bio on every device
 - Anyone's profile opens as a card when you hover or click their username — in a tournament room, the Revox member list, or the Developer page
 
@@ -254,6 +260,8 @@ Other
             variant = " account-tag-developer";
           } else if (lower === "tester") {
             variant = " account-tag-tester";
+          } else if (lower === "judge") {
+            variant = " account-tag-judge";
           }
           s.className = "account-tag" + variant;
           s.textContent = t;

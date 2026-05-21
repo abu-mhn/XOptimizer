@@ -1831,11 +1831,14 @@ let coHostUsernamePool = [];
 function loadCoHostUsernameList() {
   const db = initFirebase();
   if (!db) return;
-  db.ref("usernames").once("value").then(snap => {
+  // Read the public `judges/{usernameKey}: displayName` index — only users
+  // tagged "Judge" appear here, so the sub-host typeahead surfaces only
+  // valid hosting accounts.
+  db.ref("judges").once("value").then(snap => {
     const val = snap.val() || {};
-    coHostUsernamePool = Object.keys(val)
-      .map(k => (val[k] && val[k].username) || "")
-      .filter(Boolean)
+    coHostUsernamePool = Object.values(val)
+      .filter(v => typeof v === "string" && v.trim())
+      .map(v => v.trim())
       .sort((a, b) => a.localeCompare(b));
     // If the host already typed something before the list arrived, refresh.
     const input = document.getElementById("cohost-username-input");
@@ -2170,6 +2173,8 @@ function revoxTagBadges(profile) {
       cls += " account-tag-developer";
     } else if (lower === "tester") {
       cls += " account-tag-tester";
+    } else if (lower === "judge") {
+      cls += " account-tag-judge";
     }
     return `<span class="${cls}">${escapeHtml(t)}</span>`;
   }).join("");
@@ -4747,6 +4752,182 @@ document.addEventListener("webkitfullscreenchange", scheduleSwissScrollRestore);
     refreshMyTournaments();
   });
   document.getElementById("swiss-rooms-qr")?.addEventListener("click", showTournamentQrPopup);
+  document.getElementById("swiss-rooms-tutorial")?.addEventListener("click", showTutorialPopup);
+
+  // Only accounts tagged "Judge" may create a tournament. The button (and the
+  // surrounding helper hint + divider) hide for everyone else, including
+  // signed-out visitors. The auth/profile order is racy on sign-out — the
+  // user object goes null before the profile cache clears — so we gate on
+  // BOTH: there must be a signed-in user AND that user must be a Judge.
+  function paintCreateTournamentBtn() {
+    const u = (typeof window.getCurrentUser === "function") ? window.getCurrentUser() : null;
+    const allowed = !!(u && u.uid && typeof window.isJudge === "function" && window.isJudge());
+    const btn = document.getElementById("swiss-generate");
+    if (btn) {
+      const wrap = btn.closest(".swiss-actions") || btn;
+      wrap.classList.toggle("hidden", !allowed);
+    }
+    const hint = document.querySelector("#swiss-setup .swiss-hint");
+    if (hint) hint.classList.toggle("hidden", !allowed);
+  }
+  paintCreateTournamentBtn();
+  // Profile fetches resolve after onAuthChange fires; re-paint when it lands
+  // so a freshly signed-in Judge sees the button without a refresh.
+  window.addEventListener("userprofilechange", paintCreateTournamentBtn);
+
+  // ===== Tutorial popup: auto-sliding image carousel that explains how a
+  //       new player joins a tournament. The slides are tutorial/0.jpeg
+  //       through tutorial/7.jpeg. =====
+  const TUTORIAL_SLIDES = 8;
+  const TUTORIAL_CAPTIONS = [
+    "1. Build your deck. In the Deck tab, fill the 3 slots, then tap Copy to put your deck on the clipboard.",
+    "2. Find a tournament. Switch to the Tournament tab and tap a room in the Open Tournaments list.",
+    "3. Pick Participant. Choose Participant from the join popup (the other options are Co-host and Viewer).",
+    "4. Sign in or play as Guest. Sign in to earn ranking points on finish, or Become Guest to play without affecting the leaderboard.",
+    "5. Sign in — or create an account. Enter your email and password. New here? Switch to Sign up first.",
+    "6. Signed-in registration. Your name is filled in from your account and locked — just paste your deck or build each slot by tapping it.",
+    "7. Guest registration. Type a name, then paste your deck (or tap each empty slot to build one by hand) and hit Register.",
+    "8. You're in! Wait for the host to start. Your registered deck pre-fills every match you play."
+  ];
+  let tutorialIndex = 0;
+  let tutorialAutoTimer = null;
+  let tutorialSlideEls = [];
+  let tutorialDotEls = [];
+
+  function buildTutorialPopup() {
+    if (document.getElementById("tutorial-popup")) return;
+    const overlay = document.createElement("div");
+    overlay.id = "tutorial-popup";
+    overlay.className = "popup-overlay hidden";
+    const slidesHtml = Array.from({ length: TUTORIAL_SLIDES }, (_, i) =>
+      `<figure class="tutorial-slide${i === 0 ? " active" : ""}">
+         <img src="assets/tutorial/${i}.jpeg" alt="Step ${i + 1} of ${TUTORIAL_SLIDES}">
+         <figcaption class="tutorial-caption">${escapeHtml(TUTORIAL_CAPTIONS[i] || "")}</figcaption>
+       </figure>`
+    ).join("");
+    const dotsHtml = Array.from({ length: TUTORIAL_SLIDES }, (_, i) =>
+      `<button type="button" class="tutorial-dot${i === 0 ? " active" : ""}" data-slide="${i}" aria-label="Slide ${i + 1}"></button>`
+    ).join("");
+    overlay.innerHTML = `
+      <div class="popup-card tutorial-card">
+        <h2 class="popup-title">How to Participate</h2>
+        <div class="tutorial-carousel">${slidesHtml}</div>
+        <div class="tutorial-dots">${dotsHtml}</div>
+        <div class="popup-actions">
+          <button type="button" class="btn popup-cancel" id="tutorial-close">
+            <img src="assets/icons/exit-button.png" alt="" onerror="this.style.display='none'">
+            <span class="btn-label">Close</span>
+          </button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", e => { if (e.target === overlay) closeTutorialPopup(); });
+    document.getElementById("tutorial-close").addEventListener("click", closeTutorialPopup);
+
+    tutorialSlideEls = [...overlay.querySelectorAll(".tutorial-slide")];
+    tutorialDotEls = [...overlay.querySelectorAll(".tutorial-dot")];
+
+    tutorialDotEls.forEach(dot => {
+      dot.addEventListener("click", () => {
+        showTutorialSlide(Number(dot.dataset.slide));
+        scheduleTutorialAuto();
+      });
+    });
+
+    // Swipe / drag to change slide; any interaction restarts the 3s idle
+    // countdown (same pattern as the combined-blade carousel popup).
+    const carousel = overlay.querySelector(".tutorial-carousel");
+    let dragStartX = null;
+    const resetIdle = () => {
+      if (tutorialAutoTimer !== null) scheduleTutorialAuto();
+    };
+    carousel.addEventListener("pointerdown", (e) => {
+      dragStartX = e.clientX;
+      try { carousel.setPointerCapture(e.pointerId); } catch (err) {}
+      resetIdle();
+    });
+    carousel.addEventListener("pointerup", (e) => {
+      if (dragStartX !== null) {
+        const dx = e.clientX - dragStartX;
+        dragStartX = null;
+        if (Math.abs(dx) > 35) showTutorialSlide(tutorialIndex + (dx < 0 ? 1 : -1));
+      }
+      resetIdle();
+    });
+    carousel.addEventListener("pointercancel", () => { dragStartX = null; });
+    carousel.addEventListener("mousemove", resetIdle);
+  }
+
+  function showTutorialSlide(i) {
+    if (!tutorialSlideEls.length) return;
+    tutorialIndex = (i + tutorialSlideEls.length) % tutorialSlideEls.length;
+    tutorialSlideEls.forEach((el, n) => el.classList.toggle("active", n === tutorialIndex));
+    tutorialDotEls.forEach((el, n) => el.classList.toggle("active", n === tutorialIndex));
+  }
+
+  function stopTutorialAuto() {
+    if (tutorialAutoTimer !== null) {
+      clearInterval(tutorialAutoTimer);
+      tutorialAutoTimer = null;
+    }
+  }
+
+  // Auto-advance after 3s of idle; each subsequent advance also waits 3s.
+  function scheduleTutorialAuto() {
+    if (tutorialAutoTimer !== null) clearInterval(tutorialAutoTimer);
+    tutorialAutoTimer = setInterval(() => showTutorialSlide(tutorialIndex + 1), 3000);
+  }
+
+  function showTutorialPopup() {
+    buildTutorialPopup();
+    tutorialIndex = 0;
+    showTutorialSlide(0);
+    document.getElementById("tutorial-popup").classList.remove("hidden");
+    scheduleTutorialAuto();
+  }
+
+  function closeTutorialPopup() {
+    stopTutorialAuto();
+    document.getElementById("tutorial-popup")?.classList.add("hidden");
+  }
+
+  // ===== Auto-open the tutorial popup after 3 seconds of idle on the
+  //       Tournament tab (lobby view). =====
+  const TUTORIAL_IDLE_MS = 3000;
+  let tutorialIdleTimer = null;
+
+  function tournamentTabIsVisible() {
+    const section = document.getElementById("form-swiss");
+    return !!(section && !section.classList.contains("hidden"));
+  }
+
+  function shouldAutoshowTutorial() {
+    if (!tournamentTabIsVisible()) return false;
+    // Skip when any popup (sign-in, registration, share, the tutorial
+    // itself, etc.) is already up, or when the user is inside a running /
+    // registering room.
+    const visiblePopup = document.querySelector(".popup-overlay:not(.hidden)");
+    if (visiblePopup) return false;
+    if (swissRoomRef) return false;
+    return true;
+  }
+
+  function scheduleTutorialAutoshow() {
+    if (tutorialIdleTimer) clearTimeout(tutorialIdleTimer);
+    tutorialIdleTimer = setTimeout(() => {
+      tutorialIdleTimer = null;
+      if (shouldAutoshowTutorial()) showTutorialPopup();
+    }, TUTORIAL_IDLE_MS);
+  }
+
+  // Any user interaction restarts the 7s idle countdown so an active user is
+  // never interrupted. Listeners attach once; they're cheap and passive.
+  ["mousemove", "mousedown", "touchstart", "keydown", "scroll", "wheel"].forEach(evt =>
+    document.addEventListener(evt, scheduleTutorialAutoshow, { passive: true })
+  );
+  // Kick off the timer on first paint — only fires if the Tournament tab is
+  // the visible page.
+  scheduleTutorialAutoshow();
 
   // Build (once) and show a popup with a QR code pointing to /tournament/
   // so participants can scan and open the lobby on their phone.
@@ -4792,6 +4973,7 @@ document.addEventListener("webkitfullscreenchange", scheduleSwissScrollRestore);
   if (typeof onAuthChange === "function") {
     onAuthChange(user => {
       refreshMyTournaments();
+      paintCreateTournamentBtn();
       // Hosting / co-hosting requires a signed-in account. On sign-out, drop
       // the local room state unconditionally — even when this page's runtime
       // didn't have an active swissRoomRef (sign-out can come from another
@@ -5909,6 +6091,98 @@ function syncTournamentRankingAwards(state) {
   if (!tournamentIsDecided(state)) return; // wait until final + 3rd-place are settled
   const awards = computeTournamentRankingAwards(state);
   Object.entries(awards).forEach(([name, points]) => awardPlayerIfNew(name, points));
+  // Any participant whose username starts with "RvX-" or "Rvx-" and finishes
+  // in the Top 8 also gets a Revox ranking entry, scored Top-8-style.
+  const placings = computeTournamentRevoxPlacings(state);
+  const tName = (state.tournamentName || "").trim();
+  const dateStr = todayISO();
+  Object.entries(placings).forEach(([name, placing]) => {
+    awardRevoxIfNew(name, placing, tName, dateStr);
+  });
+}
+
+// Compute each Top-8 finisher's placing (1–4 by bracket, 5 for everyone else
+// in the knockout bracket). Guests and test registrants are excluded.
+function computeTournamentRevoxPlacings(state) {
+  const matches = state?.matches || {};
+  const registrants = state?.registrants || {};
+  const guestNames = new Set();
+  Object.values(registrants).forEach(r => {
+    if (r && r.isGuest && typeof r.name === "string") guestNames.add(r.name);
+  });
+  const matchResult = m => {
+    if (!m || m.scoreA == null || m.scoreB == null || m.scoreA === m.scoreB) return null;
+    const aWon = m.scoreA > m.scoreB;
+    return { winner: aWon ? m.a : m.b, loser: aWon ? m.b : m.a };
+  };
+  const placings = {};
+  const set = (name, p) => {
+    if (!name || guestNames.has(name) || isTestRegistrant(name)) return;
+    if (placings[name] == null || p < placings[name]) placings[name] = p;
+  };
+  const f = matchResult(matches["bracket-f-0"]);
+  if (f) { set(f.winner, 1); set(f.loser, 2); }
+  const third = matchResult(matches["bracket-3rd-0"]);
+  if (third) { set(third.winner, 3); set(third.loser, 4); }
+  // Top 8 = anyone who reached the knockout bracket.
+  const topEight = new Set();
+  if (state?.mode === "swiss") {
+    Object.values(matches).forEach(m => {
+      if (m && m.bracket) {
+        if (m.a) topEight.add(m.a);
+        if (m.b) topEight.add(m.b);
+      }
+    });
+  } else if (state?.mode === "single-elim") {
+    const preFinal = state.preFinalRounds || 0;
+    if (preFinal <= 2) {
+      getParticipants(state).forEach(n => { if (n) topEight.add(n); });
+    } else {
+      const qfRound = preFinal - 2;
+      Object.values(matches).forEach(m => {
+        if (!m || !m.bracket) return;
+        const inQfOrLater = (typeof m.round === "number" && m.round >= qfRound)
+          || m.round === "f" || m.round === "3rd";
+        if (inQfOrLater) {
+          if (m.a) topEight.add(m.a);
+          if (m.b) topEight.add(m.b);
+        }
+      });
+    }
+  }
+  topEight.forEach(name => set(name, 5));
+  return placings;
+}
+
+// True when the username carries a Revox prefix ("RvX-" or "Rvx-").
+function isRevoxUsername(name) {
+  return /^Rv[Xx]-/.test(String(name || "").trim());
+}
+
+// Award Revox ranking once per tournament per player, guarded by an
+// `awarded/revox/{key}` slot inside the room so a re-firing listener
+// can't double-count.
+function awardRevoxIfNew(name, placing, tournamentName, dateStr) {
+  if (!swissRoomRef || !placing) return;
+  const cleanName = String(name || "").trim();
+  if (!cleanName) return;
+  if (!isRevoxUsername(cleanName)) return;
+  if (isTestRegistrant(cleanName)) return;
+  const key = rankingKey(cleanName);
+  if (!key) return;
+  const slotRef = swissRoomRef.child("awarded/revox/" + key);
+  slotRef.transaction(
+    prev => prev != null ? undefined : { name: cleanName, placing },
+    (err, committed) => {
+      if (err || !committed) return;
+      const pts = revoxPointsForPlacing(placing);
+      if (pts > 0) {
+        addRevoxEntry(cleanName, pts, tournamentName, placing, dateStr).catch(e => {
+          console.warn("Revox auto-award failed:", e);
+        });
+      }
+    }
+  );
 }
 
 function renderTournamentRanking() {

@@ -446,6 +446,10 @@
   // synthetic participants) from accounts that aren't on the QA team.
   window.isTester = function isTester() { return hasTag("Tester"); };
 
+  // Exposed so the Tournament tab can gate "Create Tournament" — hosting
+  // requires the "Judge" tag (set by a developer).
+  window.isJudge = function isJudge() { return hasTag("Judge"); };
+
   // The signed-in account's username ("" when signed out / no profile yet).
   // Used by the tournament sub-host list to match designated co-hosts.
   window.getCurrentUsername = function getCurrentUsername() {
@@ -565,6 +569,20 @@
         const m = (tagMaps && tagMaps[i]) || {};
         u.tags = Object.keys(m).filter(t => m[t]);
       });
+      // Sync the public `judges` index with whatever the users tree says —
+      // every visit by a Developer brings the index back in line (covers
+      // any existing Judges that were tagged before the judges-index code
+      // landed). Firebase only writes the diff.
+      const judgesPatch = {};
+      (developerUsers || []).forEach(u => {
+        if (!u.username) return;
+        const key = usernameKey(u.username);
+        if (!key) return;
+        judgesPatch[key] = (u.tags.indexOf("Judge") >= 0) ? u.username : null;
+      });
+      if (Object.keys(judgesPatch).length) {
+        db.ref("judges").update(judgesPatch).catch(() => {});
+      }
       setStatus("");
       const search = document.getElementById("developer-search");
       renderDeveloperList(search ? search.value : "");
@@ -639,7 +657,10 @@
   }
 
   // Add a tag to one user — appends to their users/{uid}/tags map without
-  // disturbing the tags they already have.
+  // disturbing the tags they already have. When the tag is "Judge" we also
+  // write a public `judges/{usernameKey}` entry so the tournament tab's
+  // sub-host typeahead can list Judges without needing read access to the
+  // whole users tree.
   function addDeveloperTag(uid, username) {
     if (!uid) return;
     let db;
@@ -657,17 +678,21 @@
       if (!tag) return null;
       return userRef.child("tags").child(tag).set(true).then(() => tag);
     }).then(tag => {
-      if (tag) {
-        alert('Added the "' + tag + '" tag to ' + username + '.');
-        loadDeveloperUsers();
+      if (!tag) return;
+      if (tag === "Judge") {
+        const jkey = usernameKey(username || "");
+        if (jkey) db.ref("judges/" + jkey).set(username || "").catch(() => {});
       }
+      alert('Added the "' + tag + '" tag to ' + username + '.');
+      loadDeveloperUsers();
     }).catch(e => {
       alert("Couldn't add the tag: " + ((e && e.message) || e));
     });
   }
 
   // Remove a tag from one user — clears it from the users/{uid}/tags map and,
-  // if it matches the legacy single `tag` string, clears that too.
+  // if it matches the legacy single `tag` string, clears that too. Mirrors
+  // the Judge tag removal into the public `judges/{usernameKey}` index.
   function removeDeveloperTag(uid, tag, username) {
     if (!uid || !tag) return;
     if (!confirm('Remove the "' + tag + '" tag from ' + (username || "this user") + '?')) return;
@@ -682,6 +707,10 @@
       if (snap.val() === tag) updates["tag"] = null;
       return userRef.update(updates);
     }).then(() => {
+      if (tag === "Judge") {
+        const jkey = usernameKey(username || "");
+        if (jkey) db.ref("judges/" + jkey).set(null).catch(() => {});
+      }
       loadDeveloperUsers();
     }).catch(e => {
       alert("Couldn't remove the tag: " + ((e && e.message) || e));
