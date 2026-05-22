@@ -1198,7 +1198,7 @@ function renderSwissMatchCard(matchNum, id, m, seedA, seedB, isRoundRobin) {
       <div class="swiss-match-card swiss-match-bye">
         <div class="swiss-match-row${winCls} swiss-match-row-bye">
           <span class="swiss-seed">${seedA}</span>
-          <span class="swiss-name-cell">${escapeHtml(m.a)} <span class="swiss-bye-tag">BYE</span></span>
+          ${swissMatchNameCell(m.a, ' <span class="swiss-bye-tag">BYE</span>')}
           ${scoreCell}
         </div>
       </div>
@@ -1226,12 +1226,12 @@ function renderSwissMatchCard(matchNum, id, m, seedA, seedB, isRoundRobin) {
     <div class="${cardClass}"${clickable}>
       <div class="swiss-match-row ${aWin ? "swiss-match-row-win" : done ? "swiss-match-row-lose" : ""}">
         <span class="swiss-seed">${seedA}</span>
-        <span class="swiss-name-cell">${escapeHtml(m.a)}</span>
+        ${swissMatchNameCell(m.a)}
         <span class="swiss-score-cell ${aWin ? "swiss-score-win" : ""}">${aScore}</span>
       </div>
       <div class="swiss-match-row ${bWin ? "swiss-match-row-win" : done ? "swiss-match-row-lose" : ""}">
         <span class="swiss-seed">${seedB}</span>
-        <span class="swiss-name-cell">${escapeHtml(m.b)}</span>
+        ${swissMatchNameCell(m.b)}
         <span class="swiss-score-cell ${bWin ? "swiss-score-win" : ""}">${bScore}</span>
       </div>
     </div>
@@ -1277,9 +1277,10 @@ function renderSwissGroupStandings(state, gi, canEdit) {
     const pd = row.pointsDiff > 0 ? `+${row.pointsDiff}` : `${row.pointsDiff}`;
     // Host / co-host can rename a participant straight from the standings,
     // even mid-tournament — the name cell becomes a tap-to-rename button.
+    const nameInner = swissNameCellInner(row.name);
     const nameCell = canEdit
-      ? `<button type="button" class="swiss-name-cell swiss-name-edit" data-rename="${escapeHtml(row.name)}" title="Tap to rename">${escapeHtml(row.name)}</button>`
-      : `<span class="swiss-name-cell">${escapeHtml(row.name)}</span>`;
+      ? `<button type="button" class="swiss-name-cell swiss-name-edit" data-rename="${escapeHtml(row.name)}" title="Tap to rename">${nameInner}</button>`
+      : `<span class="swiss-name-cell">${nameInner}</span>`;
     return `
     <li>
       <span class="swiss-rank">${idx + 1}</span>
@@ -1464,6 +1465,27 @@ function computeSingleElimScrollTarget(scrollEl, state) {
   return scrollEl.scrollWidth;
 }
 
+// Inner HTML for a name cell: the player's avatar (silhouette placeholder
+// until hydrateTournamentAvatars swaps in the real photo) plus the name.
+// `extraHtml` is optional trailing markup, e.g. the BYE tag. A real player
+// name gets data-reg-name so the hydrator can resolve it; "TBD" / empty
+// slots get a plain placeholder with no lookup.
+function swissNameCellInner(name, extraHtml) {
+  const clean = String(name == null ? "" : name);
+  const isReal = clean && clean !== "TBD";
+  const attr = isReal ? ` data-reg-name="${escapeHtml(clean)}"` : "";
+  return `<img class="swiss-name-avatar" src="${PROFILE_VIEW_PHOTO_PH}" alt=""${attr}>`
+    + `<span class="swiss-name-text">${escapeHtml(clean || "TBD")}</span>`
+    + (extraHtml || "");
+}
+
+// Full match-card name cell — the inner content wrapped in a .swiss-name-cell
+// span. (Standings build their own wrapper, since the cell there is a
+// tap-to-rename button — see renderSwissGroupStandings.)
+function swissMatchNameCell(name, extraHtml) {
+  return `<span class="swiss-name-cell">${swissNameCellInner(name, extraHtml)}</span>`;
+}
+
 function renderSwissBracketCard(label, id, m) {
   // Bracket BYE — one slot empty, auto-scored. Renders as a single-row card.
   if (m.bye) {
@@ -1472,7 +1494,7 @@ function renderSwissBracketCard(label, id, m) {
       <div class="swiss-match-num">${label}</div>
       <div class="swiss-match-card swiss-match-card-bracket swiss-match-bye">
         <div class="swiss-match-row swiss-match-row-win swiss-match-row-bye">
-          <span class="swiss-name-cell">${escapeHtml(player)} <span class="swiss-bye-tag">BYE</span></span>
+          ${swissMatchNameCell(player, ' <span class="swiss-bye-tag">BYE</span>')}
           <span class="swiss-score-cell swiss-score-win">W</span>
         </div>
       </div>
@@ -1511,11 +1533,11 @@ function renderSwissBracketCard(label, id, m) {
     <div class="swiss-match-num">${label}${liveBadge}${tieBadge}</div>
     <div class="${cardClass}"${clickable}>
       <div class="swiss-match-row ${aWin ? "swiss-match-row-win" : (done && !isTie) ? "swiss-match-row-lose" : ""}">
-        <span class="swiss-name-cell">${escapeHtml(m.a || "TBD")}</span>
+        ${swissMatchNameCell(m.a || "TBD")}
         <span class="swiss-score-cell ${aWin ? "swiss-score-win" : ""}">${aScore}</span>
       </div>
       <div class="swiss-match-row ${bWin ? "swiss-match-row-win" : (done && !isTie) ? "swiss-match-row-lose" : ""}">
-        <span class="swiss-name-cell">${escapeHtml(m.b || "TBD")}</span>
+        ${swissMatchNameCell(m.b || "TBD")}
         <span class="swiss-score-cell ${bWin ? "swiss-score-win" : ""}">${bScore}</span>
       </div>
     </div>
@@ -1558,11 +1580,19 @@ function renderSwissTop8({ final, third, fifth, seventh }) {
 
   const items = rows.map(r => {
     const rankClass = r.rank <= 3 ? ` swiss-top-rank-${r.rank}` : "";
+    const cleanName = String(r.name || "");
+    const nameAttr = cleanName ? ` data-reg-name="${escapeHtml(cleanName)}"` : "";
+    // data-rank-name / data-rank-place let hydrateTop8Banners paint the
+    // row with the player's profile banner (medal-tinted scrim for 1-3).
+    const rowAttr = cleanName
+      ? ` data-rank-name="${escapeHtml(cleanName)}" data-rank-place="${r.rank}"`
+      : "";
     return `
-      <li class="swiss-top-rank${rankClass}">
+      <li class="swiss-top-rank${rankClass}"${rowAttr}>
         <span class="swiss-top-rank-num">${ordinal(r.rank)}</span>
         <span class="swiss-top-rank-medal">${medal(r.rank)}</span>
-        <span class="swiss-top-rank-name">${escapeHtml(r.name || "")}</span>
+        <img class="swiss-name-avatar" src="${PROFILE_VIEW_PHOTO_PH}" alt=""${nameAttr}>
+        <span class="swiss-top-rank-name"${cleanName ? ` data-profile-username="${escapeHtml(cleanName)}"` : ""}>${escapeHtml(cleanName)}</span>
       </li>
     `;
   }).join("");
@@ -1797,18 +1827,11 @@ const STADIUM_OPTIONS = ["Xtreme", "Infinity", "Double Xtreme"];
 const RULE_OPTIONS = ["Official", "Unofficial"];
 const SHARE_TOURNAMENT_URL = "https://abu-mhn.github.io/XOptimizer/tournament/";
 const SHARE_TOURNAMENT_INVITE = "To the bladers that are planning to join this event, please click the link below for registration.";
-const SHARE_TOURNAMENT_INSTRUCTIONS = [
-  "How to register as a Participant:",
-  "1. Open the link below on your phone.",
-  "2. Under \"Open Tournaments\", tap this tournament.",
-  "3. Pick \"Participant\".",
-  "4. Enter your name, then build your 3-slot deck — or open the Deck tab, tap Copy on a saved deck, and tap \"Paste from Deck tab\" in the register popup.",
-  "5. Tap Register."
-].join("\n");
+const SHARE_TOURNAMENT_INSTRUCTIONS = "New here? On the Tournament page, tap the Tutorial button (next to the QR / Refresh buttons) for a step-by-step guide on how to register as a Participant.";
 
 function renderSwissShareButton() {
-  return `<button type="button" id="swiss-share" class="btn btn-icon-sm swiss-share-btn" aria-label="Share tournament details" title="Share tournament details">
-    <img src="assets/icons/share.png" alt="Share"
+  return `<button type="button" id="swiss-share" class="btn btn-icon-sm swiss-share-btn" aria-label="Copy tournament details" title="Copy tournament details to clipboard">
+    <img src="assets/icons/share.png" alt="Copy"
          onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21AA;');">
   </button>`;
 }
@@ -2010,21 +2033,6 @@ function composeTournamentShareMessage(state, details) {
   if (d.rule)    lines.push(`Rule: ${d.rule}`);
   if (d.remark)  lines.push(`Remark: ${d.remark}`);
 
-  // List the registered participants if any have signed up — useful for
-  // a host sharing the line-up before starting.
-  let participantNames = listRegistrants(state)
-    .map(r => (r.name || "").trim())
-    .filter(Boolean);
-  if (!participantNames.length && typeof getParticipants === "function") {
-    participantNames = getParticipants(state).map(n => (n || "").trim()).filter(Boolean);
-  }
-  participantNames.sort((a, b) => a.localeCompare(b));
-  if (participantNames.length) {
-    lines.push("");
-    lines.push(`Participants (${participantNames.length}):`);
-    participantNames.forEach((n, i) => lines.push(`${i + 1}. ${n}`));
-  }
-
   lines.push("");
   lines.push(SHARE_TOURNAMENT_INVITE);
   lines.push("");
@@ -2034,29 +2042,39 @@ function composeTournamentShareMessage(state, details) {
   return lines.join("\n");
 }
 
-function flashShareButton(btn, msg) {
+// Briefly flash a thumbs-up on the share button to confirm the message
+// was copied to the clipboard, then restore the original icon.
+function flashShareButton(btn) {
   if (!btn) return;
   const orig = btn.innerHTML;
-  btn.innerHTML = `<span class="swiss-share-flash">${msg}</span>`;
+  btn.innerHTML = `<span class="swiss-share-flash"><img src="assets/icons/thumbs-up.png" alt="Copied"
+    onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x2713;')"></span>`;
   setTimeout(() => { btn.innerHTML = orig; }, 1200);
 }
 
 async function dispatchShareMessage(message, btn) {
-  // Mobile native share sheet first; falls back to clipboard, then to a
-  // prompt() as a last resort for very old browsers without either API.
-  if (navigator.share) {
-    try {
-      await navigator.share({ text: message });
-      return;
-    } catch (e) { /* user cancelled or unsupported — fall through */ }
-  }
+  // Copy the message to the clipboard — the host then pastes it wherever
+  // they want (WhatsApp, Discord, etc.). No native share sheet, so the
+  // behaviour is identical on every device.
   if (navigator.clipboard && navigator.clipboard.writeText) {
     try {
       await navigator.clipboard.writeText(message);
-      flashShareButton(btn, "&#x2713;"); // ✓
+      flashShareButton(btn);
       return;
-    } catch (e) { /* fall through */ }
+    } catch (e) { /* fall through to the legacy copy path */ }
   }
+  // Fallback for old browsers / non-secure contexts where the async
+  // Clipboard API isn't available.
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = message;
+    ta.style.cssText = "position:fixed;left:-9999px;top:0;";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    if (ok) { flashShareButton(btn); return; }
+  } catch (e) { /* fall through to prompt */ }
   prompt("Copy this and share it:", message);
 }
 
@@ -2234,15 +2252,94 @@ function revoxTagBadges(profile) {
       cls += " account-tag-tester";
     } else if (lower === "judge") {
       cls += " account-tag-judge";
+    } else if (lower === "gold player") {
+      cls += " account-tag-gold";
+    } else if (lower === "silver player") {
+      cls += " account-tag-silver";
+    } else if (lower === "bronze player") {
+      cls += " account-tag-bronze";
     }
     return `<span class="${cls}">${escapeHtml(t)}</span>`;
   }).join("");
+}
+
+// ===== Auto medal tags — "Gold/Silver/Bronze Player" =====
+// The top 3 of the global tournament ranking carry a medal tag. These are
+// NOT stored on the account: they're derived live from the `ranking` node,
+// so they always reflect the current standing and shift automatically as
+// rankings change — no Firebase writes, no tag-management rules involved.
+//
+// Cache keyed by lowercased username; kept live by subscribeRankingMedals
+// (a `ranking` listener) and also refreshed by renderTournamentRanking.
+let rankingMedalCache = { gold: "", silver: "", bronze: "" };
+
+function setRankingMedalCache(sortedList) {
+  const keyOf = (r) => (r && r.name) ? subHostKey(r.name) : "";
+  rankingMedalCache = {
+    gold: keyOf(sortedList[0]),
+    silver: keyOf(sortedList[1]),
+    bronze: keyOf(sortedList[2])
+  };
+  // Flags that the ranking has actually been read — so consumers can tell
+  // a genuine "no medal" from a not-yet-loaded cache (the medal-theme gate
+  // must not revoke a theme before it knows the real standing).
+  window.rankingMedalsReady = true;
+  // Let tag-rendering surfaces (e.g. the Account page) and the medal-theme
+  // gate refresh once the medal cache is known or changes.
+  try { window.dispatchEvent(new Event("rankingmedalschange")); } catch (e) {}
+}
+
+// The medal tag a username currently holds by ranking position, or "".
+function medalTagForName(name) {
+  const k = subHostKey(name || "");
+  if (!k) return "";
+  if (k === rankingMedalCache.gold) return "Gold Player";
+  if (k === rankingMedalCache.silver) return "Silver Player";
+  if (k === rankingMedalCache.bronze) return "Bronze Player";
+  return "";
+}
+window.medalTagForName = medalTagForName;
+
+// Prepend the current medal tag (if any) to an existing tag-badges HTML
+// string for `username` — the medal badge leads, then the account's real
+// tags. Used wherever a profile's tags are rendered.
+function withMedalTagBadge(tagsHtml, username) {
+  const medal = medalTagForName(username);
+  if (!medal) return tagsHtml || "";
+  return revoxTagBadges({ tags: { [medal]: true } }) + (tagsHtml || "");
+}
+window.withMedalTagBadge = withMedalTagBadge;
+
+// Subscribe to `ranking` and keep the medal cache live. Because the medal
+// tag is computed against this cache (never stored on the account), the
+// moment the top 3 changes — a tournament awards points, a player is
+// overtaken — the cache updates, rankingmedalschange fires, and anyone who
+// drops out of the top 3 loses their Gold/Silver/Bronze Player tag
+// everywhere it's shown. New top-3 entrants gain it the same way.
+let rankingMedalsSubscribed = false;
+function subscribeRankingMedals() {
+  if (rankingMedalsSubscribed || !firebaseReady()) return;
+  const db = initFirebase();
+  if (!db) return;
+  rankingMedalsSubscribed = true;
+  db.ref("ranking").on("value", snap => {
+    const data = snap.val() || {};
+    const list = Object.entries(data)
+      .map(([key, v]) => ({ name: (v && v.name) || key, points: (v && Number(v.points)) || 0 }))
+      .filter(r => r.points > 0 && !isTestRegistrant(r.name))
+      .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
+    setRankingMedalCache(list);
+  }, () => {});
 }
 
 // The profile dropdown is dismissed by an outside click or by hovering away;
 // these hold the active document listener and the hover grace-period timer.
 let profileDropdownOutsideHandler = null;
 let profileDropdownHideTimer = null;
+// Bumped on every showProfileByUsername call so a slow async profile read
+// whose token no longer matches (the user already hovered elsewhere) is
+// discarded instead of popping a stale dropdown.
+let profileDropdownRequestId = 0;
 
 function hideProfileDropdown() {
   clearTimeout(profileDropdownHideTimer);
@@ -2285,8 +2382,10 @@ function positionProfileDropdown(panel, anchorEl) {
 }
 
 // Resolve a username to its account and show that profile in a read-only
-// dropdown (photo, banner, bio, tags) anchored to the clicked name. Reading
-// another account's profile needs the public users read rule.
+// dropdown (photo, banner, bio, tags) anchored to the clicked name. The
+// dropdown is revealed ONLY when a profile actually exists — a username
+// with no public profile (free-form Register Others / Test names) opens
+// nothing at all.
 function showProfileByUsername(username, anchorEl) {
   const panel = document.getElementById("profile-view-popup");
   if (!panel || !username) return;
@@ -2296,57 +2395,74 @@ function showProfileByUsername(username, anchorEl) {
   const bioEl = document.getElementById("profile-view-bio");
   const tagsEl = document.getElementById("profile-view-tags");
   const statusEl = document.getElementById("profile-view-status");
-  if (nameEl) nameEl.textContent = username;
-  if (bioEl) bioEl.textContent = "";
-  if (tagsEl) tagsEl.innerHTML = "";
-  if (photoEl) photoEl.src = PROFILE_VIEW_PHOTO_PH;
-  if (bannerEl) bannerEl.src = PROFILE_VIEW_BANNER_PH;
-  if (statusEl) statusEl.textContent = "Loading…";
-  panel.classList.remove("hidden");
-  positionProfileDropdown(panel, anchorEl);
-  // Keep it open while the pointer is over the dropdown itself.
-  cancelProfileDropdownHide();
-  panel.onmouseenter = cancelProfileDropdownHide;
-  panel.onmouseleave = scheduleProfileDropdownHide;
-  // Dismiss on an outside click — deferred so the opening click doesn't count.
-  if (profileDropdownOutsideHandler) {
-    document.removeEventListener("click", profileDropdownOutsideHandler, true);
-  }
-  profileDropdownOutsideHandler = (e) => {
-    if (panel.contains(e.target)) return;
-    if (anchorEl && anchorEl.contains(e.target)) return;
-    hideProfileDropdown();
+
+  // Each call gets a token; an async read whose token is stale (the user
+  // moved on to another name) is discarded without opening anything.
+  const reqId = ++profileDropdownRequestId;
+
+  // Populate the panel fields from a profile-shaped object. The tag row
+  // leads with the live medal tag (Gold/Silver/Bronze Player) if this
+  // account currently sits in the ranking's top 3.
+  const fill = (p) => {
+    if (statusEl) statusEl.textContent = "";
+    if (nameEl) nameEl.textContent = (p && p.username) || username;
+    if (photoEl) photoEl.src = (p && p.photo) || PROFILE_VIEW_PHOTO_PH;
+    if (bannerEl) bannerEl.src = (p && p.banner) || PROFILE_VIEW_BANNER_PH;
+    if (bioEl) bioEl.textContent = (p && p.bio) || "";
+    if (tagsEl) tagsEl.innerHTML = withMedalTagBadge(revoxTagBadges(p || {}), username);
   };
-  setTimeout(() => {
+
+  // Reveal the (already-filled) panel and wire its dismiss handlers. Only
+  // ever called once we have a real profile — so a missing profile never
+  // flashes an empty / "not found" card.
+  const reveal = () => {
+    panel.classList.remove("hidden");
+    positionProfileDropdown(panel, anchorEl);
+    cancelProfileDropdownHide();
+    panel.onmouseenter = cancelProfileDropdownHide;
+    panel.onmouseleave = scheduleProfileDropdownHide;
     if (profileDropdownOutsideHandler) {
-      document.addEventListener("click", profileDropdownOutsideHandler, true);
+      document.removeEventListener("click", profileDropdownOutsideHandler, true);
     }
-  }, 0);
+    profileDropdownOutsideHandler = (e) => {
+      if (panel.contains(e.target)) return;
+      if (anchorEl && anchorEl.contains(e.target)) return;
+      hideProfileDropdown();
+    };
+    setTimeout(() => {
+      if (profileDropdownOutsideHandler) {
+        document.addEventListener("click", profileDropdownOutsideHandler, true);
+      }
+    }, 0);
+  };
+
+  // The signed-in user's own card fills straight from the in-memory
+  // profile — instant, always exists, no Firebase read needed.
+  const myUname = (window.getCurrentUsername && window.getCurrentUsername()) || "";
+  if (myUname && subHostKey(myUname) === subHostKey(username)) {
+    const mine = (window.getCurrentProfile && window.getCurrentProfile()) || null;
+    if (mine) {
+      // currentProfile.tags is an array; revoxTagBadges wants a {tag:true} map.
+      const tagMap = {};
+      (mine.tags || []).forEach(t => { if (t) tagMap[t] = true; });
+      fill({ username: mine.username, photo: mine.photo, banner: mine.banner, bio: mine.bio, tags: tagMap });
+      reveal();
+      return;
+    }
+  }
 
   const db = initFirebase();
-  if (!db) { if (statusEl) statusEl.textContent = "Live sync isn't configured on this build."; return; }
-  db.ref("usernames/" + subHostKey(username)).once("value").then(snap => {
-    const v = snap.val();
-    if (!v || !v.uid) {
-      if (statusEl) statusEl.textContent = "No registered account uses that username.";
-      return null;
-    }
-    return db.ref("users/" + v.uid).once("value");
-  }).then(snap => {
-    if (!snap) { positionProfileDropdown(panel, anchorEl); return; }
-    const p = snap.val() || {};
-    if (statusEl) statusEl.textContent = "";
-    if (nameEl) nameEl.textContent = p.username || username;
-    if (photoEl) photoEl.src = p.photo || PROFILE_VIEW_PHOTO_PH;
-    if (bannerEl) bannerEl.src = p.banner || PROFILE_VIEW_BANNER_PH;
-    if (bioEl) bioEl.textContent = p.bio || "";
-    if (tagsEl) tagsEl.innerHTML = revoxTagBadges(p);
-    // Content height changed — re-anchor to the username.
-    positionProfileDropdown(panel, anchorEl);
-  }).catch(() => {
-    if (statusEl) statusEl.textContent = "Couldn't load that profile.";
-    positionProfileDropdown(panel, anchorEl);
-  });
+  if (!db) return;
+  // Read the public `profiles/{usernameKey}` mirror FIRST — the dropdown
+  // opens only if a profile is found. No profile (or a denied/failed
+  // read) → nothing pops up.
+  db.ref("profiles/" + subHostKey(username)).once("value").then(snap => {
+    if (reqId !== profileDropdownRequestId) return; // superseded by a newer hover/click
+    const p = snap.val();
+    if (!p) return;                                 // no profile → don't open
+    fill(p);
+    reveal();
+  }).catch(() => { /* read failed → don't open the dropdown */ });
 }
 
 function bindSwissRoomBadge(view) {
@@ -2354,6 +2470,21 @@ function bindSwissRoomBadge(view) {
   // on click (click also covers touch devices, where hover doesn't exist).
   view.querySelectorAll(".swiss-profile-link").forEach(el => {
     const uname = el.dataset.username || "";
+    if (!uname) return;
+    el.addEventListener("click", () => showProfileByUsername(uname, el));
+    el.addEventListener("mouseenter", () => showProfileByUsername(uname, el));
+    el.addEventListener("mouseleave", () => scheduleProfileDropdownHide());
+  });
+}
+
+// Wire any element carrying data-profile-username so click / hover opens
+// that account's profile dropdown. Used by the results lists (final
+// placement list, tournament ranking) where the name has no competing
+// click handler. Mirrors the .swiss-profile-link behaviour above.
+function bindTournamentProfileNames(root) {
+  if (!root) return;
+  root.querySelectorAll("[data-profile-username]").forEach(el => {
+    const uname = el.dataset.profileUsername || "";
     if (!uname) return;
     el.addEventListener("click", () => showProfileByUsername(uname, el));
     el.addEventListener("mouseenter", () => showProfileByUsername(uname, el));
@@ -2551,6 +2682,9 @@ function renderSwiss() {
   });
 
   bindSwissRoomBadge(view);
+  hydrateTournamentAvatars(view);
+  bindTournamentProfileNames(view);
+  hydrateTop8Banners(view);
   view.querySelector("#swiss-start-bracket")?.addEventListener("click", startSwissBracket);
   view.querySelector("#swiss-edit-participants")?.addEventListener("click", showAddParticipantPopup);
   view.querySelector("#swiss-cohosts")?.addEventListener("click", showCoHostsPopup);
@@ -2669,12 +2803,22 @@ function renderSwissRegisteringMarkup(state) {
           : `<span class="swiss-reg-deck-badge swiss-reg-deck-badge-missing">No deck</span>`;
         // Hosts and co-hosts can tap a registrant's name to edit it
         // (re-opens the registration form pre-filled with that
-        // registrant's name + deck).
+        // registrant's name + deck). Viewers and participants can't edit,
+        // so for them the name instead opens the profile dropdown on
+        // click / hover (data-profile-username → bindTournamentProfileNames).
+        const profileAttr = r.name ? ` data-profile-username="${escapeHtml(r.name)}"` : "";
         const nameEl = canEdit
           ? `<button type="button" class="swiss-reg-name swiss-reg-name-edit" data-reg-id="${escapeHtml(r.id)}" title="Edit name or deck">${escapeHtml(r.name || "(unnamed)")}</button>`
-          : `<span class="swiss-reg-name">${escapeHtml(r.name || "(unnamed)")}</span>`;
-        return `<li class="swiss-reg-row">
+          : `<span class="swiss-reg-name"${profileAttr}>${escapeHtml(r.name || "(unnamed)")}</span>`;
+        // Avatar starts on the silhouette placeholder; hydrateRegistrantAvatars
+        // (run after render) swaps in the real photo from the public
+        // `profiles` index when the registrant name maps to an account.
+        const avatarEl = `<img class="swiss-reg-avatar" src="${PROFILE_VIEW_PHOTO_PH}" alt="" data-reg-name="${escapeHtml(r.name || "")}">`;
+        // data-rank-name drives the banner background (hydrateRegistrantBanners).
+        const rowNameAttr = r.name ? ` data-rank-name="${escapeHtml(r.name)}"` : "";
+        return `<li class="swiss-reg-row"${rowNameAttr}>
           <span class="swiss-reg-num">${i + 1}</span>
+          ${avatarEl}
           ${nameEl}
           ${deckBadge}
           ${removeBtn}
@@ -2759,7 +2903,7 @@ function bindSwissRegisteringHandlers(view, state) {
     }, state.pairing === "round-robin");
   });
   view.querySelector("#swiss-edit-groups")?.addEventListener("click", () => {
-    showSwissGroupsPopup((gc) => updateRegisteringSetting({ groupCount: gc }));
+    showSwissGroupsPopup((gc) => updateRegisteringSetting({ groupCount: gc }), state.pairing === "round-robin");
   });
   view.querySelector("#swiss-edit-rounds")?.addEventListener("click", () => {
     showSwissRoundsPopup((rc) => updateRegisteringSetting({ roundCount: rc }));
@@ -2789,6 +2933,154 @@ function bindSwissRegisteringHandlers(view, state) {
     btn.addEventListener("click", () => {
       const id = btn.dataset.regId;
       if (id) showEditRegistrantPopup(id);
+    });
+  });
+  hydrateTournamentAvatars(view);
+  hydrateRegistrantBanners(view);
+  // Viewer / participant registrant names open the profile dropdown
+  // (host / co-host names are edit buttons instead, so they carry no
+  // data-profile-username and are skipped here).
+  bindTournamentProfileNames(view);
+}
+
+// Per-session cache of resolved profile photos, keyed by username key.
+// Value is the photo data-URL, or "" when the name has no public profile
+// (free-form Register Others / Test names, or accounts that haven't saved
+// a profile yet) — caching the empty result avoids re-querying every render.
+const swissRegistrantPhotoCache = Object.create(null);
+
+// Resolve a player name to a profile photo data-URL (""=no photo / no
+// account). The signed-in user's own photo comes straight from the
+// in-memory profile (instant, no Firebase read, works before the public
+// mirror is populated); everyone else's from the public
+// `profiles/{usernameKey}` index, cached per session. Exposed on window
+// so the scoreboard overlay (a separate file) can reuse it.
+function resolveProfilePhoto(name) {
+  const key = subHostKey(name || "");
+  if (!key) return Promise.resolve("");
+  const myKey = subHostKey((window.getCurrentUsername && window.getCurrentUsername()) || "");
+  if (myKey && key === myKey) {
+    return Promise.resolve((window.getCurrentUserPhoto && window.getCurrentUserPhoto()) || "");
+  }
+  if (key in swissRegistrantPhotoCache) return Promise.resolve(swissRegistrantPhotoCache[key]);
+  const db = initFirebase();
+  if (!db) return Promise.resolve("");
+  return db.ref("profiles/" + key + "/photo").once("value").then(snap => {
+    const photo = (typeof snap.val() === "string") ? snap.val() : "";
+    swissRegistrantPhotoCache[key] = photo;
+    return photo;
+  }).catch(() => { swissRegistrantPhotoCache[key] = ""; return ""; });
+}
+window.resolveProfilePhoto = resolveProfilePhoto;
+
+// Per-session cache of resolved profile-banner data-URLs, keyed by
+// username key. Same shape / fallback rules as swissRegistrantPhotoCache.
+const swissRegistrantBannerCache = Object.create(null);
+
+// Resolve a player name to their profile banner data-URL (""=none), used
+// as the tournament-ranking row background. Mirrors resolveProfilePhoto:
+// own profile from memory, others from the public
+// `profiles/{usernameKey}/banner`.
+function resolveProfileBanner(name) {
+  const key = subHostKey(name || "");
+  if (!key) return Promise.resolve("");
+  const myKey = subHostKey((window.getCurrentUsername && window.getCurrentUsername()) || "");
+  if (myKey && key === myKey) {
+    const mine = (window.getCurrentProfile && window.getCurrentProfile()) || null;
+    return Promise.resolve((mine && mine.banner) || "");
+  }
+  if (key in swissRegistrantBannerCache) return Promise.resolve(swissRegistrantBannerCache[key]);
+  const db = initFirebase();
+  if (!db) return Promise.resolve("");
+  return db.ref("profiles/" + key + "/banner").once("value").then(snap => {
+    const v = (typeof snap.val() === "string") ? snap.val() : "";
+    swissRegistrantBannerCache[key] = v;
+    return v;
+  }).catch(() => { swissRegistrantBannerCache[key] = ""; return ""; });
+}
+
+// Gradient scrims layered over a profile-banner row background. The top-3
+// places get a gold / silver / bronze-tinted scrim so the podium identity
+// reads through the banner; everyone else gets a neutral dark scrim. Both
+// keep the row text legible (paired with the .has-rank-banner white-text
+// CSS rules).
+const BANNER_PLACE_SCRIM = {
+  1: "linear-gradient(rgba(227, 179, 65, 0.40), rgba(22, 16, 4, 0.72))",
+  2: "linear-gradient(rgba(177, 186, 196, 0.40), rgba(15, 17, 20, 0.72))",
+  3: "linear-gradient(rgba(198, 128, 68, 0.40), rgba(22, 15, 8, 0.72))"
+};
+const BANNER_NEUTRAL_SCRIM = "linear-gradient(rgba(13, 17, 23, 0.55), rgba(13, 17, 23, 0.55))";
+
+// Paint `rowEl` with `name`'s profile banner as a full background, scrimmed
+// by `place` (1/2/3 → medal tint, anything else → neutral). Adds the
+// .has-rank-banner class so the white-text legibility rules kick in.
+// No-op when the player has no banner.
+function paintProfileBannerRow(rowEl, name, place) {
+  if (!rowEl || !name) return;
+  resolveProfileBanner(name).then(banner => {
+    if (!banner) return;
+    rowEl.style.backgroundImage = `${BANNER_PLACE_SCRIM[place] || BANNER_NEUTRAL_SCRIM}, url("${banner}")`;
+    rowEl.style.backgroundSize = "cover";
+    rowEl.style.backgroundPosition = "center";
+    rowEl.classList.add("has-rank-banner");
+  });
+}
+
+// Paint each tournament-ranking row (carrying data-rank-name) with that
+// player's profile banner as a full-row background.
+function hydrateRankingBanners(container) {
+  if (!container) return;
+  container.querySelectorAll(".tournament-ranking-row[data-rank-name]").forEach(row => {
+    const name = row.dataset.rankName || "";
+    if (!name) return;
+    const place = row.classList.contains("tournament-results-place-1") ? 1
+      : row.classList.contains("tournament-results-place-2") ? 2
+      : row.classList.contains("tournament-results-place-3") ? 3 : 0;
+    paintProfileBannerRow(row, name, place);
+  });
+}
+
+// Paint each final-placement row (.swiss-top-rank, carrying data-rank-name
+// + data-rank-place) with that player's profile banner.
+function hydrateTop8Banners(view) {
+  if (!view) return;
+  view.querySelectorAll(".swiss-top-rank[data-rank-name]").forEach(li => {
+    const name = li.dataset.rankName || "";
+    if (!name) return;
+    paintProfileBannerRow(li, name, parseInt(li.dataset.rankPlace, 10) || 0);
+  });
+}
+
+// Paint each registering-phase registrant row with that player's profile
+// banner. Registrants aren't ranked, so they always get the neutral scrim.
+function hydrateRegistrantBanners(view) {
+  if (!view) return;
+  view.querySelectorAll(".swiss-reg-row[data-rank-name]").forEach(li => {
+    const name = li.dataset.rankName || "";
+    if (name) paintProfileBannerRow(li, name, 0);
+  });
+}
+
+// Swap every tournament avatar placeholder inside `view` for the account's
+// real photo. Covers the registering-view registrant rows (.swiss-reg-avatar)
+// and the running-view match-card / standings name cells (.swiss-name-avatar)
+// — both carry data-reg-name. Names with no public profile keep the
+// silhouette placeholder.
+function hydrateTournamentAvatars(view) {
+  if (!view) return;
+  const imgs = view.querySelectorAll("img[data-reg-name]");
+  if (!imgs.length) return;
+  // Group the <img>s by name so each distinct player resolves once, even
+  // if they appear in more than one card.
+  const byName = Object.create(null);
+  imgs.forEach(img => {
+    const name = img.dataset.regName || "";
+    if (!name) return;
+    (byName[name] = byName[name] || []).push(img);
+  });
+  Object.keys(byName).forEach(name => {
+    resolveProfilePhoto(name).then(photo => {
+      if (photo) byName[name].forEach(img => { img.src = photo; });
     });
   });
 }
@@ -4443,9 +4735,18 @@ function showSwissRoundsPopup(onPick) {
   popup.classList.remove("hidden");
 }
 
-function showSwissGroupsPopup(onPick) {
+function showSwissGroupsPopup(onPick, isRoundRobin) {
   const popup = document.getElementById("swiss-groups-popup");
   if (!popup) { onPick(SWISS_GROUP_COUNT_DEFAULT); return; }
+  // The popup is shared by the Swiss and Round Robin setup flows — word the
+  // description for whichever format opened it.
+  const subtitle = popup.querySelector(".popup-subtitle");
+  if (subtitle) {
+    subtitle.textContent = (isRoundRobin
+      ? "Split participants into how many Round Robin groups? "
+      : "Split participants into how many Swiss groups? ")
+      + "Top finishers from each group feed the Top-8 bracket.";
+  }
   const options = popup.querySelector(".swiss-groups-options");
   const cancelBtn = popup.querySelector("#swiss-groups-cancel");
   const close = (gc) => {
@@ -4515,7 +4816,7 @@ function showTournamentModePopup(onPick) {
     showTopEightPopup((mode) => {
       if (!mode) return; // user cancelled at the Top 8 step
       showSwissRoundsPopup((rc) => {
-        showSwissGroupsPopup((gc) => onPick(mode, name, rc, true, gc));
+        showSwissGroupsPopup((gc) => onPick(mode, name, rc, true, gc), false);
       });
     });
   };
@@ -4526,7 +4827,7 @@ function showTournamentModePopup(onPick) {
     // rounds are fixed by group size (everyone plays everyone once).
     showTopEightPopup((mode) => {
       if (!mode) return;
-      showSwissGroupsPopup((gc) => onPick(mode, name, undefined, true, gc, "round-robin"));
+      showSwissGroupsPopup((gc) => onPick(mode, name, undefined, true, gc, "round-robin"), true);
     }, true);
   };
   singleBtn.onclick = () => {
@@ -4886,6 +5187,10 @@ if (screen.orientation && typeof screen.orientation.addEventListener === "functi
 document.addEventListener("fullscreenchange", scheduleSwissScrollRestore);
 document.addEventListener("webkitfullscreenchange", scheduleSwissScrollRestore);
 
+// Subscribe to the ranking on load so profile cards show — and live-update —
+// Gold / Silver / Bronze Player tags even before the Ranking tab is opened.
+subscribeRankingMedals();
+
 (function initTournamentSubTabs() {
   const tabs = document.querySelectorAll(".tournament-sub-tab");
   if (!tabs.length) return;
@@ -4938,19 +5243,22 @@ document.addEventListener("webkitfullscreenchange", scheduleSwissScrollRestore);
   window.addEventListener("userprofilechange", paintCreateTournamentBtn);
 
   // ===== Tutorial popup: auto-sliding image carousel that explains how a
-  //       new player joins a tournament. The slides are tutorial/0.jpeg
-  //       through tutorial/7.jpeg. =====
-  const TUTORIAL_SLIDES = 8;
+  //       new player joins a tournament. Slide images are listed in
+  //       TUTORIAL_FILES (assets/tutorial/{file}.jpeg) — note 0.5 sits
+  //       between 0 and 1. TUTORIAL_CAPTIONS is index-aligned to it. =====
+  const TUTORIAL_FILES = ["0", "0.5", "1", "2", "3", "4", "5", "6", "7"];
   const TUTORIAL_CAPTIONS = [
-    "1. Build your deck. In the Deck tab, fill the 3 slots, then tap Copy to put your deck on the clipboard.",
-    "2. Find a tournament. Switch to the Tournament tab and tap a room in the Open Tournaments list.",
-    "3. Pick Participant. Choose Participant from the join popup (the other options are Co-host and Viewer).",
-    "4. Sign in or play as Guest. Sign in to earn ranking points on finish, or Become Guest to play without affecting the leaderboard.",
-    "5. Sign in — or create an account. Enter your email and password. New here? Switch to Sign up first.",
-    "6. Signed-in registration. Your name is filled in from your account and locked — just paste your deck or build each slot by tapping it.",
-    "7. Guest registration. Type a name, then paste your deck (or tap each empty slot to build one by hand) and hit Register.",
-    "8. You're in! Wait for the host to start. Your registered deck pre-fills every match you play."
+    "1. Build your deck. In the Deck tab, fill all 3 slots, then tap Copy to put your deck on the clipboard.",
+    "2. Before that, fill the slots. Each deck slot is a combo built in the Calculator — build one, tap Calculate, then press the + Deck button on the result to add it to your deck.",
+    "3. Find a tournament. Switch to the Tournament tab and tap a room in the Open Tournaments list.",
+    "4. Pick Participant. Choose Participant from the join popup (the other options are Co-host and Viewer).",
+    "5. Sign in or play as Guest. Sign in to earn ranking points on finish, or Become Guest to play without affecting the leaderboard.",
+    "6. Sign in — or create an account. Enter your email and password. New here? Switch to Sign up first.",
+    "7. Signed-in registration. Your name is filled in from your account and locked — just paste your deck or build each slot by tapping it.",
+    "8. Guest registration. Type a name, then paste your deck (or tap each empty slot to build one by hand) and hit Register.",
+    "9. You're in! Wait for the host to start. Your registered deck pre-fills every match you play."
   ];
+  const TUTORIAL_SLIDES = TUTORIAL_FILES.length;
   let tutorialIndex = 0;
   let tutorialAutoTimer = null;
   let tutorialSlideEls = [];
@@ -4963,7 +5271,7 @@ document.addEventListener("webkitfullscreenchange", scheduleSwissScrollRestore);
     overlay.className = "popup-overlay hidden";
     const slidesHtml = Array.from({ length: TUTORIAL_SLIDES }, (_, i) =>
       `<figure class="tutorial-slide${i === 0 ? " active" : ""}">
-         <img src="assets/tutorial/${i}.jpeg" alt="Step ${i + 1} of ${TUTORIAL_SLIDES}">
+         <img src="assets/tutorial/${TUTORIAL_FILES[i]}.jpeg" alt="Step ${i + 1} of ${TUTORIAL_SLIDES}">
          <figcaption class="tutorial-caption">${escapeHtml(TUTORIAL_CAPTIONS[i] || "")}</figcaption>
        </figure>`
     ).join("");
@@ -5053,43 +5361,9 @@ document.addEventListener("webkitfullscreenchange", scheduleSwissScrollRestore);
     document.getElementById("tutorial-popup")?.classList.add("hidden");
   }
 
-  // ===== Auto-open the tutorial popup after 3 seconds of idle on the
-  //       Tournament tab (lobby view). =====
-  const TUTORIAL_IDLE_MS = 3000;
-  let tutorialIdleTimer = null;
-
-  function tournamentTabIsVisible() {
-    const section = document.getElementById("form-swiss");
-    return !!(section && !section.classList.contains("hidden"));
-  }
-
-  function shouldAutoshowTutorial() {
-    if (!tournamentTabIsVisible()) return false;
-    // Skip when any popup (sign-in, registration, share, the tutorial
-    // itself, etc.) is already up, or when the user is inside a running /
-    // registering room.
-    const visiblePopup = document.querySelector(".popup-overlay:not(.hidden)");
-    if (visiblePopup) return false;
-    if (swissRoomRef) return false;
-    return true;
-  }
-
-  function scheduleTutorialAutoshow() {
-    if (tutorialIdleTimer) clearTimeout(tutorialIdleTimer);
-    tutorialIdleTimer = setTimeout(() => {
-      tutorialIdleTimer = null;
-      if (shouldAutoshowTutorial()) showTutorialPopup();
-    }, TUTORIAL_IDLE_MS);
-  }
-
-  // Any user interaction restarts the 7s idle countdown so an active user is
-  // never interrupted. Listeners attach once; they're cheap and passive.
-  ["mousemove", "mousedown", "touchstart", "keydown", "scroll", "wheel"].forEach(evt =>
-    document.addEventListener(evt, scheduleTutorialAutoshow, { passive: true })
-  );
-  // Kick off the timer on first paint — only fires if the Tournament tab is
-  // the visible page.
-  scheduleTutorialAutoshow();
+  // ===== Tutorial popup =====
+  // The tutorial no longer auto-opens on idle — it's shown only when the
+  // user taps the Tutorial button in the Open Tournaments header.
 
   // Build (once) and show a popup with a QR code pointing to /tournament/
   // so participants can scan and open the lobby on their phone.
@@ -5553,7 +5827,9 @@ function showParticipantModeChoice(room) {
   // After sign-in, if the signed-in account is THIS room's host, drop them
   // straight into the host view instead of going through registration; any
   // other account proceeds to ranked participant registration with the name
-  // pre-filled (and locked) to their account's username.
+  // pre-filled (and locked) to their account's username. If the account is
+  // ALREADY registered in this room (same username), the registration step
+  // is skipped entirely — they go straight into the participant view.
   const enterAfterSignin = (signedInUser) => {
     if (signedInUser && room.hostUid && signedInUser.uid === room.hostUid) {
       // Mark this room as hosted on the local device so joinTournamentAsCoHost
@@ -5564,11 +5840,33 @@ function showParticipantModeChoice(room) {
       return;
     }
     const myUname = (window.getCurrentUsername && window.getCurrentUsername()) || "";
-    if (myUname) {
-      showRegistrationPopup(room, { initialName: myUname, lockName: true });
-    } else {
+    if (!myUname) {
       showRegistrationPopup(room);
+      return;
     }
+    // Check the room for a registrant already under this username — if
+    // found, skip the deck-registration form and join straight away.
+    const db = initFirebase();
+    if (!db || !room.editCode) {
+      showRegistrationPopup(room, { initialName: myUname, lockName: true });
+      return;
+    }
+    const lower = myUname.trim().toLowerCase();
+    db.ref("swissRooms/" + room.editCode + "/registrants").once("value").then(snap => {
+      const regs = snap.val() || {};
+      const alreadyRegistered = Object.keys(regs).some(k => {
+        const r = regs[k];
+        return r && typeof r.name === "string" && r.name.trim().toLowerCase() === lower;
+      });
+      if (alreadyRegistered) {
+        joinTournamentAsParticipant(room);
+      } else {
+        showRegistrationPopup(room, { initialName: myUname, lockName: true });
+      }
+    }).catch(() => {
+      // Lookup failed — fall back to the registration form.
+      showRegistrationPopup(room, { initialName: myUname, lockName: true });
+    });
   };
 
   signinBtn.onclick = () => {
@@ -5703,6 +6001,22 @@ function joinTournamentAsViewer(room) {
   disconnectSwissRoom();
   localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [], phase: "running", registrants: {} }));
   connectSwissRoom(room.editCode, room.viewCode || null, false, false);
+  const hostingTab = document.querySelector('.tournament-sub-tab[data-tournament-view="hosting"]');
+  hostingTab?.click();
+}
+
+// Drop an already-registered, signed-in player straight into the tournament
+// as a participant — no registration popup, since their name + deck are
+// already on file. Mirrors joinTournamentAsViewer but tags the session
+// role "participant" so the History tab records it correctly.
+function joinTournamentAsParticipant(room) {
+  if (!firebaseReady()) {
+    alert("Live sync isn't configured on this build.");
+    return;
+  }
+  disconnectSwissRoom();
+  localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [], phase: "running", registrants: {} }));
+  connectSwissRoom(room.editCode, room.viewCode || null, false, false, "participant");
   const hostingTab = document.querySelector('.tournament-sub-tab[data-tournament-view="hosting"]');
   hostingTab?.click();
 }
@@ -6446,21 +6760,31 @@ function renderTournamentRanking() {
         }))
         .filter(r => r.points > 0 && !isTestRegistrant(r.name))
         .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
+      // Seed the medal cache so profile cards can show Gold / Silver /
+      // Bronze Player tags for the current top 3.
+      setRankingMedalCache(list);
       if (!list.length) {
         container.innerHTML = `<p class="tournament-results-empty">No tournament results yet. Finish an online tournament to start earning ranking points (1st = +5, 2nd = +4, 3rd = +3, top 8 = +2, participation = +1). Same names merge across tournaments.</p>`;
         return;
       }
       const rows = list.map((r, i) => {
         const placeMod = i < 3 ? ` tournament-results-place-${i + 1}` : "";
+        const rankNameAttr = r.name ? ` data-rank-name="${escapeHtml(r.name)}"` : "";
         return `
-          <div class="tournament-results-row tournament-ranking-row${placeMod}">
+          <div class="tournament-results-row tournament-ranking-row${placeMod}"${rankNameAttr}>
             <span class="tournament-results-place">#${i + 1}</span>
-            <span class="tournament-results-player">${escapeHtml(r.name)}</span>
+            <span class="tournament-results-player"${r.name ? ` data-profile-username="${escapeHtml(r.name)}"` : ""}>${swissNameCellInner(r.name)}</span>
             <span class="tournament-ranking-points">${r.points} pt${r.points === 1 ? "" : "s"}</span>
           </div>
         `;
       }).join("");
       container.innerHTML = `<div class="tournament-results-list">${rows}</div>`;
+      // Swap the silhouette placeholders for real profile photos, make each
+      // name open the profile dropdown on click / hover, and paint each
+      // row with the player's profile banner as its background.
+      hydrateTournamentAvatars(container);
+      bindTournamentProfileNames(container);
+      hydrateRankingBanners(container);
     })
     .catch(err => {
       console.warn("Ranking load failed:", err);
@@ -6645,9 +6969,19 @@ function renderRevoxRanking() {
         const subLines =
           (r.tournament ? `<span class="revox-row-meta">${escapeHtml(r.tournament)}</span>` : "") +
           (dateStr ? `<span class="revox-row-meta">${escapeHtml(dateStr)}</span>` : "");
+        // data-rank-name / data-rank-place on the row drive the banner
+        // background; the avatar img's data-reg-name drives the photo —
+        // both hydrated below via the shared tournament helpers.
+        const rankNameAttr = r.name ? ` data-rank-name="${escapeHtml(r.name)}" data-rank-place="${i + 1}"` : "";
         return `
-          <div class="tournament-results-row tournament-ranking-row revox-row${placeMod}">
-            <span class="tournament-results-player"><button type="button" class="revox-name-btn" data-revox-history="${escapeHtml(r.key)}" data-revox-name="${escapeHtml(r.name)}">${escapeHtml(r.name)}</button>${subLines}</span>
+          <div class="tournament-results-row tournament-ranking-row revox-row${placeMod}"${rankNameAttr}>
+            <span class="tournament-results-player">
+              <img class="swiss-name-avatar" src="${PROFILE_VIEW_PHOTO_PH}" alt=""${r.name ? ` data-reg-name="${escapeHtml(r.name)}"` : ""}>
+              <span class="revox-name-stack">
+                <button type="button" class="revox-name-btn" data-revox-history="${escapeHtml(r.key)}" data-revox-name="${escapeHtml(r.name)}">${escapeHtml(r.name)}</button>
+                ${subLines}
+              </span>
+            </span>
             <span class="revox-row-placing">${ordinalPlace(i + 1)}</span>
             <span class="tournament-ranking-points">${r.points} pt${r.points === 1 ? "" : "s"}</span>
             ${adminBtns}
@@ -6655,6 +6989,10 @@ function renderRevoxRanking() {
         `;
       }).join("");
       container.innerHTML = `<div class="tournament-results-list">${rows}</div>`;
+      // Profile photos beside each name, and the member's banner behind
+      // each row — same helpers as the tournament ranking.
+      hydrateTournamentAvatars(container);
+      hydrateRankingBanners(container);
       // Hovering a member name shows that account's profile; clicking opens
       // their tournament history (both available to anyone).
       container.querySelectorAll("[data-revox-history]").forEach(btn => {
@@ -6761,7 +7099,7 @@ function loadRevoxHeaderProfile(name) {
     const p = snap.val() || {};
     if (photoEl && p.photo) photoEl.src = p.photo;
     if (bannerEl && p.banner) bannerEl.src = p.banner;
-    if (tagsEl) tagsEl.innerHTML = revoxTagBadges(p);
+    if (tagsEl) tagsEl.innerHTML = withMedalTagBadge(revoxTagBadges(p), name);
     if (bioEl) {
       bioEl.textContent = p.bio || "";
       bioEl.style.display = p.bio ? "" : "none";

@@ -415,6 +415,8 @@
     if (!u) return Promise.reject(new Error("Not signed in."));
     const ref = profileDbRef(u.uid);
     if (!ref) return Promise.reject(new Error("Live sync isn't configured on this build."));
+    let db;
+    try { db = firebase.database(); } catch (e) { db = null; }
     // A caller that omits photo/banner keeps the existing one (avoids wiping
     // a field when only the username is being changed).
     const clean = {
@@ -432,7 +434,32 @@
       // .update (not .set) so admin-set fields like `tag` aren't wiped.
       return ref.update(clean);
     }).then(() => {
+      // If the username changed, drop the stale public-profile mirror for
+      // the OLD key first — the profiles write rule keys off
+      // usernames/<key>/uid, and claimUsername is about to clear that
+      // mapping for the old key (making the delete impossible afterwards).
+      const newKey = usernameKey(clean.username);
+      const oldKey = usernameKey(prevUsername);
+      if (db && oldKey && oldKey !== newKey) {
+        return db.ref("profiles/" + oldKey).set(null).catch(() => {});
+      }
+    }).then(() => {
       return claimUsername(u.uid, u.email || "", clean.username, prevUsername);
+    }).then(() => {
+      // Mirror the profile into the public `profiles/{usernameKey}` index
+      // so other tabs (tournament registrant avatars, profile hover
+      // cards) can show photo / banner / bio without read access to the
+      // private users tree. .update — not .set — so the Developer-set
+      // `tags` child stays intact.
+      const key = usernameKey(clean.username);
+      if (db && key) {
+        return db.ref("profiles/" + key).update({
+          username: clean.username,
+          photo: clean.photo,
+          banner: clean.banner,
+          bio: clean.bio
+        }).catch(() => {});
+      }
     }).then(() => {
       currentProfile = Object.assign({}, currentProfile, clean);
       window.dispatchEvent(new Event("userprofilechange"));
@@ -492,6 +519,28 @@
     return (currentProfile && currentProfile.username) || "";
   };
 
+  // The signed-in account's profile photo data-URL ("" when none). Lets
+  // other tabs paint the current user's own avatar straight from the
+  // in-memory profile, with no dependency on the public profiles mirror.
+  window.getCurrentUserPhoto = function getCurrentUserPhoto() {
+    return (window.getCurrentUser() && currentProfile && currentProfile.photo) || "";
+  };
+
+  // A shallow copy of the signed-in account's cached profile (username,
+  // photo, banner, bio, tags[]) or null. Lets other tabs render the
+  // current user's own profile card without a Firebase round-trip — and
+  // without depending on the public `profiles` mirror / its read rule.
+  window.getCurrentProfile = function getCurrentProfile() {
+    if (!window.getCurrentUser() || !currentProfile) return null;
+    return {
+      username: currentProfile.username || "",
+      photo: currentProfile.photo || "",
+      banner: currentProfile.banner || "",
+      bio: currentProfile.bio || "",
+      tags: Array.isArray(currentProfile.tags) ? currentProfile.tags.slice() : []
+    };
+  };
+
   // ===== Developer area — a tab + page visible only to accounts whose
   // profile carries the "Developer" tag. Lets a developer browse every
   // registered user, search them, and assign tags. =====
@@ -536,9 +585,11 @@
   }
 
   // The Revox theme is for Revox club accounts — "Revox Admin" and "Revox
-  // Member" both get it applied automatically while signed in. For everyone
-  // else the "Revox" entry in the Settings theme menu is hidden and any
-  // lingering "revox" selection falls back to Dark.
+  // Member". It's applied automatically the FIRST time an account gains
+  // Revox access (club-identity default), after which the user is free to
+  // pick any other theme and have it stick. For non-Revox accounts the
+  // "Revox" entry in the Settings theme menu is hidden and any lingering
+  // "revox" selection falls back to Dark.
   function applyRevoxThemeGate() {
     const isRevoxUser = hasTag("Revox Admin") || hasTag("Revox Member");
 
@@ -548,21 +599,88 @@
     ).forEach(opt => opt.classList.toggle("hidden", !isRevoxUser));
 
     const theme = window.themeSetting;
-    let stored = null;
-    try { stored = localStorage.getItem("theme"); } catch (e) {}
+    let stored = null, seeded = null;
+    try {
+      stored = localStorage.getItem("theme");
+      seeded = localStorage.getItem("revoxThemeSeeded");
+    } catch (e) {}
 
     if (isRevoxUser) {
-      // A signed-in Revox account always gets the Revox theme.
-      if (stored !== "revox" && theme && theme.set) theme.set("revox");
-    } else if (stored === "revox") {
-      // Not a Revox account (any more) — drop the restricted theme.
+      // Seed the Revox theme just once per device. After this the gate
+      // never forces it again, so switching to another theme sticks.
+      if (!seeded) {
+        if (stored !== "revox" && theme && theme.set) theme.set("revox");
+        try { localStorage.setItem("revoxThemeSeeded", "1"); } catch (e) {}
+      }
+    } else {
+      // Not a Revox account (any more) — clear the seed flag so a future
+      // re-grant re-seeds, and drop the restricted theme if it's active.
+      try { localStorage.removeItem("revoxThemeSeeded"); } catch (e) {}
+      if (stored === "revox") {
+        if (theme && theme.set) theme.set("dark");
+        else {
+          document.body.classList.remove("revox-mode");
+          try { localStorage.setItem("theme", "dark"); } catch (e) {}
+        }
+      }
+    }
+  }
+
+  // True once Firebase has reported the initial auth state — lets the
+  // medal gate tell a confirmed "signed out" from "auth not resolved yet".
+  let medalGateAuthReady = false;
+
+  // Medal themes — "gold" / "silver" / "bronze" — are reward themes unlocked
+  // while the account holds the matching ranking medal tag (Gold / Silver /
+  // Bronze Player). The matching theme-menu entry is shown only while the
+  // medal is held; if the account loses the medal (drops out of the
+  // ranking's top 3) and its medal theme is active, it falls back to Dark.
+  // The medal status comes from tournament.js's live ranking cache.
+  function applyMedalThemeGate() {
+    const uname = (window.getCurrentUsername && window.getCurrentUsername()) || "";
+    const medal = (typeof window.medalTagForName === "function")
+      ? window.medalTagForName(uname) : "";
+    const unlocked = medal === "Gold Player" ? "gold"
+      : medal === "Silver Player" ? "silver"
+      : medal === "Bronze Player" ? "bronze" : "";
+
+    // Show only the unlocked medal theme in the menu; hide the others.
+    ["gold", "silver", "bronze"].forEach(v => {
+      document.querySelectorAll(
+        '#setting-theme .setting-dropdown-option[data-value="' + v + '"]'
+      ).forEach(opt => opt.classList.toggle("hidden", v !== unlocked));
+    });
+
+    // Revoking an active medal theme is only safe once we KNOW the real
+    // medal status. That needs three things settled — otherwise a slow
+    // profile load on a fresh page would wrongly demote a legitimate
+    // medal theme before the standing is known:
+    //   1. the ranking has loaded (rankingMedalsReady),
+    //   2. Firebase has reported the initial auth state (medalGateAuthReady),
+    //   3. if signed in, the profile (username) has actually loaded.
+    if (window.rankingMedalsReady !== true) return;
+    if (!medalGateAuthReady) return;
+    const signedIn = !!(window.getCurrentUser && window.getCurrentUser());
+    if (signedIn && !uname) return; // profile still loading — medal unknown
+
+    let stored = null;
+    try { stored = localStorage.getItem("theme"); } catch (e) {}
+    if ((stored === "gold" || stored === "silver" || stored === "bronze") && stored !== unlocked) {
+      const theme = window.themeSetting;
       if (theme && theme.set) theme.set("dark");
       else {
-        document.body.classList.remove("revox-mode");
+        document.body.classList.remove("gold-mode", "silver-mode", "bronze-mode");
         try { localStorage.setItem("theme", "dark"); } catch (e) {}
       }
     }
   }
+  // The ranking cache loads / changes asynchronously — re-run the gate when
+  // it does, so a medal won/lost flips the theme menu (and revokes a stale
+  // medal theme) without needing a reload.
+  window.addEventListener("rankingmedalschange", applyMedalThemeGate);
+  // Mark auth resolved on the first auth callback, then re-run the gate so
+  // a confirmed sign-out (or completed sign-in) is acted on.
+  window.onAuthChange(() => { medalGateAuthReady = true; applyMedalThemeGate(); });
 
   function devEscHtml(s) {
     return String(s == null ? "" : s)
@@ -594,16 +712,23 @@
       })).filter(u => u.uid);
       developerUsers.sort((a, b) => a.username.localeCompare(b.username));
       if (countEl) countEl.textContent = "Registered users: " + developerUsers.length;
-      // Pull each user's tag map (the Developer read rule covers users/*).
+      // Pull each user's tag map + profile photo (the Developer read rule
+      // covers users/*). The photo is a 128px JPEG (a few KB), so sweeping
+      // it in is cheap — and it lets the profiles backfill below publish
+      // avatars without waiting for each member to re-save their profile.
       return Promise.all(developerUsers.map(u =>
-        db.ref("users/" + u.uid + "/tags").once("value")
+        db.ref("users/" + u.uid).once("value")
           .then(s => s.val() || {})
           .catch(() => ({}))
       ));
-    }).then(tagMaps => {
+    }).then(userRecords => {
       (developerUsers || []).forEach((u, i) => {
-        const m = (tagMaps && tagMaps[i]) || {};
+        const rec = (userRecords && userRecords[i]) || {};
+        const m = rec.tags || {};
         u.tags = Object.keys(m).filter(t => m[t]);
+        u._photo = (typeof rec.photo === "string") ? rec.photo : "";
+        u._banner = (typeof rec.banner === "string") ? rec.banner : "";
+        u._bio = (typeof rec.bio === "string") ? rec.bio : "";
       });
       // Sync every public tag-index node (judges, revoxAccounts, …) with
       // whatever the users tree says — each visit by a Developer brings
@@ -625,6 +750,24 @@
         if (Object.keys(patch).length) {
           db.ref(node).update(patch).catch(() => {});
         }
+      });
+      // Backfill the public `profiles` index with each user's username,
+      // tag set, photo, banner and bio — so hover cards, registrant
+      // avatars and ranking-row banners resolve for accounts that predate
+      // the profiles index, without every member having to re-save.
+      (developerUsers || []).forEach(u => {
+        if (!u.username) return;
+        const key = usernameKey(u.username);
+        if (!key) return;
+        const tagMap = {};
+        (u.tags || []).forEach(t => { if (t) tagMap[t] = true; });
+        db.ref("profiles/" + key).update({
+          username: u.username,
+          photo: u._photo || "",
+          banner: u._banner || "",
+          bio: u._bio || "",
+          tags: Object.keys(tagMap).length ? tagMap : null
+        }).catch(() => {});
       });
       setStatus("");
       const search = document.getElementById("developer-search");
@@ -803,6 +946,7 @@
     paintRevoxTab();
     ensureActiveTabVisible();
     applyRevoxThemeGate();
+    applyMedalThemeGate();
     renderDeveloperPage();
   });
   window.onAuthChange(() => {

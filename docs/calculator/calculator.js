@@ -1565,7 +1565,7 @@ function initSettingDropdown(id, storageKey, defaultVal, onChange) {
 
 // Theme setting — exposed so auth.js can apply the Revox-Admin default.
 window.themeSetting = initSettingDropdown("setting-theme", "theme", "dark", (val) => {
-  document.body.classList.remove("light-mode", "space-mode", "tropical-mode", "stormy-mode", "mono-mode", "love-mode", "forest-mode", "revox-mode");
+  document.body.classList.remove("light-mode", "space-mode", "tropical-mode", "stormy-mode", "mono-mode", "love-mode", "forest-mode", "revox-mode", "gold-mode", "silver-mode", "bronze-mode");
   if (val === "light") document.body.classList.add("light-mode");
   if (val === "space") document.body.classList.add("space-mode");
   if (val === "tropical") document.body.classList.add("tropical-mode");
@@ -1574,6 +1574,10 @@ window.themeSetting = initSettingDropdown("setting-theme", "theme", "dark", (val
   if (val === "love") document.body.classList.add("love-mode");
   if (val === "forest") document.body.classList.add("forest-mode");
   if (val === "revox") document.body.classList.add("revox-mode");
+  // Medal themes (unlocked by a top-3 ranking position) are dark-based.
+  if (val === "gold") document.body.classList.add("gold-mode");
+  if (val === "silver") document.body.classList.add("silver-mode");
+  if (val === "bronze") document.body.classList.add("bronze-mode");
   const titleLogo = document.getElementById("app-title-logo");
   if (titleLogo) {
     // Love and Forest use light surfaces (blush / moss-cream), so they
@@ -1590,6 +1594,9 @@ window.themeSetting = initSettingDropdown("setting-theme", "theme", "dark", (val
     : val === "love" ? "#fff0f5"
     : val === "forest" ? "#f0f4e8"
     : val === "revox" ? "#15151a"
+    : val === "gold" ? "#1a1408"
+    : val === "silver" ? "#14171a"
+    : val === "bronze" ? "#1a1109"
     : "#0a4797";
   document.querySelectorAll('img.footer-logo').forEach(img => {
     img.src = (val === "light" || val === "tropical" || val === "love" || val === "forest") ? "assets/icons/revoxNameLight.webp" : "assets/icons/revoxName.webp";

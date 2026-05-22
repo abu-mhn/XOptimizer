@@ -60,15 +60,17 @@ Tournament
 - My Tournaments: a signed-in host is dropped straight back into the tournament they host on any device — the room index follows your account, not the device (a pick list appears only if you host more than one)
 - Join from the lobby as Participant (register name + deck) or Viewer (watch only)
 - Joining as Participant asks "Sign in" or "Become Guest" — signed-in players earn ranking points on finish; guests play normally but stay off the leaderboard
+- Sign in to a tournament you're already registered in (matched on your username) and the deck-registration step is skipped — you go straight into the participant view
 - Signing in as the room's host (matched on hostUid) drops you straight into the host view, even on a fresh device
 - Signing out while inside a tournament returns you to the Open Tournaments lobby; the room itself stays alive in Firebase, so signing back in puts you back inside
 - Sub-hosts: the host lists co-host usernames in a "Sub-hosts" popup — anyone signed in with a listed username gets full co-host powers (no host code) and joins straight as co-host from the lobby
 - The room badge shows the host and the room's designated sub-hosts
 - Hosts AND co-hosts can play (+ Register Myself), start the tournament, add participants, and remove registrants
+- Player profile photos show beside the name everywhere a player appears — registrant rows, group + bracket match cards, group standings, and the live scoreboard — pulled from a public profiles index so it works for every host / co-host (a silhouette shows for free-form Register Others / Test names that have no account)
 - Register Myself pre-fills your account's username and locks the name field, so no one can register under someone else's name from your device
 - Register Others (host / co-host): add a participant manually by name + deck, no need for them to self-register — these entries are treated as guests (no account attached) and don't earn global ranking points on finish; Register Myself stays tied to your account and does earn points
 - QR button in the Open Tournaments header shows a scannable QR code that opens /tournament/ on any phone
-- Tutorial button next to QR / Refresh opens an 8-slide illustrated walkthrough of how to participate — auto-opens after 3 seconds of idle on the Tournament tab; auto-slides, swipeable, with dot navigation
+- Tutorial button next to QR / Refresh opens a 9-slide illustrated walkthrough of how to participate — auto-slides, swipeable, with dot navigation
 - Header buttons (Tutorial / QR / Refresh / Create Tournament) sit on a single horizontal row with an invisible scroller
 - Only accounts tagged "Judge" can Create Tournament — the button hides entirely for signed-out or non-Judge accounts
 - Sub-hosts typeahead lists only accounts tagged "Judge" (via a public judges index synced from the Developer page)
@@ -88,21 +90,23 @@ Tournament
 - Swiss + Top 8 auto-generates the knockout bracket from group standings — 2 groups (top 4), 3 groups (top 2 + 2 best 3rd-place wildcards), 4 groups (top 2)
 - Scoreboard round counter above VS, advancing every 3 score taps
 - Tilt-activated scoreboard on mobile (rotate to landscape)
-- Share button opens a popup for date, time, stadium (Xtreme / Infinity / Double Xtreme), rule (Official / Unofficial), and remark — date renders as "14 May 2026 (Thursday)", and the message points participants at the Deck tab's Copy → Paste flow
-- Share message lists the registered participants (numbered) when anyone has signed up
+- Share button opens a popup for date, time, stadium (Xtreme / Infinity / Double Xtreme), rule (Official / Unofficial), and remark — date renders as "14 May 2026 (Thursday)"
+- Sharing copies the message to the clipboard (the button flashes a thumbs-up) so you can paste it anywhere — WhatsApp, Discord, etc. — instead of going through a device share sheet
+- Share message keeps it short — event details, the registration link, and a pointer to the in-app Tutorial button for how to join (no participant list, no step-by-step register text)
 - Past tournaments stay viewable in history after reset (cached snapshot)
 - Cleaner finish view: once a tournament reaches "Tournament Complete" the running-view toolbar drops the Share, Co-hosts and Add Participant buttons — only the Close button stays, since none of those actions apply after the final is decided
 - Parts-usage pie charts at tournament end as an auto-sliding carousel (theme-aware palette)
 
 Revox
 - Dedicated tab and theme for accounts tagged "Revox Admin" (full edit); "Revox Member" accounts see the tab view-only
-- The Revox theme turns on automatically for signed-in Revox Admin and Revox Member accounts
+- The Revox theme is applied automatically the first time a Revox Admin / Revox Member account is used on a device — after that it's a normal pick in the theme menu, so you can switch to any other theme and it sticks
 - Member ranking by points — no password, the account tag is the key
 - Add Result popup: pick the tournament, date and placing — the placing sets the points (Top 8 scoring: 1st = 8 pts down to 8th = 1)
 - Add Result's Name dropdown lists accounts tagged "Revox Member" or "Revox Admin" (sourced from the public revoxAccounts index — maintained automatically when a Developer adds/removes either tag, and back-filled whenever a Developer opens the Developer tab), merged with anyone who already has a ranking entry
 - Auto-entry: any participant whose account is tagged "Revox Member" or "Revox Admin" (matched via the public revoxAccounts index) and finishes in the Top 8 of a ranked tournament is added to the Revox ranking automatically with placing-based points (1st = 8 pts down to 8th = 1) — guests and test registrants are skipped, and each placing is awarded only once per tournament
 - Add a result onto an existing member straight from their row, or as a brand-new member
 - Hover a member's name for their profile card; tap it for their full tournament history
+- Each member row shows their profile photo beside the name and their profile banner as the row background (top 3 keep a gold / silver / bronze tint)
 - The history popup leads with the member's profile (banner, photo, tags, bio), then every event they joined, newest first
 - Revox Admins can edit or delete any recorded result — the member's points re-total automatically
 
@@ -121,7 +125,8 @@ History
 - Sub-tabs show icons next to "Last 3 Combos" and "Tournaments" for quick scanning
 
 Settings
-- Themes: Dark, Light, Space, Tropical, Stormy, Monochrome, Love, Forest (plus Revox, for Revox Admins)
+- Themes: Dark, Light, Space, Tropical, Stormy, Monochrome, Love, Forest (plus Revox, for Revox accounts)
+- Medal themes: Gold, Silver and Bronze are reward themes — each is unlocked only while the account holds the matching medal tag (top 3 of the tournament ranking); the menu entry appears when the medal is earned and disappears when it's lost, reverting to Dark if that medal theme was active
 - Stat display: Bar or Radar
 - Additional button mode picker (Random / Meta)
 - Account: sign up / sign in with username or email + password, forgot-password reset, sign out
@@ -130,10 +135,12 @@ Settings
 Profile
 - Your own profile tab — the profile photo doubles as the tab icon
 - Upload a photo and a banner (tap the image to change it), set a username and a short bio
+- Your profile banner doubles as your tournament-ranking row background — each ranked player's row is painted with their own banner (a medal-tinted scrim keeps the gold / silver / bronze podium identity)
 - Discord-style profile card; admin-assigned tags show as colour-coded badges (Revox red, Developer black-and-blue, Revox Admin gold-bordered, Tester teal, Judge black-on-white)
+- Auto medal tags: the current top 3 of the tournament ranking carry a "Gold Player" / "Silver Player" / "Bronze Player" badge on their profile — derived live from the ranking (not stored on the account), so it always reflects the current standing and shifts automatically as rankings change. The matching medal tag also unlocks the matching Gold / Silver / Bronze theme
 - Tag chips render on a single horizontal line with an invisible scroller — same treatment in the profile page, the profile hover card, the Revox history popup and the Developer page rows
 - Profile syncs to your account — same photo, name and bio on every device
-- Anyone's profile opens as a card when you hover or click their username — in a tournament room, the Revox member list, or the Developer page
+- Anyone's profile opens as a card when you hover or click their username — in a tournament room, the final placement list, the tournament ranking, the Revox member list, or the Developer page
 
 Developer
 - Extra tab shown only to accounts tagged "Developer"
@@ -243,39 +250,69 @@ Other
       if (kind) statusEl.classList.add(`is-${kind}`);
     };
 
+    // Render the tag badges for `profile`, led by the live medal tag
+    // (Gold/Silver/Bronze Player) when the account currently sits in the
+    // ranking's top 3. Split out of fill() so it can re-run on its own
+    // when the medal cache loads — without touching pending photo edits.
+    const renderAccountTags = (profile) => {
+      if (!tagsEl) return;
+      const tags = ((profile && profile.tags) || []).slice();
+      const medal = (typeof window.medalTagForName === "function")
+        ? window.medalTagForName((profile && profile.username) || "")
+        : "";
+      const allTags = medal ? [medal].concat(tags) : tags;
+      tagsEl.textContent = "";
+      allTags.forEach(t => {
+        const s = document.createElement("span");
+        // Colour the badge by tag family: Revox tags use the Revox theme
+        // colour, the Developer tag uses a black-and-blue badge, the medal
+        // tags use gold / silver / bronze.
+        const lower = String(t || "").toLowerCase();
+        let variant = "";
+        if (lower.indexOf("revox") >= 0) {
+          variant = " account-tag-revox";
+          if (lower === "revox admin") variant += " account-tag-revox-admin";
+        } else if (lower === "developer") {
+          variant = " account-tag-developer";
+        } else if (lower === "tester") {
+          variant = " account-tag-tester";
+        } else if (lower === "judge") {
+          variant = " account-tag-judge";
+        } else if (lower === "gold player") {
+          variant = " account-tag-gold";
+        } else if (lower === "silver player") {
+          variant = " account-tag-silver";
+        } else if (lower === "bronze player") {
+          variant = " account-tag-bronze";
+        }
+        s.className = "account-tag" + variant;
+        s.textContent = t;
+        tagsEl.appendChild(s);
+      });
+      tagsEl.classList.toggle("hidden", !allTags.length);
+    };
+
+    // The last profile shown — lets the medal-cache event re-render just
+    // the tag row (see the rankingmedalschange listener below).
+    let lastFilledProfile = null;
+
     const fill = (profile) => {
+      lastFilledProfile = profile || {};
       pendingPhoto = (profile && profile.photo) || "";
       pendingBanner = (profile && profile.banner) || "";
       if (nameInput) nameInput.value = (profile && profile.username) || "";
       if (bioInput) bioInput.value = (profile && profile.bio) || "";
-      if (tagsEl) {
-        const tags = (profile && profile.tags) || [];
-        tagsEl.textContent = "";
-        tags.forEach(t => {
-          const s = document.createElement("span");
-          // Colour the badge by tag family: Revox tags use the Revox theme
-          // colour, the Developer tag uses a black-and-blue badge.
-          const lower = String(t || "").toLowerCase();
-          let variant = "";
-          if (lower.indexOf("revox") >= 0) {
-            variant = " account-tag-revox";
-            if (lower === "revox admin") variant += " account-tag-revox-admin";
-          } else if (lower === "developer") {
-            variant = " account-tag-developer";
-          } else if (lower === "tester") {
-            variant = " account-tag-tester";
-          } else if (lower === "judge") {
-            variant = " account-tag-judge";
-          }
-          s.className = "account-tag" + variant;
-          s.textContent = t;
-          tagsEl.appendChild(s);
-        });
-        tagsEl.classList.toggle("hidden", !tags.length);
-      }
+      renderAccountTags(lastFilledProfile);
       if (avatar) avatar.src = pendingPhoto || PLACEHOLDER;
       if (banner) banner.src = pendingBanner || BANNER_PLACEHOLDER;
     };
+
+    // The medal cache loads / changes asynchronously — refresh only the
+    // tag row so a freshly-known medal appears without wiping a photo the
+    // user may have picked but not yet saved.
+    window.addEventListener("rankingmedalschange", () => {
+      if (lastFilledProfile) renderAccountTags(lastFilledProfile);
+    });
 
     // Toggle the signed-in / signed-out panes and load the profile.
     const render = (user) => {

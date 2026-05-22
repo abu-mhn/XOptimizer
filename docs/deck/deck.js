@@ -425,7 +425,12 @@ function renderDeckCanvas(onReady) {
   wrap.appendChild(title);
 
   const clone = deckList.cloneNode(true);
-  clone.querySelectorAll(".btn-deck-remove").forEach(b => b.remove());
+  // Drop the per-slot action buttons (edit pencil + remove ×) — they're
+  // interactive controls, not deck content, so they shouldn't appear in
+  // the exported image. Removing the whole .deck-slot-actions wrapper
+  // also takes the edit button's blue focus border with it.
+  clone.querySelectorAll(".deck-slot-actions").forEach(el => el.remove());
+  clone.querySelectorAll(".btn-deck-remove, .btn-deck-edit").forEach(b => b.remove());
   wrap.appendChild(clone);
 
   const footer = document.createElement("div");

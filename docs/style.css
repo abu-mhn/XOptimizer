@@ -996,6 +996,24 @@ body.light-mode .result-part-name {
     color: #000000;
     border-color: #000000;
 }
+/* Medal tags — auto-assigned to the ranking's top 3 (Gold / Silver /
+   Bronze Player). Dark text on a metallic fill so they read as podium
+   badges, distinct from the admin-assigned tag families above. */
+.account-tag-gold {
+    background: linear-gradient(135deg, #f7d774, #d9a429);
+    color: #3d2c00;
+    border-color: #f1cf6e;
+}
+.account-tag-silver {
+    background: linear-gradient(135deg, #e4e8ec, #aeb6bf);
+    color: #2b2f33;
+    border-color: #d6dde4;
+}
+.account-tag-bronze {
+    background: linear-gradient(135deg, #d99a5e, #a4642f);
+    color: #2e1a08;
+    border-color: #e0a06b;
+}
 .account-bio-field {
     display: flex;
     flex-direction: column;
@@ -4274,6 +4292,21 @@ body.light-mode .part-img {
     text-transform: uppercase;
     letter-spacing: 2px;
     margin-bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+.scoreboard-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.08);
+}
+.scoreboard-avatar.hidden {
+    display: none;
 }
 
 .scoreboard-score {
@@ -6934,6 +6967,15 @@ body.light-mode .swiss-group-progress {
     min-width: 1.5em;
     text-align: right;
 }
+.swiss-reg-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: 0 0 auto;
+    background: rgba(110, 118, 129, 0.2);
+    border: 1px solid rgba(110, 118, 129, 0.35);
+}
 .swiss-reg-name {
     flex: 1;
     color: #f0f6fc;
@@ -7430,6 +7472,27 @@ button.swiss-reg-name-edit:focus-visible {
     filter: brightness(0) invert(1);
 }
 
+/* Mirror the .reel-sub-tab icon handling. On the 4 light themes an
+   inactive sub-tab has a white background, so the white-filtered icon
+   would vanish — flip it dark. The active tab keeps its accent
+   background, so its white icon stays. On mono it's the reverse: the
+   ACTIVE tab is white-backed (inactive is #111), so only the active
+   icon needs flipping there. */
+body.light-mode .tournament-sub-tab:not(.active) img,
+body.light-mode .history-sub-tab:not(.active) img,
+body.tropical-mode .tournament-sub-tab:not(.active) img,
+body.tropical-mode .history-sub-tab:not(.active) img,
+body.love-mode .tournament-sub-tab:not(.active) img,
+body.love-mode .history-sub-tab:not(.active) img,
+body.forest-mode .tournament-sub-tab:not(.active) img,
+body.forest-mode .history-sub-tab:not(.active) img {
+    filter: brightness(0);
+}
+body.mono-mode .tournament-sub-tab.active img,
+body.mono-mode .history-sub-tab.active img {
+    filter: brightness(0);
+}
+
 .history-sub-tab:hover:not(.active),
 .history-sub-tab:focus-visible,
 .tournament-sub-tab:hover:not(.active),
@@ -7626,6 +7689,75 @@ button.swiss-reg-name-edit:focus-visible {
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 0.95rem;
+}
+/* Global tournament ranking rows carry an avatar (swissNameCellInner) — lay
+   the cell out as a flex row. Scoped with :not(.revox-row) so the Revox
+   ranking rows (which stack a name button over meta lines) are untouched. */
+.tournament-ranking-row:not(.revox-row) .tournament-results-player {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: normal;
+}
+
+/* A ranking row painted with the player's profile banner (set inline by
+   hydrateRankingBanners). The banner already carries a dark gradient
+   scrim; force white text + shadow so it's legible on every theme. */
+.tournament-ranking-row.has-rank-banner,
+.tournament-ranking-row.has-rank-banner .tournament-results-place,
+.tournament-ranking-row.has-rank-banner .tournament-results-player,
+.tournament-ranking-row.has-rank-banner .swiss-name-text,
+.tournament-ranking-row.has-rank-banner .tournament-ranking-points {
+    color: #ffffff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
+.tournament-ranking-row.has-rank-banner .swiss-name-avatar {
+    border-color: rgba(255, 255, 255, 0.6);
+}
+/* Keep the podium identity on banner rows: the rank chip stays gold /
+   silver / bronze (more specific than the white-text rule above), and
+   the row border keeps its medal colour. */
+.tournament-ranking-row.has-rank-banner.tournament-results-place-1 .tournament-results-place {
+    color: #f1cf6e;
+}
+.tournament-ranking-row.has-rank-banner.tournament-results-place-2 .tournament-results-place {
+    color: #d6dde4;
+}
+.tournament-ranking-row.has-rank-banner.tournament-results-place-3 .tournament-results-place {
+    color: #e0a06b;
+}
+.tournament-ranking-row.has-rank-banner.tournament-results-place-1,
+.tournament-ranking-row.has-rank-banner.tournament-results-place-2,
+.tournament-ranking-row.has-rank-banner.tournament-results-place-3 {
+    border-width: 2px;
+}
+
+/* A final-placement row painted with the player's profile banner (set
+   inline by hydrateTop8Banners). Same legibility treatment — white text +
+   shadow. The medal emoji already signals the podium colour. */
+.swiss-top-rank.has-rank-banner {
+    border-radius: 6px;
+}
+.swiss-top-rank.has-rank-banner .swiss-top-rank-num,
+.swiss-top-rank.has-rank-banner .swiss-top-rank-name {
+    color: #ffffff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
+.swiss-top-rank.has-rank-banner .swiss-name-avatar {
+    border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* A registrant row painted with the player's profile banner (set inline by
+   hydrateRegistrantBanners). Force the row number + name to legible white;
+   the Deck badge and remove button keep their own colours. */
+.swiss-reg-row.has-rank-banner .swiss-reg-num,
+.swiss-reg-row.has-rank-banner .swiss-reg-name,
+.swiss-reg-row.has-rank-banner button.swiss-reg-name-edit {
+    color: #ffffff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
+.swiss-reg-row.has-rank-banner .swiss-reg-avatar {
+    border-color: rgba(255, 255, 255, 0.6);
 }
 
 .tournament-results-place-1 {
@@ -7876,6 +8008,16 @@ button.swiss-reg-name-edit:focus-visible {
 
 .revox-row .tournament-results-player {
     font-size: 1rem;
+    /* Avatar to the left, name + meta stacked to its right. */
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+.revox-name-stack {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
 }
 
 .revox-row-meta {
@@ -7886,6 +8028,19 @@ button.swiss-reg-name-edit:focus-visible {
     color: #8b949e;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* Revox row painted with the member's banner — keep the name, meta and
+   placing legible (the row already carries the .has-rank-banner white
+   colour for generic cells; these cover the Revox-specific elements). */
+.revox-row.has-rank-banner .revox-name-btn,
+.revox-row.has-rank-banner .revox-row-placing {
+    color: #ffffff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
+.revox-row.has-rank-banner .revox-row-meta {
+    color: rgba(255, 255, 255, 0.82);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
 }
 
 /* Even floor height so single-line rows don't look cramped next to rows
@@ -8507,7 +8662,7 @@ body.stormy-mode .btn-small:hover {
 
 .swiss-top-rank {
     display: grid;
-    grid-template-columns: 3em 1.5em 1fr;
+    grid-template-columns: 3em 1.5em auto 1fr;
     align-items: center;
     gap: 8px;
     padding: 4px 6px;
@@ -8530,6 +8685,14 @@ body.stormy-mode .btn-small:hover {
 
 .swiss-top-rank-name {
     color: #c9d1d9;
+}
+
+/* Names that open the profile dropdown on click / hover (results lists). */
+[data-profile-username] {
+    cursor: pointer;
+}
+[data-profile-username]:hover {
+    text-decoration: underline;
 }
 
 .swiss-top-rank-1 {
@@ -8613,9 +8776,26 @@ body.light-mode .swiss-top-rank-2 .swiss-top-rank-name {
 }
 
 .swiss-name-cell {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+    min-width: 0;
+}
+.swiss-name-avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: 0 0 auto;
+    background: rgba(110, 118, 129, 0.2);
+    border: 1px solid rgba(110, 118, 129, 0.35);
+}
+.swiss-name-text {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    min-width: 0;
 }
 
 /* Standings name cell rendered as a tap-to-rename button (host-only). Strip
@@ -11401,3 +11581,1605 @@ body.mono-mode     .swiss-reg-format-editable { border-color: #4a4a4a; }
     color: #d29922;
     border: 1px solid rgba(210, 153, 34, 0.4);
 }
+
+/* ===== GOLD THEME (medal reward) ===== */
+/* Palette: warm dark page, gold primary accent, warm-white text */
+body.gold-mode .features-list {
+    background: #1e1708;
+    color: #f0e6cf;
+    border-color: #4a3c18;
+}
+body.gold-mode .part-usage-card {
+    background: #241c0c;
+    border-color: #4a3c18;
+}
+body.gold-mode .part-usage-title { color: #e3b341; }
+body.gold-mode .part-usage-name { color: #f0e6cf; }
+body.gold-mode .part-usage-pct { color: #b8a878; }
+body.gold-mode .part-usage-count { color: #8a7a4e; }
+
+body.gold-mode .bp-help { color: #b8a878; }
+body.gold-mode .bp-status,
+body.gold-mode .bp-summary > div,
+body.gold-mode .bp-launch {
+    background: #241c0c;
+    border-color: #4a3c18;
+    color: #f0e6cf;
+}
+body.gold-mode .bp-launches { background: #1e1708; border-color: #4a3c18; }
+body.gold-mode .bp-launch-value,
+body.gold-mode .bp-launch span:last-child { color: #e3b341; }
+body.gold-mode .bp-label,
+body.gold-mode .bp-launch span:first-child { color: #b8a878; }
+body.gold-mode .bp-value { color: #f0e6cf; }
+
+body.gold-mode .setting-action-btn {
+    background: rgba(54, 44, 18, 0.8);
+    color: #f0e6cf;
+    border-color: #4a3c18;
+}
+body.gold-mode .setting-action-btn:hover,
+body.gold-mode .setting-action-btn:focus-visible {
+    background: rgba(66, 54, 24, 0.85);
+}
+
+body.gold-mode #library-search {
+    background: #241c0c;
+    color: #f0e6cf;
+    border-color: #4a3c18;
+}
+body.gold-mode #library-search:focus { border-color: #e3b341; }
+
+body.gold-mode .bey-check-mode-tab {
+    border-color: #4a3c18;
+    background: rgba(54, 44, 18, 0.8);
+    color: #b8a878;
+}
+body.gold-mode .bey-check-mode-tab.active {
+    background: linear-gradient(135deg, #a87f1e, #e3b341);
+    color: #fff;
+    border-color: #e3b341;
+}
+
+body.gold-mode .app-header {
+    border-bottom-color: #4a3c18;
+}
+
+body.gold-mode {
+    background: #1a1408;
+    background-image:
+        radial-gradient(ellipse 60% 40% at 20% 15%, rgba(120, 100, 50, 0.25) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 35% at 80% 30%, rgba(110, 90, 45, 0.2) 0%, transparent 70%),
+        radial-gradient(ellipse 70% 45% at 50% 85%, rgba(100, 80, 40, 0.22) 0%, transparent 70%),
+        repeating-linear-gradient(110deg, rgba(230, 210, 160, 0.025) 0 1px, transparent 1px 6px);
+    background-attachment: fixed;
+    color: #f0e6cf;
+}
+
+body.gold-mode .mode-tabs,
+body.gold-mode .sub-tabs,
+body.gold-mode .history-sub-tabs,
+body.gold-mode .tournament-sub-tabs {
+    background: rgba(26, 20, 8, 0.85);
+    border-bottom-color: #4a3c18;
+    box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.55);
+}
+
+body.gold-mode .btn-row {
+    background: transparent;
+}
+
+body.gold-mode .tab {
+    border-color: #4a3c18;
+    background: rgba(54, 44, 18, 0.8);
+    color: #b8a878;
+}
+
+body.gold-mode .tab.active {
+    background: linear-gradient(135deg, #a87f1e, #e3b341);
+    color: #fff;
+    border-color: #e3b341;
+}
+
+body.gold-mode .tab:hover:not(.active) {
+    background: rgba(227, 179, 65, 0.2);
+    border-color: #6e5a28;
+    color: #f0e6cf;
+}
+
+body.gold-mode .reel-embed blockquote.instagram-media {
+    background: rgba(54, 44, 18, 0.8) !important;
+    border-color: #4a3c18 !important;
+    color: #f0e6cf !important;
+}
+
+body.gold-mode .reel-embed blockquote.instagram-media a {
+    color: #e3b341 !important;
+}
+
+body.gold-mode .reel-embed iframe.instagram-media {
+    border-color: #4a3c18 !important;
+    background: rgba(54, 44, 18, 0.6);
+}
+
+body.gold-mode .sub-tab {
+    border-color: #4a3c18;
+    background: rgba(54, 44, 18, 0.8);
+    color: #b8a878;
+}
+
+body.gold-mode .sub-tab.active {
+    background: linear-gradient(135deg, #a87f1e, #c89a2e);
+    color: #fff;
+    border-color: #e3b341;
+}
+
+body.gold-mode .sub-tab:hover:not(.active),
+body.gold-mode .sub-tab:focus-visible {
+    background: rgba(227, 179, 65, 0.2);
+    border-color: #6e5a28;
+    color: #f0e6cf;
+}
+
+body.gold-mode fieldset {
+    border-color: #4a3c18;
+    background: rgba(54, 44, 18, 0.6);
+}
+
+body.gold-mode legend {
+    color: #f1cf6e;
+}
+
+body.gold-mode label {
+    color: #b8a878;
+}
+
+body.gold-mode .search-dropdown input {
+    background: rgba(26, 20, 8, 0.8);
+    border-color: #4a3c18;
+    color: #f0e6cf;
+}
+
+body.gold-mode .search-dropdown .dd-list {
+    background: #241c0c;
+    border-color: #4a3c18;
+}
+
+body.gold-mode .dd-item:hover,
+body.gold-mode .dd-item.active {
+    background: rgba(227, 179, 65, 0.3);
+}
+
+body.gold-mode .result {
+    background: rgba(54, 44, 18, 0.6);
+    border-color: #4a3c18;
+}
+
+body.gold-mode .result th {
+    background: rgba(227, 179, 65, 0.2);
+    color: #f1cf6e;
+}
+
+body.gold-mode .result td {
+    border-color: #4a3c18;
+    color: #f0e6cf;
+}
+
+body.gold-mode .btn {
+    background: rgba(54, 44, 18, 0.8);
+    border-color: #4a3c18;
+    color: #f0e6cf;
+}
+
+body.gold-mode .btn:hover {
+    background: rgba(227, 179, 65, 0.3);
+    border-color: #e3b341;
+}
+
+body.gold-mode .btn-reset {
+    background: rgba(60, 40, 30, 0.6);
+    border-color: #7a4a3a;
+}
+
+body.gold-mode .btn-reset:hover {
+    background: rgba(122, 74, 58, 0.5);
+}
+
+body.gold-mode .btn-lucky img {
+    filter: brightness(0) invert(1);
+}
+
+body.gold-mode .separator {
+    color: #6e5a28;
+}
+
+body.gold-mode .app-footer {
+    background: rgba(26, 20, 8, 0.95);
+    border-top-color: #4a3c18;
+    color: #b8a878;
+}
+
+body.gold-mode .popup-overlay {
+    background: rgba(12, 9, 3, 0.85);
+}
+
+body.gold-mode .popup-card {
+    background: #241c0c;
+    border: 1px solid #4a3c18;
+    color: #f0e6cf;
+}
+
+body.gold-mode .popup-title {
+    color: #f1cf6e;
+}
+
+body.gold-mode .popup-list li {
+    color: #b8a878;
+}
+
+body.gold-mode .popup-ok {
+    background: linear-gradient(135deg, #a87f1e, #e3b341);
+    color: #fff;
+}
+
+body.gold-mode .popup-ok:hover {
+    background: linear-gradient(135deg, #c89a2e, #f1cf6e);
+}
+
+body.gold-mode .setting-dropdown-btn {
+    background: rgba(54, 44, 18, 0.8);
+    border-color: #4a3c18;
+    color: #f0e6cf;
+}
+
+body.gold-mode .setting-dropdown-menu {
+    background: #241c0c;
+    border-color: #4a3c18;
+}
+
+body.gold-mode .setting-dropdown-option {
+    color: #b8a878;
+}
+
+body.gold-mode .setting-dropdown-option:hover {
+    background: rgba(227, 179, 65, 0.25);
+}
+
+body.gold-mode .setting-dropdown-option.active {
+    background: rgba(227, 179, 65, 0.4);
+    color: #fff;
+}
+
+body.gold-mode .setting-label-text {
+    color: #b8a878;
+}
+
+body.gold-mode .stat-bar-bg {
+    background: #4a3c18;
+}
+
+body.gold-mode .library-sort {
+    border-color: #4a3c18;
+}
+
+body.gold-mode .sort-btn,
+body.gold-mode .filter-btn {
+    background: rgba(54, 44, 18, 0.8);
+    border-color: #4a3c18;
+    color: #b8a878;
+}
+
+body.gold-mode .sort-btn.active,
+body.gold-mode .filter-btn.active {
+    background: linear-gradient(135deg, #a87f1e, #c89a2e);
+    color: #fff;
+}
+
+body.gold-mode .search-item {
+    background: rgba(54, 44, 18, 0.6);
+    border-color: #4a3c18;
+}
+
+body.gold-mode .image-popup-content {
+    background: #241c0c;
+    border-color: #4a3c18;
+}
+
+body.gold-mode .combo-name {
+    color: #f1cf6e;
+}
+
+body.gold-mode .history-section {
+    border-color: #4a3c18;
+}
+
+body.gold-mode .history-item {
+    background: rgba(54, 44, 18, 0.6);
+    border-color: #4a3c18;
+}
+
+body.gold-mode .scoreboard-overlay {
+    background: #1a1408;
+}
+
+body.gold-mode .scoreboard-left {
+    background: rgba(227, 179, 65, 0.2);
+}
+
+body.gold-mode .scoreboard-right {
+    background: rgba(241, 207, 110, 0.15);
+}
+
+body.gold-mode .scoreboard-divider {
+    background: #1a1408;
+    color: #6e5a28;
+}
+
+body.gold-mode .scoreboard-score {
+    color: #fff;
+}
+
+body.gold-mode .sb-btn {
+    background: rgba(227, 179, 65, 0.3);
+    border-color: #e3b341;
+    color: #f0e6cf;
+}
+
+body.gold-mode .sb-btn:active {
+    background: rgba(227, 179, 65, 0.55);
+}
+
+body.gold-mode .scoreboard-reset,
+body.gold-mode .scoreboard-play {
+    background: rgba(54, 44, 18, 0.8);
+    border-color: #4a3c18;
+    color: #f0e6cf;
+}
+
+body.gold-mode .scoreboard-play.is-playing {
+    background: linear-gradient(135deg, #a87f1e, #c89a2e);
+    border-color: #e3b341;
+    color: #fff;
+}
+
+body.gold-mode .deck-name-input {
+    background: #241c0c;
+    border-color: #4a3c18;
+    color: #f0e6cf;
+}
+body.gold-mode .deck-name-input:focus { border-color: #e3b341; }
+
+body.gold-mode .swiss-toolbar .swiss-share-btn img {
+    filter: brightness(0) invert(1);
+}
+
+body.gold-mode .btn-small {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: #f0e6cf;
+}
+
+body.gold-mode .btn-small:hover {
+    background: rgba(255, 255, 255, 0.22);
+    border-color: rgba(255, 255, 255, 0.55);
+}
+
+body.gold-mode .history-sub-tab,
+body.gold-mode .reel-sub-tab,
+body.gold-mode .tournament-sub-tab {
+    border-color: #4a3c18;
+    background: rgba(54, 44, 18, 0.8);
+    color: #b8a878;
+}
+
+body.gold-mode .history-sub-tab:hover:not(.active),
+body.gold-mode .history-sub-tab:focus-visible,
+body.gold-mode .reel-sub-tab:hover:not(.active),
+body.gold-mode .reel-sub-tab:focus-visible,
+body.gold-mode .tournament-sub-tab:hover:not(.active),
+body.gold-mode .tournament-sub-tab:focus-visible {
+    background: rgba(227, 179, 65, 0.2);
+    border-color: #6e5a28;
+    color: #f0e6cf;
+}
+
+body.gold-mode .history-sub-tab.active,
+body.gold-mode .reel-sub-tab.active,
+body.gold-mode .tournament-sub-tab.active {
+    background: linear-gradient(135deg, #a87f1e, #c89a2e);
+    color: #fff;
+    border-color: #e3b341;
+}
+
+body.gold-mode .reel-video {
+    background: rgba(54, 44, 18, 0.8);
+    border-color: #4a3c18;
+}
+
+body.gold-mode .reel-empty {
+    color: #b8a878;
+}
+
+body.gold-mode .reel-empty code {
+    background: rgba(227, 179, 65, 0.2);
+    border-color: #4a3c18;
+    color: #f1cf6e;
+}
+
+body.gold-mode .tournament-history-item {
+    background: rgba(54, 44, 18, 0.6);
+    border-color: #4a3c18;
+    color: #f0e6cf;
+}
+
+body.gold-mode .tournament-history-mode,
+body.gold-mode .tournament-history-time,
+body.gold-mode .tournament-history-empty {
+    color: #b8a878;
+}
+
+body.gold-mode .tournament-name-input,
+body.gold-mode .tournament-mode-btn {
+    background: rgba(54, 44, 18, 0.9);
+    border-color: #4a3c18;
+    color: #f0e6cf;
+}
+
+body.gold-mode .tournament-name-input:focus {
+    border-color: #e3b341;
+    background: rgba(227, 179, 65, 0.15);
+}
+
+body.gold-mode .tournament-mode-btn:hover,
+body.gold-mode .tournament-mode-btn:focus-visible {
+    border-color: #e3b341;
+    background: rgba(227, 179, 65, 0.18);
+}
+
+body.gold-mode .tournament-mode-name {
+    color: #f1cf6e;
+}
+
+body.gold-mode .deck-pill {
+    border-color: #4a3c18;
+    background: rgba(54, 44, 18, 0.8);
+    color: #b8a878;
+}
+body.gold-mode .deck-pill:hover:not(.active) {
+    background: rgba(227, 179, 65, 0.2);
+    border-color: #6e5a28;
+    color: #f0e6cf;
+}
+body.gold-mode .deck-pill.active {
+    background: linear-gradient(135deg, #a87f1e, #c89a2e);
+    border-color: #e3b341;
+    color: #fff;
+}
+
+body.gold-mode .tournament-results-heading {
+    border-bottom-color: #4a3c18;
+}
+
+body.gold-mode .tournament-results-row {
+    border-color: #4a3c18;
+    background: rgba(54, 44, 18, 0.6);
+    color: #f0e6cf;
+}
+
+body.gold-mode .tournament-share-card .tournament-name-input {
+    color-scheme: dark;
+}
+
+body.gold-mode .share-dropdown .setting-dropdown-btn {
+    background: #241c0c;
+    border-color: #4a3c18;
+    color: #f0e6cf;
+}
+
+body.gold-mode .updates-card {
+    background: rgba(26, 20, 8, 0.85);
+    border-color: #4a3c18;
+}
+
+body.gold-mode .revox-input {
+    background: rgba(26, 20, 8, 0.85);
+    border-color: #4a3c18;
+    color: #f0e6cf;
+}
+
+body.gold-mode .sb-btn {
+    background: rgba(26, 20, 8, 0.8);
+    color: #f0e6cf;
+    border-color: #4a3c18;
+}
+body.gold-mode .sb-btn:active {
+    background: rgba(227, 179, 65, 0.25);
+}
+
+body.gold-mode .scoreboard-round   { color: #f0e6cf; }
+body.gold-mode .scoreboard-hint   { color: #8a7a4e; }
+body.gold-mode .scoreboard-close {
+    color: #b8a878;
+}
+body.gold-mode .scoreboard-close:hover {
+    color: #f0e6cf;
+}
+
+body.gold-mode .part-img,
+body.gold-mode .result-part-img-box {
+    background: rgba(227, 179, 65, 0.18);
+    border-color: #4a3c18;
+}
+body.gold-mode .result-part-name {
+    color: #f0e6cf;
+}
+
+body.gold-mode .swiss-reg-format-editable { border-color: #e3b341; }
+
+/* ===== SILVER THEME (medal reward) ===== */
+/* Palette: cool neutral dark page, silver primary accent, cool-white text */
+body.silver-mode .features-list {
+    background: #181b1f;
+    color: #e8ecf0;
+    border-color: #383f47;
+}
+body.silver-mode .part-usage-card {
+    background: #20242a;
+    border-color: #383f47;
+}
+body.silver-mode .part-usage-title { color: #aeb6bf; }
+body.silver-mode .part-usage-name { color: #e8ecf0; }
+body.silver-mode .part-usage-pct { color: #9aa3ad; }
+body.silver-mode .part-usage-count { color: #6c757e; }
+
+body.silver-mode .bp-help { color: #9aa3ad; }
+body.silver-mode .bp-status,
+body.silver-mode .bp-summary > div,
+body.silver-mode .bp-launch {
+    background: #20242a;
+    border-color: #383f47;
+    color: #e8ecf0;
+}
+body.silver-mode .bp-launches { background: #181b1f; border-color: #383f47; }
+body.silver-mode .bp-launch-value,
+body.silver-mode .bp-launch span:last-child { color: #aeb6bf; }
+body.silver-mode .bp-label,
+body.silver-mode .bp-launch span:first-child { color: #9aa3ad; }
+body.silver-mode .bp-value { color: #e8ecf0; }
+
+body.silver-mode .setting-action-btn {
+    background: rgba(46, 52, 60, 0.8);
+    color: #e8ecf0;
+    border-color: #383f47;
+}
+body.silver-mode .setting-action-btn:hover,
+body.silver-mode .setting-action-btn:focus-visible {
+    background: rgba(56, 62, 70, 0.85);
+}
+
+body.silver-mode #library-search {
+    background: #20242a;
+    color: #e8ecf0;
+    border-color: #383f47;
+}
+body.silver-mode #library-search:focus { border-color: #aeb6bf; }
+
+body.silver-mode .bey-check-mode-tab {
+    border-color: #383f47;
+    background: rgba(46, 52, 60, 0.8);
+    color: #9aa3ad;
+}
+body.silver-mode .bey-check-mode-tab.active {
+    background: linear-gradient(135deg, #7c848d, #aeb6bf);
+    color: #fff;
+    border-color: #aeb6bf;
+}
+
+body.silver-mode .app-header {
+    border-bottom-color: #383f47;
+}
+
+body.silver-mode {
+    background: #14171a;
+    background-image:
+        radial-gradient(ellipse 60% 40% at 20% 15%, rgba(120, 128, 138, 0.25) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 35% at 80% 30%, rgba(100, 108, 118, 0.2) 0%, transparent 70%),
+        radial-gradient(ellipse 70% 45% at 50% 85%, rgba(90, 98, 108, 0.22) 0%, transparent 70%),
+        repeating-linear-gradient(110deg, rgba(210, 218, 226, 0.025) 0 1px, transparent 1px 6px);
+    background-attachment: fixed;
+    color: #e8ecf0;
+}
+
+body.silver-mode .mode-tabs,
+body.silver-mode .sub-tabs,
+body.silver-mode .history-sub-tabs,
+body.silver-mode .tournament-sub-tabs {
+    background: rgba(20, 23, 26, 0.85);
+    border-bottom-color: #383f47;
+    box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.55);
+}
+
+body.silver-mode .btn-row {
+    background: transparent;
+}
+
+body.silver-mode .tab {
+    border-color: #383f47;
+    background: rgba(46, 52, 60, 0.8);
+    color: #9aa3ad;
+}
+
+body.silver-mode .tab.active {
+    background: linear-gradient(135deg, #7c848d, #aeb6bf);
+    color: #fff;
+    border-color: #aeb6bf;
+}
+
+body.silver-mode .tab:hover:not(.active) {
+    background: rgba(174, 182, 191, 0.2);
+    border-color: #555e67;
+    color: #e8ecf0;
+}
+
+body.silver-mode .reel-embed blockquote.instagram-media {
+    background: rgba(46, 52, 60, 0.8) !important;
+    border-color: #383f47 !important;
+    color: #e8ecf0 !important;
+}
+
+body.silver-mode .reel-embed blockquote.instagram-media a {
+    color: #aeb6bf !important;
+}
+
+body.silver-mode .reel-embed iframe.instagram-media {
+    border-color: #383f47 !important;
+    background: rgba(46, 52, 60, 0.6);
+}
+
+body.silver-mode .sub-tab {
+    border-color: #383f47;
+    background: rgba(46, 52, 60, 0.8);
+    color: #9aa3ad;
+}
+
+body.silver-mode .sub-tab.active {
+    background: linear-gradient(135deg, #7c848d, #969ea7);
+    color: #fff;
+    border-color: #aeb6bf;
+}
+
+body.silver-mode .sub-tab:hover:not(.active),
+body.silver-mode .sub-tab:focus-visible {
+    background: rgba(174, 182, 191, 0.2);
+    border-color: #555e67;
+    color: #e8ecf0;
+}
+
+body.silver-mode fieldset {
+    border-color: #383f47;
+    background: rgba(46, 52, 60, 0.6);
+}
+
+body.silver-mode legend {
+    color: #d6dde4;
+}
+
+body.silver-mode label {
+    color: #9aa3ad;
+}
+
+body.silver-mode .search-dropdown input {
+    background: rgba(20, 23, 26, 0.8);
+    border-color: #383f47;
+    color: #e8ecf0;
+}
+
+body.silver-mode .search-dropdown .dd-list {
+    background: #20242a;
+    border-color: #383f47;
+}
+
+body.silver-mode .dd-item:hover,
+body.silver-mode .dd-item.active {
+    background: rgba(174, 182, 191, 0.3);
+}
+
+body.silver-mode .result {
+    background: rgba(46, 52, 60, 0.6);
+    border-color: #383f47;
+}
+
+body.silver-mode .result th {
+    background: rgba(174, 182, 191, 0.2);
+    color: #d6dde4;
+}
+
+body.silver-mode .result td {
+    border-color: #383f47;
+    color: #e8ecf0;
+}
+
+body.silver-mode .btn {
+    background: rgba(46, 52, 60, 0.8);
+    border-color: #383f47;
+    color: #e8ecf0;
+}
+
+body.silver-mode .btn:hover {
+    background: rgba(174, 182, 191, 0.3);
+    border-color: #aeb6bf;
+}
+
+body.silver-mode .btn-reset {
+    background: rgba(60, 40, 30, 0.6);
+    border-color: #7a4a3a;
+}
+
+body.silver-mode .btn-reset:hover {
+    background: rgba(122, 74, 58, 0.5);
+}
+
+body.silver-mode .btn-lucky img {
+    filter: brightness(0) invert(1);
+}
+
+body.silver-mode .separator {
+    color: #555e67;
+}
+
+body.silver-mode .app-footer {
+    background: rgba(20, 23, 26, 0.95);
+    border-top-color: #383f47;
+    color: #9aa3ad;
+}
+
+body.silver-mode .popup-overlay {
+    background: rgba(9, 11, 13, 0.85);
+}
+
+body.silver-mode .popup-card {
+    background: #20242a;
+    border: 1px solid #383f47;
+    color: #e8ecf0;
+}
+
+body.silver-mode .popup-title {
+    color: #d6dde4;
+}
+
+body.silver-mode .popup-list li {
+    color: #9aa3ad;
+}
+
+body.silver-mode .popup-ok {
+    background: linear-gradient(135deg, #7c848d, #aeb6bf);
+    color: #fff;
+}
+
+body.silver-mode .popup-ok:hover {
+    background: linear-gradient(135deg, #969ea7, #d6dde4);
+}
+
+body.silver-mode .setting-dropdown-btn {
+    background: rgba(46, 52, 60, 0.8);
+    border-color: #383f47;
+    color: #e8ecf0;
+}
+
+body.silver-mode .setting-dropdown-menu {
+    background: #20242a;
+    border-color: #383f47;
+}
+
+body.silver-mode .setting-dropdown-option {
+    color: #9aa3ad;
+}
+
+body.silver-mode .setting-dropdown-option:hover {
+    background: rgba(174, 182, 191, 0.25);
+}
+
+body.silver-mode .setting-dropdown-option.active {
+    background: rgba(174, 182, 191, 0.4);
+    color: #fff;
+}
+
+body.silver-mode .setting-label-text {
+    color: #9aa3ad;
+}
+
+body.silver-mode .stat-bar-bg {
+    background: #383f47;
+}
+
+body.silver-mode .library-sort {
+    border-color: #383f47;
+}
+
+body.silver-mode .sort-btn,
+body.silver-mode .filter-btn {
+    background: rgba(46, 52, 60, 0.8);
+    border-color: #383f47;
+    color: #9aa3ad;
+}
+
+body.silver-mode .sort-btn.active,
+body.silver-mode .filter-btn.active {
+    background: linear-gradient(135deg, #7c848d, #969ea7);
+    color: #fff;
+}
+
+body.silver-mode .search-item {
+    background: rgba(46, 52, 60, 0.6);
+    border-color: #383f47;
+}
+
+body.silver-mode .image-popup-content {
+    background: #20242a;
+    border-color: #383f47;
+}
+
+body.silver-mode .combo-name {
+    color: #d6dde4;
+}
+
+body.silver-mode .history-section {
+    border-color: #383f47;
+}
+
+body.silver-mode .history-item {
+    background: rgba(46, 52, 60, 0.6);
+    border-color: #383f47;
+}
+
+body.silver-mode .scoreboard-overlay {
+    background: #14171a;
+}
+
+body.silver-mode .scoreboard-left {
+    background: rgba(174, 182, 191, 0.2);
+}
+
+body.silver-mode .scoreboard-right {
+    background: rgba(214, 221, 228, 0.15);
+}
+
+body.silver-mode .scoreboard-divider {
+    background: #14171a;
+    color: #555e67;
+}
+
+body.silver-mode .scoreboard-score {
+    color: #fff;
+}
+
+body.silver-mode .sb-btn {
+    background: rgba(174, 182, 191, 0.3);
+    border-color: #aeb6bf;
+    color: #e8ecf0;
+}
+
+body.silver-mode .sb-btn:active {
+    background: rgba(174, 182, 191, 0.55);
+}
+
+body.silver-mode .scoreboard-reset,
+body.silver-mode .scoreboard-play {
+    background: rgba(46, 52, 60, 0.8);
+    border-color: #383f47;
+    color: #e8ecf0;
+}
+
+body.silver-mode .scoreboard-play.is-playing {
+    background: linear-gradient(135deg, #7c848d, #969ea7);
+    border-color: #aeb6bf;
+    color: #fff;
+}
+
+body.silver-mode .deck-name-input {
+    background: #20242a;
+    border-color: #383f47;
+    color: #e8ecf0;
+}
+body.silver-mode .deck-name-input:focus { border-color: #aeb6bf; }
+
+body.silver-mode .swiss-toolbar .swiss-share-btn img {
+    filter: brightness(0) invert(1);
+}
+
+body.silver-mode .btn-small {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: #e8ecf0;
+}
+
+body.silver-mode .btn-small:hover {
+    background: rgba(255, 255, 255, 0.22);
+    border-color: rgba(255, 255, 255, 0.55);
+}
+
+body.silver-mode .history-sub-tab,
+body.silver-mode .reel-sub-tab,
+body.silver-mode .tournament-sub-tab {
+    border-color: #383f47;
+    background: rgba(46, 52, 60, 0.8);
+    color: #9aa3ad;
+}
+
+body.silver-mode .history-sub-tab:hover:not(.active),
+body.silver-mode .history-sub-tab:focus-visible,
+body.silver-mode .reel-sub-tab:hover:not(.active),
+body.silver-mode .reel-sub-tab:focus-visible,
+body.silver-mode .tournament-sub-tab:hover:not(.active),
+body.silver-mode .tournament-sub-tab:focus-visible {
+    background: rgba(174, 182, 191, 0.2);
+    border-color: #555e67;
+    color: #e8ecf0;
+}
+
+body.silver-mode .history-sub-tab.active,
+body.silver-mode .reel-sub-tab.active,
+body.silver-mode .tournament-sub-tab.active {
+    background: linear-gradient(135deg, #7c848d, #969ea7);
+    color: #fff;
+    border-color: #aeb6bf;
+}
+
+body.silver-mode .reel-video {
+    background: rgba(46, 52, 60, 0.8);
+    border-color: #383f47;
+}
+
+body.silver-mode .reel-empty {
+    color: #9aa3ad;
+}
+
+body.silver-mode .reel-empty code {
+    background: rgba(174, 182, 191, 0.2);
+    border-color: #383f47;
+    color: #d6dde4;
+}
+
+body.silver-mode .tournament-history-item {
+    background: rgba(46, 52, 60, 0.6);
+    border-color: #383f47;
+    color: #e8ecf0;
+}
+
+body.silver-mode .tournament-history-mode,
+body.silver-mode .tournament-history-time,
+body.silver-mode .tournament-history-empty {
+    color: #9aa3ad;
+}
+
+body.silver-mode .tournament-name-input,
+body.silver-mode .tournament-mode-btn {
+    background: rgba(46, 52, 60, 0.9);
+    border-color: #383f47;
+    color: #e8ecf0;
+}
+
+body.silver-mode .tournament-name-input:focus {
+    border-color: #aeb6bf;
+    background: rgba(174, 182, 191, 0.15);
+}
+
+body.silver-mode .tournament-mode-btn:hover,
+body.silver-mode .tournament-mode-btn:focus-visible {
+    border-color: #aeb6bf;
+    background: rgba(174, 182, 191, 0.18);
+}
+
+body.silver-mode .tournament-mode-name {
+    color: #d6dde4;
+}
+
+body.silver-mode .deck-pill {
+    border-color: #383f47;
+    background: rgba(46, 52, 60, 0.8);
+    color: #9aa3ad;
+}
+body.silver-mode .deck-pill:hover:not(.active) {
+    background: rgba(174, 182, 191, 0.2);
+    border-color: #555e67;
+    color: #e8ecf0;
+}
+body.silver-mode .deck-pill.active {
+    background: linear-gradient(135deg, #7c848d, #969ea7);
+    border-color: #aeb6bf;
+    color: #fff;
+}
+
+body.silver-mode .tournament-results-heading {
+    border-bottom-color: #383f47;
+}
+
+body.silver-mode .tournament-results-row {
+    border-color: #383f47;
+    background: rgba(46, 52, 60, 0.6);
+    color: #e8ecf0;
+}
+
+body.silver-mode .tournament-share-card .tournament-name-input {
+    color-scheme: dark;
+}
+
+body.silver-mode .share-dropdown .setting-dropdown-btn {
+    background: #20242a;
+    border-color: #383f47;
+    color: #e8ecf0;
+}
+
+body.silver-mode .updates-card {
+    background: rgba(20, 23, 26, 0.85);
+    border-color: #383f47;
+}
+
+body.silver-mode .revox-input {
+    background: rgba(20, 23, 26, 0.85);
+    border-color: #383f47;
+    color: #e8ecf0;
+}
+
+body.silver-mode .sb-btn {
+    background: rgba(20, 23, 26, 0.8);
+    color: #e8ecf0;
+    border-color: #383f47;
+}
+body.silver-mode .sb-btn:active {
+    background: rgba(174, 182, 191, 0.25);
+}
+
+body.silver-mode .scoreboard-round   { color: #e8ecf0; }
+body.silver-mode .scoreboard-hint   { color: #6c757e; }
+body.silver-mode .scoreboard-close {
+    color: #9aa3ad;
+}
+body.silver-mode .scoreboard-close:hover {
+    color: #e8ecf0;
+}
+
+body.silver-mode .part-img,
+body.silver-mode .result-part-img-box {
+    background: rgba(174, 182, 191, 0.18);
+    border-color: #383f47;
+}
+body.silver-mode .result-part-name {
+    color: #e8ecf0;
+}
+
+body.silver-mode .swiss-reg-format-editable { border-color: #aeb6bf; }
+
+/* ===== BRONZE THEME (medal reward) ===== */
+/* Palette: warm brown dark page, bronze primary accent, warm-white text */
+body.bronze-mode .features-list {
+    background: #1f150c;
+    color: #f0e2d2;
+    border-color: #4a3320;
+}
+body.bronze-mode .part-usage-card {
+    background: #251a10;
+    border-color: #4a3320;
+}
+body.bronze-mode .part-usage-title { color: #c68044; }
+body.bronze-mode .part-usage-name { color: #f0e2d2; }
+body.bronze-mode .part-usage-pct { color: #b89878; }
+body.bronze-mode .part-usage-count { color: #8a6a4e; }
+
+body.bronze-mode .bp-help { color: #b89878; }
+body.bronze-mode .bp-status,
+body.bronze-mode .bp-summary > div,
+body.bronze-mode .bp-launch {
+    background: #251a10;
+    border-color: #4a3320;
+    color: #f0e2d2;
+}
+body.bronze-mode .bp-launches { background: #1f150c; border-color: #4a3320; }
+body.bronze-mode .bp-launch-value,
+body.bronze-mode .bp-launch span:last-child { color: #c68044; }
+body.bronze-mode .bp-label,
+body.bronze-mode .bp-launch span:first-child { color: #b89878; }
+body.bronze-mode .bp-value { color: #f0e2d2; }
+
+body.bronze-mode .setting-action-btn {
+    background: rgba(58, 40, 24, 0.8);
+    color: #f0e2d2;
+    border-color: #4a3320;
+}
+body.bronze-mode .setting-action-btn:hover,
+body.bronze-mode .setting-action-btn:focus-visible {
+    background: rgba(70, 50, 32, 0.85);
+}
+
+body.bronze-mode #library-search {
+    background: #251a10;
+    color: #f0e2d2;
+    border-color: #4a3320;
+}
+body.bronze-mode #library-search:focus { border-color: #c68044; }
+
+body.bronze-mode .bey-check-mode-tab {
+    border-color: #4a3320;
+    background: rgba(58, 40, 24, 0.8);
+    color: #b89878;
+}
+body.bronze-mode .bey-check-mode-tab.active {
+    background: linear-gradient(135deg, #8a5424, #c68044);
+    color: #fff;
+    border-color: #c68044;
+}
+
+body.bronze-mode .app-header {
+    border-bottom-color: #4a3320;
+}
+
+body.bronze-mode {
+    background: #1a1109;
+    background-image:
+        radial-gradient(ellipse 60% 40% at 20% 15%, rgba(130, 90, 55, 0.25) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 35% at 80% 30%, rgba(115, 80, 48, 0.2) 0%, transparent 70%),
+        radial-gradient(ellipse 70% 45% at 50% 85%, rgba(105, 72, 44, 0.22) 0%, transparent 70%),
+        repeating-linear-gradient(110deg, rgba(230, 200, 170, 0.025) 0 1px, transparent 1px 6px);
+    background-attachment: fixed;
+    color: #f0e2d2;
+}
+
+body.bronze-mode .mode-tabs,
+body.bronze-mode .sub-tabs,
+body.bronze-mode .history-sub-tabs,
+body.bronze-mode .tournament-sub-tabs {
+    background: rgba(26, 17, 9, 0.85);
+    border-bottom-color: #4a3320;
+    box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.55);
+}
+
+body.bronze-mode .btn-row {
+    background: transparent;
+}
+
+body.bronze-mode .tab {
+    border-color: #4a3320;
+    background: rgba(58, 40, 24, 0.8);
+    color: #b89878;
+}
+
+body.bronze-mode .tab.active {
+    background: linear-gradient(135deg, #8a5424, #c68044);
+    color: #fff;
+    border-color: #c68044;
+}
+
+body.bronze-mode .tab:hover:not(.active) {
+    background: rgba(198, 128, 68, 0.2);
+    border-color: #6e4e30;
+    color: #f0e2d2;
+}
+
+body.bronze-mode .reel-embed blockquote.instagram-media {
+    background: rgba(58, 40, 24, 0.8) !important;
+    border-color: #4a3320 !important;
+    color: #f0e2d2 !important;
+}
+
+body.bronze-mode .reel-embed blockquote.instagram-media a {
+    color: #c68044 !important;
+}
+
+body.bronze-mode .reel-embed iframe.instagram-media {
+    border-color: #4a3320 !important;
+    background: rgba(58, 40, 24, 0.6);
+}
+
+body.bronze-mode .sub-tab {
+    border-color: #4a3320;
+    background: rgba(58, 40, 24, 0.8);
+    color: #b89878;
+}
+
+body.bronze-mode .sub-tab.active {
+    background: linear-gradient(135deg, #8a5424, #a96a34);
+    color: #fff;
+    border-color: #c68044;
+}
+
+body.bronze-mode .sub-tab:hover:not(.active),
+body.bronze-mode .sub-tab:focus-visible {
+    background: rgba(198, 128, 68, 0.2);
+    border-color: #6e4e30;
+    color: #f0e2d2;
+}
+
+body.bronze-mode fieldset {
+    border-color: #4a3320;
+    background: rgba(58, 40, 24, 0.6);
+}
+
+body.bronze-mode legend {
+    color: #e0a06b;
+}
+
+body.bronze-mode label {
+    color: #b89878;
+}
+
+body.bronze-mode .search-dropdown input {
+    background: rgba(26, 17, 9, 0.8);
+    border-color: #4a3320;
+    color: #f0e2d2;
+}
+
+body.bronze-mode .search-dropdown .dd-list {
+    background: #251a10;
+    border-color: #4a3320;
+}
+
+body.bronze-mode .dd-item:hover,
+body.bronze-mode .dd-item.active {
+    background: rgba(198, 128, 68, 0.3);
+}
+
+body.bronze-mode .result {
+    background: rgba(58, 40, 24, 0.6);
+    border-color: #4a3320;
+}
+
+body.bronze-mode .result th {
+    background: rgba(198, 128, 68, 0.2);
+    color: #e0a06b;
+}
+
+body.bronze-mode .result td {
+    border-color: #4a3320;
+    color: #f0e2d2;
+}
+
+body.bronze-mode .btn {
+    background: rgba(58, 40, 24, 0.8);
+    border-color: #4a3320;
+    color: #f0e2d2;
+}
+
+body.bronze-mode .btn:hover {
+    background: rgba(198, 128, 68, 0.3);
+    border-color: #c68044;
+}
+
+body.bronze-mode .btn-reset {
+    background: rgba(60, 40, 30, 0.6);
+    border-color: #7a4a3a;
+}
+
+body.bronze-mode .btn-reset:hover {
+    background: rgba(122, 74, 58, 0.5);
+}
+
+body.bronze-mode .btn-lucky img {
+    filter: brightness(0) invert(1);
+}
+
+body.bronze-mode .separator {
+    color: #6e4e30;
+}
+
+body.bronze-mode .app-footer {
+    background: rgba(26, 17, 9, 0.95);
+    border-top-color: #4a3320;
+    color: #b89878;
+}
+
+body.bronze-mode .popup-overlay {
+    background: rgba(12, 8, 4, 0.85);
+}
+
+body.bronze-mode .popup-card {
+    background: #251a10;
+    border: 1px solid #4a3320;
+    color: #f0e2d2;
+}
+
+body.bronze-mode .popup-title {
+    color: #e0a06b;
+}
+
+body.bronze-mode .popup-list li {
+    color: #b89878;
+}
+
+body.bronze-mode .popup-ok {
+    background: linear-gradient(135deg, #8a5424, #c68044);
+    color: #fff;
+}
+
+body.bronze-mode .popup-ok:hover {
+    background: linear-gradient(135deg, #a96a34, #e0a06b);
+}
+
+body.bronze-mode .setting-dropdown-btn {
+    background: rgba(58, 40, 24, 0.8);
+    border-color: #4a3320;
+    color: #f0e2d2;
+}
+
+body.bronze-mode .setting-dropdown-menu {
+    background: #251a10;
+    border-color: #4a3320;
+}
+
+body.bronze-mode .setting-dropdown-option {
+    color: #b89878;
+}
+
+body.bronze-mode .setting-dropdown-option:hover {
+    background: rgba(198, 128, 68, 0.25);
+}
+
+body.bronze-mode .setting-dropdown-option.active {
+    background: rgba(198, 128, 68, 0.4);
+    color: #fff;
+}
+
+body.bronze-mode .setting-label-text {
+    color: #b89878;
+}
+
+body.bronze-mode .stat-bar-bg {
+    background: #4a3320;
+}
+
+body.bronze-mode .library-sort {
+    border-color: #4a3320;
+}
+
+body.bronze-mode .sort-btn,
+body.bronze-mode .filter-btn {
+    background: rgba(58, 40, 24, 0.8);
+    border-color: #4a3320;
+    color: #b89878;
+}
+
+body.bronze-mode .sort-btn.active,
+body.bronze-mode .filter-btn.active {
+    background: linear-gradient(135deg, #8a5424, #a96a34);
+    color: #fff;
+}
+
+body.bronze-mode .search-item {
+    background: rgba(58, 40, 24, 0.6);
+    border-color: #4a3320;
+}
+
+body.bronze-mode .image-popup-content {
+    background: #251a10;
+    border-color: #4a3320;
+}
+
+body.bronze-mode .combo-name {
+    color: #e0a06b;
+}
+
+body.bronze-mode .history-section {
+    border-color: #4a3320;
+}
+
+body.bronze-mode .history-item {
+    background: rgba(58, 40, 24, 0.6);
+    border-color: #4a3320;
+}
+
+body.bronze-mode .scoreboard-overlay {
+    background: #1a1109;
+}
+
+body.bronze-mode .scoreboard-left {
+    background: rgba(198, 128, 68, 0.2);
+}
+
+body.bronze-mode .scoreboard-right {
+    background: rgba(224, 160, 107, 0.15);
+}
+
+body.bronze-mode .scoreboard-divider {
+    background: #1a1109;
+    color: #6e4e30;
+}
+
+body.bronze-mode .scoreboard-score {
+    color: #fff;
+}
+
+body.bronze-mode .sb-btn {
+    background: rgba(198, 128, 68, 0.3);
+    border-color: #c68044;
+    color: #f0e2d2;
+}
+
+body.bronze-mode .sb-btn:active {
+    background: rgba(198, 128, 68, 0.55);
+}
+
+body.bronze-mode .scoreboard-reset,
+body.bronze-mode .scoreboard-play {
+    background: rgba(58, 40, 24, 0.8);
+    border-color: #4a3320;
+    color: #f0e2d2;
+}
+
+body.bronze-mode .scoreboard-play.is-playing {
+    background: linear-gradient(135deg, #8a5424, #a96a34);
+    border-color: #c68044;
+    color: #fff;
+}
+
+body.bronze-mode .deck-name-input {
+    background: #251a10;
+    border-color: #4a3320;
+    color: #f0e2d2;
+}
+body.bronze-mode .deck-name-input:focus { border-color: #c68044; }
+
+body.bronze-mode .swiss-toolbar .swiss-share-btn img {
+    filter: brightness(0) invert(1);
+}
+
+body.bronze-mode .btn-small {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: #f0e2d2;
+}
+
+body.bronze-mode .btn-small:hover {
+    background: rgba(255, 255, 255, 0.22);
+    border-color: rgba(255, 255, 255, 0.55);
+}
+
+body.bronze-mode .history-sub-tab,
+body.bronze-mode .reel-sub-tab,
+body.bronze-mode .tournament-sub-tab {
+    border-color: #4a3320;
+    background: rgba(58, 40, 24, 0.8);
+    color: #b89878;
+}
+
+body.bronze-mode .history-sub-tab:hover:not(.active),
+body.bronze-mode .history-sub-tab:focus-visible,
+body.bronze-mode .reel-sub-tab:hover:not(.active),
+body.bronze-mode .reel-sub-tab:focus-visible,
+body.bronze-mode .tournament-sub-tab:hover:not(.active),
+body.bronze-mode .tournament-sub-tab:focus-visible {
+    background: rgba(198, 128, 68, 0.2);
+    border-color: #6e4e30;
+    color: #f0e2d2;
+}
+
+body.bronze-mode .history-sub-tab.active,
+body.bronze-mode .reel-sub-tab.active,
+body.bronze-mode .tournament-sub-tab.active {
+    background: linear-gradient(135deg, #8a5424, #a96a34);
+    color: #fff;
+    border-color: #c68044;
+}
+
+body.bronze-mode .reel-video {
+    background: rgba(58, 40, 24, 0.8);
+    border-color: #4a3320;
+}
+
+body.bronze-mode .reel-empty {
+    color: #b89878;
+}
+
+body.bronze-mode .reel-empty code {
+    background: rgba(198, 128, 68, 0.2);
+    border-color: #4a3320;
+    color: #e0a06b;
+}
+
+body.bronze-mode .tournament-history-item {
+    background: rgba(58, 40, 24, 0.6);
+    border-color: #4a3320;
+    color: #f0e2d2;
+}
+
+body.bronze-mode .tournament-history-mode,
+body.bronze-mode .tournament-history-time,
+body.bronze-mode .tournament-history-empty {
+    color: #b89878;
+}
+
+body.bronze-mode .tournament-name-input,
+body.bronze-mode .tournament-mode-btn {
+    background: rgba(58, 40, 24, 0.9);
+    border-color: #4a3320;
+    color: #f0e2d2;
+}
+
+body.bronze-mode .tournament-name-input:focus {
+    border-color: #c68044;
+    background: rgba(198, 128, 68, 0.15);
+}
+
+body.bronze-mode .tournament-mode-btn:hover,
+body.bronze-mode .tournament-mode-btn:focus-visible {
+    border-color: #c68044;
+    background: rgba(198, 128, 68, 0.18);
+}
+
+body.bronze-mode .tournament-mode-name {
+    color: #e0a06b;
+}
+
+body.bronze-mode .deck-pill {
+    border-color: #4a3320;
+    background: rgba(58, 40, 24, 0.8);
+    color: #b89878;
+}
+body.bronze-mode .deck-pill:hover:not(.active) {
+    background: rgba(198, 128, 68, 0.2);
+    border-color: #6e4e30;
+    color: #f0e2d2;
+}
+body.bronze-mode .deck-pill.active {
+    background: linear-gradient(135deg, #8a5424, #a96a34);
+    border-color: #c68044;
+    color: #fff;
+}
+
+body.bronze-mode .tournament-results-heading {
+    border-bottom-color: #4a3320;
+}
+
+body.bronze-mode .tournament-results-row {
+    border-color: #4a3320;
+    background: rgba(58, 40, 24, 0.6);
+    color: #f0e2d2;
+}
+
+body.bronze-mode .tournament-share-card .tournament-name-input {
+    color-scheme: dark;
+}
+
+body.bronze-mode .share-dropdown .setting-dropdown-btn {
+    background: #251a10;
+    border-color: #4a3320;
+    color: #f0e2d2;
+}
+
+body.bronze-mode .updates-card {
+    background: rgba(26, 17, 9, 0.85);
+    border-color: #4a3320;
+}
+
+body.bronze-mode .revox-input {
+    background: rgba(26, 17, 9, 0.85);
+    border-color: #4a3320;
+    color: #f0e2d2;
+}
+
+body.bronze-mode .sb-btn {
+    background: rgba(26, 17, 9, 0.8);
+    color: #f0e2d2;
+    border-color: #4a3320;
+}
+body.bronze-mode .sb-btn:active {
+    background: rgba(198, 128, 68, 0.25);
+}
+
+body.bronze-mode .scoreboard-round   { color: #f0e2d2; }
+body.bronze-mode .scoreboard-hint   { color: #8a6a4e; }
+body.bronze-mode .scoreboard-close {
+    color: #b89878;
+}
+body.bronze-mode .scoreboard-close:hover {
+    color: #f0e2d2;
+}
+
+body.bronze-mode .part-img,
+body.bronze-mode .result-part-img-box {
+    background: rgba(198, 128, 68, 0.18);
+    border-color: #4a3320;
+}
+body.bronze-mode .result-part-name {
+    color: #f0e2d2;
+}
+
+body.bronze-mode .swiss-reg-format-editable { border-color: #c68044; }

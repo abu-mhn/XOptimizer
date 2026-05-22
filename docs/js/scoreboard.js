@@ -24,6 +24,33 @@ let scoreboardSaveCallback = null;
 
   if (!overlay) return;
 
+  // Neutral silhouette shown until a real photo resolves (or kept for
+  // accounts with no photo). Matches the placeholder used elsewhere.
+  const SB_AVATAR_PH = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%2321262d'/%3E%3Ccircle cx='32' cy='24' r='12' fill='%23484f58'/%3E%3Cpath d='M11 57c0-12 10-20 21-20s21 8 21 20z' fill='%23484f58'/%3E%3C/svg%3E";
+
+  // Paint a player label: avatar above the name. `name` empty / "A" / "B"
+  // is the standalone (no-match) board, where the avatar is hidden. For a
+  // real player the avatar starts on the placeholder, then the photo is
+  // resolved via window.resolveProfilePhoto (defined in tournament.js).
+  function setScoreboardLabel(labelEl, name) {
+    if (!labelEl) return;
+    const display = name || "A";
+    const real = !!name && name !== "A" && name !== "B";
+    labelEl.innerHTML = '<img class="scoreboard-avatar" alt="">'
+      + '<span class="scoreboard-player-name"></span>';
+    const img = labelEl.querySelector(".scoreboard-avatar");
+    const nameSpan = labelEl.querySelector(".scoreboard-player-name");
+    if (nameSpan) nameSpan.textContent = display;
+    if (!img) return;
+    if (!real) { img.classList.add("hidden"); return; }
+    img.src = SB_AVATAR_PH;
+    if (typeof window.resolveProfilePhoto === "function") {
+      window.resolveProfilePhoto(name).then(photo => {
+        if (photo) img.src = photo;
+      }).catch(() => {});
+    }
+  }
+
   function ordinal(n) {
     const s = ["th", "st", "nd", "rd"];
     const v = n % 100;
@@ -216,8 +243,8 @@ let scoreboardSaveCallback = null;
   // match context stuck on the overlay.
   window.resetScoreboardToDefault = function () {
     scoreboardSaveCallback = null;
-    if (labelA) labelA.textContent = "A";
-    if (labelB) labelB.textContent = "B";
+    setScoreboardLabel(labelA, "A");
+    setScoreboardLabel(labelB, "B");
     scoreA = 0;
     scoreB = 0;
     scorePresses = 0;
@@ -246,8 +273,8 @@ let scoreboardSaveCallback = null;
       initialB = 0;
     }
 
-    if (labelA) labelA.textContent = nameA || "A";
-    if (labelB) labelB.textContent = nameB || "B";
+    setScoreboardLabel(labelA, nameA || "A");
+    setScoreboardLabel(labelB, nameB || "B");
     scoreA = typeof initialA === "number" ? initialA : 0;
     scoreB = typeof initialB === "number" ? initialB : 0;
     scorePresses = 0;
