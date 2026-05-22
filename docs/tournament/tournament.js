@@ -64,6 +64,15 @@ function isRoomHosted(code) {
   return loadHostedRooms().includes(code);
 }
 
+// Authoritative "is the signed-in account this room's host?" check — the
+// room's hostUid matched against the current user. Unlike the device-wide
+// isRoomHosted() flag, this is account-scoped, so a different account
+// signing in on the same device is never mistaken for the host.
+function isCurrentUserRoomHost(room) {
+  const u = (typeof window.getCurrentUser === "function") ? window.getCurrentUser() : null;
+  return !!(u && u.uid && room && room.hostUid && u.uid === room.hostUid);
+}
+
 function saveJoinedRoom(info) {
   if (info) {
     // Stamp the owning account's uid. The joined-room pointer is
@@ -5769,15 +5778,14 @@ function renderLobbyRooms(list, rooms) {
 // lobby summary's editCode), participant opens the registration form,
 // viewer connects view-only directly via the lobby's viewCode.
 function showTournamentJoinChoicePopup(room) {
-  // This device hosts the room — rejoin straight as host, no role pick.
-  // Skipped when signed out: hosting is account-scoped, so a signed-out
-  // user falls through to the participant / viewer choice instead.
-  if (isRoomHosted(room.editCode)) {
-    const u = (typeof window.getCurrentUser === "function") ? window.getCurrentUser() : null;
-    if (u && u.uid) {
-      joinTournamentAsCoHost(room);
-      return;
-    }
+  // The signed-in account IS this room's host — rejoin straight as host,
+  // no role pick. Checked against the room's hostUid (account-scoped), so
+  // a DIFFERENT account on the same device is NOT auto-joined as host of
+  // someone else's tournament — it falls through to the role choice.
+  if (isCurrentUserRoomHost(room)) {
+    if (typeof markRoomHosted === "function") markRoomHosted(room.editCode);
+    joinTournamentAsCoHost(room);
+    return;
   }
   // A signed-in user on this room's sub-host list joins straight as co-host —
   // no role pick and no host code. We read just their own subHosts entry.
@@ -6053,7 +6061,10 @@ function joinTournamentAsCoHost(room) {
   }
   disconnectSwissRoom();
   localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [], phase: "running", registrants: {} }));
-  const asHost = isRoomHosted(room.editCode);
+  // asHost is account-scoped (hostUid match) — a co-host joining a room
+  // that happens to have been hosted from this device by another account
+  // must NOT inherit host rights.
+  const asHost = isCurrentUserRoomHost(room);
   connectSwissRoom(room.editCode, room.viewCode || null, asHost, true);
   // Make sure the user is on the Hosting tab so they see the live tournament.
   const hostingTab = document.querySelector('.tournament-sub-tab[data-tournament-view="hosting"]');
