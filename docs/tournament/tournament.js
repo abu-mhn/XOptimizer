@@ -6234,6 +6234,16 @@ function showRegistrationPopup(room, options = {}) {
     const modeLabel = tournamentFormatLabel(room.mode, room.pairing, true);
     subtitle.textContent = `${name} · ${modeLabel}`;
   }
+  // Swap the deck-building hint for guests so it's clear the deck is
+  // optional — they can register with the slots left empty. Set both
+  // ways explicitly: the popup is shared, so a prior guest open must not
+  // leave the guest wording on a later account registration.
+  const deckHint = popup.querySelector(".register-deck-hint");
+  if (deckHint) {
+    deckHint.textContent = allowEmptyDeck
+      ? "Deck is optional for guests — you can skip it and leave the slots empty. To add combos, tap a slot or paste a deck from the Deck tab."
+      : "Build the 3-combo deck you'll bring. The judge sees this deck at every match. Tip: copy a deck from the Deck tab, then paste it here.";
+  }
   // `lockName` makes the name field read-only (used by the "Register myself"
   // flow so the host can't impersonate someone else from their own device).
   const lockName = !!options.lockName;
