@@ -2052,30 +2052,56 @@ function flashShareButton(btn) {
   setTimeout(() => { btn.innerHTML = orig; }, 1200);
 }
 
-async function dispatchShareMessage(message, btn) {
-  // Copy the message to the clipboard — the host then pastes it wherever
-  // they want (WhatsApp, Discord, etc.). No native share sheet, so the
-  // behaviour is identical on every device.
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    try {
-      await navigator.clipboard.writeText(message);
-      flashShareButton(btn);
-      return;
-    } catch (e) { /* fall through to the legacy copy path */ }
-  }
-  // Fallback for old browsers / non-secure contexts where the async
-  // Clipboard API isn't available.
+// Legacy clipboard path for old browsers / non-secure contexts without the
+// async Clipboard API. Returns true on success; on total failure it shows
+// a prompt() so the user can still copy manually, and returns false.
+function legacyCopyText(text) {
   try {
     const ta = document.createElement("textarea");
-    ta.value = message;
+    ta.value = text;
     ta.style.cssText = "position:fixed;left:-9999px;top:0;";
     document.body.appendChild(ta);
     ta.select();
     const ok = document.execCommand("copy");
     document.body.removeChild(ta);
-    if (ok) { flashShareButton(btn); return; }
+    if (ok) return true;
   } catch (e) { /* fall through to prompt */ }
-  prompt("Copy this and share it:", message);
+  prompt("Copy this:", text);
+  return false;
+}
+
+// Copy `text` to the clipboard — async Clipboard API first, legacy path as
+// a fallback. Resolves true when the text actually reached the clipboard.
+function copyTextToClipboard(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text)
+      .then(() => true)
+      .catch(() => legacyCopyText(text));
+  }
+  return Promise.resolve(legacyCopyText(text));
+}
+
+function dispatchShareMessage(message, btn) {
+  // Copy the message to the clipboard — the host then pastes it wherever
+  // they want (WhatsApp, Discord, etc.). No native share sheet, so the
+  // behaviour is identical on every device.
+  copyTextToClipboard(message).then(ok => { if (ok) flashShareButton(btn); });
+}
+
+// Tester QA aid — copy every registrant name (one per line) to the
+// clipboard. Briefly relabels the button to confirm.
+function copyRegistrantNames(state, btn) {
+  const names = listRegistrants(state)
+    .map(r => ((r && r.name) || "").trim())
+    .filter(Boolean);
+  if (!names.length) { alert("No registrants to copy yet."); return; }
+  copyTextToClipboard(names.join("\n")).then(ok => {
+    if (!ok || !btn) return;
+    const orig = btn.textContent;
+    btn.textContent = `Copied ${names.length}`;
+    btn.disabled = true;
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1200);
+  });
 }
 
 function bindSwissShareButton(view) {
@@ -2838,6 +2864,10 @@ function renderSwissRegisteringMarkup(state) {
   const testRegBtnHtml = (canEdit && isTesterAcct)
     ? `<button type="button" id="swiss-reg-test" class="swiss-reg-self swiss-reg-test">Test</button>`
     : "";
+  // Bulk-copy every registrant name to the clipboard (QA aid) — Tester-only.
+  const copyNamesBtnHtml = (canEdit && isTesterAcct && registrants.length)
+    ? `<button type="button" id="swiss-reg-copy-names" class="swiss-reg-self swiss-reg-test">Copy Names</button>`
+    : "";
   const startBtnHtml = canEdit
     ? `<button type="button" id="swiss-reg-start" class="btn swiss-reg-start" ${enoughRegistrants ? "" : "disabled"}>
          ${enoughRegistrants ? "Start Tournament" : `Need ${minTotal - registrants.length} more`}
@@ -2871,8 +2901,8 @@ function renderSwissRegisteringMarkup(state) {
       <div class="swiss-reg-heading-row">
         <h3 class="swiss-reg-heading">Registrants <span class="swiss-reg-count">(${registrants.length}${minTotal ? ` / ${minTotal} min` : ""})</span></h3>
       </div>
-      ${(selfRegBtnHtml || othersRegBtnHtml || testRegBtnHtml)
-        ? `<div class="swiss-reg-host-actions">${selfRegBtnHtml}${othersRegBtnHtml}${testRegBtnHtml}</div>`
+      ${(selfRegBtnHtml || othersRegBtnHtml || testRegBtnHtml || copyNamesBtnHtml)
+        ? `<div class="swiss-reg-host-actions">${selfRegBtnHtml}${othersRegBtnHtml}${testRegBtnHtml}${copyNamesBtnHtml}</div>`
         : ""}
       <ul class="swiss-reg-list">${registrantRows}</ul>
       <div class="swiss-reg-actions">${startBtnHtml}</div>
@@ -2920,6 +2950,9 @@ function bindSwissRegisteringHandlers(view, state) {
       if (!confirm(`Add ${n} test registrants? That's a lot — confirm to proceed.`)) return;
     }
     addTestRegistrants(n);
+  });
+  view.querySelector("#swiss-reg-copy-names")?.addEventListener("click", (e) => {
+    copyRegistrantNames(state, e.currentTarget);
   });
   bindSwissShareButton(view);
   view.querySelectorAll(".swiss-reg-remove").forEach(btn => {
