@@ -323,7 +323,11 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit, roleHint) {
   }, err => {
     console.warn("Swiss room listen error:", err);
   });
-  saveJoinedRoom({ editCode, viewCode: swissViewCode, role: canEdit ? "edit" : "view" });
+  // Record the actual role (asHost) too — initSwissRoomOnLoad reconnects
+  // with exactly this, instead of guessing from the device-wide
+  // hosted-rooms flag (which would mis-promote a co-host / viewer to host
+  // on a device that hosted the room under another account).
+  saveJoinedRoom({ editCode, viewCode: swissViewCode, role: canEdit ? "edit" : "view", asHost: !!asHost });
   return { ok: true };
 }
 
@@ -425,7 +429,10 @@ function initSwissRoomOnLoad() {
       if (typeof renderSwiss === "function") renderSwiss();
       return;
     }
-    const asHost = isRoomHosted(info.editCode);
+    // Reconnect with the role actually saved at join time — NOT the
+    // device-wide isRoomHosted() flag, which would re-enter a co-host /
+    // viewer as host on a device that once hosted this room.
+    const asHost = !!info.asHost;
     const canEdit = asHost || info.role === "edit";
     connectSwissRoom(info.editCode, info.viewCode || null, asHost, canEdit);
   };
@@ -2466,6 +2473,18 @@ function showProfileByUsername(username, anchorEl) {
   const bioEl = document.getElementById("profile-view-bio");
   const tagsEl = document.getElementById("profile-view-tags");
   const statusEl = document.getElementById("profile-view-status");
+
+  // The tag row is a single line with an invisible scrollbar — a normal
+  // mouse wheel only scrolls vertically, so translate vertical wheel input
+  // into horizontal scroll here. Bound once (guarded by a dataset flag).
+  if (tagsEl && !tagsEl.dataset.wheelBound) {
+    tagsEl.dataset.wheelBound = "1";
+    tagsEl.addEventListener("wheel", (e) => {
+      if (!e.deltaY || tagsEl.scrollWidth <= tagsEl.clientWidth) return;
+      e.preventDefault();
+      tagsEl.scrollLeft += e.deltaY;
+    }, { passive: false });
+  }
 
   // Each call gets a token; an async read whose token is stale (the user
   // moved on to another name) is discarded without opening anything.
@@ -7073,16 +7092,14 @@ function renderRevoxRanking() {
       // each row — same helpers as the tournament ranking.
       hydrateTournamentAvatars(container);
       hydrateRankingBanners(container);
-      // Hovering a member name shows that account's profile; clicking opens
-      // their tournament history (both available to anyone).
+      // Clicking a member name opens their tournament history popup, which
+      // already leads with the full profile (banner, photo, tags, bio) — so
+      // there's no separate hover profile dropdown here (it would otherwise
+      // race the history popup and float on top of it).
       container.querySelectorAll("[data-revox-history]").forEach(btn => {
         btn.addEventListener("click", () => {
           showRevoxHistory(btn.dataset.revoxHistory, btn.dataset.revoxName);
         });
-        btn.addEventListener("mouseenter", () => {
-          showProfileByUsername(btn.dataset.revoxName, btn);
-        });
-        btn.addEventListener("mouseleave", () => scheduleProfileDropdownHide());
       });
       // Wire row buttons (admin only).
       if (isAdmin) {
