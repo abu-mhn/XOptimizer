@@ -23,6 +23,7 @@ let swissSetupWasVisible = false; // tracks setup-form visibility so we only re-
 let swissSubHosts = {};      // room's designated sub-host usernames { lowercaseKey: casedName }
 let swissHostNameCache = {};     // hostUid -> resolved username (rooms with no stored hostName)
 let swissHostNameResolving = {}; // hostUid -> in-flight resolve guard
+let swissSessionRole = null;     // this session's role: "host" | "co-host" | "participant" | "view"
 
 function initFirebase() {
   if (swissDb) return swissDb;
@@ -108,6 +109,7 @@ function disconnectSwissRoom() {
   swissSubHosts = {};
   swissLiveMatchId = null;
   swissCoHostUidWritten = false;
+  swissSessionRole = null;
   saveJoinedRoom(null);
   // Drop any match-linked state on the scoreboard so leaving a room doesn't
   // leave stale match names / score / save callback on the overlay.
@@ -235,6 +237,7 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit, roleHint) {
   // self-registered players from plain viewers. Without a hint we
   // fall back to the canEdit/asHost flags.
   const role = roleHint || (asHost ? "host" : (canEdit ? "co-host" : "view"));
+  swissSessionRole = role;
   const isViewer = role === "view" || role === "participant";
   const localNow = loadSwiss();
   saveTournamentHistoryEntry({
@@ -326,8 +329,10 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit, roleHint) {
   // Record the actual role (asHost) too — initSwissRoomOnLoad reconnects
   // with exactly this, instead of guessing from the device-wide
   // hosted-rooms flag (which would mis-promote a co-host / viewer to host
-  // on a device that hosted the room under another account).
-  saveJoinedRoom({ editCode, viewCode: swissViewCode, role: canEdit ? "edit" : "view", asHost: !!asHost });
+  // on a device that hosted the room under another account). sessionRole
+  // carries the finer "participant" vs "view" distinction so a reload
+  // keeps a participant's participant-only UI (e.g. Register Others).
+  saveJoinedRoom({ editCode, viewCode: swissViewCode, role: canEdit ? "edit" : "view", asHost: !!asHost, sessionRole: role });
   return { ok: true };
 }
 
@@ -434,7 +439,7 @@ function initSwissRoomOnLoad() {
     // viewer as host on a device that once hosted this room.
     const asHost = !!info.asHost;
     const canEdit = asHost || info.role === "edit";
-    connectSwissRoom(info.editCode, info.viewCode || null, asHost, canEdit);
+    connectSwissRoom(info.editCode, info.viewCode || null, asHost, canEdit, info.sessionRole || null);
   };
 
   if (typeof window.onAuthChange === "function") {
@@ -2922,7 +2927,12 @@ function renderSwissRegisteringMarkup(state) {
   const selfRegBtnHtml = canRegisterSelf
     ? `<button type="button" id="swiss-reg-self" class="swiss-reg-self">+ Register Myself</button>`
     : "";
-  const othersRegBtnHtml = canEdit
+  // "Register Others" adds a deck-optional guest player. Open to hosts /
+  // co-hosts and to registered participants — a participant signing up
+  // friends on their device uses the same selfRegister write path (no
+  // disconnect, so they keep their participant session).
+  const canRegisterOthers = canEdit || swissSessionRole === "participant";
+  const othersRegBtnHtml = canRegisterOthers
     ? `<button type="button" id="swiss-reg-others" class="swiss-reg-self">+ Register Others</button>`
     : "";
   // The Test button bulk-adds synthetic participants — gate it on the
@@ -3198,10 +3208,18 @@ function showEditRegistrantPopup(registrantId) {
     roundCount: state.roundCount || null,
     groupCount: state.groupCount || null
   };
+  // A registrant created by a signed-in account carries no isGuest flag —
+  // its name must stay equal to that account's username (it keys ranking),
+  // so lock the field on edit. Only guest / "Register Others" entries, which
+  // have no account attached, keep an editable name.
   showRegistrationPopup(room, {
     editRegistrantId: registrantId,
     initialName: reg.name || "",
-    initialDeck: normalizeBeyCheckDeck(reg.deck)
+    initialDeck: normalizeBeyCheckDeck(reg.deck),
+    lockName: !reg.isGuest,
+    // Guests may stay deck-less on edit too — only account registrations
+    // are held to a full 3-combo deck.
+    allowEmptyDeck: !!reg.isGuest
   });
 }
 
@@ -3232,11 +3250,15 @@ function showSelfRegisterPopup() {
 // the name field editable for any free-form participant name.
 //
 // "Register Others" entries are flagged isGuest because no account is
-// attached to them — the host is typing a free-form name on someone else's
-// behalf, so we treat them like guest registrants and skip them from
-// global ranking awards on finish.
+// attached to them — the host (or a participant) is typing a free-form
+// name on someone else's behalf, so we treat them like guest registrants
+// and skip them from global ranking awards on finish.
+//
+// Available to hosts / co-hosts and to registered participants; plain
+// viewers can't add registrants.
 function showOthersRegisterPopup() {
-  if (!swissCanEdit || !swissEditCode) return;
+  if (!swissEditCode) return;
+  if (!swissCanEdit && swissSessionRole !== "participant") return;
   const state = loadSwiss();
   if (!isRegisteringPhase(state)) return;
   const room = {
@@ -3828,6 +3850,8 @@ function aggregatePartUsage(state) {
     if (!name) continue;
     const deck = findLatestDeckForParticipant(state, name, null);
     if (!deck) continue;
+    // A deck-less guest contributes nothing to the part-usage pie chart.
+    if (isBeyCheckDeckEmpty(deck)) continue;
     deck.forEach(slot => {
       if (!slot || !slot.parts) return;
       Object.entries(slot.parts).forEach(([field, partName]) => {
@@ -6192,6 +6216,11 @@ function showRegistrationPopup(room, options = {}) {
   // Guest registrants play normally but don't earn ranking points when
   // the tournament finishes.
   const asGuest = !!options.asGuest;
+  // Guests may register without building a deck — the all-3-slots block
+  // is lifted for them. Their empty deck contributes nothing to the
+  // finish part-usage pie chart (aggregatePartUsage skips empty decks).
+  // Real account registrations still need a full 3-combo deck.
+  const allowEmptyDeck = asGuest || !!options.allowEmptyDeck;
 
   const setStatus = (msg, kind) => {
     if (!status) return;
@@ -6291,7 +6320,7 @@ function showRegistrationPopup(room, options = {}) {
       return;
     }
     const missingSlots = emptyBeyCheckDeckSlotNumbers(deck);
-    if (missingSlots.length) {
+    if (missingSlots.length && !allowEmptyDeck) {
       // Hard block — every registrant needs all 3 slots built. The judge
       // sees this 3-combo deck at every match, so a partial registration
       // breaks the bey-check flow. Tap any empty slot to build it, or
