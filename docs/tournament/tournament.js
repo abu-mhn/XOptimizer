@@ -2852,8 +2852,11 @@ function renderSwissRegisteringMarkup(state) {
   // group size so every participant plays every other one.
   const isRoundRobin = state.pairing === "round-robin";
   const formatBits = [];
-  if (canEdit && isSwiss) {
-    formatBits.push(`<button type="button" class="swiss-reg-format-mode swiss-reg-format-editable" id="swiss-edit-mode" title="Tap to change Top 8">${modeLabel}</button>`);
+  // The format chip is editable for any format — tapping it opens the
+  // Swiss / Round Robin / Single Elimination picker (single-elim included,
+  // so the host can switch away from it too).
+  if (canEdit) {
+    formatBits.push(`<button type="button" class="swiss-reg-format-mode swiss-reg-format-editable" id="swiss-edit-mode" title="Tap to change format">${modeLabel}</button>`);
   } else {
     formatBits.push(`<span class="swiss-reg-format-mode">${modeLabel}</span>`);
   }
@@ -2991,11 +2994,7 @@ function bindSwissRegisteringHandlers(view, state) {
   view.querySelector("#swiss-edit-name")?.addEventListener("click", showEditTournamentNamePopup);
   view.querySelector("#swiss-cohosts")?.addEventListener("click", showCoHostsPopup);
   view.querySelector("#swiss-clear")?.addEventListener("click", resetSwiss);
-  view.querySelector("#swiss-edit-mode")?.addEventListener("click", () => {
-    showTopEightPopup((mode) => {
-      if (mode) updateRegisteringSetting({ mode });
-    }, state.pairing === "round-robin");
-  });
+  view.querySelector("#swiss-edit-mode")?.addEventListener("click", showSwissFormatPopup);
   view.querySelector("#swiss-edit-groups")?.addEventListener("click", () => {
     showSwissGroupsPopup((gc) => updateRegisteringSetting({ groupCount: gc }), state.pairing === "round-robin");
   });
@@ -4896,7 +4895,11 @@ function showTournamentModePopup(onPick) {
   const singleBtn = popup.querySelector("#tournament-mode-single");
   const cancelBtn = popup.querySelector("#tournament-mode-cancel");
   const nameInput = popup.querySelector("#tournament-name-input");
-  if (nameInput) nameInput.value = "";
+  const nameLabel = popup.querySelector('label[for="tournament-name-input"]');
+  // The format-change reuse (showSwissFormatPopup) hides the name field —
+  // always restore it here so the creation flow shows it.
+  if (nameInput) { nameInput.value = ""; nameInput.classList.remove("hidden"); }
+  if (nameLabel) nameLabel.classList.remove("hidden");
   const teardown = () => {
     popup.classList.add("hidden");
     swissBtn.onclick = null;
@@ -4935,6 +4938,57 @@ function showTournamentModePopup(onPick) {
   cancelBtn.onclick = () => teardown();
   popup.classList.remove("hidden");
   if (nameInput) setTimeout(() => nameInput.focus(), 0);
+}
+
+// Switch the tournament FORMAT (Swiss / Round Robin / Single Elimination)
+// while still in the registering phase. Reuses the creation-time format
+// popup, but hides its name field — the tournament already has a name.
+// The chosen format is applied via updateRegisteringSetting, so registrants
+// are kept and nothing is reset.
+function showSwissFormatPopup() {
+  const s = loadSwiss();
+  if (!isRegisteringPhase(s)) return;
+  const popup = document.getElementById("tournament-mode-popup");
+  if (!popup) return;
+  const swissBtn = popup.querySelector("#tournament-mode-swiss");
+  const rrBtn = popup.querySelector("#tournament-mode-roundrobin");
+  const singleBtn = popup.querySelector("#tournament-mode-single");
+  const cancelBtn = popup.querySelector("#tournament-mode-cancel");
+  const nameInput = popup.querySelector("#tournament-name-input");
+  const nameLabel = popup.querySelector('label[for="tournament-name-input"]');
+  // The name field is a creation-only concern — hide it for the switch.
+  if (nameInput) nameInput.classList.add("hidden");
+  if (nameLabel) nameLabel.classList.add("hidden");
+  const teardown = () => {
+    popup.classList.add("hidden");
+    if (swissBtn) swissBtn.onclick = null;
+    if (rrBtn) rrBtn.onclick = null;
+    if (singleBtn) singleBtn.onclick = null;
+    if (cancelBtn) cancelBtn.onclick = null;
+    if (nameInput) nameInput.classList.remove("hidden");
+    if (nameLabel) nameLabel.classList.remove("hidden");
+  };
+  // Swiss / Round Robin then ask whether to keep a Top 8 knockout;
+  // Single Elimination applies straight away. pairing is cleared for
+  // Swiss / Single Elim and set for Round Robin.
+  if (swissBtn) swissBtn.onclick = () => {
+    teardown();
+    showTopEightPopup((mode) => {
+      if (mode) updateRegisteringSetting({ mode, pairing: null });
+    }, false);
+  };
+  if (rrBtn) rrBtn.onclick = () => {
+    teardown();
+    showTopEightPopup((mode) => {
+      if (mode) updateRegisteringSetting({ mode, pairing: "round-robin" });
+    }, true);
+  };
+  if (singleBtn) singleBtn.onclick = () => {
+    teardown();
+    updateRegisteringSetting({ mode: "single-elim", pairing: null });
+  };
+  if (cancelBtn) cancelBtn.onclick = teardown;
+  popup.classList.remove("hidden");
 }
 
 function startTournamentFromState(next) {
