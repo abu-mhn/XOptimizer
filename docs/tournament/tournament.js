@@ -65,8 +65,17 @@ function isRoomHosted(code) {
 }
 
 function saveJoinedRoom(info) {
-  if (info) localStorage.setItem(SWISS_ROOM_STORAGE, JSON.stringify(info));
-  else localStorage.removeItem(SWISS_ROOM_STORAGE);
+  if (info) {
+    // Stamp the owning account's uid. The joined-room pointer is
+    // device-wide localStorage, so initSwissRoomOnLoad uses this to
+    // auto-reconnect ONLY for the same account — a different account
+    // signing in on the same device must not inherit this room.
+    const user = (typeof window.getCurrentUser === "function") ? window.getCurrentUser() : null;
+    const rec = Object.assign({}, info, { uid: (user && user.uid) || "" });
+    localStorage.setItem(SWISS_ROOM_STORAGE, JSON.stringify(rec));
+  } else {
+    localStorage.removeItem(SWISS_ROOM_STORAGE);
+  }
 }
 function loadJoinedRoom() {
   try {
@@ -392,9 +401,36 @@ function initSwissRoomOnLoad() {
   const info = loadJoinedRoom();
   if (!info || !info.editCode) return;
   if (!firebaseReady()) return;
-  const asHost = isRoomHosted(info.editCode);
-  const canEdit = asHost || info.role === "edit";
-  connectSwissRoom(info.editCode, info.viewCode || null, asHost, canEdit);
+
+  // The joined-room pointer is device-wide localStorage. Auto-reconnect
+  // ONLY for the account that saved it — otherwise a different account
+  // signing in on the same device is dropped into the previous account's
+  // tournament. Defer the decision until Firebase reports the auth state.
+  const proceed = (user) => {
+    const currentUid = (user && user.uid) || "";
+    if ((info.uid || "") !== currentUid) {
+      // Stale pointer from another account (or a signed-out session) —
+      // discard it, wipe any leftover room state, and show the lobby.
+      saveJoinedRoom(null);
+      localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [] }));
+      if (typeof renderSwiss === "function") renderSwiss();
+      return;
+    }
+    const asHost = isRoomHosted(info.editCode);
+    const canEdit = asHost || info.role === "edit";
+    connectSwissRoom(info.editCode, info.viewCode || null, asHost, canEdit);
+  };
+
+  if (typeof window.onAuthChange === "function") {
+    let handled = false;
+    window.onAuthChange((user) => {
+      if (handled) return; // act only on the first (initial) auth resolution
+      handled = true;
+      proceed(user);
+    });
+  } else {
+    proceed((typeof window.getCurrentUser === "function") ? window.getCurrentUser() : null);
+  }
 }
 
 // ================= SWISS TOURNAMENT =================
