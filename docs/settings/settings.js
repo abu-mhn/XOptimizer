@@ -54,7 +54,7 @@ Tournament
 - Hosting requires a free email account (Settings → Account, or prompted on Create Tournament)
 - Every tournament is ranked automatically — no host password
 - Self-registration via the Open Tournaments lobby (no manual name list)
-- Deck is mandatory on registration — every registrant (self, Register Others, edit-in-place, and host-added during a running tournament) must fill all 3 deck slots before submit; the judge needs a full 3-combo deck to bey-check at each match. Error inline names the missing slot(s)
+- Deck is mandatory for account registrations — Register Myself and any signed-in lobby registrant must fill all 3 deck slots before submit. Guests (Register Others and the lobby Guest flow) can skip the deck entirely; the register popup swaps in a "Deck is optional for guests" hint, and their empty deck is excluded from the finish parts-usage pie chart. Account registrations still get the inline missing-slot error
 - Tournaments you host show a "Hosting" badge in the Open Tournaments lobby when you're signed in
 - Running tournaments stay listed in the Open Tournaments lobby with an "In progress" badge — registration is closed, but co-hosts and viewers can still join
 - My Tournaments: a signed-in host is dropped straight back into the tournament they host on any device — the room index follows your account, not the device (a pick list appears only if you host more than one)
@@ -68,7 +68,7 @@ Tournament
 - Hosts AND co-hosts can play (+ Register Myself), start the tournament, add participants, and remove registrants
 - Player profile photos show beside the name everywhere a player appears — registrant rows, group + bracket match cards, group standings, and the live scoreboard — pulled from a public profiles index so it works for every host / co-host (a silhouette shows for free-form Register Others / Test names that have no account)
 - Register Myself pre-fills your account's username and locks the name field, so no one can register under someone else's name from your device
-- Register Others (host / co-host): add a participant manually by name + deck, no need for them to self-register — these entries are treated as guests (no account attached) and don't earn global ranking points on finish; Register Myself stays tied to your account and does earn points
+- Register Others (host / co-host AND registered participants): add a walk-in player by name with an optional deck, no need for them to self-register — a participant signing up friends from their device uses the same write path so they keep their participant session. These entries are treated as guests (no account attached) and don't earn global ranking points on finish; Register Myself stays tied to your account and does earn points
 - QR button in the Open Tournaments header shows a scannable QR code that opens /tournament/ on any phone
 - Tutorial button next to QR / Refresh opens a 9-slide illustrated walkthrough of how to participate — auto-slides, swipeable, with dot navigation
 - Header buttons (Tutorial / QR / Refresh / Create Tournament) sit on a single horizontal row with an invisible scroller
@@ -81,7 +81,7 @@ Tournament
 - Test decks obey "one of each part per deck" across all 3 slots (only light lock chips can repeat; Emperor / Valkyrie cannot)
 - Test deck mode mix is weighted realistic: ~75% Standard, ~13% CX, ~12% CX Expand
 - Test registrants never earn global ranking points or appear on the leaderboard
-- Edit a registrant in place — tap their name to change the name or rebuild their deck
+- Edit a registrant in place — tap their name to change the name or rebuild their deck. Account-based registrations keep the name locked on edit (it keys their ranking entry); only guest / Register Others entries stay name-editable
 - Add a participant during round 1 — name + 3-combo deck; Swiss and Round Robin slot them in as a free win, or pair them against an existing bye, with no reset
 - Rename any participant after the tournament starts — tap their name in a group's Standings
 - Adjust the total round count mid-tournament — tap "Round X / Y" in a group header; already-played rounds are kept
@@ -156,7 +156,7 @@ Other
 - Live Firebase sync across host / co-host / participant / viewer devices
 - Multi-mode part images (Eclipse, Dual, Turbo, Operate, Scorpio Spear, Lightning L-Drago) display correctly everywhere — defaults to mode 0 when no mode is recorded
 - Broken-image fallback hides only the image (rank chip + name stay), so Best Parts 1st / 2nd / 3rd rows never shift out of alignment
-- Themed end-to-end: dashboard, scoreboard (sb-btn / round / hint / close / divider), tournament registering view (heading / format pills / + Register myself / row names), group + match cards (sub-tabs / round titles / match rows / seed pills / score cells), Bey Check popup (player tabs / slot cards / labels), Rounds + Groups picker popups, Open Tournaments list, Revox input, What's New page, charts, Battle Pass widgets
+- Themed end-to-end: dashboard, scoreboard (sb-btn / round / hint / close / divider), tournament registering view (heading / format pills / + Register myself / row names), group + match cards (sub-tabs / round titles / match rows / seed pills / score cells), Bey Check popup (player tabs / slot cards / part tiles / labels), Rounds + Groups picker popups, Open Tournaments list, Revox input + member row action buttons (+ / delete), Account / Profile card (avatar ring, username, email, hint, bio), Developer pane (search field, user rows, names, count), deck-slot pencil edit button, empty-profile avatar placeholder (the silhouette sits on the themed card bg instead of a hard-coded dark slab), What's New page, charts, Battle Pass widgets
 `;
 
   const btn = document.getElementById("settings-show-features");

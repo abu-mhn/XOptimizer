@@ -892,7 +892,9 @@ body.light-mode .result-part-name {
     border-radius: 50%;
     object-fit: cover;
     border: 5px solid #1b1f27;
-    background: #2a2f3a;
+    /* Translucent so the placeholder silhouette sits on the themed card
+       bg (real photos cover this anyway via object-fit). */
+    background: rgba(110, 118, 129, 0.2);
     cursor: pointer;
     transition: filter 0.15s ease;
 }
@@ -939,6 +941,64 @@ body.light-mode .result-part-name {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
+/* Per-theme account card. The base above hard-codes #1b1f27 — the dark
+   slab the username / email / tags / bio sit on — so on light themes the
+   whole card stood out as black. Each light theme gets a white-card
+   palette matching its .bey-check-slot tones; metallic themes get the
+   tinted dark slab matching their .btn. The 5px avatar ring is tied to
+   the card bg so it keeps blending in (no dark donut on a light card). */
+body.light-mode    .account-card { background: #ffffff; border-color: #d1d9e0; }
+body.tropical-mode .account-card { background: #ffffff; border-color: #ffd8a8; }
+body.love-mode     .account-card { background: #ffffff; border-color: #ffc1d2; }
+body.forest-mode   .account-card { background: #ffffff; border-color: #b5c89a; }
+
+body.light-mode    .account-card-cover .account-profile-avatar,
+body.tropical-mode .account-card-cover .account-profile-avatar,
+body.love-mode     .account-card-cover .account-profile-avatar,
+body.forest-mode   .account-card-cover .account-profile-avatar { border-color: #ffffff; }
+
+body.light-mode    .account-profile-username { color: #1f2328; }
+body.tropical-mode .account-profile-username { color: #2d3a3a; }
+body.love-mode     .account-profile-username { color: #4a1d2a; }
+body.forest-mode   .account-profile-username { color: #2d3e1f; }
+
+body.light-mode    .account-profile-username:focus { background: #f6f8fa; border-color: #0969da; }
+body.tropical-mode .account-profile-username:focus { background: #fff0d6; border-color: #00b8a9; }
+body.love-mode     .account-profile-username:focus { background: #ffe6ee; border-color: #c0245f; }
+body.forest-mode   .account-profile-username:focus { background: #e8f0d8; border-color: #386641; }
+
+body.light-mode    .account-email,
+body.light-mode    .account-edit-hint { color: #656d76; }
+body.tropical-mode .account-email,
+body.tropical-mode .account-edit-hint { color: #8a6d3b; }
+body.love-mode     .account-email,
+body.love-mode     .account-edit-hint { color: #9c4a5e; }
+body.forest-mode   .account-email,
+body.forest-mode   .account-edit-hint { color: #5a6a4b; }
+
+body.gold-mode   .account-card { background: rgba(54, 44, 18, 0.8); border-color: #4a3c18; }
+body.silver-mode .account-card { background: rgba(46, 52, 60, 0.8); border-color: #383f47; }
+body.bronze-mode .account-card { background: rgba(58, 40, 24, 0.8); border-color: #4a3320; }
+
+body.gold-mode   .account-card-cover .account-profile-avatar { border-color: #4a3c18; }
+body.silver-mode .account-card-cover .account-profile-avatar { border-color: #383f47; }
+body.bronze-mode .account-card-cover .account-profile-avatar { border-color: #4a3320; }
+
+body.gold-mode   .account-profile-username { color: #f0e6cf; }
+body.silver-mode .account-profile-username { color: #e8ecf0; }
+body.bronze-mode .account-profile-username { color: #f0e2d2; }
+
+body.gold-mode   .account-profile-username:focus { background: rgba(227, 179, 65, 0.15); border-color: #e3b341; }
+body.silver-mode .account-profile-username:focus { background: rgba(174, 182, 191, 0.15); border-color: #aeb6bf; }
+body.bronze-mode .account-profile-username:focus { background: rgba(198, 128, 68, 0.15); border-color: #c68044; }
+
+body.gold-mode   .account-email,
+body.gold-mode   .account-edit-hint { color: #b8a06e; }
+body.silver-mode .account-email,
+body.silver-mode .account-edit-hint { color: #9aa3ad; }
+body.bronze-mode .account-email,
+body.bronze-mode .account-edit-hint { color: #a8896b; }
 /* Admin-assigned profile badges (e.g. "Developer"). Single row that scrolls
    horizontally when there are more tags than fit; scrollbar is hidden. */
 .account-tags {
@@ -1049,6 +1109,40 @@ body.light-mode .result-part-name {
     border-color: #58a6ff;
     outline: none;
 }
+
+/* Per-theme bio textarea + label. The base above is hard-coded dark
+   (#0d1117 bg, #e6edf3 text), so on every light theme the bio dropped
+   out as a black rectangle inside the themed card. Each override
+   matches that theme's .bey-check-slot palette (light themes) or its
+   .btn palette (metallic dark themes), so the field reads as part of
+   the card it sits in. */
+body.light-mode    .account-bio { background: #ffffff; border-color: #d1d9e0; color: #1f2328; }
+body.tropical-mode .account-bio { background: #ffffff; border-color: #ffd8a8; color: #2d3a3a; }
+body.love-mode     .account-bio { background: #ffffff; border-color: #ffc1d2; color: #4a1d2a; }
+body.forest-mode   .account-bio { background: #ffffff; border-color: #b5c89a; color: #2d3e1f; }
+
+body.light-mode    .account-bio:focus { border-color: #0969da; }
+body.tropical-mode .account-bio:focus { border-color: #00b8a9; }
+body.love-mode     .account-bio:focus { border-color: #c0245f; }
+body.forest-mode   .account-bio:focus { border-color: #386641; }
+
+body.light-mode    .account-bio-label { color: #656d76; }
+body.tropical-mode .account-bio-label { color: #8a6d3b; }
+body.love-mode     .account-bio-label { color: #9c4a5e; }
+body.forest-mode   .account-bio-label { color: #5a6a4b; }
+
+body.gold-mode   .account-bio { background: rgba(54, 44, 18, 0.8); border-color: #4a3c18; color: #f0e6cf; }
+body.silver-mode .account-bio { background: rgba(46, 52, 60, 0.8); border-color: #383f47; color: #e8ecf0; }
+body.bronze-mode .account-bio { background: rgba(58, 40, 24, 0.8); border-color: #4a3320; color: #f0e2d2; }
+
+body.gold-mode   .account-bio:focus { border-color: #e3b341; }
+body.silver-mode .account-bio:focus { border-color: #aeb6bf; }
+body.bronze-mode .account-bio:focus { border-color: #c68044; }
+
+body.gold-mode   .account-bio-label { color: #d4af37; }
+body.silver-mode .account-bio-label { color: #b8c0c8; }
+body.bronze-mode .account-bio-label { color: #c68044; }
+
 .account-actions {
     display: flex;
     flex-wrap: wrap;
@@ -1184,6 +1278,66 @@ body.light-mode .result-part-name {
 .developer-tag-remove:hover {
     opacity: 1;
 }
+
+/* Per-theme Developer pane. The four base rules above lock white-on-dark
+   defaults — .developer-count and .developer-user-name use #e6edf3
+   (invisible on a white card), .developer-search is a black input, and
+   .developer-user-row is a 3%-white tint (nearly transparent). Each
+   theme gets the same card / input palette used by .account-bio and
+   .bey-check-slot so the page reads as part of the active theme. */
+body.light-mode    .developer-count { color: #1f2328; }
+body.tropical-mode .developer-count { color: #2d3a3a; }
+body.love-mode     .developer-count { color: #4a1d2a; }
+body.forest-mode   .developer-count { color: #2d3e1f; }
+
+body.light-mode    .developer-search { background: #ffffff; border-color: #d1d9e0; color: #1f2328; }
+body.tropical-mode .developer-search { background: #ffffff; border-color: #ffd8a8; color: #2d3a3a; }
+body.love-mode     .developer-search { background: #ffffff; border-color: #ffc1d2; color: #4a1d2a; }
+body.forest-mode   .developer-search { background: #ffffff; border-color: #b5c89a; color: #2d3e1f; }
+
+body.light-mode    .developer-search:focus { border-color: #0969da; }
+body.tropical-mode .developer-search:focus { border-color: #00b8a9; }
+body.love-mode     .developer-search:focus { border-color: #c0245f; }
+body.forest-mode   .developer-search:focus { border-color: #386641; }
+
+body.light-mode    .developer-user-row { background: #ffffff; border-color: #d1d9e0; }
+body.tropical-mode .developer-user-row { background: #ffffff; border-color: #ffd8a8; }
+body.love-mode     .developer-user-row { background: #ffffff; border-color: #ffc1d2; }
+body.forest-mode   .developer-user-row { background: #ffffff; border-color: #b5c89a; }
+
+body.light-mode    .developer-user-name { color: #1f2328; }
+body.tropical-mode .developer-user-name { color: #2d3a3a; }
+body.love-mode     .developer-user-name { color: #4a1d2a; }
+body.forest-mode   .developer-user-name { color: #2d3e1f; }
+
+body.light-mode    .developer-user-email { color: #656d76; }
+body.tropical-mode .developer-user-email { color: #8a6d3b; }
+body.love-mode     .developer-user-email { color: #9c4a5e; }
+body.forest-mode   .developer-user-email { color: #5a6a4b; }
+
+body.gold-mode   .developer-count { color: #f0e6cf; }
+body.silver-mode .developer-count { color: #e8ecf0; }
+body.bronze-mode .developer-count { color: #f0e2d2; }
+
+body.gold-mode   .developer-search { background: rgba(54, 44, 18, 0.8); border-color: #4a3c18; color: #f0e6cf; }
+body.silver-mode .developer-search { background: rgba(46, 52, 60, 0.8); border-color: #383f47; color: #e8ecf0; }
+body.bronze-mode .developer-search { background: rgba(58, 40, 24, 0.8); border-color: #4a3320; color: #f0e2d2; }
+
+body.gold-mode   .developer-search:focus { border-color: #e3b341; }
+body.silver-mode .developer-search:focus { border-color: #aeb6bf; }
+body.bronze-mode .developer-search:focus { border-color: #c68044; }
+
+body.gold-mode   .developer-user-row { background: rgba(54, 44, 18, 0.8); border-color: #4a3c18; }
+body.silver-mode .developer-user-row { background: rgba(46, 52, 60, 0.8); border-color: #383f47; }
+body.bronze-mode .developer-user-row { background: rgba(58, 40, 24, 0.8); border-color: #4a3320; }
+
+body.gold-mode   .developer-user-name { color: #f0e6cf; }
+body.silver-mode .developer-user-name { color: #e8ecf0; }
+body.bronze-mode .developer-user-name { color: #f0e2d2; }
+
+body.gold-mode   .developer-user-email { color: #b8a06e; }
+body.silver-mode .developer-user-email { color: #9aa3ad; }
+body.bronze-mode .developer-user-email { color: #a8896b; }
 
 /* ===== Settings → inline action buttons (sized like the dropdowns) ===== */
 .setting-action-btn {
@@ -1613,6 +1767,29 @@ body.forest-mode .features-list {
     justify-content: center;
     overflow: hidden;
 }
+
+/* Per-theme part tile inside the bey-check / register deck slots. The base
+   above is the same dark slab .result-part-img-box uses elsewhere, but
+   .bey-check-part-img-box had no theme overrides — so every slot still
+   rendered its parts in black squares on light themes. Mirror the
+   .result-part-img-box palette per theme so all the tiles in a slot row
+   share the same look. */
+body.light-mode    .bey-check-part-img-box { background: #f6f8fa; border-color: #d1d9e0; }
+body.tropical-mode .bey-check-part-img-box { background: #fff0d6; border-color: #ffd8a8; }
+body.love-mode     .bey-check-part-img-box { background: #ffe1ea; border-color: #ffc1d2; }
+body.forest-mode   .bey-check-part-img-box { background: #e9efdc; border-color: #b5c89a; }
+
+body.gold-mode   .bey-check-part-img-box { background: rgba(227, 179, 65, 0.18); border-color: #4a3c18; }
+body.silver-mode .bey-check-part-img-box { background: rgba(174, 182, 191, 0.18); border-color: #383f47; }
+body.bronze-mode .bey-check-part-img-box { background: rgba(198, 128, 68, 0.18); border-color: #4a3320; }
+
+body.light-mode    .bey-check-part-name { color: #656d76; }
+body.tropical-mode .bey-check-part-name { color: #8a6d3b; }
+body.love-mode     .bey-check-part-name { color: #9c4a5e; }
+body.forest-mode   .bey-check-part-name { color: #5a6a4b; }
+body.gold-mode     .bey-check-part-name { color: #f0e6cf; }
+body.silver-mode   .bey-check-part-name { color: #e8ecf0; }
+body.bronze-mode   .bey-check-part-name { color: #f0e2d2; }
 
 .bey-check-part-img {
     max-width: 90%;
@@ -3491,6 +3668,22 @@ body.forest-mode .image-popup-dot.active {
 .btn-deck-edit:hover {
     background: #1f6feb;
 }
+
+/* The base .btn-deck-edit img filter is brightness(0) invert(1) — flips the
+   pencil to white. That vanishes on the light themes' white cards, leaving
+   the button as an empty blue-bordered box. Drop `invert(1)` so the icon
+   renders solid black; on hover the bg flips to the blue #1f6feb fill, so
+   put the white back for contrast against that. Metallic + plain dark
+   themes keep the white icon from the base. */
+body.light-mode    .btn-deck-edit img,
+body.tropical-mode .btn-deck-edit img,
+body.love-mode     .btn-deck-edit img,
+body.forest-mode   .btn-deck-edit img { filter: brightness(0); }
+
+body.light-mode    .btn-deck-edit:hover img,
+body.tropical-mode .btn-deck-edit:hover img,
+body.love-mode     .btn-deck-edit:hover img,
+body.forest-mode   .btn-deck-edit:hover img { filter: brightness(0) invert(1); }
 
 /* ===== Deck slot combo editor popup ===== */
 .deck-edit-fields {
@@ -6579,7 +6772,9 @@ body.mono-mode .popup-ok:hover {
     border-radius: 50%;
     object-fit: cover;
     border: 3px solid #161b22;
-    background: #21262d;
+    /* Translucent so a real photo covers it but, when only the placeholder
+       silhouette is rendered, the themed card bg behind shows through. */
+    background: rgba(110, 118, 129, 0.2);
 }
 
 .profile-view-name {
@@ -7970,6 +8165,38 @@ body.mono-mode .history-sub-tab.active img {
 .revox-row-btn-delete {
     color: #ff6b6b;
 }
+
+/* Per-theme tones for the row action buttons. The base above hard-codes
+   a dark chip, which jars on the light themes (the icon SVGs use
+   currentColor, so adjusting bg / border / color re-tones the whole
+   button). Each theme follows its existing .bey-check-slot / .btn
+   palette so these buttons sit naturally in the card. The delete
+   variant keeps a red icon — error red reads as "destructive" across
+   themes — only its bg / border come from the base override. */
+body.light-mode    .revox-row-btn { background: #ffffff; border-color: #d1d9e0; color: #1f2328; }
+body.tropical-mode .revox-row-btn { background: #ffffff; border-color: #ffd8a8; color: #2d3a3a; }
+body.love-mode     .revox-row-btn { background: #ffffff; border-color: #ffc1d2; color: #4a1d2a; }
+body.forest-mode   .revox-row-btn { background: #ffffff; border-color: #b5c89a; color: #2d3e1f; }
+
+body.light-mode    .revox-row-btn:hover { background: #f6f8fa; border-color: #0969da; }
+body.tropical-mode .revox-row-btn:hover { background: #fff0d6; border-color: #f5b86b; }
+body.love-mode     .revox-row-btn:hover { background: #ffe6ee; border-color: #f0a0bc; }
+body.forest-mode   .revox-row-btn:hover { background: #e8f0d8; border-color: #7a9159; }
+
+body.light-mode    .revox-row-btn-delete,
+body.tropical-mode .revox-row-btn-delete,
+body.love-mode     .revox-row-btn-delete,
+body.forest-mode   .revox-row-btn-delete { color: #d1242f; }
+
+/* Metallic dark themes — mirror their .btn palette so the chip reads
+   as a small button of the same family (deep tinted bg, accent border). */
+body.gold-mode   .revox-row-btn { background: rgba(54, 44, 18, 0.8); border-color: #4a3c18; color: #f0e6cf; }
+body.silver-mode .revox-row-btn { background: rgba(46, 52, 60, 0.8); border-color: #383f47; color: #e8ecf0; }
+body.bronze-mode .revox-row-btn { background: rgba(58, 40, 24, 0.8); border-color: #4a3320; color: #f0e2d2; }
+
+body.gold-mode   .revox-row-btn:hover { background: rgba(227, 179, 65, 0.3); border-color: #e3b341; }
+body.silver-mode .revox-row-btn:hover { background: rgba(174, 182, 191, 0.3); border-color: #aeb6bf; }
+body.bronze-mode .revox-row-btn:hover { background: rgba(198, 128, 68, 0.3); border-color: #c68044; }
 
 /* Top "Add a result" button — icon only. */
 .revox-icon-btn {

@@ -2314,7 +2314,12 @@ function wireShareDropdown(root, options, initial, onPick) {
 }
 
 // Placeholders for the profile-view popup when an account has no photo/banner.
-const PROFILE_VIEW_PHOTO_PH = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%2321262d'/%3E%3Ccircle cx='32' cy='24' r='12' fill='%23484f58'/%3E%3Cpath d='M11 57c0-12 10-20 21-20s21 8 21 20z' fill='%23484f58'/%3E%3C/svg%3E";
+// Placeholder silhouette shown when a profile has no photo. The SVG has a
+// TRANSPARENT background — the surrounding <img>'s themed CSS `background`
+// shows through, so the empty avatar follows the active theme instead of
+// rendering as a hard-coded dark slab. The silhouette stays a neutral mid
+// grey (#484f58) so it reads on both light and dark theme cards.
+const PROFILE_VIEW_PHOTO_PH = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='24' r='12' fill='%23484f58'/%3E%3Cpath d='M11 57c0-12 10-20 21-20s21 8 21 20z' fill='%23484f58'/%3E%3C/svg%3E";
 const PROFILE_VIEW_BANNER_PH = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
 // Render a profile's tags as coloured badge spans (Revox red, Developer
