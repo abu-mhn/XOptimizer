@@ -6083,18 +6083,15 @@ function showParticipantModeChoice(room) {
     auth.signInAnonymously()
       .then(() => showRegistrationPopup(room, { asGuest: true }))
       .catch(err => {
-        // Anonymous sign-in must be enabled in the Firebase console
-        // (Authentication → Sign-in method → Anonymous → Enable). Without
-        // it the eventual registrants/$regId write hits the .write rule's
-        // `auth != null` check and Firebase returns PERMISSION_DENIED, so
-        // we'd open a popup the user can never submit. Surface the cause
-        // up front instead of letting them fill the form for nothing.
-        console.warn("Anonymous sign-in failed:", err);
-        alert(
-          "Guest registration isn't available right now — anonymous sign-in is disabled on this build.\n\n"
-          + "Tap Sign In instead, or ask the host to enable Anonymous auth in the Firebase console "
-          + "(Authentication → Sign-in method → Anonymous → Enable)."
-        );
+        // Best-effort: anonymous sign-in is preferred because it stamps
+        // the entry with createdBy = anon uid so the guest "owns" their
+        // own row. When the Anonymous provider isn't enabled we fall
+        // through unauthenticated — the relaxed registrants/$regId rule
+        // accepts a new isGuest entry with no createdBy during the
+        // registering phase, so the guest can still join. They just
+        // can't edit their own entry afterward (host / co-host can).
+        console.info("Proceeding without anonymous auth:", err && err.code);
+        showRegistrationPopup(room, { asGuest: true });
       });
   };
   cancelBtn.onclick = close;
