@@ -60,6 +60,7 @@ Tournament
 - My Tournaments: a signed-in host is dropped straight back into the tournament they host on any device — the room index follows your account, not the device (a pick list appears only if you host more than one)
 - Join from the lobby as Participant (register name + deck) or Viewer (watch only)
 - Joining as Participant asks "Sign in" or "Become Guest" — signed-in players earn ranking points on finish; guests play normally but stay off the leaderboard
+- Become Guest needs no account at all — not even anonymous sign-in. A guest joins with just a name; the registrant carries isGuest: true and is created with no createdBy field, so host / co-host manage the entry afterward. If anonymous sign-in is enabled in the Firebase project, it's used silently for better ownership stamping (the guest then "owns" their own row), but it's no longer required
 - Sign in to a tournament you're already registered in (matched on your username) and the deck-registration step is skipped — you go straight into the participant view
 - Signing in as the room's host (matched on hostUid) drops you straight into the host view, even on a fresh device
 - Signing out while inside a tournament returns you to the Open Tournaments lobby; the room itself stays alive in Firebase, so signing back in puts you back inside
