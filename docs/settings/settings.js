@@ -46,9 +46,9 @@ Deck (3 Slots)
 Tournament
 - Three formats: Swiss, Round Robin, Single Elimination
 - Round Robin: everyone in a group plays everyone else exactly once; rounds are fixed by group size (N players = N-1 rounds, or N with a bye each round when odd)
-- Round Robin reuses the Swiss group stage, standings and Top 8 — only the per-round pairing differs (fixed everyone-vs-everyone schedule vs. Swiss standings-based pairing)
-- A Round Robin bye (forced by an odd group size) is a sit-out, not a win — only real matches count toward standings and the top-2-per-group Top 8 seeding
-- Pick Swiss or Round Robin, then choose whether to add a Top 8 knockout (+ Top 8) or finish on group records (group records only)
+- Round Robin reuses the Swiss group stage, standings and Top-N knockout — only the per-round pairing differs (fixed everyone-vs-everyone schedule vs. Swiss standings-based pairing)
+- A Round Robin bye (forced by an odd group size) is a sit-out, not a win — only real matches count toward standings and the bracket seeding
+- Pick Swiss or Round Robin, then choose whether to add a knockout bracket (any top-N) or finish on group records. The knockout size is set at create time — Top 4 / 8 / 16 / 32 presets plus a custom number input (2-64). Non-power-of-2 sizes (Top 10, Top 12, …) are padded with byes via the same engine single-elim uses
 - Configurable groups: 2, 3, or 4 (Swiss and Round Robin)
 - Configurable rounds per group for Swiss: 3, 4, 5 (Round Robin derives rounds from group size)
 - Hosting requires a free email account (Settings → Account, or prompted on Create Tournament)
@@ -60,23 +60,23 @@ Tournament
 - My Tournaments: a signed-in host is dropped straight back into the tournament they host on any device — the room index follows your account, not the device (a pick list appears only if you host more than one)
 - Join from the lobby as Participant (register name + deck) or Viewer (watch only)
 - Joining as Participant asks "Sign in" or "Become Guest" — signed-in players earn ranking points on finish; guests play normally but stay off the leaderboard
-- Become Guest needs no account at all — not even anonymous sign-in. A guest joins with just a name; the registrant carries isGuest: true and is created with no createdBy field, so host / co-host manage the entry afterward. If anonymous sign-in is enabled in the Firebase project, it's used silently for better ownership stamping (the guest then "owns" their own row), but it's no longer required
+- Become Guest opens the bulk-guests popup — enter your name (and any friends, one per line) and every entry is created as a deck-less guest in a single write; you're then dropped into the tournament view as participant. No account needed, not even anonymous sign-in: registrants are flagged isGuest with no createdBy, accepted by the relaxed rule's tail clause. If the Anonymous provider IS enabled in the Firebase project, it's used silently for createdBy ownership stamping, but not required
 - Sign in to a tournament you're already registered in (matched on your username) and the deck-registration step is skipped — you go straight into the participant view
 - Signing in as the room's host (matched on hostUid) drops you straight into the host view, even on a fresh device
 - Signing out while inside a tournament returns you to the Open Tournaments lobby; the room itself stays alive in Firebase, so signing back in puts you back inside
 - Sub-hosts: the host lists co-host usernames in a "Sub-hosts" popup — anyone signed in with a listed username gets full co-host powers (no host code) and joins straight as co-host from the lobby
 - The room badge shows the host and the room's designated sub-hosts
 - Hosts AND co-hosts can play (+ Register Myself), start the tournament, add participants, and remove registrants
-- Player profile photos show beside the name everywhere a player appears — registrant rows, group + bracket match cards, group standings, and the live scoreboard — pulled from a public profiles index so it works for every host / co-host (a silhouette shows for free-form Register Others / Test names that have no account)
+- Player profile photos show beside the name everywhere a player appears — registrant rows, group + bracket match cards, group standings, and the live scoreboard — pulled from a public profiles index so it works for every host / co-host (a silhouette shows for free-form Bulk Guests / Test names that have no account)
 - Register Myself pre-fills your account's username and locks the name field, so no one can register under someone else's name from your device
-- Register Others (host / co-host AND registered participants): add a walk-in player by name with an optional deck, no need for them to self-register — a participant signing up friends from their device uses the same write path so they keep their participant session. These entries are treated as guests (no account attached) and don't earn global ranking points on finish; Register Myself stays tied to your account and does earn points
+- Bulk Guests (host / co-host AND registered participants): the single "add others" path. Paste a name list (one per line) and every entry is created as a deck-less guest in one Firebase update, so they all appear together in the registrants list. Single-add works too — type one line for one guest. Max 50 names per batch; duplicates within the batch and against existing registrants are auto-skipped. These entries are flagged isGuest (no account attached) and don't earn global ranking points; Register Myself stays tied to your account and does earn points
 - QR button in the Open Tournaments header shows a scannable QR code that opens /tournament/ on any phone
 - Tutorial button next to QR / Refresh opens a 9-slide illustrated walkthrough of how to participate — auto-slides, swipeable, with dot navigation
 - Header buttons (Tutorial / QR / Refresh / Create Tournament) sit on a single horizontal row with an invisible scroller
 - Only accounts tagged "Judge" can Create Tournament — the button hides entirely for signed-out or non-Judge accounts
 - Sub-hosts typeahead lists only accounts tagged "Judge" (via a public judges index synced from the Developer page)
 - Lobby cards flag a tournament you've been invited to co-host with a small "!" alert badge
-- Edit the format while waiting for players — tap the format chip to switch between Swiss, Round Robin and Single Elimination, or the Top 8 / groups / rounds chips to adjust them; registrants are kept, no reset needed
+- Edit the format while waiting for players — tap the format chip to switch between Swiss, Round Robin and Single Elimination, or the groups / rounds chips to adjust them; registrants are kept, no reset needed. (The knockout size — Top N — is set at create time only and isn't edited inline.)
 - Test button: bulk-adds synthetic participants for QA — visible only to accounts tagged "Tester"
 - Copy Names button (Tester-only, host / co-host): copies every registrant's name to the clipboard, one per line — a QA aid; the button flashes the copied count
 - Test decks obey "one of each part per deck" across all 3 slots (only light lock chips can repeat; Emperor / Valkyrie cannot)
@@ -89,7 +89,7 @@ Tournament
 - Registered decks pre-fill every match; judges can override per match
 - CX / CX Expand decks paste from the Deck tab without losing parts (lock chip / main blade / assist blade preserved)
 - Bey Check slots show just "Slot 1 / 2 / 3" with an invisible-scrollbar part row (swipe still works)
-- Swiss + Top 8 auto-generates the knockout bracket from group standings — 2 groups (top 4), 3 groups (top 2 + 2 best 3rd-place wildcards), 4 groups (top 2)
+- Swiss + Top N auto-generates the knockout bracket from group standings the moment every group's final round completes — top finishers from each group are pooled, sorted by Swiss tiebreakers, and seeded into a standard fold bracket (1 vs N, 2 vs N-1, …). Non-power-of-2 N pads with byes that auto-advance, so Top 10 / Top 12 work the same as Top 8 / Top 16. Legacy Top 8 tournaments already in flight keep their original QF/SF/F structure
 - Scoreboard round counter above VS, advancing every 3 score taps
 - Tilt-activated scoreboard on mobile (rotate to landscape)
 - Share button opens a popup for date, time, stadium (Xtreme / Infinity / Double Xtreme), rule (Official / Unofficial), and remark — date renders as "14 May 2026 (Thursday)"

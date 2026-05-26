@@ -491,10 +491,12 @@ function getGroupCount(state) {
 // Human-readable format label. Round robin reuses the swiss / swiss-only mode
 // keys plus a `pairing: "round-robin"` flag, so the label keys off both.
 // `shortElim` picks the compact "Single Elim" for room cards.
-function tournamentFormatLabel(mode, pairing, shortElim) {
+function tournamentFormatLabel(mode, pairing, shortElim, topN) {
   if (mode === "single-elim") return shortElim ? "Single Elim" : "Single Elimination";
   const base = pairing === "round-robin" ? "Round Robin" : "Swiss";
-  return mode === "swiss-only" ? base : base + " + Top 8";
+  if (mode === "swiss-only") return base;
+  const n = (typeof topN === "number" && topN >= 2) ? topN : 8;
+  return `${base} + Top ${n}`;
 }
 
 // Registration-phase helpers. A tournament with `phase: "registering"` is
@@ -1187,8 +1189,8 @@ function startSwissMatch(matchId) {
       }
     }
 
-    // Auto-generate the top-8 knockout bracket the moment every group's
-    // final round completes, so no one has to hunt for a "Start" button.
+    // Auto-generate the knockout bracket the moment every group's final
+    // round completes, so no one has to hunt for a "Start" button.
     // Only fires once — the hasSwissBracket guard makes this idempotent for
     // late edits that don't change group completion. Skipped for swiss-only
     // mode, which ends after the group stage with no knockout.
@@ -1196,6 +1198,14 @@ function startSwissMatch(matchId) {
       const bracketMatches = buildBracketMatches(s);
       Object.assign(s.matches, bracketMatches);
       newMatchIds = (newMatchIds || []).concat(Object.keys(bracketMatches));
+      // buildTopNBracketMatches stamps bracketSize / preFinalRounds onto the
+      // state so the renderer + propagation know the shape — push them too,
+      // otherwise other devices would render an empty / mis-shaped bracket.
+      if (typeof s.bracketSize === "number" || typeof s.preFinalRounds === "number") {
+        extraUpdates = extraUpdates || {};
+        if (typeof s.bracketSize === "number") extraUpdates["bracketSize"] = s.bracketSize;
+        if (typeof s.preFinalRounds === "number") extraUpdates["preFinalRounds"] = s.preFinalRounds;
+      }
     }
 
     // Bracket match: propagate both winner and loser into their respective
@@ -1661,7 +1671,27 @@ function renderSwissBracket(state) {
   if (state.mode === "single-elim") {
     return renderSingleElimBracket(state);
   }
+  // Legacy Top 8 tournaments keep their QF/SF/F structure — those matches
+  // are already in Firebase under those exact ids. New tournaments with a
+  // configurable topN use the single-elim renderer (round-indexed match ids).
+  const hasLegacyQF = Object.keys(state.matches || {}).some(k => k.startsWith("bracket-qf-"));
+  if (hasLegacyQF) return renderSwissTop8Bracket(state);
+  if (typeof state.topN === "number" && state.topN >= 2) {
+    return renderSwissTopNBracket(state);
+  }
   return renderSwissTop8Bracket(state);
+}
+
+// Wrapper around the single-elim renderer for a Swiss+TopN knockout. Just
+// swaps the section header so the "Single Elimination — N-slot bracket"
+// title reads "Knockout — Top N" instead.
+function renderSwissTopNBracket(state) {
+  const html = renderSingleElimBracket(state);
+  const n = state.topN || state.bracketSize || 8;
+  return html.replace(
+    /<span class="swiss-bracket-title">[^<]*<\/span>/,
+    `<span class="swiss-bracket-title">Knockout — Top ${n}</span>`
+  );
 }
 
 function getBracketRoundName(matchesInRound) {
@@ -2854,7 +2884,7 @@ function renderSwissRegisteringMarkup(state) {
   const minTotal = swissRegistrationMinimum(state);
   const enoughRegistrants = registrants.length >= minTotal;
 
-  const modeLabel = tournamentFormatLabel(state.mode, state.pairing, false);
+  const modeLabel = tournamentFormatLabel(state.mode, state.pairing, false, state.topN);
   // Hosts / co-hosts can tweak the format while still waiting for players —
   // no matches exist yet, so changing groups / rounds / Top-8 is safe.
   const isSwiss = state.mode !== "single-elim";
@@ -2936,9 +2966,14 @@ function renderSwissRegisteringMarkup(state) {
   // co-hosts and to registered participants — a participant signing up
   // friends on their device uses the same selfRegister write path (no
   // disconnect, so they keep their participant session).
+  // Bulk Guests — the single "add others as guests" entry point. Pastes a
+  // name list (one per line) and creates every entry as a deck-less guest
+  // in a single Firebase update. Open to hosts / co-hosts and registered
+  // participants; viewers can't see it. Handles single-add too — just type
+  // one line.
   const canRegisterOthers = canEdit || swissSessionRole === "participant";
-  const othersRegBtnHtml = canRegisterOthers
-    ? `<button type="button" id="swiss-reg-others" class="swiss-reg-self">+ Register Others</button>`
+  const bulkGuestsBtnHtml = canRegisterOthers
+    ? `<button type="button" id="swiss-reg-bulk-guests" class="swiss-reg-self">+ Bulk Guests</button>`
     : "";
   // The Test button bulk-adds synthetic participants — gate it on the
   // "Tester" tag so regular hosts don't see (or accidentally use) it.
@@ -2983,8 +3018,8 @@ function renderSwissRegisteringMarkup(state) {
       <div class="swiss-reg-heading-row">
         <h3 class="swiss-reg-heading">Registrants <span class="swiss-reg-count">(${registrants.length}${minTotal ? ` / ${minTotal} min` : ""})</span></h3>
       </div>
-      ${(selfRegBtnHtml || othersRegBtnHtml || testRegBtnHtml || copyNamesBtnHtml)
-        ? `<div class="swiss-reg-host-actions">${selfRegBtnHtml}${othersRegBtnHtml}${testRegBtnHtml}${copyNamesBtnHtml}</div>`
+      ${(selfRegBtnHtml || bulkGuestsBtnHtml || testRegBtnHtml || copyNamesBtnHtml)
+        ? `<div class="swiss-reg-host-actions">${selfRegBtnHtml}${bulkGuestsBtnHtml}${testRegBtnHtml}${copyNamesBtnHtml}</div>`
         : ""}
       <ul class="swiss-reg-list">${registrantRows}</ul>
       <div class="swiss-reg-actions">${startBtnHtml}</div>
@@ -3018,7 +3053,7 @@ function bindSwissRegisteringHandlers(view, state) {
   });
   view.querySelector("#swiss-reg-start")?.addEventListener("click", startRegisteringTournament);
   view.querySelector("#swiss-reg-self")?.addEventListener("click", showSelfRegisterPopup);
-  view.querySelector("#swiss-reg-others")?.addEventListener("click", showOthersRegisterPopup);
+  view.querySelector("#swiss-reg-bulk-guests")?.addEventListener("click", showBulkGuestsPopup);
   view.querySelector("#swiss-reg-test")?.addEventListener("click", () => {
     const raw = prompt("How many test registrants?", "10");
     if (raw == null) return;
@@ -3250,31 +3285,188 @@ function showSelfRegisterPopup() {
   showRegistrationPopup(room, { selfRegister: true, lockName: true, initialName: myUname });
 }
 
-// Host / co-host registers someone else manually (name + deck). Same write
-// path as selfRegister (no disconnect/reconnect, host stays host), but with
-// the name field editable for any free-form participant name.
+// Bulk Guests — the single "add others" path. Pastes a name list (one per
+// line) and creates every entry as a deck-less guest in a single Firebase
+// update. Same audience as Register Myself: hosts / co-hosts and registered
+// participants; plain viewers can't reach the button. Mirrors the Test
+// path's batched .update() so the listener fires once and every entry
+// appears in the same render tick. Handles single-add too — the host can
+// just type one line for one guest.
 //
-// "Register Others" entries are flagged isGuest because no account is
-// attached to them — the host (or a participant) is typing a free-form
-// name on someone else's behalf, so we treat them like guest registrants
-// and skip them from global ranking awards on finish.
-//
-// Available to hosts / co-hosts and to registered participants; plain
-// viewers can't add registrants.
-function showOthersRegisterPopup() {
-  if (!swissEditCode) return;
-  if (!swissCanEdit && swissSessionRole !== "participant") return;
-  const state = loadSwiss();
-  if (!isRegisteringPhase(state)) return;
-  const room = {
-    editCode: swissEditCode,
-    viewCode: swissViewCode,
-    name: state.tournamentName || "",
-    mode: state.mode || "swiss",
-    roundCount: state.roundCount || null,
-    groupCount: state.groupCount || null
+// The popup is built dynamically so this works on any page (every per-tab
+// index.html is a full app copy, but we don't need a new <div> in each).
+const BULK_GUESTS_MAX = 50;
+
+// opts:
+//   editCode — defaults to the currently connected room's code (in-room use).
+//             Pass explicitly from the lobby (Become Guest), where the device
+//             isn't connected to a room yet.
+//   fromLobby — when true, skip the in-room guards and use a lobby-tailored
+//             title / hint text ("Join + register friends" framing).
+//   afterAdd — optional callback fired after a successful bulk write; the
+//             lobby flow uses this to auto-connect the user to the room as
+//             participant + switch tabs.
+function showBulkGuestsPopup(opts) {
+  opts = opts || {};
+  const fromLobby = !!opts.fromLobby;
+  const editCode = opts.editCode || swissEditCode;
+  if (!editCode) return;
+
+  // In-room invocation needs the registering-phase + role guards. Lobby
+  // invocation has already validated the room exists and is open.
+  if (!fromLobby) {
+    if (!swissCanEdit && swissSessionRole !== "participant") return;
+    const state = loadSwiss();
+    if (!isRegisteringPhase(state)) return;
+  }
+
+  // Re-open: drop any stale instance first.
+  document.getElementById("bulk-guests-popup")?.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "bulk-guests-popup";
+  overlay.className = "popup-overlay";
+  const title = fromLobby ? "Join as Guest" : "Bulk Add Guests";
+  const blurb = fromLobby
+    ? "Enter your name (and any friends, one per line). Each becomes a deck-less guest entry — guests don't earn ranking points. You'll be dropped into the tournament view after."
+    : "Enter one name per line — each becomes a deck-less guest entry. Guests don't earn ranking points.";
+  const submitLabel = fromLobby ? "Join" : "Add Guests";
+  overlay.innerHTML = `
+    <div class="popup-card">
+      <h2 class="popup-title">${title}</h2>
+      <p class="popup-text">${blurb}</p>
+      <textarea id="bulk-guests-input" class="account-bio" rows="8" placeholder="Alice
+Bob
+Charlie" style="width:100%; min-height:140px; resize:vertical;"></textarea>
+      <p class="popup-text" style="font-size:0.78rem; margin-top:6px;">Max ${BULK_GUESTS_MAX} per batch. Duplicate names (matching existing registrants or each other) are skipped.</p>
+      <div id="bulk-guests-status" class="swiss-join-status"></div>
+      <div class="popup-actions">
+        <button type="button" id="bulk-guests-submit" class="btn">${submitLabel}</button>
+        <button type="button" id="bulk-guests-cancel" class="btn popup-cancel">Cancel</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const textarea = overlay.querySelector("#bulk-guests-input");
+  const status = overlay.querySelector("#bulk-guests-status");
+  const submitBtn = overlay.querySelector("#bulk-guests-submit");
+  const cancelBtn = overlay.querySelector("#bulk-guests-cancel");
+
+  const setStatus = (msg, kind) => {
+    if (!status) return;
+    status.textContent = msg || "";
+    status.classList.remove("is-ok", "is-err", "is-pending");
+    if (kind) status.classList.add(`is-${kind}`);
   };
-  showRegistrationPopup(room, { selfRegister: true, lockName: false, asGuest: true });
+
+  const close = () => overlay.remove();
+  cancelBtn.onclick = close;
+
+  // Esc closes, like the other popups.
+  const onKey = (e) => {
+    if (e.key === "Escape") { e.preventDefault(); close(); document.removeEventListener("keydown", onKey); }
+  };
+  document.addEventListener("keydown", onKey);
+
+  setTimeout(() => textarea?.focus(), 0);
+
+  submitBtn.onclick = () => {
+    const seen = new Set();
+    const names = (textarea.value || "")
+      .split(/\r?\n/)
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
+      .filter(s => {
+        const k = s.toLowerCase();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+    if (names.length === 0) {
+      setStatus("Enter at least one name (one per line).", "err");
+      return;
+    }
+    const tooLong = names.find(n => n.length > 60);
+    if (tooLong) {
+      setStatus(`"${tooLong.slice(0, 40)}" is over 60 characters.`, "err");
+      return;
+    }
+    if (names.length > BULK_GUESTS_MAX) {
+      setStatus(`Too many names — max ${BULK_GUESTS_MAX} per batch (got ${names.length}).`, "err");
+      return;
+    }
+    submitBtn.disabled = true;
+    bulkAddGuests(editCode, names, setStatus, () => {
+      document.removeEventListener("keydown", onKey);
+      close();
+      if (typeof opts.afterAdd === "function") opts.afterAdd();
+    }, () => { submitBtn.disabled = false; });
+  };
+}
+
+function bulkAddGuests(editCode, names, setStatus, onSuccess, onFail) {
+  if (!editCode) { onFail?.(); return; }
+  const db = initFirebase();
+  if (!db) { setStatus("Firebase not available.", "err"); onFail?.(); return; }
+  setStatus(`Adding ${names.length} guest${names.length === 1 ? "" : "s"}…`, "pending");
+
+  const roomRef = db.ref("swissRooms/" + editCode);
+  roomRef.once("value").then(snap => {
+    const remote = snap.val();
+    if (!remote || remote.phase !== "registering") {
+      throw new Error("This tournament is no longer accepting registrations.");
+    }
+    const usedNames = new Set(
+      Object.values(remote.registrants || {})
+        .map(r => (r && typeof r.name === "string") ? r.name.trim().toLowerCase() : "")
+        .filter(Boolean)
+    );
+    const dupes = [];
+    const toAdd = [];
+    for (const n of names) {
+      const k = n.toLowerCase();
+      if (usedNames.has(k)) { dupes.push(n); continue; }
+      usedNames.add(k);
+      toAdd.push(n);
+    }
+    if (toAdd.length === 0) {
+      throw new Error("All those names are already registered.");
+    }
+
+    // Bulk write: one .update() so the listener fires once, every entry
+    // shows up together. Each entry mirrors Register Others — isGuest:true,
+    // empty deck (guests may skip the deck), createdBy = writer's uid when
+    // signed in (host / co-host / participant; the rule's third clause
+    // accepts it). Unauthed callers can't reach this popup, so we always
+    // expect a writerUid here.
+    const writerUid = (window.getCurrentUser && window.getCurrentUser()?.uid) || null;
+    const emptyDeck = emptyBeyCheckDeck();
+    const updates = {};
+    for (const name of toAdd) {
+      const id = generateRegistrantId();
+      const entry = { name, deck: emptyDeck, isGuest: true };
+      if (writerUid) entry.createdBy = writerUid;
+      updates[`registrants/${id}`] = entry;
+    }
+
+    return roomRef.update(updates).then(() => {
+      // Refresh the lobby count (non-fatal — host listener also publishes).
+      return roomRef.child("registrants").once("value").then(s => {
+        const total = s.numChildren();
+        return db.ref("openTournaments/" + editCode + "/registrantCount").set(total).catch(() => {});
+      });
+    }).then(() => {
+      const addedTxt = `${toAdd.length} guest${toAdd.length === 1 ? "" : "s"}`;
+      const dupeTxt = dupes.length ? ` (skipped ${dupes.length} duplicate${dupes.length === 1 ? "" : "s"})` : "";
+      setStatus(`Added ${addedTxt} ✓${dupeTxt}`, "ok");
+      setTimeout(() => onSuccess?.(), 900);
+    });
+  }).catch(e => {
+    console.warn("Bulk add guests failed:", e);
+    setStatus(e.message || "Couldn't add guests. Try again.", "err");
+    onFail?.();
+  });
 }
 
 // Minimum registrants needed before Start can fire. Mirrors the same checks
@@ -3283,12 +3475,14 @@ function showOthersRegisterPopup() {
 function swissRegistrationMinimum(state) {
   if (!state) return 0;
   if (state.mode === "single-elim") return 2;
-  // Swiss / Swiss + Top 8: need enough per group for SWISS_MIN_PER_GROUP and
-  // enough total for the bracket's top-N slots.
+  // Swiss / Swiss + Top N: need enough per group for SWISS_MIN_PER_GROUP and
+  // enough total for the knockout's slots. New tournaments carry state.topN
+  // (configurable), legacy ones fall back to the original 8.
   const gc = getGroupCount(state);
-  const minPerGroupForBracket = state.mode === "swiss-only"
-    ? SWISS_MIN_PER_GROUP
-    : Math.ceil(SWISS_BRACKET_SIZE / gc);
+  const bracketN = state.mode === "swiss-only"
+    ? 0
+    : (typeof state.topN === "number" && state.topN >= 2 ? state.topN : SWISS_BRACKET_SIZE);
+  const minPerGroupForBracket = bracketN > 0 ? Math.ceil(bracketN / gc) : SWISS_MIN_PER_GROUP;
   return gc * Math.max(SWISS_MIN_PER_GROUP, minPerGroupForBracket);
 }
 
@@ -3625,6 +3819,14 @@ function bracketSeedingFromStandings(state) {
 }
 
 function buildBracketMatches(state) {
+  // New tournaments carry state.topN (the configurable bracket size). They
+  // go through the round-indexed single-elim structure so any N works.
+  // Legacy tournaments (no topN) keep the hard-coded QF/SF/F bracket — their
+  // in-flight matches and listeners depend on those exact ids.
+  if (typeof state.topN === "number" && state.topN >= 2) {
+    return buildTopNBracketMatches(state);
+  }
+
   const qfPairs = bracketSeedingFromStandings(state);
   const newMatches = {};
   const emptyBracketMatch = (round, idx) => ({
@@ -3653,6 +3855,135 @@ function buildBracketMatches(state) {
   return newMatches;
 }
 
+// Build a single-elim-style knockout for an arbitrary top-N from group
+// standings. Reuses the same match-id structure that single-elim mode uses
+// (bracket-r0-*, bracket-r1-*, ..., bracket-f-0, bracket-3rd-0, plus the
+// consolation chain bracket-cqf-*/5th/7th when there's a quarterfinal),
+// so the existing renderSingleElimBracket renderer and bracketUpstreamSource
+// resolver work without changes. Non-power-of-2 N pads to the next power of
+// 2 with BYE slots, which autoAdvanceByes will collapse on entry.
+function buildTopNBracketMatches(state) {
+  const topN = Math.max(2, Number(state.topN) || 8);
+  const seeded = topNSeededParticipants(state, topN); // length = topN
+  let bracketSize = 2;
+  while (bracketSize < topN) bracketSize *= 2;
+  // Pad with null BYEs.
+  const slots = seeded.slice();
+  while (slots.length < bracketSize) slots.push(null);
+  const preFinalRounds = Math.round(Math.log2(bracketSize)) - 1;
+
+  // Stash for the renderer / autoAdvanceByes. preFinalRounds is also what
+  // bracketUpstreamSource reads to resolve placement-match upstreams.
+  state.bracketSize = bracketSize;
+  state.preFinalRounds = preFinalRounds;
+
+  const emptyBracketMatch = (round, idx) => ({
+    bracket: true, round, bracketIndex: idx,
+    groupIndex: null, a: null, b: null,
+    scoreA: null, scoreB: null, startedAt: null, bye: false
+  });
+  const newMatches = {};
+
+  if (preFinalRounds === 0) {
+    // 2-player bracket — just the final.
+    newMatches["bracket-f-0"] = {
+      ...emptyBracketMatch("f", 0),
+      a: slots[0], b: slots[1]
+    };
+    return newMatches;
+  }
+
+  // Round 0: filled with seeded pairs (and any tail BYEs).
+  for (let j = 0; j < bracketSize / 2; j++) {
+    newMatches[`bracket-r0-${j}`] = {
+      ...emptyBracketMatch(0, j),
+      a: slots[j * 2], b: slots[j * 2 + 1]
+    };
+  }
+  // Intermediate rounds 1..preFinalRounds-1 — empty, filled via propagation.
+  for (let r = 1; r < preFinalRounds; r++) {
+    const matchesInRound = bracketSize / Math.pow(2, r + 1);
+    for (let j = 0; j < matchesInRound; j++) {
+      newMatches[`bracket-r${r}-${j}`] = emptyBracketMatch(r, j);
+    }
+  }
+  newMatches["bracket-f-0"] = emptyBracketMatch("f", 0);
+  if (topN >= 4) {
+    newMatches["bracket-3rd-0"] = emptyBracketMatch("3rd", 0);
+  }
+  // 5th/7th consolation chain — only when there's a real quarterfinal round
+  // (bracketSize >= 8). bracketUpstreamSource feeds CQF off the QF round
+  // (preFinal - 2 in the round-indexed numbering).
+  if (preFinalRounds >= 2) {
+    newMatches["bracket-cqf-0"] = emptyBracketMatch("cqf", 0);
+    newMatches["bracket-cqf-1"] = emptyBracketMatch("cqf", 1);
+    newMatches["bracket-5th-0"] = emptyBracketMatch("5th", 0);
+    newMatches["bracket-7th-0"] = emptyBracketMatch("7th", 0);
+  }
+  return newMatches;
+}
+
+// Pick the top-N participants from group standings in seeded order, cross-
+// group interleaved so the top seed in each group lands on a different half
+// of the bracket. The returned array is length topN — slot 0 plays slot 1 in
+// round 0, slot 2 plays slot 3, etc. (matches the single-elim seeding the
+// generic engine expects).
+function topNSeededParticipants(state, topN) {
+  const groups = (state && Array.isArray(state.groups)) ? state.groups : [];
+  if (groups.length === 0) return Array.from({ length: topN }, () => null);
+  // Standings per group, sorted best-first.
+  const standings = groups.map((members, gi) =>
+    computeStandings(members, state.matches, gi, state.pairing === "round-robin")
+  );
+  // Flatten into a global pool of {rank-in-group, group-index, entry}. Then
+  // sort by rank-in-group asc, then by the same tiebreakers computeStandings
+  // applies across groups, so the best 1sts come before the best 2nds, etc.
+  const pool = [];
+  standings.forEach((st, gi) => {
+    st.forEach((entry, rankInGroup) => {
+      pool.push({ rankInGroup, gi, entry });
+    });
+  });
+  pool.sort((a, b) =>
+    a.rankInGroup - b.rankInGroup ||
+    ((b.entry.wins || 0) - (a.entry.wins || 0)) ||
+    ((b.entry.pointsScored || 0) - (a.entry.pointsScored || 0)) ||
+    ((b.entry.pointsDiff || 0) - (a.entry.pointsDiff || 0)) ||
+    ((b.entry.medianBuchholz || 0) - (a.entry.medianBuchholz || 0)) ||
+    (a.entry.name || "").localeCompare(b.entry.name || "")
+  );
+  const top = pool.slice(0, topN).map(p => p.entry.name || null);
+  // Standard cross-bracket seeding: pair seed 1 vs seed N, 2 vs N-1, etc.,
+  // and interleave halves so the top two seeds sit on opposite sides of
+  // the bracket. Build with the standard "fold" sequence — for size S,
+  // round-0 order is [1, S, S-1, 2, ... ] which keeps 1 vs S in match 0
+  // and pushes top seeds apart through subsequent rounds.
+  let bracketSize = 2;
+  while (bracketSize < topN) bracketSize *= 2;
+  while (top.length < bracketSize) top.push(null);
+  return foldBracketSeeding(top);
+}
+
+// Standard tournament fold seeding: turns a seed-ordered array [1,2,3,4,...]
+// into the round-0 slot order that puts top seeds on opposite halves and
+// only lets them meet in the final. For size 8 this yields [1,8,4,5,2,7,3,6]
+// — match 0 is 1v8, match 1 is 4v5, etc. Works for any power-of-2 size.
+function foldBracketSeeding(seeds) {
+  const n = seeds.length;
+  if (n <= 2) return seeds.slice();
+  let order = [0, 1];
+  while (order.length < n) {
+    const sz = order.length * 2;
+    const next = [];
+    for (const i of order) {
+      next.push(i);
+      next.push(sz - 1 - i);
+    }
+    order = next;
+  }
+  return order.map(i => seeds[i]);
+}
+
 function startSwissBracket() {
   const s = loadSwiss();
   if (!isGroupStageComplete(s)) {
@@ -3671,6 +4002,10 @@ function startSwissBracket() {
   if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
     const updates = {};
     Object.entries(newMatches).forEach(([id, m]) => { updates[`matches/${id}`] = m; });
+    // buildTopNBracketMatches sets bracketSize / preFinalRounds on the
+    // state so the renderer can shape the bracket — push them too.
+    if (typeof s.bracketSize === "number") updates["bracketSize"] = s.bracketSize;
+    if (typeof s.preFinalRounds === "number") updates["preFinalRounds"] = s.preFinalRounds;
     swissRoomRef.update(updates).catch(e => console.warn("Bracket push failed:", e));
   }
   renderSwiss();
@@ -4893,8 +5228,72 @@ function showSwissGroupsPopup(onPick, isRoundRobin) {
 }
 
 // Yes / No follow-up that asks whether the Swiss tournament should end in
-// a Top 8 knockout. Resolves the callback with the corresponding mode key
-// ("swiss" = with Top 8, "swiss-only" = without).
+// a knockout bracket at all. Resolves the callback with the corresponding
+// mode key ("swiss" = with knockout, "swiss-only" = group stage only). The
+// caller follows up with showTopNPickerPopup to pick the bracket size when
+// the user picks "yes".
+// After the user chooses "yes, add a knockout", pick the bracket size N. Any
+// integer >= 2 is allowed — power-of-2 sizes (4, 8, 16) run a clean bracket,
+// non-power-of-2 (10, 12, …) pad with byes via the same engine single-elim
+// uses. Dynamically built so it works on every per-tab index.html without
+// adding new HTML.
+const TOPN_PRESETS = [2, 4, 8, 16, 32];
+function showTopNPickerPopup(onPick, defaultN) {
+  defaultN = Number.isFinite(defaultN) && defaultN >= 2 ? defaultN : 8;
+  document.getElementById("topn-picker-popup")?.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "topn-picker-popup";
+  overlay.className = "popup-overlay";
+  const presetBtns = TOPN_PRESETS.map(n =>
+    `<button type="button" class="btn topn-preset" data-n="${n}">Top ${n}</button>`
+  ).join("");
+  overlay.innerHTML = `
+    <div class="popup-card">
+      <h2 class="popup-title">Knockout Bracket Size</h2>
+      <p class="popup-text">How many players advance from the group stage into the knockout?</p>
+      <div class="popup-actions" style="flex-wrap:wrap; gap:6px; margin-bottom:8px;">${presetBtns}</div>
+      <label class="popup-text" style="display:block; margin-top:6px;">Or pick a custom size (2–64):</label>
+      <input type="number" id="topn-custom" class="account-bio" min="2" max="64" step="1" value="${defaultN}" style="width:100%; padding:8px 10px;">
+      <div class="popup-actions">
+        <button type="button" id="topn-confirm" class="btn">Confirm</button>
+        <button type="button" id="topn-cancel" class="btn popup-cancel">Cancel</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const input = overlay.querySelector("#topn-custom");
+  const close = () => overlay.remove();
+  const finish = (n) => {
+    close();
+    document.removeEventListener("keydown", onKey);
+    onPick(n);
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") { e.preventDefault(); finish(null); }
+    else if (e.key === "Enter" && document.activeElement === input) {
+      e.preventDefault();
+      const v = parseInt(input.value, 10);
+      if (Number.isFinite(v) && v >= 2 && v <= 64) finish(v);
+    }
+  };
+  document.addEventListener("keydown", onKey);
+
+  overlay.querySelectorAll(".topn-preset").forEach(btn => {
+    btn.onclick = () => finish(Number(btn.dataset.n));
+  });
+  overlay.querySelector("#topn-confirm").onclick = () => {
+    const v = parseInt(input.value, 10);
+    if (!Number.isFinite(v) || v < 2 || v > 64) {
+      alert("Pick a number between 2 and 64.");
+      return;
+    }
+    finish(v);
+  };
+  overlay.querySelector("#topn-cancel").onclick = () => finish(null);
+  setTimeout(() => input?.focus(), 0);
+}
+
 function showTopEightPopup(onPick, isRoundRobin) {
   const popup = document.getElementById("tournament-top-eight-popup");
   if (!popup) { onPick("swiss"); return; }
@@ -4941,22 +5340,36 @@ function showTournamentModePopup(onPick) {
   swissBtn.onclick = () => {
     const name = nameInput ? nameInput.value.trim() : "";
     teardown();
-    // Ask whether to add a Top 8 bracket after the group stage.
+    // Ask whether to add a knockout, and if so for what N.
     showTopEightPopup((mode) => {
-      if (!mode) return; // user cancelled at the Top 8 step
-      showSwissRoundsPopup((rc) => {
-        showSwissGroupsPopup((gc) => onPick(mode, name, rc, true, gc), false);
+      if (!mode) return; // user cancelled at the knockout step
+      const proceed = (topN) => {
+        showSwissRoundsPopup((rc) => {
+          showSwissGroupsPopup((gc) => onPick(mode, name, rc, true, gc, undefined, topN), false);
+        });
+      };
+      if (mode === "swiss-only") { proceed(null); return; }
+      showTopNPickerPopup((n) => {
+        if (n == null) return; // cancelled at the size step
+        proceed(n);
       });
     });
   };
   if (rrBtn) rrBtn.onclick = () => {
     const name = nameInput ? nameInput.value.trim() : "";
     teardown();
-    // Round robin asks Top 8 + group count, but skips the round picker —
+    // Round robin asks knockout + group count, but skips the round picker —
     // rounds are fixed by group size (everyone plays everyone once).
     showTopEightPopup((mode) => {
       if (!mode) return;
-      showSwissGroupsPopup((gc) => onPick(mode, name, undefined, true, gc, "round-robin"), true);
+      const proceed = (topN) => {
+        showSwissGroupsPopup((gc) => onPick(mode, name, undefined, true, gc, "round-robin", topN), true);
+      };
+      if (mode === "swiss-only") { proceed(null); return; }
+      showTopNPickerPopup((n) => {
+        if (n == null) return;
+        proceed(n);
+      });
     }, true);
   };
   singleBtn.onclick = () => {
@@ -4997,19 +5410,27 @@ function showSwissFormatPopup() {
     if (nameInput) nameInput.classList.remove("hidden");
     if (nameLabel) nameLabel.classList.remove("hidden");
   };
-  // Swiss / Round Robin then ask whether to keep a Top 8 knockout;
+  // Swiss / Round Robin then ask whether to keep a Top N knockout;
   // Single Elimination applies straight away. pairing is cleared for
-  // Swiss / Single Elim and set for Round Robin.
+  // Swiss / Single Elim and set for Round Robin. The knockout size (topN)
+  // is set at create time only — switching the format mid-registration
+  // preserves the existing topN (or seeds 8 if there isn't one).
   if (swissBtn) swissBtn.onclick = () => {
     teardown();
     showTopEightPopup((mode) => {
-      if (mode) updateRegisteringSetting({ mode, pairing: null });
+      if (!mode) return;
+      const patch = { mode, pairing: null };
+      if (mode === "swiss" && !(typeof s.topN === "number" && s.topN >= 2)) patch.topN = 8;
+      updateRegisteringSetting(patch);
     }, false);
   };
   if (rrBtn) rrBtn.onclick = () => {
     teardown();
     showTopEightPopup((mode) => {
-      if (mode) updateRegisteringSetting({ mode, pairing: "round-robin" });
+      if (!mode) return;
+      const patch = { mode, pairing: "round-robin" };
+      if (mode === "swiss" && !(typeof s.topN === "number" && s.topN >= 2)) patch.topN = 8;
+      updateRegisteringSetting(patch);
     }, true);
   };
   if (singleBtn) singleBtn.onclick = () => {
@@ -5126,12 +5547,12 @@ document.getElementById("swiss-generate")?.addEventListener("click", async () =>
   } catch (e) {
     return; // user cancelled the sign-in modal
   }
-  showTournamentModePopup((mode, tournamentName, roundCount, ranked, groupCount, pairing) => {
+  showTournamentModePopup((mode, tournamentName, roundCount, ranked, groupCount, pairing, topN) => {
     // Open Registration only — empty room in registering phase. Players
     // self-register with their decks via the Rooms tab, then the host
     // clicks Start to generate groups / bracket from the registrants.
     const next = createRegisteringTournamentState({
-      mode, tournamentName, roundCount, ranked, groupCount, pairing, hostUid: user ? user.uid : null
+      mode, tournamentName, roundCount, ranked, groupCount, pairing, topN, hostUid: user ? user.uid : null
     });
     startTournamentFromState(next);
   });
@@ -5143,7 +5564,7 @@ document.getElementById("swiss-generate")?.addEventListener("click", async () =>
 // Firebase Auth uid of the user creating the tournament — Reset / Start
 // flows check it to ensure only the original host (signed into the same
 // account on any device) can wipe or kick off the room.
-function createRegisteringTournamentState({ mode, tournamentName, roundCount, ranked, groupCount, pairing, hostUid }) {
+function createRegisteringTournamentState({ mode, tournamentName, roundCount, ranked, groupCount, pairing, topN, hostUid }) {
   const safeMode = mode === "single-elim" ? "single-elim"
     : mode === "swiss-only" ? "swiss-only"
     : "swiss";
@@ -5172,6 +5593,12 @@ function createRegisteringTournamentState({ mode, tournamentName, roundCount, ra
     } else {
       state.roundCount = SWISS_ROUND_OPTIONS.includes(Number(roundCount))
         ? Number(roundCount) : SWISS_ROUND_COUNT;
+    }
+    // Knockout bracket size — null / swiss-only skips the bracket entirely;
+    // otherwise default 8 for back-compat with old call sites.
+    if (safeMode === "swiss") {
+      const nVal = Number(topN);
+      state.topN = (Number.isFinite(nVal) && nVal >= 2 && nVal <= 64) ? nVal : 8;
     }
   }
   return state;
@@ -5240,7 +5667,7 @@ function renderTournamentResultsMarkup(state) {
   const name = state.tournamentName && state.tournamentName.trim()
     ? escapeHtml(state.tournamentName)
     : "(unnamed tournament)";
-  const modeLabel = tournamentFormatLabel(state.mode, state.pairing, false);
+  const modeLabel = tournamentFormatLabel(state.mode, state.pairing, false, state.topN);
   const header = `
     <div class="tournament-results-heading">
       <div class="tournament-results-name">${name}</div>
@@ -5699,7 +6126,7 @@ function refreshMyTournaments() {
 function renderMyTournamentRooms(list, rooms) {
   list.innerHTML = rooms.map(r => {
     const name = (r.name || "").trim() || "(unnamed tournament)";
-    const modeLabel = tournamentFormatLabel(r.mode, r.pairing, true);
+    const modeLabel = tournamentFormatLabel(r.mode, r.pairing, true, r.topN);
     const badge = r.phase === "running"
       ? `<span class="swiss-room-running-badge">In progress</span>`
       : `<span class="swiss-room-hosting-badge">Registering</span>`;
@@ -5833,7 +6260,7 @@ function renderLobbyRooms(list, rooms) {
   const myKey = myUname ? subHostKey(myUname) : "";
   list.innerHTML = rooms.map(r => {
     const name = (r.name || "").trim() || "(unnamed tournament)";
-    const modeLabel = tournamentFormatLabel(r.mode, r.pairing, true);
+    const modeLabel = tournamentFormatLabel(r.mode, r.pairing, true, r.topN);
     const isRunning = r.phase === "running";
     const meta = [`${r.registrantCount || 0} ${isRunning ? "players" : "registered"}`];
     if (r.mode !== "single-elim") {
@@ -5914,7 +6341,7 @@ function openJoinChoicePopup(room) {
 
   if (subtitle) {
     const name = (room.name || "").trim() || "(unnamed tournament)";
-    const modeLabel = tournamentFormatLabel(room.mode, room.pairing, true);
+    const modeLabel = tournamentFormatLabel(room.mode, room.pairing, true, room.topN);
     subtitle.textContent = `${name} · ${modeLabel}`;
   }
 
@@ -5995,7 +6422,7 @@ function showParticipantModeChoice(room) {
   const subtitle = popup.querySelector("#participant-mode-subtitle");
   if (subtitle) {
     const name = (room.name || "").trim() || "(unnamed tournament)";
-    const modeLabel = tournamentFormatLabel(room.mode, room.pairing, true);
+    const modeLabel = tournamentFormatLabel(room.mode, room.pairing, true, room.topN);
     subtitle.textContent = `${name} · ${modeLabel}`;
   }
   const close = () => popup.classList.add("hidden");
@@ -6065,33 +6492,39 @@ function showParticipantModeChoice(room) {
       showRegistrationPopup(room);
     }
   };
+  // After a successful bulk write the lobby user is connected to the room
+  // as participant and dropped into the tournament view — same as the
+  // legacy single-name lobby guest flow used to do.
+  const joinAsParticipantAfterAdd = () => {
+    if (!firebaseReady()) return;
+    disconnectSwissRoom();
+    localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [], phase: "running", registrants: {} }));
+    connectSwissRoom(room.editCode, room.viewCode || null, false, false, "participant");
+    const hostingTab = document.querySelector('.tournament-sub-tab[data-tournament-view="hosting"]');
+    hostingTab?.click();
+  };
+  const openLobbyBulk = () => {
+    showBulkGuestsPopup({
+      fromLobby: true,
+      editCode: room.editCode,
+      afterAdd: joinAsParticipantAfterAdd
+    });
+  };
   guestBtn.onclick = () => {
     close();
     const user = (typeof window.getCurrentUser === "function") ? window.getCurrentUser() : null;
-    if (user && user.uid) {
-      showRegistrationPopup(room, { asGuest: true });
-      return;
-    }
-    // Sign in anonymously so Firebase rules requiring `auth != null` let
-    // the registrant write succeed. The registrant payload still carries
-    // isGuest: true, so the global ranking skips this entry on award.
+    if (user && user.uid) { openLobbyBulk(); return; }
+    // Best-effort anonymous sign-in for ownership stamping (createdBy = anon
+    // uid). If the Anonymous provider isn't enabled, fall through unauthed —
+    // the relaxed registrants/$regId rule accepts new isGuest entries with
+    // no createdBy during the registering phase.
     const auth = (typeof firebase !== "undefined" && firebase.auth) ? firebase.auth() : null;
-    if (!auth || typeof auth.signInAnonymously !== "function") {
-      showRegistrationPopup(room, { asGuest: true });
-      return;
-    }
+    if (!auth || typeof auth.signInAnonymously !== "function") { openLobbyBulk(); return; }
     auth.signInAnonymously()
-      .then(() => showRegistrationPopup(room, { asGuest: true }))
+      .then(openLobbyBulk)
       .catch(err => {
-        // Best-effort: anonymous sign-in is preferred because it stamps
-        // the entry with createdBy = anon uid so the guest "owns" their
-        // own row. When the Anonymous provider isn't enabled we fall
-        // through unauthenticated — the relaxed registrants/$regId rule
-        // accepts a new isGuest entry with no createdBy during the
-        // registering phase, so the guest can still join. They just
-        // can't edit their own entry afterward (host / co-host can).
         console.info("Proceeding without anonymous auth:", err && err.code);
-        showRegistrationPopup(room, { asGuest: true });
+        openLobbyBulk();
       });
   };
   cancelBtn.onclick = close;
@@ -6240,7 +6673,7 @@ function showRegistrationPopup(room, options = {}) {
 
   if (subtitle) {
     const name = (room.name || "").trim() || "(unnamed tournament)";
-    const modeLabel = tournamentFormatLabel(room.mode, room.pairing, true);
+    const modeLabel = tournamentFormatLabel(room.mode, room.pairing, true, room.topN);
     subtitle.textContent = `${name} · ${modeLabel}`;
   }
   // Swap the deck-building hint for guests so it's clear the deck is
