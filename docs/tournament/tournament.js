@@ -424,11 +424,24 @@ function initSwissRoomOnLoad() {
   // ONLY for the account that saved it — otherwise a different account
   // signing in on the same device is dropped into the previous account's
   // tournament. Defer the decision until Firebase reports the auth state.
+  //
+  // iOS quirk: hard-killing Safari can evict Firebase's IndexedDB auth
+  // persistence even when localStorage survives. The user re-opens, auth
+  // comes back as null, currentUid is empty, and a strict mismatch check
+  // would wipe a legitimate room. Distinguish "auth was lost on this
+  // device" (info.uid set, currentUid empty) from "different account
+  // signed in" (both set, but different) — the first reconnects as a
+  // read-only viewer so the user keeps seeing the room and can sign in
+  // again to restore host / co-host privileges. The second still wipes.
   const proceed = (user) => {
     const currentUid = (user && user.uid) || "";
-    if ((info.uid || "") !== currentUid) {
-      // Stale pointer from another account (or a signed-out session) —
-      // discard it, wipe any leftover room state, and show the lobby.
+    const savedUid = info.uid || "";
+    const sameAccount = savedUid === currentUid;
+    const authLostOnThisDevice = savedUid && !currentUid;
+    if (!sameAccount && !authLostOnThisDevice) {
+      // Different signed-in account on the same device — discard the
+      // previous account's pointer, wipe any leftover room state, and
+      // show the lobby.
       saveJoinedRoom(null);
       localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [] }));
       if (typeof renderSwiss === "function") renderSwiss();
@@ -437,9 +450,18 @@ function initSwissRoomOnLoad() {
     // Reconnect with the role actually saved at join time — NOT the
     // device-wide isRoomHosted() flag, which would re-enter a co-host /
     // viewer as host on a device that once hosted this room.
-    const asHost = !!info.asHost;
-    const canEdit = asHost || info.role === "edit";
-    connectSwissRoom(info.editCode, info.viewCode || null, asHost, canEdit, info.sessionRole || null);
+    //
+    // If auth was lost (authLostOnThisDevice), force read-only / viewer
+    // role for this session — host / co-host writes need a matching
+    // auth.uid against the Firebase rules and would just be rejected
+    // anyway. The user can sign back in to regain edit privileges; until
+    // then they at least see the room rather than the empty lobby.
+    const asHost = !authLostOnThisDevice && !!info.asHost;
+    const canEdit = !authLostOnThisDevice && (asHost || info.role === "edit");
+    const sessionRole = authLostOnThisDevice
+      ? (info.sessionRole === "participant" ? "participant" : "view")
+      : (info.sessionRole || null);
+    connectSwissRoom(info.editCode, info.viewCode || null, asHost, canEdit, sessionRole);
   };
 
   if (typeof window.onAuthChange === "function") {
@@ -1060,16 +1082,73 @@ function isGroupRoundComplete(matches, groupIndex, roundIndex) {
   return roundMatches.every(m => m.bye || (m.scoreA != null && m.scoreB != null));
 }
 
+// ---------------- Self-cancel from room ----------------
+// "Owned" registrant entries are ones the user can delete themselves —
+// either authed (createdBy matches auth.uid) or tracked locally for
+// unauthed guests (no createdBy stamp, but the device created them).
+// Tracked per room so leaving one tournament doesn't affect another.
+function ownedRegistrantsKey(editCode) {
+  return "beyblade_owned_regs:" + editCode;
+}
+
+function loadDeviceOwnedRegIds(editCode) {
+  if (!editCode) return [];
+  try {
+    const raw = localStorage.getItem(ownedRegistrantsKey(editCode));
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.filter(id => typeof id === "string") : [];
+  } catch (e) { return []; }
+}
+
+function rememberDeviceOwnedRegIds(editCode, ids) {
+  if (!editCode || !Array.isArray(ids) || !ids.length) return;
+  const existing = new Set(loadDeviceOwnedRegIds(editCode));
+  ids.forEach(id => { if (id) existing.add(id); });
+  localStorage.setItem(ownedRegistrantsKey(editCode), JSON.stringify(Array.from(existing)));
+}
+
+function clearDeviceOwnedRegIds(editCode) {
+  if (!editCode) return;
+  localStorage.removeItem(ownedRegistrantsKey(editCode));
+}
+
+// Registrant IDs the current user is allowed to delete: createdBy matches
+// their auth.uid OR the device tracked the ID locally (unauthed guests).
+// Filters against the live state so stale localStorage entries (already
+// removed by the host) don't show up.
+function findMyRegistrantIds(state, editCode) {
+  if (!state || !state.registrants) return [];
+  const out = new Set();
+  const myUid = (window.getCurrentUser && window.getCurrentUser()?.uid) || "";
+  Object.entries(state.registrants).forEach(([id, r]) => {
+    if (!r) return;
+    if (myUid && r.createdBy === myUid) out.add(id);
+  });
+  loadDeviceOwnedRegIds(editCode).forEach(id => {
+    if (state.registrants[id]) out.add(id);
+  });
+  return Array.from(out);
+}
+
 function resetSwiss() {
   const state = loadSwiss();
   const hasAny = state.groups || Object.keys(state.matches || {}).length > 0 || isRegisteringPhase(state);
   const inRoom = !!swissEditCode;
+  // Self-cancel — registrant IDs the user owns in this room. Only
+  // meaningful for non-hosts during the registering phase: hosts use
+  // the X-next-to-name button, and a started tournament can't have its
+  // registrants pulled out mid-flight without breaking pairings.
+  const canSelfCancel = inRoom && !swissIsHost && isRegisteringPhase(state);
+  const myRegIds = canSelfCancel ? findMyRegistrantIds(state, swissEditCode) : [];
   // The dialog only describes the live room being torn down. Past
   // tournament history entries (Tournament History tab) are stored
   // separately and never touched by reset.
   let promptMsg;
   if (inRoom && !swissIsHost) {
-    promptMsg = "Leave this live room?";
+    promptMsg = myRegIds.length
+      ? "Leave this live room? Your registration will be removed too."
+      : "Leave this live room?";
   } else if (isRegisteringPhase(state)) {
     promptMsg = "Cancel this tournament and close registration? Past tournaments in your history won't be affected.";
   } else {
@@ -1082,6 +1161,28 @@ function resetSwiss() {
   const codeForRemote = swissEditCode;
   const viewCodeForRemote = swissViewCode;
   const dbHandle = swissDb;
+
+  // Delete owned registrant entries BEFORE detaching the listener — the
+  // listener has to be alive to issue the writes through swissRoomRef.
+  // Failures are non-fatal (rule rejection on an unauthed-guest delete is
+  // expected if the room's rule clause isn't updated yet) — surface a
+  // warning rather than block the leave flow.
+  if (myRegIds.length && swissRoomRef) {
+    const updates = {};
+    myRegIds.forEach(id => { updates[`registrants/${id}`] = null; });
+    swissRoomRef.update(updates).catch(e => {
+      console.warn("Self-cancel failed for some entries:", e);
+      alert("Couldn't fully remove your registration — your device left the room, but the host may still see your name. Ask them to remove you, or sign in first.");
+    });
+    // Bump the lobby's cached count. Non-fatal — host listener also resyncs.
+    if (dbHandle && codeForRemote) {
+      dbHandle.ref("swissRooms/" + codeForRemote + "/registrants").once("value").then(s => {
+        const total = Math.max(0, s.numChildren() - myRegIds.length);
+        return dbHandle.ref("openTournaments/" + codeForRemote + "/registrantCount").set(total);
+      }).catch(() => {});
+    }
+  }
+  if (canSelfCancel) clearDeviceOwnedRegIds(codeForRemote);
 
   // Snapshot the live state into the history entry before we wipe the
   // remote. Past tournaments in the Tournament History tab become
@@ -1189,6 +1290,8 @@ function startSwissMatch(matchId) {
       }
     }
 
+    let extraUpdates = null;
+
     // Auto-generate the knockout bracket the moment every group's final
     // round completes, so no one has to hunt for a "Start" button.
     // Only fires once — the hasSwissBracket guard makes this idempotent for
@@ -1213,7 +1316,6 @@ function startSwissMatch(matchId) {
     // consolation bracket (CQF → 5th); losers drop into placement matches
     // (SF → 3rd, QF → CQF, CQF → 7th). Ties leave both downstream slots
     // blank so the UI flags them for re-scoring.
-    let extraUpdates = null;
     if (stored.bracket) {
       const prop = getBracketPropagation(stored.round, stored.bracketIndex, s);
       extraUpdates = {};
@@ -1235,6 +1337,24 @@ function startSwissMatch(matchId) {
       // it so the lone real player skips ahead. Cascades up the bracket.
       autoAdvanceByes(s, extraUpdates);
       if (Object.keys(extraUpdates).length === 0) extraUpdates = null;
+    }
+
+    // Win-rate update. Bump the global /winRates counters once per match,
+    // gated on a wrApplied flag so re-scoring doesn't double-count. Only
+    // non-guest registrants are tracked (guests / single-elim by-name
+    // entries don't have a stable account key). Runs after the bracket
+    // propagation so a match's terminal state is recorded first.
+    if (!isEdit) {
+      const wrUpdates = maybeApplyMatchWinRate(matchId, stored, s);
+      if (wrUpdates && wrUpdates.matchPatch) {
+        // Mark the match as counted on the local state + Firebase so other
+        // devices see the flag and don't re-apply.
+        Object.assign(stored, wrUpdates.matchPatch);
+        extraUpdates = extraUpdates || {};
+        Object.entries(wrUpdates.matchPatch).forEach(([k, v]) => {
+          extraUpdates[`matches/${matchId}/${k}`] = v;
+        });
+      }
     }
 
     persistSwiss(s);
@@ -2512,6 +2632,7 @@ function showProfileByUsername(username, anchorEl) {
   const bannerEl = document.getElementById("profile-view-banner");
   const bioEl = document.getElementById("profile-view-bio");
   const tagsEl = document.getElementById("profile-view-tags");
+  const wrEl = document.getElementById("profile-view-winrate");
   const statusEl = document.getElementById("profile-view-status");
 
   // The tag row is a single line with an invisible scrollbar — a normal
@@ -2536,10 +2657,41 @@ function showProfileByUsername(username, anchorEl) {
   const fill = (p) => {
     if (statusEl) statusEl.textContent = "";
     if (nameEl) nameEl.textContent = (p && p.username) || username;
-    if (photoEl) photoEl.src = (p && p.photo) || PROFILE_VIEW_PHOTO_PH;
-    if (bannerEl) bannerEl.src = (p && p.banner) || PROFILE_VIEW_BANNER_PH;
+    if (photoEl) {
+      photoEl.src = (p && p.photo) || PROFILE_VIEW_PHOTO_PH;
+      photoEl.style.objectPosition = (p && p.photoPos) || "50% 50%";
+    }
+    if (bannerEl) {
+      bannerEl.src = (p && p.banner) || PROFILE_VIEW_BANNER_PH;
+      bannerEl.style.objectPosition = (p && p.bannerPos) || "50% 50%";
+    }
     if (bioEl) bioEl.textContent = (p && p.bio) || "";
     if (tagsEl) tagsEl.innerHTML = withMedalTagBadge(revoxTagBadges(p || {}), username);
+    // Win rate starts hidden; the async winRates read below reveals it
+    // once data lands. Reset on every open so a previous profile's stats
+    // don't flash on screen before the new read resolves.
+    if (wrEl) { wrEl.textContent = ""; wrEl.classList.add("hidden"); }
+  };
+
+  // Fetch and render the public win-rate counter for this username. Hides
+  // the row entirely when there's no record (new players / never scored).
+  const loadWinRate = () => {
+    if (!wrEl) return;
+    const db = initFirebase();
+    if (!db) return;
+    db.ref("winRates/" + winRateKey(username)).once("value").then(snap => {
+      if (reqId !== profileDropdownRequestId) return; // superseded
+      const v = snap.val();
+      const wins = (v && v.wins) || 0;
+      const losses = (v && v.losses) || 0;
+      const ties = (v && v.ties) || 0;
+      const total = wins + losses + ties;
+      if (total === 0) return; // no data → leave hidden
+      const pct = Math.round((wins / total) * 100);
+      const tieBit = ties > 0 ? ` · ${ties}T` : "";
+      wrEl.textContent = `Win rate ${pct}% — ${wins}W / ${losses}L${tieBit}`;
+      wrEl.classList.remove("hidden");
+    }).catch(() => { /* read failed → leave hidden */ });
   };
 
   // Reveal the (already-filled) panel and wire its dismiss handlers. Only
@@ -2577,6 +2729,7 @@ function showProfileByUsername(username, anchorEl) {
       (mine.tags || []).forEach(t => { if (t) tagMap[t] = true; });
       fill({ username: mine.username, photo: mine.photo, banner: mine.banner, bio: mine.bio, tags: tagMap });
       reveal();
+      loadWinRate();
       return;
     }
   }
@@ -2592,6 +2745,7 @@ function showProfileByUsername(username, anchorEl) {
     if (!p) return;                                 // no profile → don't open
     fill(p);
     reveal();
+    loadWinRate();
   }).catch(() => { /* read failed → don't open the dropdown */ });
 }
 
@@ -2975,6 +3129,31 @@ function renderSwissRegisteringMarkup(state) {
   const bulkGuestsBtnHtml = canRegisterOthers
     ? `<button type="button" id="swiss-reg-bulk-guests" class="swiss-reg-self">+ Bulk Guests</button>`
     : "";
+  // Banned Parts management — host-only. Co-hosts can't edit because the
+  // bannedParts field isn't listed in the per-child rule set, so writes
+  // fall to the parent rule (host only). The "Banned Parts" panel below
+  // shows everyone (host / co-host / participants / viewers) what's banned.
+  const banPartsBtnHtml = swissIsHost
+    ? `<button type="button" id="swiss-reg-banned" class="swiss-reg-self">Banned Parts</button>`
+    : "";
+  // Banned-list display — only renders when there's at least one ban.
+  // Visible to every audience so participants see what they can't use.
+  const bannedPartsPanelHtml = (() => {
+    const banned = getBannedParts(state);
+    const sections = BANNABLE_FIELDS
+      .filter(f => banned[f].length > 0)
+      .map(f => {
+        const chips = banned[f]
+          .map(n => `<span class="swiss-banned-chip">${escapeHtml(n)}</span>`)
+          .join("");
+        return `<div class="swiss-banned-section"><span class="swiss-banned-label">${BANNABLE_FIELD_LABEL[f]}:</span> ${chips}</div>`;
+      });
+    if (!sections.length) return "";
+    return `<div class="swiss-banned-panel" role="region" aria-label="Banned parts">
+      <div class="swiss-banned-heading">Banned Parts</div>
+      ${sections.join("")}
+    </div>`;
+  })();
   // The Test button bulk-adds synthetic participants — gate it on the
   // "Tester" tag so regular hosts don't see (or accidentally use) it.
   const isTesterAcct = typeof window.isTester === "function" && window.isTester();
@@ -3018,8 +3197,9 @@ function renderSwissRegisteringMarkup(state) {
       <div class="swiss-reg-heading-row">
         <h3 class="swiss-reg-heading">Registrants <span class="swiss-reg-count">(${registrants.length}${minTotal ? ` / ${minTotal} min` : ""})</span></h3>
       </div>
-      ${(selfRegBtnHtml || bulkGuestsBtnHtml || testRegBtnHtml || copyNamesBtnHtml)
-        ? `<div class="swiss-reg-host-actions">${selfRegBtnHtml}${bulkGuestsBtnHtml}${testRegBtnHtml}${copyNamesBtnHtml}</div>`
+      ${bannedPartsPanelHtml}
+      ${(selfRegBtnHtml || bulkGuestsBtnHtml || banPartsBtnHtml || testRegBtnHtml || copyNamesBtnHtml)
+        ? `<div class="swiss-reg-host-actions">${selfRegBtnHtml}${bulkGuestsBtnHtml}${banPartsBtnHtml}${testRegBtnHtml}${copyNamesBtnHtml}</div>`
         : ""}
       <ul class="swiss-reg-list">${registrantRows}</ul>
       <div class="swiss-reg-actions">${startBtnHtml}</div>
@@ -3054,6 +3234,7 @@ function bindSwissRegisteringHandlers(view, state) {
   view.querySelector("#swiss-reg-start")?.addEventListener("click", startRegisteringTournament);
   view.querySelector("#swiss-reg-self")?.addEventListener("click", showSelfRegisterPopup);
   view.querySelector("#swiss-reg-bulk-guests")?.addEventListener("click", showBulkGuestsPopup);
+  view.querySelector("#swiss-reg-banned")?.addEventListener("click", showBannedPartsPopup);
   view.querySelector("#swiss-reg-test")?.addEventListener("click", () => {
     const raw = prompt("How many test registrants?", "10");
     if (raw == null) return;
@@ -3285,6 +3466,153 @@ function showSelfRegisterPopup() {
   showRegistrationPopup(room, { selfRegister: true, lockName: true, initialName: myUname });
 }
 
+// Host-only "Manage Banned Parts" popup. Built dynamically so it works on
+// every per-tab index.html without separate HTML. Lets the host pick parts
+// across every category that can't appear in any registrant's deck. Locked
+// to the registering phase — once Start fires the list is final.
+function showBannedPartsPopup() {
+  if (!swissEditCode) return;
+  // Host-only. Co-hosts can't edit because the swissRooms/$code/.write rule
+  // restricts unspecified children (bannedParts isn't in the per-child rule
+  // list) to hostUid only — a co-host write would be rejected by Firebase.
+  if (!swissIsHost) return;
+  const state = loadSwiss();
+  if (!isRegisteringPhase(state)) return;
+  if (typeof makeSearchable !== "function" || typeof DATA === "undefined") return;
+
+  // Re-open: drop any stale instance first.
+  document.getElementById("banned-parts-popup")?.remove();
+
+  // Working copy — committed via updateRegisteringSetting on Save.
+  const working = {};
+  const initial = getBannedParts(state);
+  BANNABLE_FIELDS.forEach(f => { working[f] = initial[f].slice(); });
+
+  const overlay = document.createElement("div");
+  overlay.id = "banned-parts-popup";
+  overlay.className = "popup-overlay";
+  overlay.innerHTML = `
+    <div class="popup-card">
+      <h2 class="popup-title">Banned Parts</h2>
+      <p class="popup-text">Pick parts that registrants can't use in any deck. Deck registration blocks any deck containing a banned part; Bey Check shows a warning so the judge can still record the deck if needed.</p>
+      <label class="popup-text" style="display:block; margin-top:8px;">Add a part to ban:</label>
+      <select id="banned-parts-add" style="display:none;"></select>
+      <div id="banned-parts-list" style="margin-top:10px; display:flex; flex-direction:column; gap:6px;"></div>
+      <div id="banned-parts-status" class="swiss-join-status"></div>
+      <div class="popup-actions">
+        <button type="button" id="banned-parts-save" class="btn">Save</button>
+        <button type="button" id="banned-parts-cancel" class="btn popup-cancel">Cancel</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const sel = overlay.querySelector("#banned-parts-add");
+  const listHost = overlay.querySelector("#banned-parts-list");
+  const status = overlay.querySelector("#banned-parts-status");
+  const saveBtn = overlay.querySelector("#banned-parts-save");
+  const cancelBtn = overlay.querySelector("#banned-parts-cancel");
+
+  // Combined picker: every part across every bannable category. The option
+  // label is "Category — Part Name". Value is "field:partName" so the
+  // selection handler can route it back to the right category.
+  const combinedItems = [];
+  BANNABLE_FIELDS.forEach(f => {
+    const dataKey = BEY_CHECK_DATA_BY_FIELD[f];
+    const arr = (dataKey && DATA[dataKey]) || [];
+    arr.forEach(item => {
+      if (!item || !item.name) return;
+      combinedItems.push({
+        field: f,
+        partName: item.name,
+        _label: `${BANNABLE_FIELD_LABEL[f]} — ${item.name}`
+      });
+    });
+  });
+  // Sort within each category alphabetically; categories follow BANNABLE_FIELDS.
+  const orderIdx = BANNABLE_FIELDS.reduce((acc, f, i) => { acc[f] = i; return acc; }, {});
+  combinedItems.sort((a, b) =>
+    (orderIdx[a.field] - orderIdx[b.field]) ||
+    a.partName.localeCompare(b.partName)
+  );
+
+  const renderList = () => {
+    const sections = [];
+    BANNABLE_FIELDS.forEach(f => {
+      const list = working[f];
+      if (!list.length) return;
+      const chips = list.map(name =>
+        `<button type="button" class="banned-chip" data-field="${f}" data-name="${escapeHtml(name)}" title="Remove" style="display:inline-flex; align-items:center; gap:4px; padding:3px 6px 3px 10px; border-radius:999px; border:1px solid currentColor; background:transparent; color:inherit; font:inherit; font-size:.78rem; cursor:pointer;">${escapeHtml(name)}<span style="font-size:1rem; line-height:1; opacity:.65;">×</span></button>`
+      ).join("");
+      sections.push(`
+        <div>
+          <div style="font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; opacity:.65; margin-bottom:4px;">${BANNABLE_FIELD_LABEL[f]}</div>
+          <div style="display:flex; flex-wrap:wrap; gap:4px;">${chips}</div>
+        </div>
+      `);
+    });
+    listHost.innerHTML = sections.length
+      ? sections.join("")
+      : `<div class="popup-text" style="font-style:italic; opacity:.7;">No bans yet.</div>`;
+    listHost.querySelectorAll(".banned-chip").forEach(btn => {
+      btn.onclick = () => {
+        const f = btn.dataset.field;
+        const n = btn.dataset.name;
+        working[f] = (working[f] || []).filter(x => x !== n);
+        renderList();
+      };
+    });
+  };
+
+  // Wire makeSearchable on the combined picker, then capture selections.
+  makeSearchable(sel, combinedItems, item => item._label);
+  sel.addEventListener("change", () => {
+    const idx = parseInt(sel.value, 10);
+    if (!Number.isFinite(idx) || idx < 0 || idx >= combinedItems.length) return;
+    const item = combinedItems[idx];
+    if (!item) return;
+    const list = working[item.field] || (working[item.field] = []);
+    if (!list.some(n => n.toLowerCase() === item.partName.toLowerCase())) {
+      list.push(item.partName);
+    }
+    // Clear the picker so the same input stays ready for the next pick.
+    sel.value = "";
+    const wrapperInput = sel.nextElementSibling?.querySelector("input");
+    if (wrapperInput) wrapperInput.value = "";
+    renderList();
+  });
+
+  renderList();
+
+  const setStatus = (msg, kind) => {
+    if (!status) return;
+    status.textContent = msg || "";
+    status.classList.remove("is-ok", "is-err", "is-pending");
+    if (kind) status.classList.add(`is-${kind}`);
+  };
+
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener("keydown", onKey);
+  };
+  const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); close(); } };
+  document.addEventListener("keydown", onKey);
+  cancelBtn.onclick = close;
+
+  saveBtn.onclick = () => {
+    // Prune empty categories so we don't write {blade: [], lockChip: [], …}.
+    const patch = {};
+    BANNABLE_FIELDS.forEach(f => {
+      if (working[f] && working[f].length) patch[f] = working[f].slice();
+    });
+    // Persist via the same patcher the other registering-time settings use.
+    // updateRegisteringSetting handles both local persist and Firebase push.
+    updateRegisteringSetting({ bannedParts: Object.keys(patch).length ? patch : null });
+    setStatus("Saved ✓", "ok");
+    setTimeout(close, 500);
+  };
+}
+
 // Bulk Guests — the single "add others" path. Pastes a name list (one per
 // line) and creates every entry as a deck-less guest in a single Firebase
 // update. Same audience as Register Myself: hosts / co-hosts and registered
@@ -3443,14 +3771,19 @@ function bulkAddGuests(editCode, names, setStatus, onSuccess, onFail) {
     const writerUid = (window.getCurrentUser && window.getCurrentUser()?.uid) || null;
     const emptyDeck = emptyBeyCheckDeck();
     const updates = {};
+    const newIds = [];
     for (const name of toAdd) {
       const id = generateRegistrantId();
       const entry = { name, deck: emptyDeck, isGuest: true };
       if (writerUid) entry.createdBy = writerUid;
       updates[`registrants/${id}`] = entry;
+      newIds.push(id);
     }
 
     return roomRef.update(updates).then(() => {
+      // Remember every entry created in this batch so the user can self-
+      // cancel via Leave Room. Critical for unauthed guests (no createdBy).
+      rememberDeviceOwnedRegIds(editCode, newIds);
       // Refresh the lobby count (non-fatal — host listener also publishes).
       return roomRef.child("registrants").once("value").then(s => {
         const total = s.numChildren();
@@ -3467,6 +3800,158 @@ function bulkAddGuests(editCode, names, setStatus, onSuccess, onFail) {
     setStatus(e.message || "Couldn't add guests. Try again.", "err");
     onFail?.();
   });
+}
+
+// ---------------- Banned parts ----------------
+// The host can ban specific parts during the registering phase. Banned
+// parts are stored on state.bannedParts as a per-category name list and
+// blocked at deck submission, warned at Bey Check, and shown to every
+// participant in the registering view. The list locks the moment the
+// tournament starts (Start clears the registering phase).
+const BANNABLE_FIELDS = ["blade", "lockChip", "mainBlade", "metalBlade", "overBlade", "assistBlade", "ratchet", "bit"];
+const BANNABLE_FIELD_LABEL = {
+  blade: "Blade",
+  lockChip: "Lock Chip",
+  mainBlade: "Main Blade",
+  metalBlade: "Metal Blade",
+  overBlade: "Over Blade",
+  assistBlade: "Assist Blade",
+  ratchet: "Ratchet",
+  bit: "Bit"
+};
+
+// Return banned parts grouped by category, with every category present and
+// an empty array when nothing is banned. Defensive — handles missing /
+// non-array storage gracefully.
+function getBannedParts(state) {
+  const src = (state && state.bannedParts) || {};
+  const out = {};
+  BANNABLE_FIELDS.forEach(f => {
+    const list = Array.isArray(src[f]) ? src[f].filter(n => typeof n === "string" && n) : [];
+    out[f] = list;
+  });
+  return out;
+}
+
+// True iff at least one category has any banned part.
+function hasAnyBannedParts(state) {
+  const b = getBannedParts(state);
+  return BANNABLE_FIELDS.some(f => b[f].length > 0);
+}
+
+// Walk a deck and return every banned part it carries as
+// [{ slot: 1-based, field, name }]. Case-insensitive name match.
+function findBannedPartsInDeck(deck, bannedParts) {
+  const hits = [];
+  if (!Array.isArray(deck)) return hits;
+  const lookup = {};
+  Object.entries(bannedParts || {}).forEach(([f, list]) => {
+    lookup[f] = new Set((list || []).map(n => String(n).trim().toLowerCase()).filter(Boolean));
+  });
+  deck.forEach((slot, slotIdx) => {
+    if (!slot || !slot.parts) return;
+    Object.entries(slot.parts).forEach(([f, name]) => {
+      if (!name || name === NO_RATCHET) return;
+      const ban = lookup[f];
+      if (ban && ban.has(String(name).trim().toLowerCase())) {
+        hits.push({ slot: slotIdx + 1, field: f, name });
+      }
+    });
+  });
+  return hits;
+}
+
+// ---------------- Win rate ----------------
+// Each user has a running W / L / Tie tally at /winRates/$key. Public read,
+// any authed write — same pattern as /ranking. The host's device bumps
+// counters once per match via a wrApplied flag on the match record so
+// re-scoring (or another device replaying the listener) doesn't double-
+// count. Only non-guest registrants are tracked: guest / single-elim
+// by-name entries have no stable account key.
+//
+// Known limitation: if a match is re-scored with the winner flipped, the
+// original win/loss stays on the books (because wrApplied is set). The
+// host can manually adjust if needed. Trade-off for keeping the writes
+// simple (one bump per match instead of a delta).
+
+// True if `name` matches a non-guest registrant in this tournament.
+// Returns false for guests, single-elim by-name participants (no
+// registrants[] entry), and missing / blank names.
+function nameIsAccountRegistrant(state, name) {
+  if (!name || !state || !state.registrants) return false;
+  const lower = String(name).trim().toLowerCase();
+  for (const id in state.registrants) {
+    const r = state.registrants[id];
+    if (r && typeof r.name === "string" && r.name.trim().toLowerCase() === lower) {
+      return r.isGuest !== true;
+    }
+  }
+  return false;
+}
+
+// Lowercase / Firebase-safe key for a player name. Mirrors usernameKey in
+// auth.js so the winRates entry shares the same key the profiles index uses.
+function winRateKey(name) {
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[.#$/\[\]]/g, "_");
+}
+
+// Transactional +1 to wins / losses / ties for a single player.
+function bumpWinRate(name, kind) {
+  if (!name) return;
+  if (kind !== "win" && kind !== "loss" && kind !== "tie") return;
+  const db = (typeof initFirebase === "function") ? initFirebase() : null;
+  if (!db) return;
+  const key = winRateKey(name);
+  if (!key) return;
+  const ref = db.ref(`winRates/${key}`);
+  ref.transaction(curr => {
+    const c = (curr && typeof curr === "object") ? curr : {};
+    const inc = { wins: c.wins || 0, losses: c.losses || 0, ties: c.ties || 0 };
+    if (kind === "win") inc.wins++;
+    else if (kind === "loss") inc.losses++;
+    else inc.ties++;
+    inc.updatedAt = new Date().toISOString();
+    return inc;
+  }).catch(e => console.warn("winRate bump failed for", key, e));
+}
+
+// Inspect a freshly-scored match and bump the win-rate counters for each
+// non-guest player. Idempotent via match.wrApplied. Returns a small patch
+// to merge onto the match record (the wrApplied flag) so the caller can
+// push it alongside the score update — that way every device sees the
+// match as "counted" and the host listener doesn't re-apply on the way
+// back through Firebase.
+function maybeApplyMatchWinRate(matchId, storedBefore, state) {
+  if (!swissCanEdit) return null;          // only scoring devices apply
+  const match = state.matches && state.matches[matchId];
+  if (!match) return null;
+  if (match.wrApplied) return null;        // already counted
+  if (match.bye) return null;              // skip BYEs
+  if (!match.a || !match.b) return null;   // half-filled
+  const scoreA = match.scoreA, scoreB = match.scoreB;
+  if (scoreA == null || scoreB == null) return null; // not scored yet
+
+  const aCounts = nameIsAccountRegistrant(state, match.a);
+  const bCounts = nameIsAccountRegistrant(state, match.b);
+  if (!aCounts && !bCounts) return null;   // nothing to write
+
+  if (scoreA > scoreB) {
+    if (aCounts) bumpWinRate(match.a, "win");
+    if (bCounts) bumpWinRate(match.b, "loss");
+  } else if (scoreB > scoreA) {
+    if (aCounts) bumpWinRate(match.a, "loss");
+    if (bCounts) bumpWinRate(match.b, "win");
+  } else {
+    if (aCounts) bumpWinRate(match.a, "tie");
+    if (bCounts) bumpWinRate(match.b, "tie");
+  }
+  // Mark the match locally so the host's own listener tick (and any sibling
+  // tab) won't re-apply, and return the patch for the Firebase push.
+  match.wrApplied = true;
+  return { matchPatch: { wrApplied: true } };
 }
 
 // Minimum registrants needed before Start can fire. Mirrors the same checks
@@ -4217,6 +4702,11 @@ function getPiePaletteForTheme() {
   if (cls.contains("stormy-mode"))   return { type: "hue", hueStart: 200, hueRange: 90,  sat: 55, light: 55 };
   if (cls.contains("mono-mode"))     return { type: "gray", lightStart: 30, lightEnd: 80 };
   if (cls.contains("light-mode"))    return { type: "hue", hueStart: 0,   hueRange: 360, sat: 55, light: 50 };
+  // Metallic + revox themes — narrow hue bands tinted to each theme's accent.
+  if (cls.contains("gold-mode"))     return { type: "hue", hueStart: 30,  hueRange: 50,  sat: 70, light: 55 };
+  if (cls.contains("silver-mode"))   return { type: "hue", hueStart: 200, hueRange: 50,  sat: 20, light: 65 };
+  if (cls.contains("bronze-mode"))   return { type: "hue", hueStart: 10,  hueRange: 40,  sat: 60, light: 50 };
+  if (cls.contains("revox-mode"))    return { type: "hue", hueStart: 350, hueRange: 60,  sat: 70, light: 55 };
   return                                    { type: "hue", hueStart: 0,   hueRange: 360, sat: 65, light: 55 };
 }
 
@@ -4229,6 +4719,12 @@ function getPieStrokeForTheme() {
   if (cls.contains("space-mode"))    return "#0a0d1f";
   if (cls.contains("stormy-mode"))   return "#1a2030";
   if (cls.contains("mono-mode"))     return "#0b0b0b";
+  // Metallic + revox — match each theme's deep card-bg tone so the stroke
+  // reads as a separator rather than a bright outline against the slices.
+  if (cls.contains("gold-mode"))     return "#3a2f12";
+  if (cls.contains("silver-mode"))   return "#2e343c";
+  if (cls.contains("bronze-mode"))   return "#3a2818";
+  if (cls.contains("revox-mode"))    return "#2a1010";
   return "#0d1117";
 }
 
@@ -4820,7 +5316,16 @@ function showBeyCheckPopup(matchId) {
 
   const renderSlots = () => {
     const deck = decks[activeSide];
-    slotsHost.innerHTML = deck.map((s, i) => renderBeyCheckSlot(i, s)).join("");
+    // Soft banned-parts warning — the judge can still record the deck. The
+    // ban list is read live from local state (kept fresh by the listener),
+    // so updates made mid-tournament are picked up if any.
+    const banned = findBannedPartsInDeck(deck, getBannedParts(loadSwiss()));
+    const banner = banned.length
+      ? `<div class="bey-check-banned" role="alert" style="margin:0 0 8px; padding:8px 10px; border:1px solid #f85149; border-radius:6px; background:rgba(248,81,73,0.12); color:#ff7b72; font-size:0.85rem;"><strong>Banned parts in this deck:</strong> ${
+          banned.map(h => `${escapeHtml(h.name)} (Slot ${h.slot})`).join(", ")
+        }. You can still record, but the host marked these as not allowed.</div>`
+      : "";
+    slotsHost.innerHTML = banner + deck.map((s, i) => renderBeyCheckSlot(i, s)).join("");
     slotsHost.querySelectorAll(".bey-check-slot").forEach(el => {
       el.addEventListener("click", () => {
         const slotIdx = Number(el.dataset.slot);
@@ -5849,47 +6354,38 @@ subscribeRankingMedals();
   // so a freshly signed-in Judge sees the button without a refresh.
   window.addEventListener("userprofilechange", paintCreateTournamentBtn);
 
-  // ===== Tutorial popup: auto-sliding image carousel that explains how a
-  //       new player joins a tournament. Slide images are listed in
-  //       TUTORIAL_FILES (assets/tutorial/{file}.jpeg) — note 0.5 sits
-  //       between 0 and 1. TUTORIAL_CAPTIONS is index-aligned to it. =====
-  const TUTORIAL_FILES = ["0", "0.5", "1", "2", "3", "4", "5", "6", "7"];
-  const TUTORIAL_CAPTIONS = [
-    "1. Build your deck. In the Deck tab, fill all 3 slots, then tap Copy to put your deck on the clipboard.",
-    "2. Before that, fill the slots. Each deck slot is a combo built in the Calculator — build one, tap Calculate, then press the + Deck button on the result to add it to your deck.",
-    "3. Find a tournament. Switch to the Tournament tab and tap a room in the Open Tournaments list.",
-    "4. Pick Participant. Choose Participant from the join popup (the other options are Co-host and Viewer).",
-    "5. Sign in or play as Guest. Sign in to earn ranking points on finish, or Become Guest to play without affecting the leaderboard.",
-    "6. Sign in — or create an account. Enter your email and password. New here? Switch to Sign up first.",
-    "7. Signed-in registration. Your name is filled in from your account and locked — just paste your deck or build each slot by tapping it.",
-    "8. Guest registration. Type a name, then paste your deck (or tap each empty slot to build one by hand) and hit Register.",
-    "9. You're in! Wait for the host to start. Your registered deck pre-fills every match you play."
-  ];
-  const TUTORIAL_SLIDES = TUTORIAL_FILES.length;
-  let tutorialIndex = 0;
-  let tutorialAutoTimer = null;
-  let tutorialSlideEls = [];
-  let tutorialDotEls = [];
-
+  // ===== Tutorial popup =====
+  // Two tabs (Participant / Guest) — each shows a single demo gif with a
+  // caption. Replaced the older 9-slide jpeg carousel because the gifs
+  // walk through the flow on their own; nothing to swipe or auto-advance.
   function buildTutorialPopup() {
     if (document.getElementById("tutorial-popup")) return;
     const overlay = document.createElement("div");
     overlay.id = "tutorial-popup";
     overlay.className = "popup-overlay hidden";
-    const slidesHtml = Array.from({ length: TUTORIAL_SLIDES }, (_, i) =>
-      `<figure class="tutorial-slide${i === 0 ? " active" : ""}">
-         <img src="assets/tutorial/${TUTORIAL_FILES[i]}.jpeg" alt="Step ${i + 1} of ${TUTORIAL_SLIDES}">
-         <figcaption class="tutorial-caption">${escapeHtml(TUTORIAL_CAPTIONS[i] || "")}</figcaption>
-       </figure>`
-    ).join("");
-    const dotsHtml = Array.from({ length: TUTORIAL_SLIDES }, (_, i) =>
-      `<button type="button" class="tutorial-dot${i === 0 ? " active" : ""}" data-slide="${i}" aria-label="Slide ${i + 1}"></button>`
-    ).join("");
     overlay.innerHTML = `
       <div class="popup-card tutorial-card">
-        <h2 class="popup-title">How to Participate</h2>
-        <div class="tutorial-carousel">${slidesHtml}</div>
-        <div class="tutorial-dots">${dotsHtml}</div>
+        <h2 class="popup-title">How to Join</h2>
+        <div class="tutorial-tabs" role="tablist">
+          <button type="button" class="tutorial-tab active" data-tab="participant" role="tab" aria-selected="true">Sign In</button>
+          <button type="button" class="tutorial-tab" data-tab="guest" role="tab" aria-selected="false">Guest</button>
+        </div>
+        <div class="tutorial-pane tutorial-pane-participant active" data-pane="participant">
+          <div class="tutorial-guest-frame">
+            <figure class="tutorial-slide tutorial-slide-guest active">
+              <img src="assets/tutorial/signin/signin.gif" alt="How to join as a participant">
+              <figcaption class="tutorial-caption">Sign in (or create an account), pick Participant from the join popup, paste your 3-combo deck, and hit Register. Signed-in players earn ranking points on finish.</figcaption>
+            </figure>
+          </div>
+        </div>
+        <div class="tutorial-pane tutorial-pane-guest" data-pane="guest">
+          <div class="tutorial-guest-frame">
+            <figure class="tutorial-slide tutorial-slide-guest active">
+              <img src="assets/tutorial/guest/guest.gif" alt="How to join as a guest">
+              <figcaption class="tutorial-caption">Tap Become Guest, enter your name (or paste several for friends, one per line), and you're in — no account or deck needed.</figcaption>
+            </figure>
+          </div>
+        </div>
         <div class="popup-actions">
           <button type="button" class="btn popup-cancel" id="tutorial-close">
             <img src="assets/icons/exit-button.png" alt="" onerror="this.style.display='none'">
@@ -5901,70 +6397,27 @@ subscribeRankingMedals();
     overlay.addEventListener("click", e => { if (e.target === overlay) closeTutorialPopup(); });
     document.getElementById("tutorial-close").addEventListener("click", closeTutorialPopup);
 
-    tutorialSlideEls = [...overlay.querySelectorAll(".tutorial-slide")];
-    tutorialDotEls = [...overlay.querySelectorAll(".tutorial-dot")];
-
-    tutorialDotEls.forEach(dot => {
-      dot.addEventListener("click", () => {
-        showTutorialSlide(Number(dot.dataset.slide));
-        scheduleTutorialAuto();
+    overlay.querySelectorAll(".tutorial-tab").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const tab = btn.dataset.tab;
+        overlay.querySelectorAll(".tutorial-tab").forEach(b => {
+          const on = b.dataset.tab === tab;
+          b.classList.toggle("active", on);
+          b.setAttribute("aria-selected", on ? "true" : "false");
+        });
+        overlay.querySelectorAll(".tutorial-pane").forEach(p => {
+          p.classList.toggle("active", p.dataset.pane === tab);
+        });
       });
     });
-
-    // Swipe / drag to change slide; any interaction restarts the 3s idle
-    // countdown (same pattern as the combined-blade carousel popup).
-    const carousel = overlay.querySelector(".tutorial-carousel");
-    let dragStartX = null;
-    const resetIdle = () => {
-      if (tutorialAutoTimer !== null) scheduleTutorialAuto();
-    };
-    carousel.addEventListener("pointerdown", (e) => {
-      dragStartX = e.clientX;
-      try { carousel.setPointerCapture(e.pointerId); } catch (err) {}
-      resetIdle();
-    });
-    carousel.addEventListener("pointerup", (e) => {
-      if (dragStartX !== null) {
-        const dx = e.clientX - dragStartX;
-        dragStartX = null;
-        if (Math.abs(dx) > 35) showTutorialSlide(tutorialIndex + (dx < 0 ? 1 : -1));
-      }
-      resetIdle();
-    });
-    carousel.addEventListener("pointercancel", () => { dragStartX = null; });
-    carousel.addEventListener("mousemove", resetIdle);
-  }
-
-  function showTutorialSlide(i) {
-    if (!tutorialSlideEls.length) return;
-    tutorialIndex = (i + tutorialSlideEls.length) % tutorialSlideEls.length;
-    tutorialSlideEls.forEach((el, n) => el.classList.toggle("active", n === tutorialIndex));
-    tutorialDotEls.forEach((el, n) => el.classList.toggle("active", n === tutorialIndex));
-  }
-
-  function stopTutorialAuto() {
-    if (tutorialAutoTimer !== null) {
-      clearInterval(tutorialAutoTimer);
-      tutorialAutoTimer = null;
-    }
-  }
-
-  // Auto-advance after 3s of idle; each subsequent advance also waits 3s.
-  function scheduleTutorialAuto() {
-    if (tutorialAutoTimer !== null) clearInterval(tutorialAutoTimer);
-    tutorialAutoTimer = setInterval(() => showTutorialSlide(tutorialIndex + 1), 3000);
   }
 
   function showTutorialPopup() {
     buildTutorialPopup();
-    tutorialIndex = 0;
-    showTutorialSlide(0);
     document.getElementById("tutorial-popup").classList.remove("hidden");
-    scheduleTutorialAuto();
   }
 
   function closeTutorialPopup() {
-    stopTutorialAuto();
     document.getElementById("tutorial-popup")?.classList.add("hidden");
   }
 
@@ -6372,7 +6825,7 @@ function openJoinChoicePopup(room) {
     } else {
       participantBtn.disabled = false;
       participantBtn.classList.remove("is-disabled");
-      if (desc) desc.textContent = "Sign up with your name and deck. Your deck pre-fills every match you play.";
+      if (desc) desc.textContent = "Sign in with your name and deck (deck pre-fills every match), or play as a guest — guests can skip the deck.";
       participantBtn.onclick = () => {
         close();
         showParticipantModeChoice(room);
@@ -6403,11 +6856,11 @@ function buildParticipantModePopup() {
       <div class="tournament-mode-grid">
         <button type="button" id="participant-mode-signin" class="tournament-mode-btn">
           <span class="tournament-mode-title">Sign in</span>
-          <span class="tournament-mode-desc">Your final placing counts toward the global ranking.</span>
+          <span class="tournament-mode-desc">Bring a 3-combo deck; your final placing counts toward the global ranking.</span>
         </button>
         <button type="button" id="participant-mode-guest" class="tournament-mode-btn">
           <span class="tournament-mode-title">Become Guest</span>
-          <span class="tournament-mode-desc">Play this tournament without earning any ranking points.</span>
+          <span class="tournament-mode-desc">Play with just a name — no deck or account needed. Doesn't affect the leaderboard.</span>
         </button>
       </div>
       <button type="button" id="participant-mode-cancel" class="btn popup-cancel">Cancel</button>
@@ -6788,6 +7241,15 @@ function showRegistrationPopup(room, options = {}) {
       setStatus(msg, "err");
       return;
     }
+    // Banned-parts check — reject the deck if it uses any part the host
+    // banned for this tournament. We read the latest local state so an
+    // updated ban list (pushed live from the host) blocks immediately.
+    const banned = findBannedPartsInDeck(deck, getBannedParts(loadSwiss()));
+    if (banned.length) {
+      const names = banned.map(h => `${h.name} (Slot ${h.slot})`).join(", ");
+      setStatus(`This tournament bans: ${names}. Swap them out before submitting.`, "err");
+      return;
+    }
     submitRegistration(room, name, deck, setStatus, close, { selfRegister, editRegistrantId, asGuest });
   };
   submitBtn.onclick = submit;
@@ -7070,6 +7532,12 @@ function submitRegistration(room, name, deck, setStatus, onSuccess, options = {}
       if (!isEdit) setStatus("Submitting…", "pending");
       return roomRef.child("registrants/" + id).set(payload)
         .then(() => {
+          // Remember this entry locally so the user can self-cancel later
+          // via Leave Room. Authed registrants don't strictly need this
+          // (createdBy matches their uid for the rule check), but tracking
+          // both keeps the code path uniform — and is the only way to
+          // cancel an unauthed guest entry (no createdBy stamp).
+          if (!isEdit) rememberDeviceOwnedRegIds(editCode, [id]);
           // Refresh the lobby's registrantCount from the authoritative
           // source. The host's listener would normally re-publish the
           // open-tournaments summary on this same registrant write, but
@@ -7729,8 +8197,14 @@ function loadRevoxHeaderProfile(name) {
   }).then(snap => {
     if (!snap) return;
     const p = snap.val() || {};
-    if (photoEl && p.photo) photoEl.src = p.photo;
-    if (bannerEl && p.banner) bannerEl.src = p.banner;
+    if (photoEl) {
+      if (p.photo) photoEl.src = p.photo;
+      photoEl.style.objectPosition = p.photoPos || "50% 50%";
+    }
+    if (bannerEl) {
+      if (p.banner) bannerEl.src = p.banner;
+      bannerEl.style.objectPosition = p.bannerPos || "50% 50%";
+    }
     if (tagsEl) tagsEl.innerHTML = withMedalTagBadge(revoxTagBadges(p), name);
     if (bioEl) {
       bioEl.textContent = p.bio || "";
@@ -7754,11 +8228,33 @@ function showRevoxHistory(key, name) {
   const bannerEl = document.getElementById("revox-history-banner");
   const tagsEl = document.getElementById("revox-history-tags");
   const bioEl = document.getElementById("revox-history-bio");
+  const wrEl = document.getElementById("revox-history-winrate");
   if (photoEl) photoEl.src = PROFILE_VIEW_PHOTO_PH;
   if (bannerEl) bannerEl.src = PROFILE_VIEW_BANNER_PH;
   if (tagsEl) tagsEl.innerHTML = "";
   if (bioEl) { bioEl.textContent = ""; bioEl.style.display = "none"; }
+  if (wrEl) { wrEl.textContent = ""; wrEl.classList.add("hidden"); }
   loadRevoxHeaderProfile(name);
+  // Public /winRates read. Same shape and rendering as the profile dropdown
+  // and account card, so the same person sees the same numbers wherever
+  // their stats appear.
+  if (wrEl && name) {
+    const db = initFirebase();
+    if (db) {
+      db.ref("winRates/" + winRateKey(name)).once("value").then(snap => {
+        const v = snap.val();
+        const wins = (v && v.wins) || 0;
+        const losses = (v && v.losses) || 0;
+        const ties = (v && v.ties) || 0;
+        const total = wins + losses + ties;
+        if (total === 0) return; // no data → leave hidden
+        const pct = Math.round((wins / total) * 100);
+        const tieBit = ties > 0 ? ` · ${ties}T` : "";
+        wrEl.textContent = `Win rate ${pct}% — ${wins}W / ${losses}L${tieBit}`;
+        wrEl.classList.remove("hidden");
+      }).catch(() => { /* read failed → leave hidden */ });
+    }
+  }
   listEl.innerHTML = `<p class="tournament-results-loading">Loading…</p>`;
   popup.classList.remove("hidden");
   const db = initFirebase();

@@ -942,6 +942,27 @@ body.light-mode .result-part-name {
     white-space: nowrap;
 }
 
+/* Win-rate row on the account card. Hidden until /winRates/{key} resolves
+   (no data → no row). Color inherits so it picks up the active theme;
+   the email and edit-hint per-theme overrides below also touch this. */
+.account-win-rate {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin: 0;
+    color: inherit;
+    opacity: 0.9;
+}
+.account-win-rate.hidden {
+    display: none;
+}
+body.light-mode    .account-win-rate { color: #1f2328; }
+body.tropical-mode .account-win-rate { color: #2d3a3a; }
+body.love-mode     .account-win-rate { color: #4a1d2a; }
+body.forest-mode   .account-win-rate { color: #2d3e1f; }
+body.gold-mode     .account-win-rate { color: #f0e6cf; }
+body.silver-mode   .account-win-rate { color: #e8ecf0; }
+body.bronze-mode   .account-win-rate { color: #f0e2d2; }
+
 /* Per-theme account card. The base above hard-codes #1b1f27 — the dark
    slab the username / email / tags / bio sit on — so on light themes the
    whole card stood out as black. Each light theme gets a white-card
@@ -6812,6 +6833,34 @@ body.mono-mode .popup-ok:hover {
     margin: 0;
 }
 
+/* Win-rate row in the profile-view dropdown. Hidden until the async
+   /winRates read lands (no rate = no row, so a new player's card stays
+   uncluttered). Inherits the panel's text color so it follows the theme;
+   the percentage and W/L counts read at a slightly stronger weight. */
+.profile-view-winrate {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: inherit;
+    margin: 0;
+    opacity: 0.85;
+}
+.profile-view-winrate.hidden {
+    display: none;
+}
+
+/* Revox history popup variant — same look, separate selector so it sits
+   in the popup's own theme cascade. */
+.revox-history-winrate {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: inherit;
+    margin: 4px 0 0;
+    opacity: 0.85;
+}
+.revox-history-winrate.hidden {
+    display: none;
+}
+
 .swiss-room-role {
     font-weight: 700;
     letter-spacing: 0.03em;
@@ -7141,6 +7190,53 @@ body.light-mode .swiss-group-progress {
     font-size: 0.85rem;
     color: #c9d1d9;
 }
+
+/* Banned-parts panel in the registering view. The chip is intentionally
+   muted red across themes — a "this is restricted" signal, not destructive
+   like a delete button. The label and heading inherit normal body color so
+   they sit naturally on the themed card. */
+.swiss-banned-panel {
+    margin: 6px 0 4px;
+    padding: 8px 10px;
+    border: 1px solid rgba(248, 81, 73, 0.4);
+    border-radius: 8px;
+    background: rgba(248, 81, 73, 0.06);
+    font-size: 0.85rem;
+}
+.swiss-banned-heading {
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    margin-bottom: 4px;
+    color: inherit;
+}
+.swiss-banned-section {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px;
+    margin-top: 2px;
+    color: inherit;
+}
+.swiss-banned-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.75;
+    margin-right: 4px;
+}
+.swiss-banned-chip {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 999px;
+    border: 1px solid rgba(248, 81, 73, 0.5);
+    background: rgba(248, 81, 73, 0.1);
+    color: #ff7b72;
+    font-size: 0.75rem;
+}
+body.light-mode    .swiss-banned-chip,
+body.tropical-mode .swiss-banned-chip,
+body.love-mode     .swiss-banned-chip,
+body.forest-mode   .swiss-banned-chip { color: #b42d2d; }
 .swiss-reg-format-mode {
     font-weight: 600;
     color: #f0f6fc;
@@ -8515,6 +8611,72 @@ body.bronze-mode .revox-row-btn:hover { background: rgba(198, 128, 68, 0.3); bor
 /* ===== Tutorial popup: auto-sliding image carousel ===== */
 .tutorial-card {
     max-width: min(560px, 92vw);
+}
+
+/* Tab switcher inside the tutorial popup. Two tabs (Participant / Guest)
+   pick which pane shows below; only the active pane renders so the swipe
+   carousel and the guest gif don't fight for space. */
+.tutorial-tabs {
+    display: flex;
+    gap: 4px;
+    margin: 8px 0 4px;
+    border-bottom: 1px solid #30363d;
+}
+.tutorial-tab {
+    appearance: none;
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    color: #8b949e;
+    font: inherit;
+    font-size: 0.88rem;
+    font-weight: 600;
+    padding: 6px 14px;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+.tutorial-tab:hover { color: #f0f6fc; }
+.tutorial-tab.active {
+    color: #f0f6fc;
+    background: #0d1117;
+    border-color: #30363d;
+    border-bottom-color: #0d1117;
+    margin-bottom: -1px;
+}
+/* Light themes: tabs need a visible color on the white popup card. */
+body.light-mode    .tutorial-tab,
+body.tropical-mode .tutorial-tab,
+body.love-mode     .tutorial-tab,
+body.forest-mode   .tutorial-tab { color: #656d76; }
+body.light-mode    .tutorial-tab:hover,
+body.tropical-mode .tutorial-tab:hover,
+body.love-mode     .tutorial-tab:hover,
+body.forest-mode   .tutorial-tab:hover,
+body.light-mode    .tutorial-tab.active,
+body.tropical-mode .tutorial-tab.active,
+body.love-mode     .tutorial-tab.active,
+body.forest-mode   .tutorial-tab.active { color: #1f2328; background: #ffffff; }
+body.light-mode    .tutorial-tab.active { border-color: #d1d9e0; border-bottom-color: #ffffff; }
+body.tropical-mode .tutorial-tab.active { border-color: #ffd8a8; border-bottom-color: #ffffff; }
+body.love-mode     .tutorial-tab.active { border-color: #ffc1d2; border-bottom-color: #ffffff; }
+body.forest-mode   .tutorial-tab.active { border-color: #b5c89a; border-bottom-color: #ffffff; }
+
+.tutorial-pane { display: none; }
+.tutorial-pane.active { display: block; }
+
+/* Guest pane frame — same look as .tutorial-carousel (so switching tabs
+   doesn't change the popup's footprint) but without the swipe affordance. */
+.tutorial-guest-frame {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4 / 5;
+    max-height: 60vh;
+    margin: 10px 0 6px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #0d1117;
+    border: 1px solid #30363d;
 }
 
 .tutorial-carousel {
@@ -11957,8 +12119,23 @@ body.gold-mode .reel-embed iframe.instagram-media {
 
 body.gold-mode .sub-tab {
     border-color: #4a3c18;
-    background: rgba(54, 44, 18, 0.8);
-    color: #b8a878;
+    background: rgba(15, 10, 4, 0.85);
+    color: #f0e6cf;
+}
+
+/* The calculator / Bey Check line sub-tabs carry baked-in colored line
+   logos (BX blue, UX red, CX red, Expand-Blade black). Their raw colors
+   fight the gold theme — red on gold gradient is the worst of it. Re-
+   colorize every logo to a flat theme-coherent tone instead: warm cream
+   on the dark inactive tab, dark warm-brown on the bright active tab.
+   The shapes stay distinct, the palette stops clashing. brightness(0)
+   collapses every pixel to black so the sepia / hue / saturate chain
+   has a uniform input to recolor. */
+body.gold-mode .sub-tab img {
+    filter: brightness(0) invert(94%) sepia(20%) saturate(400%) hue-rotate(-10deg);
+}
+body.gold-mode .sub-tab.active img {
+    filter: brightness(0) invert(15%) sepia(60%) saturate(500%) hue-rotate(-5deg);
 }
 
 body.gold-mode .sub-tab.active {
@@ -11969,8 +12146,8 @@ body.gold-mode .sub-tab.active {
 
 body.gold-mode .sub-tab:hover:not(.active),
 body.gold-mode .sub-tab:focus-visible {
-    background: rgba(227, 179, 65, 0.2);
-    border-color: #6e5a28;
+    background: rgba(50, 38, 14, 0.95);
+    border-color: #e3b341;
     color: #f0e6cf;
 }
 

@@ -418,13 +418,21 @@
     let db;
     try { db = firebase.database(); } catch (e) { db = null; }
     // A caller that omits photo/banner keeps the existing one (avoids wiping
-    // a field when only the username is being changed).
+    // a field when only the username is being changed). photoPos / bannerPos
+    // are CSS object-position strings like "50% 30%" — they let the user
+    // pick what part of the uploaded image stays in the visible crop.
     const clean = {
       username: String((profile && profile.username) || "").trim().slice(0, 30),
       photo: (profile && typeof profile.photo === "string")
         ? profile.photo : ((currentProfile && currentProfile.photo) || ""),
       banner: (profile && typeof profile.banner === "string")
         ? profile.banner : ((currentProfile && currentProfile.banner) || ""),
+      photoPos: (profile && typeof profile.photoPos === "string")
+        ? profile.photoPos.slice(0, 16)
+        : ((currentProfile && currentProfile.photoPos) || ""),
+      bannerPos: (profile && typeof profile.bannerPos === "string")
+        ? profile.bannerPos.slice(0, 16)
+        : ((currentProfile && currentProfile.bannerPos) || ""),
       bio: (profile && typeof profile.bio === "string")
         ? profile.bio.slice(0, 300) : ((currentProfile && currentProfile.bio) || "")
     };
@@ -457,6 +465,8 @@
           username: clean.username,
           photo: clean.photo,
           banner: clean.banner,
+          photoPos: clean.photoPos,
+          bannerPos: clean.bannerPos,
           bio: clean.bio
         }).catch(() => {});
       }

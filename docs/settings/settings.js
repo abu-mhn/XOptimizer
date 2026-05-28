@@ -71,7 +71,7 @@ Tournament
 - Register Myself pre-fills your account's username and locks the name field, so no one can register under someone else's name from your device
 - Bulk Guests (host / co-host AND registered participants): the single "add others" path. Paste a name list (one per line) and every entry is created as a deck-less guest in one Firebase update, so they all appear together in the registrants list. Single-add works too — type one line for one guest. Max 50 names per batch; duplicates within the batch and against existing registrants are auto-skipped. These entries are flagged isGuest (no account attached) and don't earn global ranking points; Register Myself stays tied to your account and does earn points
 - QR button in the Open Tournaments header shows a scannable QR code that opens /tournament/ on any phone
-- Tutorial button next to QR / Refresh opens a 9-slide illustrated walkthrough of how to participate — auto-slides, swipeable, with dot navigation
+- Tutorial button next to QR / Refresh opens a two-tab walkthrough — Sign In and Guest. Each tab shows a single demo gif (assets/tutorial/signin/signin.gif and guest/guest.gif) with a one-line caption. No carousel, no swipe, no auto-advance — the gifs walk through the flow on their own
 - Header buttons (Tutorial / QR / Refresh / Create Tournament) sit on a single horizontal row with an invisible scroller
 - Only accounts tagged "Judge" can Create Tournament — the button hides entirely for signed-out or non-Judge accounts
 - Sub-hosts typeahead lists only accounts tagged "Judge" (via a public judges index synced from the Developer page)
@@ -83,6 +83,7 @@ Tournament
 - Test deck mode mix is weighted realistic: ~75% Standard, ~13% CX, ~12% CX Expand
 - Test registrants never earn global ranking points or appear on the leaderboard
 - Edit a registrant in place — tap their name to change the name or rebuild their deck. Account-based registrations keep the name locked on edit (it keys their ranking entry); only guest / Register Others entries stay name-editable
+- Leave Room also unregisters you — tapping the leave button during the registering phase removes any registrant entries the device owns (matched by createdBy = auth.uid, or by per-room localStorage tracking for unauthed Become Guest entries). No need to ping the host to remove your name. Hosts use the existing × next to each name
 - Add a participant during round 1 — name + 3-combo deck; Swiss and Round Robin slot them in as a free win, or pair them against an existing bye, with no reset
 - Rename any participant after the tournament starts — tap their name in a group's Standings
 - Adjust the total round count mid-tournament — tap "Round X / Y" in a group header; already-played rounds are kept
@@ -137,6 +138,8 @@ Settings
 Profile
 - Your own profile tab — the profile photo doubles as the tab icon
 - Upload a photo and a banner (tap the image to change it), set a username and a short bio
+- Photo / banner crop editor — after upload, a popup opens with the image inside a circle (photo) or 3:1 frame (banner). Drag to pan, pinch / scroll / slider to zoom (1x–4x); Apply bakes the visible crop into the saved image so the display is a plain object-fit:cover with no per-surface transforms. Reset on every fresh upload
+- Running win-rate counter — every account has a public /winRates/{key} tally (wins / losses / ties). Bumped once per scored tournament match (gated by a wrApplied flag so re-scoring doesn't double-count); guests and single-elim by-name players are skipped (no stable account key). Rendered as "Win rate X% — Y W / Z L · T T" on your Profile card, the profile hover dropdown, and the Revox history popup. Hidden when there's no data yet
 - Your profile banner doubles as your tournament-ranking row background — each ranked player's row is painted with their own banner (a medal-tinted scrim keeps the gold / silver / bronze podium identity)
 - Discord-style profile card; admin-assigned tags show as colour-coded badges (Revox red, Developer black-and-blue, Revox Admin gold-bordered, Tester teal, Judge black-on-white)
 - Auto medal tags: the current top 3 of the tournament ranking carry a "Gold Player" / "Silver Player" / "Bronze Player" badge on their profile — derived live from the ranking (not stored on the account), so it always reflects the current standing and shifts automatically as rankings change. The matching medal tag also unlocks the matching Gold / Silver / Bronze theme
@@ -231,6 +234,7 @@ Other
     const bioInput = document.getElementById("account-bio");
     const emailEl = document.getElementById("account-email");
     const tagsEl = document.getElementById("account-tags");
+    const winRateEl = document.getElementById("account-win-rate");
     const saveBtn = document.getElementById("account-save-btn");
     const fileInput = document.getElementById("account-profile-file");
     const banner = document.getElementById("account-banner");
@@ -244,6 +248,10 @@ Other
 
     let pendingPhoto = "";
     let pendingBanner = "";
+    // CSS object-position strings — what part of the uploaded image stays
+    // in the visible crop. "" = use the default (centered).
+    let pendingPhotoPos = "";
+    let pendingBannerPos = "";
 
     const setStatus = (msg, kind) => {
       if (!statusEl) return;
@@ -302,11 +310,50 @@ Other
       lastFilledProfile = profile || {};
       pendingPhoto = (profile && profile.photo) || "";
       pendingBanner = (profile && profile.banner) || "";
+      pendingPhotoPos = (profile && profile.photoPos) || "";
+      pendingBannerPos = (profile && profile.bannerPos) || "";
       if (nameInput) nameInput.value = (profile && profile.username) || "";
       if (bioInput) bioInput.value = (profile && profile.bio) || "";
       renderAccountTags(lastFilledProfile);
-      if (avatar) avatar.src = pendingPhoto || PLACEHOLDER;
-      if (banner) banner.src = pendingBanner || BANNER_PLACEHOLDER;
+      if (avatar) {
+        avatar.src = pendingPhoto || PLACEHOLDER;
+        avatar.style.objectPosition = pendingPhotoPos || "50% 50%";
+      }
+      if (banner) {
+        banner.src = pendingBanner || BANNER_PLACEHOLDER;
+        banner.style.objectPosition = pendingBannerPos || "50% 50%";
+      }
+      loadAccountWinRate(profile && profile.username);
+    };
+
+    // Public win-rate counter, fetched from /winRates/{usernameKey}. Hidden
+    // entirely when there's no record (new user, never scored). Mirrors the
+    // display logic in showProfileByUsername so the same person sees the
+    // same numbers here and on their popup card.
+    const loadAccountWinRate = (username) => {
+      if (!winRateEl) return;
+      winRateEl.textContent = "";
+      winRateEl.classList.add("hidden");
+      if (!username) return;
+      const fb = (typeof firebase !== "undefined" && firebase.database) ? firebase.database() : null;
+      if (!fb) return;
+      const key = String(username)
+        .trim()
+        .toLowerCase()
+        .replace(/[.#$/\[\]]/g, "_");
+      if (!key) return;
+      fb.ref("winRates/" + key).once("value").then(snap => {
+        const v = snap.val();
+        const wins = (v && v.wins) || 0;
+        const losses = (v && v.losses) || 0;
+        const ties = (v && v.ties) || 0;
+        const total = wins + losses + ties;
+        if (total === 0) return; // no data → leave hidden
+        const pct = Math.round((wins / total) * 100);
+        const tieBit = ties > 0 ? ` · ${ties}T` : "";
+        winRateEl.textContent = `Win rate ${pct}% — ${wins}W / ${losses}L${tieBit}`;
+        winRateEl.classList.remove("hidden");
+      }).catch(() => { /* read failed → leave hidden */ });
     };
 
     // The medal cache loads / changes asynchronously — refresh only the
@@ -375,6 +422,219 @@ Other
       reader.readAsDataURL(file);
     });
 
+    // Image crop editor — opens after a fresh upload so the user can pan
+    // AND zoom to pick the visible crop. The image lives in an absolutely
+    // positioned <img> inside an overflow:hidden frame; drag updates its
+    // top/left, the slider / wheel / pinch updates its scale. zoom = 1 is
+    // "cover" — the smaller dimension exactly fills the frame; max zoom
+    // 4 is a tight crop. On Apply the visible region is drawn to a canvas
+    // and the cropped data URL is the new image — so the display path
+    // stays a plain object-fit:cover <img> with no extra transforms.
+    const openImageCropEditor = (opts) => {
+      const { src, kind, onSave } = opts;
+      document.getElementById("image-pos-editor")?.remove();
+      const isPhoto = kind === "photo";
+      // Smaller editor frames + non-scrolling card so the whole popup fits
+      // on a phone-portrait viewport without the popup-card's own scroll
+      // kicking in. Banner keeps its 3:1 display aspect at a more modest
+      // 280×93; photo at 180×180.
+      const frameW = isPhoto ? 180 : 280;
+      const frameH = isPhoto ? 180 : 93;
+      // Output dims of the baked crop. Photo stays square at 256; banner
+      // matches the editor frame's 3:1 aspect at 1024-wide.
+      const outputW = isPhoto ? 256 : 1024;
+      const outputH = isPhoto ? 256 : Math.round(outputW * frameH / frameW);
+      const frameCss = isPhoto
+        ? `width:${frameW}px;height:${frameH}px;border-radius:50%;`
+        : `width:${frameW}px;height:${frameH}px;border-radius:8px;`;
+
+      const overlay = document.createElement("div");
+      overlay.id = "image-pos-editor";
+      overlay.className = "popup-overlay";
+      overlay.innerHTML = `
+        <div class="popup-card" style="overflow:hidden;max-height:none;">
+          <h2 class="popup-title">${isPhoto ? "Adjust photo" : "Adjust banner"}</h2>
+          <p class="popup-text">Drag to pan, scroll / pinch / use the slider to zoom.</p>
+          <div class="image-pos-frame" style="${frameCss}margin:10px auto;overflow:hidden;background:#0d1117;position:relative;cursor:grab;touch-action:none;user-select:none;">
+            <img class="image-pos-img" src="${src}" alt="" draggable="false" style="position:absolute;left:0;top:0;pointer-events:none;max-width:none;max-height:none;">
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin:8px 4px 0;">
+            <span style="font-size:0.78rem;opacity:.7;">Zoom</span>
+            <input type="range" class="image-pos-zoom" min="100" max="400" value="100" step="1" style="flex:1;">
+          </div>
+          <div class="popup-actions">
+            <button type="button" class="btn" data-act="save">Apply</button>
+            <button type="button" class="btn popup-cancel" data-act="cancel">Cancel</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+
+      const frame = overlay.querySelector(".image-pos-frame");
+      const imgEl = overlay.querySelector(".image-pos-img");
+      const zoomSlider = overlay.querySelector(".image-pos-zoom");
+
+      // Source image loaded into a hidden <img> too, so we can read
+      // naturalWidth/Height before painting (avoids a layout-jump).
+      const srcImg = new Image();
+      // Same-origin data URLs don't need crossOrigin, but it's harmless.
+      srcImg.src = src;
+
+      // Geometry — zoom is multiplicative on baseScale (cover). offsetX/Y
+      // is the image element's left/top inside the frame, clamped so the
+      // image always covers the frame (no empty space).
+      let baseScale = 1;
+      let zoom = 1;
+      let offsetX = 0, offsetY = 0;
+
+      const clamp = () => {
+        const w = srcImg.naturalWidth * baseScale * zoom;
+        const h = srcImg.naturalHeight * baseScale * zoom;
+        if (w <= frameW) offsetX = (frameW - w) / 2;
+        else offsetX = Math.min(0, Math.max(frameW - w, offsetX));
+        if (h <= frameH) offsetY = (frameH - h) / 2;
+        else offsetY = Math.min(0, Math.max(frameH - h, offsetY));
+      };
+
+      const apply = () => {
+        clamp();
+        const w = srcImg.naturalWidth * baseScale * zoom;
+        const h = srcImg.naturalHeight * baseScale * zoom;
+        imgEl.style.width = w + "px";
+        imgEl.style.height = h + "px";
+        imgEl.style.left = offsetX + "px";
+        imgEl.style.top = offsetY + "px";
+      };
+
+      const initOnLoad = () => {
+        baseScale = Math.max(frameW / srcImg.naturalWidth, frameH / srcImg.naturalHeight);
+        zoom = 1;
+        const w = srcImg.naturalWidth * baseScale * zoom;
+        const h = srcImg.naturalHeight * baseScale * zoom;
+        offsetX = (frameW - w) / 2;
+        offsetY = (frameH - h) / 2;
+        apply();
+      };
+      if (srcImg.complete && srcImg.naturalWidth) initOnLoad();
+      else srcImg.addEventListener("load", initOnLoad, { once: true });
+
+      // ---- Pan (single-finger / mouse drag) ----
+      let dragging = false, startPX = 0, startPY = 0, startOX = 0, startOY = 0;
+      const onDown = (e) => {
+        if (pointers.size >= 2) return; // pinch path owns this gesture
+        dragging = true;
+        startPX = e.clientX; startPY = e.clientY;
+        startOX = offsetX; startOY = offsetY;
+        frame.style.cursor = "grabbing";
+        frame.setPointerCapture?.(e.pointerId);
+      };
+      const onMove = (e) => {
+        if (!dragging || pointers.size >= 2) return;
+        offsetX = startOX + (e.clientX - startPX);
+        offsetY = startOY + (e.clientY - startPY);
+        apply();
+      };
+      const onUp = () => { dragging = false; frame.style.cursor = "grab"; };
+
+      // ---- Pinch zoom (two-finger) ----
+      const pointers = new Map();
+      let pinchStartDist = 0;
+      let pinchStartZoom = 1;
+      const pinchDist = () => {
+        const pts = Array.from(pointers.values());
+        if (pts.length < 2) return 0;
+        const dx = pts[0].x - pts[1].x;
+        const dy = pts[0].y - pts[1].y;
+        return Math.hypot(dx, dy);
+      };
+
+      frame.addEventListener("pointerdown", (e) => {
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pointers.size === 1) onDown(e);
+        else if (pointers.size === 2) {
+          dragging = false;
+          pinchStartDist = pinchDist();
+          pinchStartZoom = zoom;
+        }
+      });
+      frame.addEventListener("pointermove", (e) => {
+        if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pointers.size === 2 && pinchStartDist > 0) {
+          const ratio = pinchDist() / pinchStartDist;
+          zoom = Math.max(1, Math.min(4, pinchStartZoom * ratio));
+          zoomSlider.value = Math.round(zoom * 100);
+          apply();
+        } else {
+          onMove(e);
+        }
+      });
+      const releasePointer = (e) => {
+        pointers.delete(e.pointerId);
+        if (pointers.size < 2) pinchStartDist = 0;
+        if (pointers.size === 0) onUp();
+      };
+      frame.addEventListener("pointerup", releasePointer);
+      frame.addEventListener("pointercancel", releasePointer);
+      frame.addEventListener("pointerleave", releasePointer);
+
+      // ---- Wheel zoom (centered on cursor) ----
+      frame.addEventListener("wheel", (e) => {
+        e.preventDefault();
+        const rect = frame.getBoundingClientRect();
+        const cx = e.clientX - rect.left;
+        const cy = e.clientY - rect.top;
+        const factor = Math.exp(-e.deltaY * 0.002); // gentle exponential
+        const oldZoom = zoom;
+        zoom = Math.max(1, Math.min(4, zoom * factor));
+        // Keep the cursor's source-image point fixed under the cursor.
+        const imgPxX = (cx - offsetX) / oldZoom;
+        const imgPxY = (cy - offsetY) / oldZoom;
+        offsetX = cx - imgPxX * zoom;
+        offsetY = cy - imgPxY * zoom;
+        zoomSlider.value = Math.round(zoom * 100);
+        apply();
+      }, { passive: false });
+
+      // ---- Slider zoom (centered on frame middle) ----
+      zoomSlider.addEventListener("input", () => {
+        const newZoom = Math.max(1, Math.min(4, Number(zoomSlider.value) / 100));
+        const cx = frameW / 2, cy = frameH / 2;
+        const imgPxX = (cx - offsetX) / zoom;
+        const imgPxY = (cy - offsetY) / zoom;
+        zoom = newZoom;
+        offsetX = cx - imgPxX * zoom;
+        offsetY = cy - imgPxY * zoom;
+        apply();
+      });
+
+      const close = () => overlay.remove();
+      overlay.querySelector('[data-act="cancel"]').onclick = close;
+      overlay.querySelector('[data-act="save"]').onclick = () => {
+        if (!srcImg.naturalWidth) { close(); return; }
+        clamp();
+        // Source rect in image-pixel coords for the visible frame region.
+        // Each frame pixel maps to (1 / (baseScale * zoom)) image pixels.
+        const ratio = 1 / (baseScale * zoom);
+        const sx = (0 - offsetX) * ratio;
+        const sy = (0 - offsetY) * ratio;
+        const sw = frameW * ratio;
+        const sh = frameH * ratio;
+        const canvas = document.createElement("canvas");
+        canvas.width = outputW;
+        canvas.height = outputH;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(srcImg, sx, sy, sw, sh, 0, 0, outputW, outputH);
+        const baked = canvas.toDataURL("image/jpeg", 0.85);
+        close();
+        onSave?.(baked);
+      };
+
+      const onKey = (e) => {
+        if (e.key === "Escape") { e.preventDefault(); close(); document.removeEventListener("keydown", onKey); }
+      };
+      document.addEventListener("keydown", onKey);
+    };
+
     // Tap the avatar / banner image itself to change it.
     avatar?.addEventListener("click", () => fileInput?.click());
 
@@ -383,11 +643,27 @@ Other
       fileInput.value = ""; // let the same file be re-picked later
       if (!file) return;
       setStatus("Processing photo…", "pending");
-      downscale(file, 128)
+      // Downscale generously — the editor crops INTO this image, so giving
+      // it more pixels means the final baked crop stays sharp at the
+      // chosen zoom level.
+      downscale(file, 1024)
         .then(dataUrl => {
-          pendingPhoto = dataUrl;
-          if (avatar) avatar.src = dataUrl;
-          setStatus("Photo ready — tap Save profile to keep it.", "ok");
+          openImageCropEditor({
+            src: dataUrl,
+            kind: "photo",
+            onSave: (bakedUrl) => {
+              // The crop / zoom is baked into bakedUrl — display stays a
+              // plain object-fit:cover with centered position.
+              pendingPhoto = bakedUrl;
+              pendingPhotoPos = "50% 50%";
+              if (avatar) {
+                avatar.src = bakedUrl;
+                avatar.style.objectPosition = "50% 50%";
+              }
+              setStatus("Photo ready — tap Save profile to keep it.", "ok");
+            }
+          });
+          setStatus("", "");
         })
         .catch(e => setStatus(e.message || "Couldn't process that image.", "err"));
     });
@@ -399,11 +675,22 @@ Other
       bannerFile.value = "";
       if (!file) return;
       setStatus("Processing banner…", "pending");
-      downscale(file, 640)
+      downscale(file, 2048)
         .then(dataUrl => {
-          pendingBanner = dataUrl;
-          if (banner) banner.src = dataUrl;
-          setStatus("Banner ready — tap Save profile to keep it.", "ok");
+          openImageCropEditor({
+            src: dataUrl,
+            kind: "banner",
+            onSave: (bakedUrl) => {
+              pendingBanner = bakedUrl;
+              pendingBannerPos = "50% 50%";
+              if (banner) {
+                banner.src = bakedUrl;
+                banner.style.objectPosition = "50% 50%";
+              }
+              setStatus("Banner ready — tap Save profile to keep it.", "ok");
+            }
+          });
+          setStatus("", "");
         })
         .catch(e => setStatus(e.message || "Couldn't process that image.", "err"));
     });
@@ -414,7 +701,14 @@ Other
       if (!username) { setStatus("Enter a username.", "err"); nameInput?.focus(); return; }
       setStatus("Saving…", "pending");
       saveBtn.disabled = true;
-      window.saveUserProfile({ username, photo: pendingPhoto, banner: pendingBanner, bio: (bioInput?.value || "").trim() })
+      window.saveUserProfile({
+        username,
+        photo: pendingPhoto,
+        banner: pendingBanner,
+        photoPos: pendingPhotoPos,
+        bannerPos: pendingBannerPos,
+        bio: (bioInput?.value || "").trim()
+      })
         .then(() => setStatus("Profile saved ✓", "ok"))
         .catch(e => setStatus(e.message || "Couldn't save your profile.", "err"))
         .finally(() => { saveBtn.disabled = false; });
