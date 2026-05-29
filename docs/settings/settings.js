@@ -83,6 +83,7 @@ Tournament
 - Test deck mode mix is weighted realistic: ~75% Standard, ~13% CX, ~12% CX Expand
 - Test registrants never earn global ranking points or appear on the leaderboard
 - Edit a registrant in place — tap their name to change the name or rebuild their deck. Account-based registrations keep the name locked on edit (it keys their ranking entry); only guest / Register Others entries stay name-editable
+- Each registrant row carries a deck-status badge so the host can spot incomplete entries at a glance: green "Deck ✓" when every slot has every required part for its mode (standard / CX / CX Expand), amber "Incomplete" when at least one slot is missing a required part (tooltip names the offending slot numbers), or red "No deck" when all 3 slots are empty. Strict per-mode completeness — a slot with only a blade picked counts as incomplete, not "filled"
 - Leave Room also unregisters you — tapping the leave button during the registering phase removes any registrant entries the device owns (matched by createdBy = auth.uid, or by per-room localStorage tracking for unauthed Become Guest entries). No need to ping the host to remove your name. Hosts use the existing × next to each name
 - Add a participant during round 1 — name + 3-combo deck; Swiss and Round Robin slot them in as a free win, or pair them against an existing bye, with no reset
 - Rename any participant after the tournament starts — tap their name in a group's Standings

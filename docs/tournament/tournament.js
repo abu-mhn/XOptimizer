@@ -3084,10 +3084,25 @@ function renderSwissRegisteringMarkup(state) {
         const removeBtn = canEdit
           ? `<button type="button" class="swiss-reg-remove" data-reg-id="${escapeHtml(r.id)}" title="Remove ${escapeHtml(r.name)}" aria-label="Remove ${escapeHtml(r.name)}">&times;</button>`
           : "";
-        const deckHasContent = !isBeyCheckDeckEmpty(r.deck);
-        const deckBadge = deckHasContent
-          ? `<span class="swiss-reg-deck-badge">Deck ✓</span>`
-          : `<span class="swiss-reg-deck-badge swiss-reg-deck-badge-missing">No deck</span>`;
+        // Three deck states from the registrant row's POV:
+        //   1. every slot is empty                        → "No deck"     (red)
+        //   2. every slot has every required part         → "Deck ✓"     (green)
+        //   3. anything in between — slots missing slots, OR slots
+        //      with only some parts filled (e.g. blade picked but no
+        //      ratchet / bit) — gets the amber "Incomplete (N/3)" badge.
+        //   The slot-complete check is the stricter one so a slot with
+        //   only a blade name doesn't pass as "filled".
+        const emptySlots = emptyBeyCheckDeckSlotNumbers(r.deck);
+        const incompleteSlots = incompleteBeyCheckDeckSlotNumbers(r.deck);
+        const deckSlotsTotal = BEY_CHECK_DECK_SIZE;
+        let deckBadge;
+        if (emptySlots.length === deckSlotsTotal) {
+          deckBadge = `<span class="swiss-reg-deck-badge swiss-reg-deck-badge-missing">No deck</span>`;
+        } else if (incompleteSlots.length > 0) {
+          deckBadge = `<span class="swiss-reg-deck-badge swiss-reg-deck-badge-partial" title="Slot${incompleteSlots.length === 1 ? "" : "s"} ${incompleteSlots.join(", ")} missing parts">Incomplete</span>`;
+        } else {
+          deckBadge = `<span class="swiss-reg-deck-badge">Deck ✓</span>`;
+        }
         // Hosts and co-hosts can tap a registrant's name to edit it
         // (re-opens the registration form pre-filled with that
         // registrant's name + deck). Viewers and participants can't edit,
@@ -4598,6 +4613,34 @@ function isBeyCheckSlotEmpty(slot) {
   return Object.values(slot.parts).every(v => !v);
 }
 
+// Stricter check: a slot counts as "complete" only when every field its
+// mode declares is present (non-empty). For standard mode that's blade
+// + ratchet + bit, with the ratchet allowed to be the NO_RATCHET
+// sentinel when the bit is a ratchet-bit (the bit then carries the
+// ratchet portion). For CX / CX Expand modes every listed field must
+// have a name. Used by the registrant-row "Incomplete" badge so a slot
+// that only has a blade picked doesn't pass as "filled".
+function isBeyCheckSlotComplete(slot) {
+  if (!slot || !slot.parts) return false;
+  const mode = (slot.mode && BEY_CHECK_MODES.includes(slot.mode)) ? slot.mode : "standard";
+  const fields = BEY_CHECK_FIELDS[mode] || [];
+  if (!fields.length) return false;
+  for (const f of fields) {
+    const v = slot.parts[f];
+    // The ratchet field accepts NO_RATCHET — that's a real choice, not
+    // an empty slot. Every other field needs a non-empty name.
+    if (f === "ratchet") {
+      if (!v) return false; // missing entirely
+      // empty string fails, NO_RATCHET sentinel passes, real name passes
+      if (v !== NO_RATCHET && typeof v !== "string") return false;
+      if (v !== NO_RATCHET && !v.length) return false;
+    } else {
+      if (typeof v !== "string" || !v) return false;
+    }
+  }
+  return true;
+}
+
 function isBeyCheckDeckEmpty(deck) {
   return !Array.isArray(deck) || deck.every(isBeyCheckSlotEmpty);
 }
@@ -4610,6 +4653,19 @@ function emptyBeyCheckDeckSlotNumbers(deck) {
   const out = [];
   for (let i = 0; i < BEY_CHECK_DECK_SIZE; i++) {
     if (isBeyCheckSlotEmpty(deck[i])) out.push(i + 1);
+  }
+  return out;
+}
+
+// Stricter variant of the helper above — returns the 1-based slot
+// numbers that aren't COMPLETE (missing one or more required parts for
+// their mode). Catches the "blade only, no ratchet / bit" case the
+// empty-check misses.
+function incompleteBeyCheckDeckSlotNumbers(deck) {
+  if (!Array.isArray(deck)) return [1, 2, 3];
+  const out = [];
+  for (let i = 0; i < BEY_CHECK_DECK_SIZE; i++) {
+    if (!isBeyCheckSlotComplete(deck[i])) out.push(i + 1);
   }
   return out;
 }
