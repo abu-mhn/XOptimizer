@@ -5943,25 +5943,32 @@ function showSwissFormatPopup() {
   };
   // Swiss / Round Robin then ask whether to keep a Top N knockout;
   // Single Elimination applies straight away. pairing is cleared for
-  // Swiss / Single Elim and set for Round Robin. The knockout size (topN)
-  // is set at create time only — switching the format mid-registration
-  // preserves the existing topN (or seeds 8 if there isn't one).
+  // Swiss / Single Elim and set for Round Robin. When switching INTO a
+  // knockout format ("Yes — add a knockout"), open the Top-N picker so
+  // the host picks the bracket size right there — same flow as the
+  // create-tournament path. Cancelling the size picker cancels the
+  // whole format change. Existing topN is the picker default.
+  const applyWithTopN = (basePatch) => {
+    const currentTopN = (typeof s.topN === "number" && s.topN >= 2) ? s.topN : 8;
+    showTopNPickerPopup((n) => {
+      if (n == null) return; // user cancelled the size step → keep current format
+      updateRegisteringSetting(Object.assign({}, basePatch, { topN: n }));
+    }, currentTopN);
+  };
   if (swissBtn) swissBtn.onclick = () => {
     teardown();
     showTopEightPopup((mode) => {
       if (!mode) return;
-      const patch = { mode, pairing: null };
-      if (mode === "swiss" && !(typeof s.topN === "number" && s.topN >= 2)) patch.topN = 8;
-      updateRegisteringSetting(patch);
+      if (mode === "swiss") applyWithTopN({ mode, pairing: null });
+      else updateRegisteringSetting({ mode, pairing: null });
     }, false);
   };
   if (rrBtn) rrBtn.onclick = () => {
     teardown();
     showTopEightPopup((mode) => {
       if (!mode) return;
-      const patch = { mode, pairing: "round-robin" };
-      if (mode === "swiss" && !(typeof s.topN === "number" && s.topN >= 2)) patch.topN = 8;
-      updateRegisteringSetting(patch);
+      if (mode === "swiss") applyWithTopN({ mode, pairing: "round-robin" });
+      else updateRegisteringSetting({ mode, pairing: "round-robin" });
     }, true);
   };
   if (singleBtn) singleBtn.onclick = () => {

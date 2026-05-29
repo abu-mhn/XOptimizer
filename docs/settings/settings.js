@@ -48,7 +48,7 @@ Tournament
 - Round Robin: everyone in a group plays everyone else exactly once; rounds are fixed by group size (N players = N-1 rounds, or N with a bye each round when odd)
 - Round Robin reuses the Swiss group stage, standings and Top-N knockout — only the per-round pairing differs (fixed everyone-vs-everyone schedule vs. Swiss standings-based pairing)
 - A Round Robin bye (forced by an odd group size) is a sit-out, not a win — only real matches count toward standings and the bracket seeding
-- Pick Swiss or Round Robin, then choose whether to add a knockout bracket (any top-N) or finish on group records. The knockout size is set at create time — Top 4 / 8 / 16 / 32 presets plus a custom number input (2-64). Non-power-of-2 sizes (Top 10, Top 12, …) are padded with byes via the same engine single-elim uses
+- Pick Swiss or Round Robin, then choose whether to add a knockout bracket (any top-N) or finish on group records. The knockout size is asked at create time AND any time the host switches an existing tournament into a knockout format mid-registration — Top 4 / 8 / 16 / 32 presets plus a custom number input (2-64). Non-power-of-2 sizes (Top 10, Top 12, …) are padded with byes via the same engine single-elim uses
 - Configurable groups: 2, 3, or 4 (Swiss and Round Robin)
 - Configurable rounds per group for Swiss: 3, 4, 5 (Round Robin derives rounds from group size)
 - Hosting requires a free email account (Settings → Account, or prompted on Create Tournament)
@@ -76,7 +76,7 @@ Tournament
 - Only accounts tagged "Judge" can Create Tournament — the button hides entirely for signed-out or non-Judge accounts
 - Sub-hosts typeahead lists only accounts tagged "Judge" (via a public judges index synced from the Developer page)
 - Lobby cards flag a tournament you've been invited to co-host with a small "!" alert badge
-- Edit the format while waiting for players — tap the format chip to switch between Swiss, Round Robin and Single Elimination, or the groups / rounds chips to adjust them; registrants are kept, no reset needed. (The knockout size — Top N — is set at create time only and isn't edited inline.)
+- Edit the format while waiting for players — tap the format chip to switch between Swiss, Round Robin and Single Elimination, or the groups / rounds chips to adjust them; registrants are kept, no reset needed. Switching INTO a knockout format (Swiss + Top N or Round Robin + Top N) re-opens the Top-N picker so the host picks the bracket size right there — same flow as create time
 - Test button: bulk-adds synthetic participants for QA — visible only to accounts tagged "Tester"
 - Copy Names button (Tester-only, host / co-host): copies every registrant's name to the clipboard, one per line — a QA aid; the button flashes the copied count
 - Test decks obey "one of each part per deck" across all 3 slots (only light lock chips can repeat; Emperor / Valkyrie cannot)
