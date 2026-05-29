@@ -139,6 +139,7 @@ Profile
 - Your own profile tab — the profile photo doubles as the tab icon
 - Upload a photo and a banner (tap the image to change it), set a username and a short bio
 - Photo / banner crop editor — after upload, a popup opens with the image inside a circle (photo) or 3:1 frame (banner). Drag to pan, pinch / scroll / slider to zoom (1x–4x); Apply bakes the visible crop into the saved image so the display is a plain object-fit:cover with no per-surface transforms. Reset on every fresh upload
+- Animated GIF photo / banner — picking a .gif (or any image/gif MIME) skips the canvas crop editor (re-encoding would freeze the animation) and saves the original bytes as-is. A preview popup shows the GIF playing in the target frame shape with the actual file size; tap Use this to commit. Caps: photo ~375 KB raw, banner ~750 KB raw — matched to the Firebase .validate length limits. GIFs animate live everywhere the photo / banner is shown (account card, profile dropdown, Revox member list, tournament-ranking row background)
 - Running win-rate counter — every account has a public /winRates/{key} tally (wins / losses / ties). Bumped once per scored tournament match (gated by a wrApplied flag so re-scoring doesn't double-count); guests and single-elim by-name players are skipped (no stable account key). Rendered as "Win rate X% — Y W / Z L · T T" on your Profile card, the profile hover dropdown, and the Revox history popup. Hidden when there's no data yet
 - Your profile banner doubles as your tournament-ranking row background — each ranked player's row is painted with their own banner (a medal-tinted scrim keeps the gold / silver / bronze podium identity)
 - Discord-style profile card; admin-assigned tags show as colour-coded badges (Revox red, Developer black-and-blue, Revox Admin gold-bordered, Tester teal, Judge black-on-white)
@@ -149,9 +150,16 @@ Profile
 
 Developer
 - Extra tab shown only to accounts tagged "Developer"
-- Lists every registered user with a total count, searchable by username or email; each user's current tags show as badges
+- Two sub-tabs: Users (the registered-user list + tag controls) and Database (raw Firebase data browser)
+- Users sub-tab: lists every registered user with a total count, searchable by username or email; each user's current tags show as badges
 - Developers can add AND remove tags on any user (multiple tags per user)
 - Hover or click a username in the list to open that account's profile card
+- Database sub-tab: scrollable row of tabs across every readable top-level node (swissRooms, openTournaments, users, usernames, profiles, ranking, revoxRanking, winRates, judges, revoxAccounts, swissViewCodes, userDecks, userTournaments). Pick a node, see all entries as a sortable table — every field that exists across any row gets a column, heavy fields (photo / banner data URLs) summarized as "[N KB]", nested objects shown as "{count} firstKey, secondKey, …"
+- Per-row actions: ✎ Edit fields (type-aware inputs — text / number / checkbox / textarea; photo / banner / smallBanner render as image preview + file picker, never raw base64), {} Edit raw JSON (pretty-printed textarea, parse on save, set to literal null to delete), 🗑 Delete (confirm prompt, then null-write)
+- + Add entry at the top opens the JSON editor in new-entry mode — exposes a Key input + JSON value
+- winRates table joins with /profiles to show the real cased username next to each W/L/T row
+- Mobile-friendly: under 600 px the table flips to per-row cards (header hidden, every cell shows its column name as a label via data-col attr)
+- Write permissions still enforced by Firebase rules — Developers can write users / profiles / ranking / revoxRanking / winRates / judges / revoxAccounts / openTournaments / swissViewCodes / userDecks / userTournaments, but swissRooms is still host-only and usernames is still owner-only. Failed writes surface a PERMISSION_DENIED alert
 
 Other
 - Per-tab URLs: /dashboard/, /calculator/, /library/, /deck/, /tournament/, /revox/, /battlepass/, /reel/, /history/, /settings/, /account/, /developer/
@@ -638,10 +646,107 @@ Other
     // Tap the avatar / banner image itself to change it.
     avatar?.addEventListener("click", () => fileInput?.click());
 
+    // GIFs bypass the canvas pipeline — drawing one to a canvas always
+    // flattens it to a single still frame, killing the animation. We
+    // store the original bytes as a data URL and skip the crop editor
+    // (re-encoding an animated GIF needs a heavy library; not worth it
+    // for avatars). Size caps match the Firebase .validate caps for
+    // the photo / banner fields — bump both ends together if changing.
+    const PHOTO_GIF_MAX_CHARS = 500000;   // ~375 KB raw
+    const BANNER_GIF_MAX_CHARS = 1000000; // ~750 KB raw
+    const isGifFile = (file) => !!file && (file.type === "image/gif" || /\.gif$/i.test(file.name));
+    const readDataUrl = (file) => new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onerror = () => reject(new Error("Couldn't read that file."));
+      r.onload = () => resolve(r.result);
+      r.readAsDataURL(file);
+    });
+    // Friendly "your file is X KB, max is Y KB" message instead of a
+    // bare "too large" hint, so the user knows exactly how much to trim.
+    const formatGifSizeError = (dataUrlLen, capChars, label) => {
+      const haveKB = Math.round(dataUrlLen * 0.75 / 1024); // base64 ≈ 1.33× raw
+      const capKB = Math.round(capChars * 0.75 / 1024);
+      return `${label} is ~${haveKB} KB — max is ~${capKB} KB. Try a smaller / more optimised GIF (fewer frames, smaller dimensions, or higher compression).`;
+    };
+
+    // GIFs skip the canvas-baked crop editor (the bake would freeze the
+    // animation). Show a simple preview popup so the user has the same
+    // visual "is this what I picked?" confirmation step the JPEG path
+    // gets via the crop editor. The GIF is sized to the same frame
+    // shape used by the crop editor (circle for photo, 3:1 for banner)
+    // and plays live inside the frame.
+    const openGifPreviewPopup = (opts) => {
+      const { src, kind, sizeKB, onConfirm } = opts;
+      document.getElementById("image-pos-editor")?.remove();
+      const isPhoto = kind === "photo";
+      const frameW = isPhoto ? 180 : 280;
+      const frameH = isPhoto ? 180 : 93;
+      const frameCss = isPhoto
+        ? `width:${frameW}px;height:${frameH}px;border-radius:50%;`
+        : `width:${frameW}px;height:${frameH}px;border-radius:8px;`;
+      const overlay = document.createElement("div");
+      overlay.id = "image-pos-editor";
+      overlay.className = "popup-overlay";
+      overlay.innerHTML = `
+        <div class="popup-card" style="overflow:hidden;max-height:none;">
+          <h2 class="popup-title">${isPhoto ? "Animated photo" : "Animated banner"}</h2>
+          <p class="popup-text">GIFs skip the crop / zoom editor — animation would be lost. The full image is saved as-is.</p>
+          <div class="image-pos-frame" style="${frameCss}margin:10px auto;overflow:hidden;background:#0d1117;position:relative;">
+            <img src="${src}" alt="" style="width:100%;height:100%;object-fit:cover;object-position:50% 50%;pointer-events:none;">
+          </div>
+          <p class="popup-text" style="font-size:0.78rem; margin-top:6px; text-align:center; opacity:.75;">~${sizeKB} KB</p>
+          <div class="popup-actions">
+            <button type="button" class="btn" data-act="use">Use this</button>
+            <button type="button" class="btn popup-cancel" data-act="cancel">Cancel</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      const close = () => overlay.remove();
+      overlay.querySelector('[data-act="cancel"]').onclick = close;
+      overlay.querySelector('[data-act="use"]').onclick = () => { close(); onConfirm?.(); };
+      const onKey = (e) => {
+        if (e.key === "Escape") { e.preventDefault(); close(); document.removeEventListener("keydown", onKey); }
+      };
+      document.addEventListener("keydown", onKey);
+    };
+
     fileInput?.addEventListener("change", () => {
       const file = fileInput.files && fileInput.files[0];
       fileInput.value = ""; // let the same file be re-picked later
       if (!file) return;
+      if (isGifFile(file)) {
+        setStatus("Processing GIF…", "pending");
+        console.info("[profile] photo GIF picked:", file.name, file.size, "bytes,", file.type);
+        readDataUrl(file).then(dataUrl => {
+          if (dataUrl.length > PHOTO_GIF_MAX_CHARS) {
+            throw new Error(formatGifSizeError(dataUrl.length, PHOTO_GIF_MAX_CHARS, "That GIF"));
+          }
+          openGifPreviewPopup({
+            src: dataUrl,
+            kind: "photo",
+            sizeKB: Math.round(dataUrl.length * 0.75 / 1024),
+            onConfirm: () => {
+              pendingPhoto = dataUrl;
+              pendingPhotoPos = "50% 50%";
+              if (avatar) {
+                avatar.src = dataUrl;
+                avatar.style.objectPosition = "50% 50%";
+              }
+              setStatus("GIF ready — tap Save profile to keep it.", "ok");
+            }
+          });
+          setStatus("", "");
+        }).catch(e => {
+          console.warn("[profile] photo GIF failed:", e);
+          // The account-status text strip is below the fold on some
+          // viewports — surface GIF failures as a real alert so they're
+          // unmissable. Most common cause is the file being too big.
+          alert(e.message || "Couldn't process that GIF.");
+          setStatus(e.message || "Couldn't process that GIF.", "err");
+        });
+        return;
+      }
       setStatus("Processing photo…", "pending");
       // Downscale generously — the editor crops INTO this image, so giving
       // it more pixels means the final baked crop stays sharp at the
@@ -674,6 +779,35 @@ Other
       const file = bannerFile.files && bannerFile.files[0];
       bannerFile.value = "";
       if (!file) return;
+      if (isGifFile(file)) {
+        setStatus("Processing GIF…", "pending");
+        console.info("[profile] banner GIF picked:", file.name, file.size, "bytes,", file.type);
+        readDataUrl(file).then(dataUrl => {
+          if (dataUrl.length > BANNER_GIF_MAX_CHARS) {
+            throw new Error(formatGifSizeError(dataUrl.length, BANNER_GIF_MAX_CHARS, "That banner GIF"));
+          }
+          openGifPreviewPopup({
+            src: dataUrl,
+            kind: "banner",
+            sizeKB: Math.round(dataUrl.length * 0.75 / 1024),
+            onConfirm: () => {
+              pendingBanner = dataUrl;
+              pendingBannerPos = "50% 50%";
+              if (banner) {
+                banner.src = dataUrl;
+                banner.style.objectPosition = "50% 50%";
+              }
+              setStatus("GIF ready — tap Save profile to keep it.", "ok");
+            }
+          });
+          setStatus("", "");
+        }).catch(e => {
+          console.warn("[profile] banner GIF failed:", e);
+          alert(e.message || "Couldn't process that GIF.");
+          setStatus(e.message || "Couldn't process that GIF.", "err");
+        });
+        return;
+      }
       setStatus("Processing banner…", "pending");
       downscale(file, 2048)
         .then(dataUrl => {

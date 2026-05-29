@@ -3326,6 +3326,32 @@ function resolveProfileBanner(name) {
   }).catch(() => { swissRegistrantBannerCache[key] = ""; return ""; });
 }
 
+// When the signed-in user updates their own profile (saveUserProfile
+// dispatches `userprofilechange`), invalidate THEIR cached photo /
+// banner so the next render reads the fresh data, then re-render any
+// visible list that paints those — Revox ranking and tournament ranking
+// are the two surfaces. Rows for the user's own name are served from
+// the in-memory currentProfile (not the cache), so the cache delete is
+// mostly a belt-and-braces for any stale entry from earlier in the
+// session — the real fix is the re-render.
+window.addEventListener("userprofilechange", () => {
+  const uname = (window.getCurrentUsername && window.getCurrentUsername()) || "";
+  const k = subHostKey(uname);
+  if (k) {
+    delete swissRegistrantPhotoCache[k];
+    delete swissRegistrantBannerCache[k];
+  }
+  if (document.getElementById("revox-ranking-list") && typeof renderRevoxRanking === "function") {
+    renderRevoxRanking();
+  }
+  if (typeof renderTournamentRanking === "function") {
+    // Only re-render if the ranking panel is the active tournament sub-tab,
+    // otherwise we trigger a fetch the user can't see.
+    const active = document.querySelector('.tournament-sub-tab.active');
+    if (active && active.dataset.tournamentView === "ranking") renderTournamentRanking();
+  }
+});
+
 // Gradient scrims layered over a profile-banner row background. The top-3
 // places get a gold / silver / bronze-tinted scrim so the podium identity
 // reads through the banner; everyone else gets a neutral dark scrim. Both

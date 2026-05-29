@@ -1182,6 +1182,293 @@ body.bronze-mode .account-bio-label { color: #c68044; }
 .developer-pane.hidden {
     display: none;
 }
+
+/* Sub-tabs inside the Developer pane (Users / Database). Tab text inherits
+   the page color so themes pick it up; the active tab gets the page bg
+   bottom-color so its border merges with the panel below. */
+.developer-sub-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid #30363d;
+    margin-bottom: 4px;
+}
+.developer-sub-tab {
+    appearance: none;
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    color: #8b949e;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 6px 14px;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+.developer-sub-tab:hover { color: #f0f6fc; }
+.developer-sub-tab.active {
+    color: #f0f6fc;
+    background: #0d1117;
+    border-color: #30363d;
+    border-bottom-color: #0d1117;
+    margin-bottom: -1px;
+}
+.developer-sub-panel.hidden { display: none; }
+.developer-sub-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Light-theme overrides — without these the active tab's #0d1117 strip
+   reads as a dark bar on the white card. */
+body.light-mode    .developer-sub-tab,
+body.tropical-mode .developer-sub-tab,
+body.love-mode     .developer-sub-tab,
+body.forest-mode   .developer-sub-tab { color: #656d76; }
+body.light-mode    .developer-sub-tab:hover,
+body.tropical-mode .developer-sub-tab:hover,
+body.love-mode     .developer-sub-tab:hover,
+body.forest-mode   .developer-sub-tab:hover,
+body.light-mode    .developer-sub-tab.active,
+body.tropical-mode .developer-sub-tab.active,
+body.love-mode     .developer-sub-tab.active,
+body.forest-mode   .developer-sub-tab.active { color: #1f2328; background: #ffffff; }
+body.light-mode    .developer-sub-tab.active { border-color: #d1d9e0; border-bottom-color: #ffffff; }
+body.tropical-mode .developer-sub-tab.active { border-color: #ffd8a8; border-bottom-color: #ffffff; }
+body.love-mode     .developer-sub-tab.active { border-color: #ffc1d2; border-bottom-color: #ffffff; }
+body.forest-mode   .developer-sub-tab.active { border-color: #b5c89a; border-bottom-color: #ffffff; }
+
+/* Database panel — node tabs + refresh + scrollable monospace-ish table. */
+.developer-db-tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    /* Hide the scrollbar across browsers — the row still scrolls, just
+       without a visible track / thumb. */
+    scrollbar-width: none;        /* Firefox */
+    -ms-overflow-style: none;     /* IE / old Edge */
+    padding-bottom: 2px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid #30363d;
+}
+.developer-db-tabs::-webkit-scrollbar {
+    display: none;                /* Chrome / Safari / new Edge */
+}
+.developer-db-tab {
+    appearance: none;
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    color: #8b949e;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 5px 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    flex: 0 0 auto;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+.developer-db-tab:hover { color: #f0f6fc; }
+.developer-db-tab.active {
+    color: #f0f6fc;
+    background: #0d1117;
+    border-color: #30363d;
+    border-bottom-color: #0d1117;
+    margin-bottom: -1px;
+}
+body.light-mode    .developer-db-tab,
+body.tropical-mode .developer-db-tab,
+body.love-mode     .developer-db-tab,
+body.forest-mode   .developer-db-tab { color: #656d76; }
+body.light-mode    .developer-db-tab:hover,
+body.tropical-mode .developer-db-tab:hover,
+body.love-mode     .developer-db-tab:hover,
+body.forest-mode   .developer-db-tab:hover,
+body.light-mode    .developer-db-tab.active,
+body.tropical-mode .developer-db-tab.active,
+body.love-mode     .developer-db-tab.active,
+body.forest-mode   .developer-db-tab.active { color: #1f2328; background: #ffffff; }
+body.light-mode    .developer-db-tab.active { border-color: #d1d9e0; border-bottom-color: #ffffff; }
+body.tropical-mode .developer-db-tab.active { border-color: #ffd8a8; border-bottom-color: #ffffff; }
+body.love-mode     .developer-db-tab.active { border-color: #ffc1d2; border-bottom-color: #ffffff; }
+body.forest-mode   .developer-db-tab.active { border-color: #b5c89a; border-bottom-color: #ffffff; }
+
+.developer-db-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.developer-db-label {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.75;
+}
+.developer-db-table-wrap {
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    overflow: auto;
+    max-height: 60vh;
+}
+.developer-db-table-inner {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.78rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.developer-db-table-inner th,
+.developer-db-table-inner td {
+    padding: 6px 10px;
+    border-bottom: 1px solid #30363d;
+    text-align: left;
+    vertical-align: top;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 320px;
+}
+.developer-db-table-inner thead th {
+    position: sticky;
+    top: 0;
+    background: #161b22;
+    color: #f0f6fc;
+    font-weight: 600;
+    z-index: 1;
+}
+.developer-db-table-inner td.developer-db-key {
+    color: #f0f6fc;
+    font-weight: 600;
+    max-width: 220px;
+}
+.developer-db-table-inner tbody tr:hover { background: rgba(255, 255, 255, 0.04); }
+
+/* Per-row action buttons — small, sit at the end of each row. */
+.developer-db-actions-h { text-align: right; }
+.developer-db-actions {
+    text-align: right;
+    white-space: nowrap;
+    max-width: none;
+}
+.developer-db-act {
+    appearance: none;
+    background: rgba(110, 118, 129, 0.18);
+    border: 1px solid rgba(110, 118, 129, 0.35);
+    color: inherit;
+    font: inherit;
+    font-size: 0.85rem;
+    padding: 3px 7px;
+    margin-left: 4px;
+    border-radius: 4px;
+    cursor: pointer;
+    line-height: 1;
+}
+.developer-db-act:hover { background: rgba(110, 118, 129, 0.32); }
+.developer-db-act-del { color: #ff7b72; }
+.developer-db-act-del:hover { background: rgba(248, 81, 73, 0.18); border-color: rgba(248, 81, 73, 0.45); }
+
+/* Mobile layout — table doesn't fit a phone with 10+ columns, so flip
+   each row into a vertical card. Header row is hidden because every
+   cell carries an inline label (the column name) via data-col. */
+@media (max-width: 600px) {
+    .developer-db-table-wrap {
+        border: none;
+        max-height: none;
+        overflow: visible;
+    }
+    .developer-db-table-inner,
+    .developer-db-table-inner tbody,
+    .developer-db-table-inner tr,
+    .developer-db-table-inner td {
+        display: block;
+        width: auto;
+        max-width: none;
+    }
+    .developer-db-table-inner thead { display: none; }
+    .developer-db-table-inner tbody tr {
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        padding: 6px 4px;
+        background: rgba(255, 255, 255, 0.02);
+    }
+    .developer-db-table-inner tbody tr:hover { background: rgba(255, 255, 255, 0.04); }
+    .developer-db-table-inner td {
+        border: none;
+        padding: 3px 8px;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+        word-break: break-word;
+        font-size: 0.78rem;
+    }
+    .developer-db-table-inner td::before {
+        content: attr(data-col) ": ";
+        font-weight: 700;
+        opacity: 0.7;
+        margin-right: 4px;
+    }
+    .developer-db-table-inner td.developer-db-key {
+        font-size: 0.85rem;
+        padding-bottom: 4px;
+        margin-bottom: 4px;
+        border-bottom: 1px solid #30363d;
+    }
+    .developer-db-table-inner td.developer-db-key::before {
+        content: "";
+        margin: 0;
+    }
+    /* Action buttons row at the bottom of each mobile card. */
+    .developer-db-table-inner td.developer-db-actions {
+        text-align: left;
+        margin-top: 6px;
+        padding-top: 6px;
+        border-top: 1px solid #30363d;
+    }
+    .developer-db-table-inner td.developer-db-actions::before { content: ""; margin: 0; }
+    .developer-db-act { margin-left: 0; margin-right: 6px; }
+    /* Per-theme card backgrounds + key separator. */
+    body.light-mode    .developer-db-table-inner tbody tr,
+    body.tropical-mode .developer-db-table-inner tbody tr,
+    body.love-mode     .developer-db-table-inner tbody tr,
+    body.forest-mode   .developer-db-table-inner tbody tr { background: #ffffff; border-color: #d1d9e0; }
+    body.light-mode    .developer-db-table-inner td.developer-db-key,
+    body.tropical-mode .developer-db-table-inner td.developer-db-key,
+    body.love-mode     .developer-db-table-inner td.developer-db-key,
+    body.forest-mode   .developer-db-table-inner td.developer-db-key { border-bottom-color: #d1d9e0; }
+}
+
+/* Light themes — table on white with darker text + borders. */
+body.light-mode    .developer-db-table-wrap,
+body.tropical-mode .developer-db-table-wrap,
+body.love-mode     .developer-db-table-wrap,
+body.forest-mode   .developer-db-table-wrap { border-color: #d1d9e0; }
+body.light-mode    .developer-db-table-inner th,
+body.light-mode    .developer-db-table-inner td,
+body.tropical-mode .developer-db-table-inner th,
+body.tropical-mode .developer-db-table-inner td,
+body.love-mode     .developer-db-table-inner th,
+body.love-mode     .developer-db-table-inner td,
+body.forest-mode   .developer-db-table-inner th,
+body.forest-mode   .developer-db-table-inner td { border-bottom-color: #d1d9e0; color: #1f2328; }
+body.light-mode    .developer-db-table-inner thead th,
+body.tropical-mode .developer-db-table-inner thead th,
+body.love-mode     .developer-db-table-inner thead th,
+body.forest-mode   .developer-db-table-inner thead th { background: #f6f8fa; color: #1f2328; }
+body.light-mode    .developer-db-table-inner td.developer-db-key,
+body.tropical-mode .developer-db-table-inner td.developer-db-key,
+body.love-mode     .developer-db-table-inner td.developer-db-key,
+body.forest-mode   .developer-db-table-inner td.developer-db-key { color: #1f2328; }
+body.light-mode    .developer-db-table-inner tbody tr:hover,
+body.tropical-mode .developer-db-table-inner tbody tr:hover,
+body.love-mode     .developer-db-table-inner tbody tr:hover,
+body.forest-mode   .developer-db-table-inner tbody tr:hover { background: #f0f3f6; }
 .developer-count {
     margin: 0;
     font-weight: 600;

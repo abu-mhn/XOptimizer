@@ -565,13 +565,22 @@
           <p class="account-hint">This area is for accounts with the Developer tag.</p>
         </div>
         <div id="developer-main" class="developer-pane hidden">
-          <p class="developer-count" id="developer-count">Registered users: …</p>
-          <div class="developer-search-row">
-            <input type="text" id="developer-search" class="developer-search" placeholder="Search username or email…" autocomplete="off" />
-            <button type="button" id="developer-search-btn" class="btn btn-sm">Search</button>
+          <div class="developer-sub-tabs" role="tablist">
+            <button type="button" class="developer-sub-tab active" data-developer-view="users" role="tab" aria-selected="true">Users</button>
+            <button type="button" class="developer-sub-tab" data-developer-view="database" role="tab" aria-selected="false">Database</button>
           </div>
-          <div id="developer-status" class="swiss-join-status"></div>
-          <div id="developer-user-list" class="developer-user-list"></div>
+          <div class="developer-sub-panel" id="developer-panel-users">
+            <p class="developer-count" id="developer-count">Registered users: …</p>
+            <div class="developer-search-row">
+              <input type="text" id="developer-search" class="developer-search" placeholder="Search username or email…" autocomplete="off" />
+              <button type="button" id="developer-search-btn" class="btn btn-sm">Search</button>
+            </div>
+            <div id="developer-status" class="swiss-join-status"></div>
+            <div id="developer-user-list" class="developer-user-list"></div>
+          </div>
+          <div class="developer-sub-panel hidden" id="developer-panel-database">
+            <p class="account-hint">Database tools coming soon.</p>
+          </div>
         </div>
       </fieldset>
     </section>

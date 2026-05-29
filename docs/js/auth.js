@@ -948,7 +948,511 @@
     const searchBtn = document.getElementById("developer-search-btn");
     if (search) search.addEventListener("input", () => renderDeveloperList(search.value));
     if (searchBtn && search) searchBtn.addEventListener("click", () => renderDeveloperList(search.value));
+
+    // Users / Database sub-tab switcher. Database panel is built lazily
+    // on its first activation — no point fetching tables before the
+    // user clicks over.
+    const tabs = document.querySelectorAll(".developer-sub-tab");
+    const panels = document.querySelectorAll(".developer-sub-panel");
+    tabs.forEach(tab => {
+      tab.addEventListener("click", () => {
+        const view = tab.dataset.developerView;
+        tabs.forEach(t => {
+          const on = t === tab;
+          t.classList.toggle("active", on);
+          t.setAttribute("aria-selected", on ? "true" : "false");
+        });
+        panels.forEach(p => p.classList.toggle("hidden", p.id !== "developer-panel-" + view));
+        if (view === "database") buildDeveloperDatabasePanel();
+      });
+    });
+
     renderDeveloperPage();
+  }
+
+  // ---------------- Developer → Database panel ----------------
+  // Browses the top-level Firebase nodes in table form. Each preset
+  // defines a column list; falls back to deriving columns from the first
+  // entry's keys for unknown nodes. Long strings (data URLs) get
+  // summarized to "[N KB]" so a profile photo blob doesn't trash the
+  // viewport. Refresh re-pulls the live node. userDecks / userTournaments
+  // aren't listed — those are per-user-private and the Developer's read
+  // would be rejected anyway by the per-uid .read rule.
+  const DB_NODES = [
+    "swissRooms",
+    "openTournaments",
+    "users",
+    "usernames",
+    "profiles",
+    "ranking",
+    "revoxRanking",
+    "winRates",
+    "judges",
+    "revoxAccounts",
+    "swissViewCodes"
+  ];
+
+  const DB_COLUMN_PRESETS = {
+    swissRooms:      ["tournamentName", "mode", "phase", "hostName", "hostUid", "topN", "createdAt"],
+    openTournaments: ["name", "mode", "phase", "registrantCount", "groupCount", "roundCount", "hostUid", "createdAt"],
+    users:           ["username", "tag", "tags", "bio", "photo", "banner"],
+    usernames:       ["uid", "username", "email"],
+    profiles:        ["username", "bio", "tags", "photo", "banner"],
+    ranking:         ["points"],
+    revoxRanking:    ["points", "results"],
+    winRates:        ["username", "wins", "losses", "ties", "updatedAt"],
+    judges:          [],  // value is a plain string
+    revoxAccounts:   [],
+    swissViewCodes:  []
+  };
+
+  function buildDeveloperDatabasePanel() {
+    const panel = document.getElementById("developer-panel-database");
+    if (!panel) return;
+    if (panel.dataset.dbInit) return;
+    panel.dataset.dbInit = "1";
+
+    // One tab per node — replaces the earlier dropdown so every node is
+    // visible at a glance. The row scrolls horizontally on narrow viewports
+    // (touch-friendly) rather than wrapping into a tall block.
+    const tabsHtml = DB_NODES.map((n, i) =>
+      `<button type="button" class="developer-db-tab${i === 0 ? " active" : ""}" data-db-node="${n}">${n}</button>`
+    ).join("");
+    panel.innerHTML = `
+      <div class="developer-db-tabs" role="tablist">${tabsHtml}</div>
+      <div class="developer-db-toolbar">
+        <button type="button" id="developer-db-add" class="btn btn-sm">+ Add entry</button>
+        <button type="button" id="developer-db-refresh" class="btn btn-sm">Refresh</button>
+      </div>
+      <p class="swiss-join-status" id="developer-db-status"></p>
+      <div class="developer-db-table-wrap"><div id="developer-db-table"></div></div>
+    `;
+    const tabs = panel.querySelectorAll(".developer-db-tab");
+    const refresh = panel.querySelector("#developer-db-refresh");
+    const addBtn = panel.querySelector("#developer-db-add");
+    const tableEl = panel.querySelector("#developer-db-table");
+    let activeNode = DB_NODES[0];
+    let lastEntries = [];
+    const load = () => renderDatabaseNode(activeNode, (entries) => {
+      lastEntries = entries || [];
+    });
+    tabs.forEach(tab => {
+      tab.addEventListener("click", () => {
+        activeNode = tab.dataset.dbNode;
+        tabs.forEach(t => t.classList.toggle("active", t === tab));
+        load();
+      });
+    });
+    refresh.addEventListener("click", load);
+    addBtn.addEventListener("click", () => {
+      openDbEditJsonPopup({
+        nodeKey: activeNode,
+        keyName: "",
+        value: null,
+        isNew: true,
+        onSaved: load
+      });
+    });
+    // Per-row action buttons — delegate so the handler survives re-renders.
+    tableEl.addEventListener("click", (e) => {
+      const btn = e.target.closest(".developer-db-act");
+      if (!btn) return;
+      const act = btn.dataset.act;
+      const key = btn.dataset.key;
+      const entry = lastEntries.find(([k]) => k === key);
+      const value = entry ? entry[1] : null;
+      if (act === "delete") {
+        confirmDeleteDbEntry(activeNode, key, load);
+      } else if (act === "edit-fields") {
+        openDbEditFieldsPopup({ nodeKey: activeNode, keyName: key, value, onSaved: load });
+      } else if (act === "edit-json") {
+        openDbEditJsonPopup({ nodeKey: activeNode, keyName: key, value, isNew: false, onSaved: load });
+      }
+    });
+    load();
+  }
+
+  function renderDatabaseNode(nodeKey, onLoaded) {
+    const tableEl = document.getElementById("developer-db-table");
+    const statusEl = document.getElementById("developer-db-status");
+    if (!tableEl || !statusEl) return;
+    statusEl.textContent = "Loading…";
+    statusEl.classList.remove("is-ok", "is-err", "is-pending");
+    statusEl.classList.add("is-pending");
+    tableEl.innerHTML = "";
+    let db;
+    try { db = firebase.database(); } catch (e) { db = null; }
+    if (!db) {
+      statusEl.textContent = "Firebase not configured.";
+      statusEl.classList.replace("is-pending", "is-err");
+      return;
+    }
+    db.ref(nodeKey).once("value").then(snap => {
+      const val = snap.val();
+      if (val == null) {
+        statusEl.textContent = "Empty.";
+        statusEl.classList.replace("is-pending", "is-ok");
+        if (typeof onLoaded === "function") onLoaded([]);
+        return;
+      }
+      const entries = Object.entries(val);
+      if (typeof onLoaded === "function") onLoaded(entries);
+      statusEl.textContent = `${entries.length} entr${entries.length === 1 ? "y" : "ies"}`;
+      statusEl.classList.replace("is-pending", "is-ok");
+      // winRates keys are sanitized lowercase usernames — not super
+      // readable. Resolve each to the actual cased username from the
+      // public /profiles index so the table shows recognizable names
+      // alongside the W/L/T counts. One bulk read; the rule change
+      // already gives Developers a wildcard /profiles .read.
+      if (nodeKey === "winRates") {
+        db.ref("profiles").once("value").then(pSnap => {
+          const profiles = pSnap.val() || {};
+          entries.forEach(([k, v]) => {
+            if (v && typeof v === "object") {
+              const p = profiles[k];
+              v.username = (p && p.username) || "";
+            }
+          });
+          tableEl.innerHTML = renderDbTableHtml(nodeKey, entries);
+        }).catch(() => {
+          // Profiles read failed — still render winRates without names.
+          tableEl.innerHTML = renderDbTableHtml(nodeKey, entries);
+        });
+        return;
+      }
+      tableEl.innerHTML = renderDbTableHtml(nodeKey, entries);
+    }).catch(err => {
+      console.warn("[db viewer] read failed:", nodeKey, err);
+      statusEl.textContent = "Read failed: " + (err && err.message ? err.message : err);
+      statusEl.classList.replace("is-pending", "is-err");
+    });
+  }
+
+  function renderDbTableHtml(nodeKey, entries) {
+    const escape = (s) => String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    // Columns: union of every key across every entry, so no field is
+    // silently hidden. Preset keys (for the nodes that have them) come
+    // first in their preset order; any extra keys follow alphabetically.
+    const firstVal = entries[0] && entries[0][1];
+    const firstIsScalar = (firstVal == null) || typeof firstVal !== "object";
+    let cols = [];
+    if (!firstIsScalar) {
+      const all = new Set();
+      entries.forEach(([, v]) => {
+        if (v && typeof v === "object") Object.keys(v).forEach(k => all.add(k));
+      });
+      const preset = (DB_COLUMN_PRESETS[nodeKey] || []).filter(k => all.has(k));
+      const presetSet = new Set(preset);
+      const remaining = Array.from(all).filter(k => !presetSet.has(k)).sort();
+      cols = preset.concat(remaining);
+    }
+    const valueCol = firstIsScalar ? "Value" : null;
+    const head = `<thead><tr><th>Key</th>${
+      valueCol
+        ? `<th>${escape(valueCol)}</th>`
+        : cols.map(c => `<th>${escape(c)}</th>`).join("")
+    }<th class="developer-db-actions-h">Actions</th></tr></thead>`;
+    const rows = entries.map(([key, val]) => {
+      let cells;
+      if (firstIsScalar) {
+        cells = `<td data-col="${escape(valueCol || "Value")}">${escape(formatDbCell(val))}</td>`;
+      } else if (val == null || typeof val !== "object") {
+        cells = `<td colspan="${cols.length}" data-col="Value">${escape(formatDbCell(val))}</td>`;
+      } else {
+        // data-col on every cell so the mobile card layout can render the
+        // column name as an inline label via CSS ::before.
+        cells = cols.map(c => `<td data-col="${escape(c)}">${escape(formatDbCell(val[c]))}</td>`).join("");
+      }
+      const actions = `
+        <td class="developer-db-actions" data-col="Actions">
+          <button type="button" class="developer-db-act" data-act="edit-fields" data-key="${escape(key)}" title="Edit fields">&#9998;</button>
+          <button type="button" class="developer-db-act" data-act="edit-json"   data-key="${escape(key)}" title="Edit raw JSON">{}</button>
+          <button type="button" class="developer-db-act developer-db-act-del" data-act="delete" data-key="${escape(key)}" title="Delete">&#128465;</button>
+        </td>`;
+      return `<tr><td class="developer-db-key" data-col="Key">${escape(key)}</td>${cells}${actions}</tr>`;
+    }).join("");
+    return `<table class="developer-db-table-inner">${head}<tbody>${rows}</tbody></table>`;
+  }
+
+  // ---- Edit / delete / add helpers ----
+  // Write attempts surface PERMISSION_DENIED loudly — Developers can write
+  // most public-index nodes but a few (swissRooms unless you're the host,
+  // usernames unless you own the key, userDecks / userTournaments) are
+  // restricted by the per-path rules. The alert tells you to update rules
+  // or pick a different node rather than fail silently.
+  function dbAlertOk(msg) { alert(msg); }
+  function dbAlertErr(msg) { alert(msg); }
+
+  function confirmDeleteDbEntry(nodeKey, keyName, onDone) {
+    if (!keyName) return;
+    if (!confirm(`Delete ${nodeKey}/${keyName}?\n\nThis can't be undone.`)) return;
+    const db = firebase.database();
+    db.ref(`${nodeKey}/${keyName}`).set(null).then(() => {
+      onDone?.();
+    }).catch(err => {
+      console.warn("[db viewer] delete failed:", err);
+      dbAlertErr(`Delete failed: ${err && err.message ? err.message : err}`);
+    });
+  }
+
+  // Raw JSON editor — works for any node (handles nested objects). When
+  // isNew is true, the popup also exposes a Key input so the user can
+  // name the new entry.
+  function openDbEditJsonPopup(opts) {
+    const { nodeKey, keyName, value, isNew, onSaved } = opts;
+    document.getElementById("dbg-edit-popup")?.remove();
+    const overlay = document.createElement("div");
+    overlay.id = "dbg-edit-popup";
+    overlay.className = "popup-overlay";
+    const pretty = value == null ? "{\n  \n}" : JSON.stringify(value, null, 2);
+    overlay.innerHTML = `
+      <div class="popup-card" style="max-width:min(600px, 92vw);">
+        <h2 class="popup-title">${isNew ? "Add entry" : "Edit JSON"}</h2>
+        <p class="popup-text">${nodeKey}/${isNew ? "<key>" : (keyName || "")}</p>
+        ${isNew ? `
+          <label class="popup-text" style="display:block;margin-top:6px;">Key</label>
+          <input id="dbg-edit-key" class="account-bio" type="text" maxlength="128" style="width:100%;padding:8px 10px;" value="">
+        ` : ""}
+        <label class="popup-text" style="display:block;margin-top:8px;">Value (JSON)</label>
+        <textarea id="dbg-edit-json" class="account-bio" rows="14" style="width:100%;min-height:240px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:0.78rem;">${pretty.replace(/&/g,"&amp;").replace(/</g,"&lt;")}</textarea>
+        <p class="popup-text" style="font-size:0.78rem;margin-top:4px;opacity:.7;">Strings, numbers, booleans, arrays and nested objects all work. Set to <code>null</code> (without quotes) to delete on save.</p>
+        <div class="popup-actions">
+          <button type="button" class="btn" data-act="save">Save</button>
+          <button type="button" class="btn popup-cancel" data-act="cancel">Cancel</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.querySelector('[data-act="cancel"]').onclick = close;
+    overlay.querySelector('[data-act="save"]').onclick = () => {
+      const ta = overlay.querySelector("#dbg-edit-json");
+      const keyInput = overlay.querySelector("#dbg-edit-key");
+      let parsed;
+      try {
+        parsed = JSON.parse(ta.value);
+      } catch (e) {
+        dbAlertErr("Invalid JSON: " + e.message);
+        return;
+      }
+      const useKey = isNew ? (keyInput && keyInput.value.trim()) : keyName;
+      if (!useKey) { dbAlertErr("Enter a key."); return; }
+      if (/[.#$/\[\]]/.test(useKey)) {
+        dbAlertErr("Key can't contain . # $ / [ ]");
+        return;
+      }
+      const db = firebase.database();
+      db.ref(`${nodeKey}/${useKey}`).set(parsed).then(() => {
+        close();
+        onSaved?.();
+      }).catch(err => {
+        console.warn("[db viewer] save failed:", err);
+        dbAlertErr(`Save failed: ${err && err.message ? err.message : err}`);
+      });
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); close(); document.removeEventListener("keydown", onKey); }
+    };
+    document.addEventListener("keydown", onKey);
+  }
+
+  // Per-field editor — top-level fields only. Inputs are type-appropriate
+  // (text / number / checkbox). Nested objects show a read-only summary
+  // with a "use raw JSON" hint, since editing a tree inline is messy.
+  function openDbEditFieldsPopup(opts) {
+    const { nodeKey, keyName, value, onSaved } = opts;
+    if (value == null || typeof value !== "object") {
+      // Scalar value — fall back to JSON editor.
+      openDbEditJsonPopup({ nodeKey, keyName, value, isNew: false, onSaved });
+      return;
+    }
+    document.getElementById("dbg-edit-popup")?.remove();
+    const overlay = document.createElement("div");
+    overlay.id = "dbg-edit-popup";
+    overlay.className = "popup-overlay";
+    const fields = Object.entries(value);
+    const rowsHtml = fields.map(([k, v]) => {
+      const fieldId = `dbg-edit-f-${k.replace(/[^A-Za-z0-9_-]/g, "_")}`;
+      if (v === null || v === undefined) {
+        return `<div class="dbg-field"><label class="popup-text" for="${fieldId}">${k} <em style="opacity:.6;">(null)</em></label><input id="${fieldId}" data-field="${k}" data-type="string" class="account-bio" type="text" style="width:100%;padding:6px 10px;" value=""></div>`;
+      }
+      if (typeof v === "boolean") {
+        return `<div class="dbg-field"><label class="popup-text" style="display:flex;align-items:center;gap:6px;"><input id="${fieldId}" data-field="${k}" data-type="boolean" type="checkbox" ${v ? "checked" : ""}> ${k}</label></div>`;
+      }
+      if (typeof v === "number") {
+        return `<div class="dbg-field"><label class="popup-text" for="${fieldId}">${k}</label><input id="${fieldId}" data-field="${k}" data-type="number" class="account-bio" type="number" step="any" style="width:100%;padding:6px 10px;" value="${v}"></div>`;
+      }
+      if (typeof v === "string") {
+        const safe = v.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
+        // Known image fields (photo / banner / smallBanner) always render
+        // as an image picker — preview + replace + clear when there's
+        // data, or just a "Select image" button when empty. Detection is
+        // by field name OR by value being a data-URL image; that way an
+        // unrelated field that happens to hold a data URL also gets the
+        // visual treatment.
+        const isImageField = (k === "photo" || k === "banner" || k === "smallBanner")
+          || v.startsWith("data:image/");
+        if (isImageField) {
+          if (v.startsWith("data:image/")) {
+            const kb = Math.round(v.length * 0.75 / 1024);
+            return `<div class="dbg-field">
+              <label class="popup-text">${k} <em style="opacity:.6;">(${kb} KB)</em></label>
+              <div style="display:flex;gap:8px;align-items:flex-start;">
+                <img class="dbg-img-preview" data-preview-for="${k}" src="${safe}" alt="" style="max-width:140px;max-height:120px;border:1px solid #30363d;border-radius:4px;object-fit:cover;background:#0d1117;">
+                <div style="flex:1;display:flex;flex-direction:column;gap:6px;min-width:0;">
+                  <input type="file" accept="image/*" class="dbg-img-file" data-file-for="${k}">
+                  <button type="button" class="btn btn-sm dbg-img-clear" data-clear-for="${k}">Clear</button>
+                </div>
+              </div>
+              <input type="hidden" id="${fieldId}" data-field="${k}" data-type="string" value="${safe}">
+            </div>`;
+          }
+          // Empty image field — just the file picker, no blank preview.
+          return `<div class="dbg-field">
+            <label class="popup-text">${k} <em style="opacity:.6;">(empty)</em></label>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="file" accept="image/*" class="dbg-img-file" data-file-for="${k}">
+              <img class="dbg-img-preview" data-preview-for="${k}" alt="" style="display:none;max-width:140px;max-height:120px;border:1px solid #30363d;border-radius:4px;object-fit:cover;background:#0d1117;">
+            </div>
+            <input type="hidden" id="${fieldId}" data-field="${k}" data-type="string" value="">
+          </div>`;
+        }
+        const isLong = v.length > 80;
+        if (isLong) {
+          return `<div class="dbg-field"><label class="popup-text" for="${fieldId}">${k}</label><textarea id="${fieldId}" data-field="${k}" data-type="string" class="account-bio" rows="3" style="width:100%;padding:6px 10px;resize:vertical;">${safe}</textarea></div>`;
+        }
+        return `<div class="dbg-field"><label class="popup-text" for="${fieldId}">${k}</label><input id="${fieldId}" data-field="${k}" data-type="string" class="account-bio" type="text" style="width:100%;padding:6px 10px;" value="${safe}"></div>`;
+      }
+      // Nested object / array — read-only summary.
+      const cnt = Object.keys(v).length;
+      return `<div class="dbg-field"><label class="popup-text">${k} <em style="opacity:.6;">(nested, ${cnt} entries — use Edit JSON to change)</em></label></div>`;
+    }).join("");
+    overlay.innerHTML = `
+      <div class="popup-card" style="max-width:min(560px, 92vw);">
+        <h2 class="popup-title">Edit fields</h2>
+        <p class="popup-text">${nodeKey}/${keyName || ""}</p>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;max-height:60vh;overflow-y:auto;">
+          ${rowsHtml || `<p class="popup-text" style="opacity:.7;font-style:italic;">No editable fields.</p>`}
+        </div>
+        <div class="popup-actions">
+          <button type="button" class="btn" data-act="save">Save</button>
+          <button type="button" class="btn popup-cancel" data-act="cancel">Cancel</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.querySelector('[data-act="cancel"]').onclick = close;
+
+    // Image upload — read the picked file as a data URL, swap the
+    // hidden input value + the preview img. GIFs go through unchanged
+    // (animation preserved); other types likewise go through unmodified
+    // (no canvas re-encode here — the Save user is a Developer doing
+    // raw editing, and re-encoding would freeze animations / strip
+    // metadata they may want). Size warnings surface if the new file
+    // exceeds the Firebase .validate cap for that field type.
+    const sizeCapFor = (fieldName) => {
+      if (fieldName === "banner") return 1000000;
+      if (fieldName === "photo" || fieldName === "smallBanner") return 500000;
+      return 0; // unknown — no client-side check
+    };
+    overlay.querySelectorAll(".dbg-img-file").forEach(input => {
+      input.addEventListener("change", () => {
+        const file = input.files && input.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result;
+          const f = input.dataset.fileFor;
+          const cap = sizeCapFor(f);
+          if (cap && dataUrl.length > cap) {
+            const kb = Math.round(dataUrl.length * 0.75 / 1024);
+            const capKb = Math.round(cap * 0.75 / 1024);
+            alert(`That ${f} is ~${kb} KB — Firebase rule cap is ~${capKb} KB for this field.`);
+            input.value = "";
+            return;
+          }
+          const hidden = overlay.querySelector(`input[type="hidden"][data-field="${f}"]`);
+          const preview = overlay.querySelector(`img.dbg-img-preview[data-preview-for="${f}"]`);
+          if (hidden) hidden.value = dataUrl;
+          if (preview) {
+            preview.src = dataUrl;
+            preview.style.display = ""; // reveal if previously empty
+          }
+        };
+        reader.onerror = () => alert("Couldn't read that file.");
+        reader.readAsDataURL(file);
+      });
+    });
+    overlay.querySelectorAll(".dbg-img-clear").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const f = btn.dataset.clearFor;
+        const hidden = overlay.querySelector(`input[type="hidden"][data-field="${f}"]`);
+        const preview = overlay.querySelector(`img.dbg-img-preview[data-preview-for="${f}"]`);
+        if (hidden) hidden.value = "";
+        if (preview) {
+          preview.removeAttribute("src");
+          preview.style.display = "none";
+        }
+      });
+    });
+
+    overlay.querySelector('[data-act="save"]').onclick = () => {
+      const patch = {};
+      overlay.querySelectorAll("[data-field]").forEach(input => {
+        const f = input.dataset.field;
+        const t = input.dataset.type;
+        let raw;
+        if (t === "boolean") raw = !!input.checked;
+        else if (t === "number") {
+          const n = Number(input.value);
+          if (!Number.isFinite(n)) { return; }
+          raw = n;
+        } else {
+          raw = input.value;
+        }
+        patch[f] = raw;
+      });
+      const db = firebase.database();
+      db.ref(`${nodeKey}/${keyName}`).update(patch).then(() => {
+        close();
+        onSaved?.();
+      }).catch(err => {
+        console.warn("[db viewer] update failed:", err);
+        dbAlertErr(`Save failed: ${err && err.message ? err.message : err}`);
+      });
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); close(); document.removeEventListener("keydown", onKey); }
+    };
+    document.addEventListener("keydown", onKey);
+  }
+
+  function formatDbCell(v) {
+    if (v === undefined || v === null) return "—";
+    if (typeof v === "boolean") return v ? "✓" : "—";
+    if (typeof v === "number") return String(v);
+    if (typeof v === "string") {
+      // Data URLs (photo / banner blobs) — show size, not the 200KB blob.
+      if (v.startsWith("data:")) {
+        const kb = Math.round(v.length * 0.75 / 1024);
+        return `[${kb} KB ${v.startsWith("data:image/gif") ? "gif" : "img"}]`;
+      }
+      if (v.length > 80) return v.slice(0, 77) + "…";
+      return v;
+    }
+    if (typeof v === "object") {
+      // Map / list — surface entry count + first few keys for orientation.
+      const keys = Object.keys(v);
+      if (!keys.length) return "—";
+      const head = keys.slice(0, 4).join(", ");
+      return keys.length > 4
+        ? `{${keys.length}} ${head}…`
+        : `{${keys.length}} ${head}`;
+    }
+    return String(v);
   }
 
   window.addEventListener("userprofilechange", () => {
