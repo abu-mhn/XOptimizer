@@ -270,9 +270,12 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit, roleHint) {
       // (startedAt null/missing → set). Runs BEFORE we overwrite local
       // storage so the diff has a real before-state. Skips the device
       // that started the match itself (swissLiveMatchId === id).
+      // Also detect "the host removed me" by checking whether any
+      // registrant entries this device owned are now gone from remote.
       try {
         const prevState = JSON.parse(localStorage.getItem(SWISS_KEY) || "null") || {};
         detectAndAnnounceMatchStarts(prevState, remote);
+        detectSelfRemovedFromRoom(prevState, remote, editCode);
       } catch (e) { /* non-fatal */ }
       swissApplyingRemote = true;
       localStorage.setItem(SWISS_KEY, JSON.stringify(stripRoomMetadata(remote)));
@@ -3088,38 +3091,54 @@ function renderSwissRegisteringMarkup(state) {
     nameHtml = `<span class="swiss-tournament-name">${escapeHtml(nameValue)}</span>`;
   }
 
+  // Registrant IDs this device is allowed to self-manage (signed-in
+  // createdBy match + localStorage-tracked unauthed guest entries).
+  // Used to also let a participant tap THEIR OWN row to re-open the
+  // edit popup, not just hosts / co-hosts.
+  const myRegIdSet = new Set(
+    (typeof findMyRegistrantIds === "function" && swissEditCode)
+      ? findMyRegistrantIds(state, swissEditCode)
+      : []
+  );
+
   const registrantRows = registrants.length
     ? registrants.map((r, i) => {
+        const isMyRow = myRegIdSet.has(r.id);
+        const canEditRow = canEdit || isMyRow;
         const removeBtn = canEdit
           ? `<button type="button" class="swiss-reg-remove" data-reg-id="${escapeHtml(r.id)}" title="Remove ${escapeHtml(r.name)}" aria-label="Remove ${escapeHtml(r.name)}">&times;</button>`
           : "";
-        // Three deck states from the registrant row's POV:
-        //   1. every slot is empty                        → "No deck"     (red)
-        //   2. every slot has every required part         → "Deck ✓"     (green)
-        //   3. anything in between — slots missing slots, OR slots
-        //      with only some parts filled (e.g. blade picked but no
-        //      ratchet / bit) — gets the amber "Incomplete (N/3)" badge.
-        //   The slot-complete check is the stricter one so a slot with
-        //   only a blade name doesn't pass as "filled".
+        // Deck states from the registrant row's POV, in priority order:
+        //   1. every slot is empty                  → red    "No deck"
+        //   2. deck contains a banned part          → red    "Banned parts"  (host added a ban
+        //      after registration — pre-existing entries aren't auto-blocked)
+        //   3. some slot is missing a required part → amber  "Incomplete"
+        //   4. otherwise                            → green  "Deck ✓"
+        // Banned takes precedence over Incomplete / Deck ✓ since a banned
+        // part makes the deck unusable regardless of how complete the slots
+        // are. The tooltip on each non-green badge names the issue.
         const emptySlots = emptyBeyCheckDeckSlotNumbers(r.deck);
         const incompleteSlots = incompleteBeyCheckDeckSlotNumbers(r.deck);
+        const bannedHits = findBannedPartsInDeck(r.deck, getBannedParts(state));
         const deckSlotsTotal = BEY_CHECK_DECK_SIZE;
         let deckBadge;
         if (emptySlots.length === deckSlotsTotal) {
           deckBadge = `<span class="swiss-reg-deck-badge swiss-reg-deck-badge-missing">No deck</span>`;
+        } else if (bannedHits.length > 0) {
+          const names = bannedHits.map(h => `${h.name} (Slot ${h.slot})`).join(", ");
+          deckBadge = `<span class="swiss-reg-deck-badge swiss-reg-deck-badge-banned" title="Banned: ${escapeHtml(names)}">Banned parts</span>`;
         } else if (incompleteSlots.length > 0) {
           deckBadge = `<span class="swiss-reg-deck-badge swiss-reg-deck-badge-partial" title="Slot${incompleteSlots.length === 1 ? "" : "s"} ${incompleteSlots.join(", ")} missing parts">Incomplete</span>`;
         } else {
           deckBadge = `<span class="swiss-reg-deck-badge">Deck ✓</span>`;
         }
-        // Hosts and co-hosts can tap a registrant's name to edit it
-        // (re-opens the registration form pre-filled with that
-        // registrant's name + deck). Viewers and participants can't edit,
-        // so for them the name instead opens the profile dropdown on
+        // Hosts and co-hosts can tap any registrant's name to edit it.
+        // Participants can tap their OWN row to re-open the edit popup
+        // (canEditRow). Everyone else gets the profile dropdown on
         // click / hover (data-profile-username → bindTournamentProfileNames).
         const profileAttr = r.name ? ` data-profile-username="${escapeHtml(r.name)}"` : "";
-        const nameEl = canEdit
-          ? `<button type="button" class="swiss-reg-name swiss-reg-name-edit" data-reg-id="${escapeHtml(r.id)}" title="Edit name or deck">${escapeHtml(r.name || "(unnamed)")}</button>`
+        const nameEl = canEditRow
+          ? `<button type="button" class="swiss-reg-name swiss-reg-name-edit" data-reg-id="${escapeHtml(r.id)}" title="${isMyRow && !canEdit ? "Edit your deck" : "Edit name or deck"}">${escapeHtml(r.name || "(unnamed)")}</button>`
           : `<span class="swiss-reg-name"${profileAttr}>${escapeHtml(r.name || "(unnamed)")}</span>`;
         // Avatar starts on the silhouette placeholder; hydrateRegistrantAvatars
         // (run after render) swaps in the real photo from the public
@@ -3455,6 +3474,42 @@ function detectAndAnnounceMatchStarts(prevState, remote) {
   });
 }
 
+// ---- Auto-kick when the host removes you ----
+// Fires from the room listener after every remote update. If any
+// registrant entry this device owned in the previous state is no
+// longer present in the incoming state, the host (or co-host)
+// removed us — disconnect cleanly and surface a clear notice so the
+// player understands why they were dropped. Skips:
+//   - hosts / co-hosts (they're managing the room, not registered)
+//   - the device that itself ran the removal (it already navigated
+//     away or knows what it did)
+//   - cases where the room was reset entirely (no registrants left;
+//     covered by other paths)
+function detectSelfRemovedFromRoom(prevState, remote, editCode) {
+  if (!remote || remote.phase !== "registering") return;
+  if (swissCanEdit) return; // host / co-host bypass
+  if (!editCode) return;
+  const myIds = (typeof findMyRegistrantIds === "function")
+    ? findMyRegistrantIds(prevState || {}, editCode)
+    : [];
+  if (!myIds.length) return; // we didn't have an entry — nothing to detect
+  const nowRegs = (remote && remote.registrants) || {};
+  const stillThere = myIds.some(id => !!nowRegs[id]);
+  if (stillThere) return; // at least one entry remains → not a removal
+  // All of MY entries are gone — host removed us. Tear down local state
+  // and pop a clear notice. Wrap in setTimeout so the listener body
+  // finishes (avoids fighting the in-progress remote-apply).
+  setTimeout(() => {
+    try { clearDeviceOwnedRegIds(editCode); } catch (e) {}
+    try { disconnectSwissRoom(); } catch (e) {}
+    try {
+      localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [], phase: "running", registrants: {} }));
+    } catch (e) {}
+    try { if (typeof renderSwiss === "function") renderSwiss(); } catch (e) {}
+    alert("You were removed from the tournament by the host.");
+  }, 0);
+}
+
 // Single shared container holding every toast — created lazily on first
 // toast. Toasts auto-dismiss after 8s; clicking dismisses immediately.
 function ensureToastContainer() {
@@ -3659,11 +3714,19 @@ function hydrateTournamentAvatars(view) {
 // with their current name and deck, and routes the submit through an
 // update path (overwrites the same registrant entry, no new id).
 function showEditRegistrantPopup(registrantId) {
-  if (!swissCanEdit || !swissEditCode || !registrantId) return;
+  if (!swissEditCode || !registrantId) return;
   const state = loadSwiss();
   if (!isRegisteringPhase(state)) return;
   const reg = state.registrants && state.registrants[registrantId];
   if (!reg) return;
+  // Open if the user is host / co-host OR the registrant entry belongs
+  // to this device (signed-in createdBy match or unauthed-guest local
+  // tracking). Firebase rules already allow the same set of writers, so
+  // the Save attempt will succeed.
+  const myIds = (typeof findMyRegistrantIds === "function")
+    ? new Set(findMyRegistrantIds(state, swissEditCode))
+    : new Set();
+  if (!swissCanEdit && !myIds.has(registrantId)) return;
   const room = {
     editCode: swissEditCode,
     viewCode: swissViewCode,
