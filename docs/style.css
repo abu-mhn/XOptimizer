@@ -7621,6 +7621,12 @@ body.forest-mode   .match-toast-where { color: #656d76; }
     border-radius: 8px;
     background: rgba(248, 81, 73, 0.06);
     font-size: 0.85rem;
+    /* Clip horizontally so a long chip row stays inside the rounded
+       panel instead of bleeding past the registrants card. The chip
+       row's own overflow-x:auto handles the scroll inside this clip. */
+    overflow: hidden;
+    max-width: 100%;
+    min-width: 0;
 }
 .swiss-banned-heading {
     font-weight: 700;
@@ -7630,18 +7636,33 @@ body.forest-mode   .match-toast-where { color: #656d76; }
 }
 .swiss-banned-section {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: baseline;
     gap: 4px;
     margin-top: 2px;
     color: inherit;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    /* Invisible scrollbar — same treatment as the other horizontal-scroll
+       strips (tag chips, registrant rows). The row still scrolls via
+       swipe / drag / wheel. */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    /* Constrain to the parent panel's content width so chips that don't
+       fit horizontally scroll INSIDE the panel rather than pushing it
+       wider than its card. */
+    max-width: 100%;
+    min-width: 0;
 }
+.swiss-banned-section::-webkit-scrollbar { display: none; }
 .swiss-banned-label {
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     opacity: 0.75;
     margin-right: 4px;
+    flex: 0 0 auto;          /* keep the label fixed at content width */
+    white-space: nowrap;
 }
 .swiss-banned-chip {
     display: inline-block;
@@ -7651,6 +7672,8 @@ body.forest-mode   .match-toast-where { color: #656d76; }
     background: rgba(248, 81, 73, 0.1);
     color: #ff7b72;
     font-size: 0.75rem;
+    flex: 0 0 auto;          /* don't shrink — stay at content width inside the scroll row */
+    white-space: nowrap;
 }
 body.light-mode    .swiss-banned-chip,
 body.tropical-mode .swiss-banned-chip,

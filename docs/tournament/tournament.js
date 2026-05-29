@@ -3403,7 +3403,29 @@ const BANNER_NEUTRAL_SCRIM = "linear-gradient(rgba(13, 17, 23, 0.55), rgba(13, 1
 function detectAndAnnounceMatchStarts(prevState, remote) {
   if (!remote || !remote.matches) return;
   const prevMatches = (prevState && prevState.matches) || {};
-  const myName = (window.getCurrentUsername && window.getCurrentUsername()) || "";
+  // "My names" — every name on this device that should be treated as "me".
+  //   - signed-in username (if any)
+  //   - any registrant entries this device created locally (covers the
+  //     unauthed Become Guest path where the user's name isn't stored as
+  //     a username anywhere)
+  const myNames = new Set();
+  const uname = (window.getCurrentUsername && window.getCurrentUsername()) || "";
+  if (uname) myNames.add(uname);
+  if (swissEditCode && typeof loadDeviceOwnedRegIds === "function") {
+    const ownedIds = loadDeviceOwnedRegIds(swissEditCode);
+    const regs = (remote && remote.registrants) || {};
+    ownedIds.forEach(id => {
+      const r = regs[id];
+      if (r && typeof r.name === "string" && r.name) myNames.add(r.name);
+    });
+  }
+  // Role gate: host / co-host hear every match (they're managing the
+  // tournament), participants only hear matches they're in, viewers
+  // never hear anything. swissSessionRole carries "host"/"co-host"/
+  // "participant"/"view" — viewers also include the default ungated
+  // case if the role hasn't been set yet.
+  const isManager = swissCanEdit;
+  const isParticipant = swissSessionRole === "participant";
   Object.entries(remote.matches).forEach(([id, m]) => {
     if (!m || !m.startedAt) return;
     if (m.bye) return;
@@ -3412,7 +3434,13 @@ function detectAndAnnounceMatchStarts(prevState, remote) {
     const wasStarted = !!(before && before.startedAt);
     if (wasStarted) return; // already started — not a fresh transition
     if (swissLiveMatchId === id) return; // THIS device started it
-    const isMine = !!(myName && (m.a === myName || m.b === myName));
+    const isMine = myNames.has(m.a) || myNames.has(m.b);
+    // Role gate — viewers get nothing; participants only get their own.
+    // Hosts / co-hosts always get notified.
+    if (!isManager) {
+      if (!isParticipant) return; // pure viewer → silent
+      if (!isMine) return;        // participant in someone else's match → silent
+    }
     // Best-effort label: "Round X · Group N" / "Quarterfinal" / "Final" etc.
     let where = "";
     if (typeof m.groupIndex === "number") {
@@ -4056,19 +4084,28 @@ function hasAnyBannedParts(state) {
 
 // Walk a deck and return every banned part it carries as
 // [{ slot: 1-based, field, name }]. Case-insensitive name match.
+//
+// Cross-field — banning a part by name covers it wherever it appears in
+// the deck (blade / mainBlade / lockChip / etc.), since part names are
+// unique to one physical part. Earlier this was per-field, which let a
+// blade-banned name slip through when used under mainBlade in CX mode
+// or vice versa.
 function findBannedPartsInDeck(deck, bannedParts) {
   const hits = [];
   if (!Array.isArray(deck)) return hits;
-  const lookup = {};
-  Object.entries(bannedParts || {}).forEach(([f, list]) => {
-    lookup[f] = new Set((list || []).map(n => String(n).trim().toLowerCase()).filter(Boolean));
+  const banned = new Set();
+  Object.values(bannedParts || {}).forEach(list => {
+    (list || []).forEach(n => {
+      const k = String(n).trim().toLowerCase();
+      if (k) banned.add(k);
+    });
   });
+  if (!banned.size) return hits;
   deck.forEach((slot, slotIdx) => {
     if (!slot || !slot.parts) return;
     Object.entries(slot.parts).forEach(([f, name]) => {
       if (!name || name === NO_RATCHET) return;
-      const ban = lookup[f];
-      if (ban && ban.has(String(name).trim().toLowerCase())) {
+      if (banned.has(String(name).trim().toLowerCase())) {
         hits.push({ slot: slotIdx + 1, field: f, name });
       }
     });
