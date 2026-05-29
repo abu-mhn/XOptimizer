@@ -265,6 +265,15 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit, roleHint) {
         mode: remote.mode || null,
         role
       });
+      // Compare the previous local state with the incoming remote and
+      // pop a toast for any match that just transitioned to "started"
+      // (startedAt null/missing → set). Runs BEFORE we overwrite local
+      // storage so the diff has a real before-state. Skips the device
+      // that started the match itself (swissLiveMatchId === id).
+      try {
+        const prevState = JSON.parse(localStorage.getItem(SWISS_KEY) || "null") || {};
+        detectAndAnnounceMatchStarts(prevState, remote);
+      } catch (e) { /* non-fatal */ }
       swissApplyingRemote = true;
       localStorage.setItem(SWISS_KEY, JSON.stringify(stripRoomMetadata(remote)));
       swissApplyingRemote = false;
@@ -3383,6 +3392,149 @@ const BANNER_NEUTRAL_SCRIM = "linear-gradient(rgba(13, 17, 23, 0.55), rgba(13, 1
 // by `place` (1/2/3 → medal tint, anything else → neutral). Adds the
 // .has-rank-banner class so the white-text legibility rules kick in.
 // No-op when the player has no banner.
+// ---- Match-start notifications ----
+// Diff the previous room state against the incoming remote — every match
+// that just transitioned to "started" (startedAt was null / missing, now
+// is set) gets a toast on this device. Skip the device that itself
+// started the match (swissLiveMatchId === id), bye matches, and matches
+// without both players assigned. If we recognize the signed-in user's
+// name as one of the players, the toast carries an extra "You're up!"
+// emphasis line.
+function detectAndAnnounceMatchStarts(prevState, remote) {
+  if (!remote || !remote.matches) return;
+  const prevMatches = (prevState && prevState.matches) || {};
+  const myName = (window.getCurrentUsername && window.getCurrentUsername()) || "";
+  Object.entries(remote.matches).forEach(([id, m]) => {
+    if (!m || !m.startedAt) return;
+    if (m.bye) return;
+    if (!m.a || !m.b) return;
+    const before = prevMatches[id];
+    const wasStarted = !!(before && before.startedAt);
+    if (wasStarted) return; // already started — not a fresh transition
+    if (swissLiveMatchId === id) return; // THIS device started it
+    const isMine = !!(myName && (m.a === myName || m.b === myName));
+    // Best-effort label: "Round X · Group N" / "Quarterfinal" / "Final" etc.
+    let where = "";
+    if (typeof m.groupIndex === "number") {
+      const letter = String.fromCharCode(65 + m.groupIndex); // 0→A
+      const round = (typeof m.round === "number") ? (m.round + 1) : null;
+      where = round != null ? `Round ${round} · Group ${letter}` : `Group ${letter}`;
+    } else if (m.bracket) {
+      const labels = { qf: "Quarterfinal", sf: "Semifinal", cqf: "Consolation QF", f: "Final", "3rd": "3rd Place", "5th": "5th Place", "7th": "7th Place" };
+      where = labels[m.round] || (typeof m.round === "number" ? `Round ${m.round + 1}` : "Bracket");
+    }
+    showMatchStartToast({ a: m.a, b: m.b, where, isMine });
+  });
+}
+
+// Single shared container holding every toast — created lazily on first
+// toast. Toasts auto-dismiss after 8s; clicking dismisses immediately.
+function ensureToastContainer() {
+  let host = document.getElementById("match-toasts");
+  if (host) return host;
+  host = document.createElement("div");
+  host.id = "match-toasts";
+  host.className = "match-toasts";
+  document.body.appendChild(host);
+  return host;
+}
+
+// Browser-level Notification API support — works when the tab is open
+// but the phone is locked or the browser is backgrounded, without
+// needing a service worker. Requires the user to grant permission via a
+// real click (handled by the "Turn on alerts" button in the first toast
+// where permission is still "default"). iOS Safari only honors this
+// when the site is installed as a PWA on the home screen — the request
+// silently no-ops on regular iOS Safari, which is fine.
+function notifApiAvailable() {
+  return typeof window !== "undefined" && typeof window.Notification === "function";
+}
+
+function notifPermissionState() {
+  return notifApiAvailable() ? Notification.permission : "unsupported";
+}
+
+function maybeFireSystemNotification(title, body) {
+  if (!notifApiAvailable()) return;
+  if (Notification.permission !== "granted") return;
+  try {
+    const n = new Notification(title, {
+      body,
+      tag: "match-start",       // a new match-start replaces the prior one
+      icon: "assets/icons/M.webp",
+      badge: "assets/icons/M.webp"
+    });
+    // Bring the tab to the front when the user taps the notification.
+    n.onclick = () => {
+      try { window.focus(); n.close(); } catch (e) {}
+    };
+  } catch (e) {
+    // Some mobile browsers throw without a service worker — non-fatal.
+    console.info("System notification failed:", e && e.message);
+  }
+}
+
+function showMatchStartToast({ a, b, where, isMine }) {
+  const host = ensureToastContainer();
+  const card = document.createElement("div");
+  card.className = "match-toast" + (isMine ? " match-toast-mine" : "");
+  const perm = notifPermissionState();
+  const showEnable = perm === "default"; // unsupported / granted / denied → hide
+  card.innerHTML = `
+    <div class="match-toast-head">
+      ${isMine ? `<span class="match-toast-tag">You're up!</span>` : `<span class="match-toast-tag-neutral">Match started</span>`}
+      <button type="button" class="match-toast-close" aria-label="Dismiss">&times;</button>
+    </div>
+    <div class="match-toast-players">${escapeHtml(a)} <span class="match-toast-vs">vs</span> ${escapeHtml(b)}</div>
+    ${where ? `<div class="match-toast-where">${escapeHtml(where)}</div>` : ""}
+    ${showEnable ? `<button type="button" class="match-toast-enable">Turn on alerts</button>` : ""}
+  `;
+  host.appendChild(card);
+  const dismiss = () => {
+    if (!card.parentNode) return;
+    card.classList.add("match-toast-leaving");
+    setTimeout(() => card.remove(), 220);
+  };
+  card.querySelector(".match-toast-close").addEventListener("click", dismiss);
+  // "Turn on alerts" — request Notification permission. Stop the click
+  // from bubbling so it doesn't also dismiss the toast.
+  const enableBtn = card.querySelector(".match-toast-enable");
+  if (enableBtn) {
+    enableBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!notifApiAvailable()) return;
+      try {
+        const result = Notification.requestPermission();
+        // Some browsers return a Promise; others use callback. Handle both.
+        const handle = (perm) => {
+          if (perm === "granted") {
+            enableBtn.remove();
+            // Fire a confirmation notification so the user sees it works.
+            maybeFireSystemNotification("Match alerts on", "You'll get a system notification when matches start.");
+          }
+        };
+        if (result && typeof result.then === "function") result.then(handle);
+        else if (typeof result === "string") handle(result);
+      } catch (err) {
+        console.warn("Notification permission request failed:", err);
+      }
+    });
+  }
+  // Tapping the card body (not buttons) also dismisses.
+  card.addEventListener("click", (e) => {
+    if (e.target.closest(".match-toast-close")) return;
+    if (e.target.closest(".match-toast-enable")) return;
+    dismiss();
+  });
+  setTimeout(dismiss, 8000);
+  // ALSO fire a real OS notification — kicks in when the tab is backgrounded
+  // or the phone screen is off. Always fires when permission is granted; the
+  // in-app toast is the foreground complement.
+  const title = isMine ? "You're up!" : "Match started";
+  const body = `${a} vs ${b}${where ? ` · ${where}` : ""}`;
+  maybeFireSystemNotification(title, body);
+}
+
 function paintProfileBannerRow(rowEl, name, place) {
   if (!rowEl || !name) return;
   resolveProfileBanner(name).then(banner => {

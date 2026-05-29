@@ -7482,6 +7482,123 @@ body.light-mode .swiss-group-progress {
    muted red across themes — a "this is restricted" signal, not destructive
    like a delete button. The label and heading inherit normal body color so
    they sit naturally on the themed card. */
+/* Match-start toast stack — fixed top-right (full-width on phones), one
+   card per newly-started match. Slides in, auto-dismisses after 8s, or
+   tap to dismiss. Sits above other content (z-index 300, higher than
+   popup overlays at 200 so a toast can still fire over a popup). */
+.match-toasts {
+    position: fixed;
+    top: clamp(8px, 2vh, 16px);
+    right: clamp(8px, 3vw, 16px);
+    z-index: 300;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+    max-width: min(360px, calc(100vw - 32px));
+    width: 100%;
+}
+.match-toast {
+    pointer-events: auto;
+    background: rgba(22, 27, 34, 0.96);
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 10px 12px;
+    color: #f0f6fc;
+    font-size: 0.88rem;
+    line-height: 1.35;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+    animation: matchToastIn .22s ease-out;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+.match-toast-mine {
+    border-color: rgba(63, 185, 80, 0.6);
+    box-shadow: 0 6px 20px rgba(63, 185, 80, 0.25);
+}
+.match-toast-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+.match-toast-tag {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #3fb950;
+}
+.match-toast-tag-neutral {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #8b949e;
+}
+.match-toast-close {
+    appearance: none;
+    background: transparent;
+    border: none;
+    color: inherit;
+    font-size: 1.05rem;
+    line-height: 1;
+    padding: 0 4px;
+    cursor: pointer;
+    opacity: 0.65;
+}
+.match-toast-close:hover { opacity: 1; }
+.match-toast-players {
+    font-weight: 600;
+    word-break: break-word;
+}
+.match-toast-vs {
+    opacity: 0.6;
+    margin: 0 4px;
+    font-weight: 500;
+}
+.match-toast-where {
+    font-size: 0.78rem;
+    color: #8b949e;
+    margin-top: 2px;
+}
+.match-toast-enable {
+    appearance: none;
+    background: rgba(63, 185, 80, 0.15);
+    border: 1px solid rgba(63, 185, 80, 0.45);
+    color: #3fb950;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 6px;
+    margin-top: 8px;
+    cursor: pointer;
+    align-self: flex-start;
+}
+.match-toast-enable:hover { background: rgba(63, 185, 80, 0.25); }
+.match-toast-leaving {
+    animation: matchToastOut .2s ease-in forwards;
+}
+@keyframes matchToastIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes matchToastOut {
+    from { opacity: 1; transform: translateY(0); }
+    to   { opacity: 0; transform: translateY(-8px); }
+}
+/* Light themes — flip the toast bg to white card with darker text. */
+body.light-mode    .match-toast,
+body.tropical-mode .match-toast,
+body.love-mode     .match-toast,
+body.forest-mode   .match-toast { background: rgba(255, 255, 255, 0.98); color: #1f2328; border-color: #d1d9e0; }
+body.light-mode    .match-toast-where,
+body.tropical-mode .match-toast-where,
+body.love-mode     .match-toast-where,
+body.forest-mode   .match-toast-where { color: #656d76; }
+
 .swiss-banned-panel {
     margin: 6px 0 4px;
     padding: 8px 10px;
