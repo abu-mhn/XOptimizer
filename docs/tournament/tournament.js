@@ -3461,20 +3461,38 @@ function maybeFireSystemNotification(title, body) {
   // keep browser permission granted but silence the OS notifications on
   // this device specifically. In-app toasts still fire either way.
   try { if (localStorage.getItem("matchAlertsOff") === "1") return; } catch (e) {}
-  try {
-    const n = new Notification(title, {
-      body,
-      tag: "match-start",       // a new match-start replaces the prior one
-      icon: "assets/icons/M.webp",
-      badge: "assets/icons/M.webp"
+
+  const opts = {
+    body,
+    tag: "match-start",
+    icon: "/assets/icons/M.webp",
+    badge: "/assets/icons/M.webp"
+  };
+
+  // Mobile Chromium (Android Chrome / Edge / Brave) rejects the
+  // `new Notification(...)` constructor and only honors notifications
+  // dispatched through a service-worker registration. Desktop browsers
+  // accept both, but going through the SW path is the universal answer.
+  // Fall back to the constructor only if the SW isn't ready (e.g. very
+  // first visit before registration completes).
+  if ("serviceWorker" in navigator && navigator.serviceWorker.ready) {
+    navigator.serviceWorker.ready.then(reg => {
+      return reg.showNotification(title, opts);
+    }).catch(err => {
+      console.info("SW notification failed, falling back:", err && err.message);
+      tryConstructorNotification(title, opts);
     });
-    // Bring the tab to the front when the user taps the notification.
-    n.onclick = () => {
-      try { window.focus(); n.close(); } catch (e) {}
-    };
+  } else {
+    tryConstructorNotification(title, opts);
+  }
+}
+
+function tryConstructorNotification(title, opts) {
+  try {
+    const n = new Notification(title, opts);
+    n.onclick = () => { try { window.focus(); n.close(); } catch (e) {} };
   } catch (e) {
-    // Some mobile browsers throw without a service worker — non-fatal.
-    console.info("System notification failed:", e && e.message);
+    console.info("Constructor notification failed:", e && e.message);
   }
 }
 

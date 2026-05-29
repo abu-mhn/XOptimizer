@@ -229,6 +229,22 @@ Other
   });
 })();
 
+// ===== Service worker registration =====
+// Registers /sw.js once per page load. The SW is minimal — it exists so
+// that match-start notifications can be dispatched via
+// registration.showNotification(), which mobile Chromium requires
+// (it rejects `new Notification(...)` from a regular page). The SW
+// itself doesn't intercept fetch or precache anything; updating just
+// means bumping its SW_VERSION constant.
+if ("serviceWorker" in navigator) {
+  // Defer until after load so it doesn't fight the initial render.
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(err => {
+      console.info("Service worker registration failed:", err && err.message);
+    });
+  });
+}
+
 // ===== Settings → Match Alerts toggle =====
 // Surfaces the Notification permission state and lets the user enable /
 // disable system match-start notifications. Stored permission is browser-
