@@ -229,6 +229,84 @@ Other
   });
 })();
 
+// ===== Settings → Match Alerts toggle =====
+// Surfaces the Notification permission state and lets the user enable /
+// disable system match-start notifications. Stored permission is browser-
+// scoped; the enable/disable preference is per-device via localStorage,
+// so a user with permission already granted can still mute alerts here.
+// Reads:
+//   - Notification.permission       — browser-managed (granted/denied/default)
+//   - localStorage.matchAlertsOff   — "1" = muted even when permission granted
+// The tournament-side fire path checks BOTH before showing a system notif.
+(function initMatchAlertsSetting() {
+  const btn = document.getElementById("match-alert-btn");
+  const status = document.getElementById("match-alert-status");
+  if (!btn || !status) return; // not the settings page
+
+  const MUTE_KEY = "matchAlertsOff";
+  const supported = typeof Notification === "function";
+
+  function isMuted() {
+    try { return localStorage.getItem(MUTE_KEY) === "1"; } catch (e) { return false; }
+  }
+  function setMuted(v) {
+    try {
+      if (v) localStorage.setItem(MUTE_KEY, "1");
+      else localStorage.removeItem(MUTE_KEY);
+    } catch (e) {}
+  }
+
+  function paint() {
+    if (!supported) {
+      status.textContent = "Not supported by this browser.";
+      btn.textContent = "Unavailable";
+      btn.disabled = true;
+      return;
+    }
+    btn.disabled = false;
+    const perm = Notification.permission;
+    if (perm === "denied") {
+      status.textContent = "Blocked by the browser — enable Notifications for this site in your browser settings.";
+      btn.textContent = "Blocked";
+      btn.disabled = true;
+      return;
+    }
+    if (perm === "default") {
+      status.textContent = "Off — system notifications haven't been allowed yet.";
+      btn.textContent = "Turn on";
+      return;
+    }
+    // granted
+    if (isMuted()) {
+      status.textContent = "Muted on this device. Permission is granted, but alerts are off.";
+      btn.textContent = "Turn on";
+    } else {
+      status.textContent = "On — you'll get a system notification when a match goes LIVE in any room you've joined.";
+      btn.textContent = "Turn off";
+    }
+  }
+
+  btn.addEventListener("click", () => {
+    if (!supported) return;
+    const perm = Notification.permission;
+    if (perm === "denied") return; // can't change from here
+    if (perm === "default") {
+      try {
+        const result = Notification.requestPermission();
+        const handle = (p) => { if (p === "granted") setMuted(false); paint(); };
+        if (result && typeof result.then === "function") result.then(handle);
+        else if (typeof result === "string") handle(result);
+      } catch (e) { paint(); }
+      return;
+    }
+    // granted — toggle the per-device mute.
+    setMuted(!isMuted());
+    paint();
+  });
+
+  paint();
+})();
+
   // ===== Account page (sign in/out + profile: username & photo) =====
   // The Account tab is its own page (/account/); this wires it. settings.js
   // loads on every page, so on non-account pages the elements are absent and

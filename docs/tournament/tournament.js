@@ -3457,6 +3457,10 @@ function notifPermissionState() {
 function maybeFireSystemNotification(title, body) {
   if (!notifApiAvailable()) return;
   if (Notification.permission !== "granted") return;
+  // Per-device mute toggle set in Settings → Match Alerts. Lets the user
+  // keep browser permission granted but silence the OS notifications on
+  // this device specifically. In-app toasts still fire either way.
+  try { if (localStorage.getItem("matchAlertsOff") === "1") return; } catch (e) {}
   try {
     const n = new Notification(title, {
       body,

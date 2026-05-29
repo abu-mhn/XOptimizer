@@ -4239,6 +4239,21 @@ body.mono-mode .btn-paste:hover {
     color: #e6edf3;
 }
 
+/* Optional helper text rendered directly below a .setting-item — used
+   for status / explanation that's too long to fit alongside the button
+   on a narrow viewport (e.g. Match Alerts permission state). */
+.setting-hint {
+    font-size: 0.78rem;
+    color: #8b949e;
+    margin: -6px 0 8px;
+    line-height: 1.35;
+}
+.setting-hint:empty { display: none; }
+body.light-mode    .setting-hint,
+body.tropical-mode .setting-hint,
+body.love-mode     .setting-hint,
+body.forest-mode   .setting-hint { color: #656d76; }
+
 .setting-dropdown {
     position: relative;
 }
