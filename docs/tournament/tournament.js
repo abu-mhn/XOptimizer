@@ -3310,6 +3310,12 @@ function bindSwissRegisteringHandlers(view, state) {
     btn.addEventListener("click", () => {
       const id = btn.dataset.regId;
       if (!id) return;
+      // Confirm before removing — the auto-kick flow also disconnects
+      // the player's own device, so an accidental tap on × can boot
+      // someone out of the room with no undo.
+      const reg = (loadSwiss().registrants || {})[id];
+      const name = (reg && reg.name) || "this registrant";
+      if (!confirm(`Are you sure you want to remove ${name}?`)) return;
       removeRegistrant(id);
     });
   });
@@ -4319,9 +4325,50 @@ function startRegisteringTournament() {
     alert(`Need at least ${minTotal} registrants to start (${registrants.length} so far).`);
     return;
   }
-  const missingDecks = registrants.filter(r => isBeyCheckDeckEmpty(r.deck)).map(r => r.name || "(unnamed)");
-  if (missingDecks.length) {
-    const proceed = confirm(`These registrants haven't submitted a deck yet:\n\n${missingDecks.join("\n")}\n\nStart anyway? (Their decks will be empty until the judge fills them in.)`);
+  // Combined deck-quality warning. Three categories, listed separately so
+  // the host can see exactly what's wrong and decide whether to proceed.
+  // All three are overridable — the host can still start if (e.g.) a known
+  // guest is going to fill in their deck at the judge's table.
+  const bannedNames = getBannedParts(state);
+  const missingDecks = [];
+  const incompleteDecks = [];
+  const bannedDecks = [];
+  // listRegistrants() returns only {id, name, deck} — the isGuest flag is
+  // dropped, so read it from the raw state map here.
+  const rawRegistrants = (state && state.registrants) || {};
+  registrants.forEach(r => {
+    const display = r.name || "(unnamed)";
+    const raw = rawRegistrants[r.id] || {};
+    const isGuest = raw.isGuest === true;
+    if (isBeyCheckDeckEmpty(r.deck)) {
+      // Guests are allowed to skip the deck entirely (the judge fills it
+      // in at match time), so a fully empty guest deck doesn't warrant a
+      // warning. Account registrants still surface here.
+      if (!isGuest) missingDecks.push(display);
+      return; // already covered by the missing-deck bucket
+    }
+    const incompleteSlots = incompleteBeyCheckDeckSlotNumbers(r.deck);
+    if (incompleteSlots.length) {
+      incompleteDecks.push(`${display} — Slot${incompleteSlots.length === 1 ? "" : "s"} ${incompleteSlots.join(", ")}`);
+    }
+    const bannedHits = findBannedPartsInDeck(r.deck, bannedNames);
+    if (bannedHits.length) {
+      const parts = bannedHits.map(h => `${h.name} (Slot ${h.slot})`).join(", ");
+      bannedDecks.push(`${display} — ${parts}`);
+    }
+  });
+  if (missingDecks.length || incompleteDecks.length || bannedDecks.length) {
+    const sections = [];
+    if (missingDecks.length) {
+      sections.push(`No deck submitted:\n${missingDecks.join("\n")}`);
+    }
+    if (incompleteDecks.length) {
+      sections.push(`Deck has incomplete slots:\n${incompleteDecks.join("\n")}`);
+    }
+    if (bannedDecks.length) {
+      sections.push(`Deck contains banned parts:\n${bannedDecks.join("\n")}`);
+    }
+    const proceed = confirm(`${sections.join("\n\n")}\n\nStart anyway?`);
     if (!proceed) return;
   }
   const names = registrants.map(r => (r.name || "").trim()).filter(Boolean);
@@ -4896,19 +4943,25 @@ function isBeyCheckSlotEmpty(slot) {
 // mode declares is present (non-empty). For standard mode that's blade
 // + ratchet + bit, with the ratchet allowed to be the NO_RATCHET
 // sentinel when the bit is a ratchet-bit (the bit then carries the
-// ratchet portion). For CX / CX Expand modes every listed field must
-// have a name. Used by the registrant-row "Incomplete" badge so a slot
-// that only has a blade picked doesn't pass as "filled".
+// ratchet portion). Bullet Griffon has a built-in ratchet so its
+// ratchet field is OPTIONAL — a missing ratchet for a BG slot counts
+// as complete, same as if NO_RATCHET were set explicitly. For CX /
+// CX Expand modes every listed field must have a name. Used by the
+// registrant-row "Incomplete" badge so a slot that only has a blade
+// picked doesn't pass as "filled".
 function isBeyCheckSlotComplete(slot) {
   if (!slot || !slot.parts) return false;
   const mode = (slot.mode && BEY_CHECK_MODES.includes(slot.mode)) ? slot.mode : "standard";
   const fields = BEY_CHECK_FIELDS[mode] || [];
   if (!fields.length) return false;
+  const bladeName = (slot.parts.blade || "").trim();
+  const isBulletGriffon = bladeName === "Bullet Griffon";
   for (const f of fields) {
     const v = slot.parts[f];
-    // The ratchet field accepts NO_RATCHET — that's a real choice, not
-    // an empty slot. Every other field needs a non-empty name.
     if (f === "ratchet") {
+      // Bullet Griffon's built-in ratchet means the ratchet field is
+      // optional for that blade — any value (including missing) is fine.
+      if (isBulletGriffon) continue;
       if (!v) return false; // missing entirely
       // empty string fails, NO_RATCHET sentinel passes, real name passes
       if (v !== NO_RATCHET && typeof v !== "string") return false;
@@ -7760,7 +7813,10 @@ function buildMetaSlot(mode, used) {
   const blade = pickMetaFrom(DATA.blades || [], used);
   const codename = blade?.codename || "";
   if (codename === "BULLETGRIFFON") {
-    return { mode, parts: { blade: blade.name, bit: bitName } };
+    // BG's built-in ratchet → record NO_RATCHET explicitly so the slot
+    // reads as "complete" everywhere (matches what the form auto-fills
+    // when a user picks BG in Bey Check).
+    return { mode, parts: { blade: blade.name, ratchet: NO_RATCHET, bit: bitName } };
   }
   if (codename === "CLOCKMIRAGE") {
     // Clock Mirage requires a ratchet ending in "5", and no -5 ratchet is
