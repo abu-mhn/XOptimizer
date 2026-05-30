@@ -33,12 +33,12 @@
          the visible version number above. -->
     <article class="updates-card" data-version="v1.5.5">
       <ul class="popup-list">
-        <li><strong>Full deck required for signed-in registrations.</strong> Account registrations now have to fill every required part in every slot (blade + ratchet + bit, plus any mode-specific parts) — a blade-only or partially built slot is rejected with a clear "Slot N is missing parts" message. Guests are still exempt.</li>
-        <li><strong>Confirm before removing a registrant.</strong> Tapping × next to a name now opens an "Are you sure you want to remove [name]?" prompt — an accidental tap can't boot a player by mistake any more.</li>
-        <li><strong>Pre-Start deck check.</strong> Tapping <em>Start Tournament</em> now sweeps every registrant and surfaces deck problems in one combined prompt — names with no deck (account registrants only — guests are exempt), names with incomplete slots (and which slots), and names with banned parts (and which parts). The host can fix the listed issues or override and start anyway.</li>
-        <li><strong>Bullet Griffon counts as complete without a ratchet.</strong> A slot with Bullet Griffon + a bit now passes the "Deck ✓" check (BG has a built-in ratchet, so the ratchet field is optional). Test-generated BG slots are also fixed to record this explicitly.</li>
-        <li><strong>Match notifications reach everyone in the room.</strong> When a match goes LIVE, every connected device gets the toast and (if alerts are on) the system notification — host, co-host, participant and viewer alike. No more role gating.</li>
-        <li><strong>Profile card placement fixed on mobile.</strong> Tapping a username on a phone no longer launches the profile dropdown into the top corner — it now clamps into the visible viewport near the tap instead of flying off to the edge of the screen.</li>
+        <li><strong>Full deck required for signed-in registrations.</strong> Every slot must have every required part. Guests still exempt.</li>
+        <li><strong>Confirm before removing a registrant.</strong> Tapping × asks "Are you sure?" first.</li>
+        <li><strong>Pre-Start deck check.</strong> Start Tournament lists every missing / incomplete / banned-parts deck in one prompt before starting.</li>
+        <li><strong>Bullet Griffon counts as complete without a ratchet.</strong> BG's built-in ratchet means the ratchet field is optional.</li>
+        <li><strong>Match notifications reach everyone in the room.</strong> Host, co-host, participant and viewer all get the toast.</li>
+        <li><strong>Profile card placement fixed on mobile.</strong> Tapping a username no longer launches the card off-screen.</li>
       </ul>
     </article>
 
