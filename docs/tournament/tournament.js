@@ -2614,18 +2614,31 @@ function cancelProfileDropdownHide() {
 }
 
 // Anchor the fixed-position dropdown just below the clicked username, kept
-// inside the viewport (flips above when there isn't room below).
+// inside the viewport. Two passes:
+//   1. Try below the anchor — if it overflows the bottom, try above.
+//   2. If neither fits cleanly (tall card + short viewport on mobile),
+//      clamp into the viewport with a small margin so the card stays
+//      near the tap target instead of jumping to the top or bottom edge.
 function positionProfileDropdown(panel, anchorEl) {
   if (!panel || !anchorEl) return;
   const r = anchorEl.getBoundingClientRect();
   const pw = panel.offsetWidth || 250;
   const ph = panel.offsetHeight || 220;
+  const margin = 8;
   let left = r.left;
-  if (left + pw > window.innerWidth - 8) left = window.innerWidth - 8 - pw;
-  if (left < 8) left = 8;
+  if (left + pw > window.innerWidth - margin) left = window.innerWidth - margin - pw;
+  if (left < margin) left = margin;
+  // Prefer below; flip above if there's room; otherwise clamp into the
+  // viewport (last branch handles the small-screen "neither fits" case).
   let top = r.bottom + 6;
-  if (top + ph > window.innerHeight - 8 && r.top - ph - 6 >= 8) {
-    top = r.top - ph - 6;
+  const fitsBelow = top + ph <= window.innerHeight - margin;
+  const aboveTop = r.top - ph - 6;
+  const fitsAbove = aboveTop >= margin;
+  if (!fitsBelow && fitsAbove) {
+    top = aboveTop;
+  } else if (!fitsBelow && !fitsAbove) {
+    // Clamp into viewport — keep at least `margin` from top and bottom.
+    top = Math.max(margin, window.innerHeight - margin - ph);
   }
   panel.style.left = left + "px";
   panel.style.top = top + "px";
@@ -2710,6 +2723,7 @@ function showProfileByUsername(username, anchorEl) {
   // ever called once we have a real profile — so a missing profile never
   // flashes an empty / "not found" card.
   const reveal = () => {
+    panel.classList.remove("is-mobile"); // legacy class from prior modal experiment
     panel.classList.remove("hidden");
     positionProfileDropdown(panel, anchorEl);
     cancelProfileDropdownHide();
@@ -3438,13 +3452,10 @@ function detectAndAnnounceMatchStarts(prevState, remote) {
       if (r && typeof r.name === "string" && r.name) myNames.add(r.name);
     });
   }
-  // Role gate: host / co-host hear every match (they're managing the
-  // tournament), participants only hear matches they're in, viewers
-  // never hear anything. swissSessionRole carries "host"/"co-host"/
-  // "participant"/"view" — viewers also include the default ungated
-  // case if the role hasn't been set yet.
-  const isManager = swissCanEdit;
-  const isParticipant = swissSessionRole === "participant";
+  // Every connected device in the room gets notified — host, co-host,
+  // participant, viewer. The isMine flag below is still computed so the
+  // toast can carry the "You're up!" highlight when the signed-in user
+  // is one of the players.
   Object.entries(remote.matches).forEach(([id, m]) => {
     if (!m || !m.startedAt) return;
     if (m.bye) return;
@@ -3454,12 +3465,6 @@ function detectAndAnnounceMatchStarts(prevState, remote) {
     if (wasStarted) return; // already started — not a fresh transition
     if (swissLiveMatchId === id) return; // THIS device started it
     const isMine = myNames.has(m.a) || myNames.has(m.b);
-    // Role gate — viewers get nothing; participants only get their own.
-    // Hosts / co-hosts always get notified.
-    if (!isManager) {
-      if (!isParticipant) return; // pure viewer → silent
-      if (!isMine) return;        // participant in someone else's match → silent
-    }
     // Best-effort label: "Round X · Group N" / "Quarterfinal" / "Final" etc.
     let where = "";
     if (typeof m.groupIndex === "number") {
@@ -7603,6 +7608,25 @@ function showRegistrationPopup(room, options = {}) {
         : `Fill ${slotList} before registering — every registrant needs a full 3-combo deck. Tap an empty slot, or paste from the Deck tab.`;
       setStatus(msg, "err");
       return;
+    }
+    // Stricter check for signed-in registrants: every slot must be COMPLETE
+    // for its mode (blade-only / blade+ratchet-only counts as incomplete).
+    // Guests are exempt (allowEmptyDeck covers both "skip the deck" and
+    // "save a partial deck").
+    if (!allowEmptyDeck) {
+      const incompleteSlots = incompleteBeyCheckDeckSlotNumbers(deck);
+      if (incompleteSlots.length) {
+        const slotList = incompleteSlots.length === 1
+          ? `Slot ${incompleteSlots[0]}`
+          : incompleteSlots.length === BEY_CHECK_DECK_SIZE
+            ? "all 3 slots"
+            : "Slots " + incompleteSlots.join(" & ");
+        const msg = isEdit
+          ? `${slotList} ${incompleteSlots.length === 1 ? "is" : "are"} missing parts — every slot needs every required part (blade, ratchet, bit, plus any mode-specific parts) before saving.`
+          : `${slotList} ${incompleteSlots.length === 1 ? "is" : "are"} missing parts — every slot needs every required part (blade, ratchet, bit, plus any mode-specific parts) before registering.`;
+        setStatus(msg, "err");
+        return;
+      }
     }
     // Banned-parts check — reject the deck if it uses any part the host
     // banned for this tournament. We read the latest local state so an
