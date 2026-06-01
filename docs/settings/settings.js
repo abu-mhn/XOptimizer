@@ -106,11 +106,12 @@ Tournament
 - Parts-usage pie charts at tournament end as an auto-sliding carousel (theme-aware palette)
 
 Achievement
-- New tab visible to any signed-in account — sits between Tournament and Battle Pass in the tab bar. Each achievement is a progress card on the tab (icon + title + description + bar + N / 100 count); once the count hits 100 the card flips to "Unlocked · [Theme name] theme"
+- New tab visible to any signed-in account — sits between Profile and Revox in the tab bar. Each achievement is a progress card on the tab (icon + title + description + bar + N / 100 count); once the count hits 100 the card flips to "Unlocked · [Theme name] theme"
 - Forward-only tracking — counters start at 0 for every account on launch and only matches scored from this version onward contribute. Past tournament history is not backfilled
 - Dragon Tamer — win 100 matches while your deck includes a part named Dran, Drake or Dragoon (any slot, any field). Awards the "Dragon Tamer" profile tag + unlocks the Dragon Tamer theme (warm reds + ember gold)
 - Dragon Slayer — defeat 100 opponents whose deck included a part named Dran, Drake or Dragoon. Awards the "Dragon Slayer" profile tag + unlocks the Dragon Slayer theme (steel blue + silver)
 - Lonewolf — win 100 matches where your deck contains exactly one Wolf-named part (one slot only — two or more disqualifies the match). Awards the "Lonewolf" profile tag + unlocks the Lonewolf theme (slate gray + moon teal)
+- Rush Hour — win 100 matches where your deck contains BOTH a Clock Mirage blade AND any part named with "Rush" (Rush Bit / any Rush-prefixed ratchet, etc.). Awards the "Rush Hour" profile tag + unlocks the Rush Hour theme (deep amber + traffic-light red)
 - Storage lives at /achievements/{uid} (keyed by Firebase Auth UID). Reads are private to the user (or Developer); writes happen on the scoring device once a match is finalised. The tag is mirrored onto the user's profile the next time they sign in, gated by a Firebase rule that only lets the player self-claim a title when the matching achievement node is already flagged awarded
 - Guests and tied matches don't credit any achievement (same gate as global ranking points)
 
@@ -144,7 +145,7 @@ History
 Settings
 - Themes: Dark, Light, Space, Tropical, Stormy, Monochrome, Love, Forest (plus Revox, for Revox accounts)
 - Medal themes: Gold, Silver and Bronze are reward themes — each is unlocked only while the account holds the matching medal tag (top 3 of the tournament ranking); the menu entry appears when the medal is earned and disappears when it's lost, reverting to Dark if that medal theme was active
-- Achievement themes: Dragon Tamer (warm reds + ember gold), Dragon Slayer (steel blue + silver) and Lonewolf (slate gray + moon teal). Each appears in the theme menu only while the matching achievement tag is held (awarded at 100 wins — see the Achievement tab); same demote-to-Dark behavior as the medal themes if the tag is ever lost
+- Achievement themes: Dragon Tamer (warm reds + ember gold), Dragon Slayer (steel blue + silver), Lonewolf (slate gray + moon teal) and Rush Hour (deep amber + traffic-light red). Each appears in the theme menu only while the matching achievement tag is held (awarded at 100 wins — see the Achievement tab); same demote-to-Dark behavior as the medal themes if the tag is ever lost
 - Stat display: Bar or Radar
 - Additional button mode picker (Random / Meta)
 - Account: sign up / sign in with username or email + password, forgot-password reset, sign out
@@ -180,7 +181,7 @@ Developer
 Other
 - Per-tab URLs: /dashboard/, /calculator/, /library/, /deck/, /tournament/, /achievement/, /revox/, /battlepass/, /reel/, /history/, /settings/, /account/, /developer/
 - "What's New" landing page at the site root
-- Single-line horizontal tab bar (invisible scrollbar) — each tab shows its icon with a name label below; scroll position preserved across navigation, centered on desktop. Every static tab icon is rendered as a CSS mask filled with the active theme's text color, so switching themes (Dark / Light / Tropical / Stormy / Mono / Love / Forest / Revox / Gold / Silver / Bronze / Dragon Tamer / Dragon Slayer / Lonewolf) re-colors every icon at once with no per-theme overrides. The Profile tab is the only exception — it shows the user's own avatar photo, not a mask
+- Single-line horizontal tab bar (invisible scrollbar) — each tab shows its icon with a name label below; scroll position preserved across navigation, centered on desktop. Every static tab icon is rendered as a CSS mask filled with the active theme's text color, so switching themes (Dark / Light / Tropical / Stormy / Mono / Love / Forest / Revox / Gold / Silver / Bronze / Dragon Tamer / Dragon Slayer / Lonewolf / Rush Hour) re-colors every icon at once with no per-theme overrides. The Profile tab is the only exception — it shows the user's own avatar photo, not a mask
 - Live Firebase sync across host / co-host / participant / viewer devices
 - Multi-mode part images (Eclipse, Dual, Turbo, Operate, Scorpio Spear, Lightning L-Drago) display correctly everywhere — defaults to mode 0 when no mode is recorded
 - Broken-image fallback hides only the image (rank chip + name stay), so Best Parts 1st / 2nd / 3rd rows never shift out of alignment

@@ -14434,3 +14434,41 @@ body.lonewolf-mode .btn {
     color: #fff;
     border-color: #28323a;
 }
+
+/* --- Rush Hour: deep amber + traffic-light red on a near-black canvas
+       (Clock Mirage + any Rush part — speed, urgency, motion blur). --- */
+body.rushhour-mode {
+    background: #1a1206;
+    background-image:
+        radial-gradient(ellipse 60% 40% at 20% 15%, rgba(230, 150, 30, 0.22) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 35% at 80% 30%, rgba(220, 60, 50, 0.18) 0%, transparent 70%),
+        radial-gradient(ellipse 70% 45% at 50% 90%, rgba(180, 110, 20, 0.2) 0%, transparent 70%);
+    background-attachment: fixed;
+    color: #f6e0b8;
+}
+body.rushhour-mode .mode-tabs,
+body.rushhour-mode .sub-tabs,
+body.rushhour-mode .history-sub-tabs,
+body.rushhour-mode .tournament-sub-tabs {
+    background: rgba(34, 24, 12, 0.85);
+    border-bottom-color: #5c3a14;
+}
+body.rushhour-mode .tab,
+body.rushhour-mode .sub-tab {
+    color: #f0c878;
+}
+body.rushhour-mode .tab.active,
+body.rushhour-mode .sub-tab.active {
+    background: linear-gradient(135deg, #d04030, #f08020);
+    color: #fff;
+}
+body.rushhour-mode fieldset,
+body.rushhour-mode .popup-card {
+    background: #2a1d0c;
+    border-color: #5c3a14;
+}
+body.rushhour-mode .btn {
+    background: linear-gradient(135deg, #d04030, #f08020);
+    color: #fff;
+    border-color: #5c3a14;
+}

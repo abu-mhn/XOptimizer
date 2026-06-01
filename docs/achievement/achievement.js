@@ -20,7 +20,8 @@
   const ICONS = {
     dragonTamer: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/fantasy.png\')"></span>',
     dragonSlayer: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/fantasy.png\')"></span>',
-    lonewolf: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/dog.png\')"></span>'
+    lonewolf: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/dog.png\')"></span>',
+    rushHour: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/fast-time.png\')"></span>'
   };
 
   const defs = (window.ACHIEVEMENTS || []);

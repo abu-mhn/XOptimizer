@@ -1565,7 +1565,7 @@ function initSettingDropdown(id, storageKey, defaultVal, onChange) {
 
 // Theme setting — exposed so auth.js can apply the Revox-Admin default.
 window.themeSetting = initSettingDropdown("setting-theme", "theme", "dark", (val) => {
-  document.body.classList.remove("light-mode", "space-mode", "tropical-mode", "stormy-mode", "mono-mode", "love-mode", "forest-mode", "revox-mode", "gold-mode", "silver-mode", "bronze-mode", "dragontamer-mode", "dragonslayer-mode", "lonewolf-mode");
+  document.body.classList.remove("light-mode", "space-mode", "tropical-mode", "stormy-mode", "mono-mode", "love-mode", "forest-mode", "revox-mode", "gold-mode", "silver-mode", "bronze-mode", "dragontamer-mode", "dragonslayer-mode", "lonewolf-mode", "rushhour-mode");
   if (val === "light") document.body.classList.add("light-mode");
   if (val === "space") document.body.classList.add("space-mode");
   if (val === "tropical") document.body.classList.add("tropical-mode");
@@ -1583,6 +1583,7 @@ window.themeSetting = initSettingDropdown("setting-theme", "theme", "dark", (val
   if (val === "dragontamer") document.body.classList.add("dragontamer-mode");
   if (val === "dragonslayer") document.body.classList.add("dragonslayer-mode");
   if (val === "lonewolf") document.body.classList.add("lonewolf-mode");
+  if (val === "rushhour") document.body.classList.add("rushhour-mode");
   const titleLogo = document.getElementById("app-title-logo");
   if (titleLogo) {
     // Love and Forest use light surfaces (blush / moss-cream), so they
@@ -1605,6 +1606,7 @@ window.themeSetting = initSettingDropdown("setting-theme", "theme", "dark", (val
     : val === "dragontamer" ? "#1a0d0d"
     : val === "dragonslayer" ? "#0e1320"
     : val === "lonewolf" ? "#0c1014"
+    : val === "rushhour" ? "#1a1206"
     : "#0a4797";
   document.querySelectorAll('img.footer-logo').forEach(img => {
     img.src = (val === "light" || val === "tropical" || val === "love" || val === "forest") ? "assets/icons/revoxNameLight.webp" : "assets/icons/revoxName.webp";

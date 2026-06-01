@@ -49,6 +49,20 @@
       shortDescription: "Win 100 matches where your deck has exactly one Wolf part.",
       // Per-match credit: did the WINNER's deck contain EXACTLY ONE Wolf-named part?
       creditOnWin: (winnerDeck /*, loserDeck */) => countDeckPartsByName(winnerDeck, WOLF_NAMES) === 1
+    },
+    {
+      id: "rushHour",
+      title: "Rush Hour",
+      tag: "Rush Hour",
+      theme: "rushhour",
+      themeLabel: "Rush Hour",
+      target: 100,
+      shortDescription: "Win 100 matches with Clock Mirage AND any Rush-named part in your deck.",
+      // Per-match credit: did the WINNER's deck include BOTH a Clock Mirage
+      // (exact blade name) AND a Rush-named part somewhere in the deck?
+      creditOnWin: (winnerDeck /*, loserDeck */) =>
+        deckHasAnyPartName(winnerDeck, CLOCK_MIRAGE_NAMES)
+        && deckHasAnyPartName(winnerDeck, RUSH_NAMES)
     }
   ];
 
@@ -57,6 +71,12 @@
   // deck stores display names, so we case-fold and look for the substring.
   const DRAGON_NAMES = ["dran", "drake", "dragoon"];
   const WOLF_NAMES = ["wolf"];
+  // Clock Mirage check uses the full display name (no other blade contains
+  // "clock mirage" as a substring, so the substring approach is safe).
+  const CLOCK_MIRAGE_NAMES = ["clock mirage"];
+  // Rush match against any part containing "rush" in its name (Rush Bit,
+  // any Rush-prefixed ratchet or assist blade, etc.).
+  const RUSH_NAMES = ["rush"];
 
   // Walk every named part across all 3 slots in a bey-check deck. Each slot
   // can be in standard / cx / cxExpand mode with different fields; we just

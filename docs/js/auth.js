@@ -657,17 +657,38 @@
   const ACHIEVEMENT_THEME_TAGS = {
     dragontamer: "Dragon Tamer",
     dragonslayer: "Dragon Slayer",
-    lonewolf: "Lonewolf"
+    lonewolf: "Lonewolf",
+    rushhour: "Rush Hour"
   };
+  // Becomes true after Firebase reports the first auth state — lets the
+  // achievement gate tell a confirmed "signed out" from "auth not resolved
+  // yet". Without this, the gate would fire on DOMContentLoaded with
+  // currentProfile still null and wrongly demote any active achievement
+  // theme to Dark before the user's tags have actually been read.
+  let achievementGateAuthReady = false;
   function applyAchievementThemeGate() {
+    // Developer override — accounts tagged "Developer" can preview any
+    // theme without holding the matching achievement tag. Every gated
+    // option is shown and the demote-on-revoke path is skipped.
+    const devOverride = isDeveloper();
     const unlocked = {};
     Object.keys(ACHIEVEMENT_THEME_TAGS).forEach(v => {
-      unlocked[v] = hasTag(ACHIEVEMENT_THEME_TAGS[v]);
+      unlocked[v] = devOverride || hasTag(ACHIEVEMENT_THEME_TAGS[v]);
       document.querySelectorAll(
         '#setting-theme .setting-dropdown-option[data-value="' + v + '"]'
       ).forEach(opt => opt.classList.toggle("hidden", !unlocked[v]));
     });
-    // Demote an active achievement theme if the tag has been revoked.
+    if (devOverride) return;
+    // Demoting an active achievement theme is only safe once we KNOW the
+    // user's tags. Three things must be settled — otherwise a fresh page
+    // load would wrongly demote a legitimate achievement theme before the
+    // profile has loaded from Firebase:
+    //   1. Firebase has reported the initial auth state (achievementGateAuthReady),
+    //   2. if signed in, the profile (username + tags) has actually loaded.
+    if (!achievementGateAuthReady) return;
+    const signedIn = !!(window.getCurrentUser && window.getCurrentUser());
+    if (signedIn && (!currentProfile || !currentProfile.username)) return;
+
     let stored = null;
     try { stored = localStorage.getItem("theme"); } catch (e) {}
     if (stored && Object.prototype.hasOwnProperty.call(unlocked, stored) && !unlocked[stored]) {
@@ -687,12 +708,20 @@
   // "Revox" entry in the Settings theme menu is hidden and any lingering
   // "revox" selection falls back to Dark.
   function applyRevoxThemeGate() {
+    // Developer override — Developers can preview the Revox theme without
+    // holding a Revox Admin / Member tag. The option stays visible and the
+    // demote-to-Dark path is skipped. Seeding (the one-time "first sign-in
+    // → Revox theme" default) is intentionally NOT triggered for Developers
+    // since they don't have a Revox identity.
+    const devOverride = isDeveloper();
     const isRevoxUser = hasTag("Revox Admin") || hasTag("Revox Member");
 
     // Show / hide the Revox entry in the theme menu on every page.
     document.querySelectorAll(
       '#setting-theme .setting-dropdown-option[data-value="revox"]'
-    ).forEach(opt => opt.classList.toggle("hidden", !isRevoxUser));
+    ).forEach(opt => opt.classList.toggle("hidden", !(isRevoxUser || devOverride)));
+
+    if (devOverride) return;
 
     const theme = window.themeSetting;
     let stored = null, seeded = null;
@@ -733,6 +762,9 @@
   // ranking's top 3) and its medal theme is active, it falls back to Dark.
   // The medal status comes from tournament.js's live ranking cache.
   function applyMedalThemeGate() {
+    // Developer override — Developers see all three medal options in the
+    // menu and never get demoted off one, regardless of ranking standing.
+    const devOverride = isDeveloper();
     const uname = (window.getCurrentUsername && window.getCurrentUsername()) || "";
     const medal = (typeof window.medalTagForName === "function")
       ? window.medalTagForName(uname) : "";
@@ -741,11 +773,14 @@
       : medal === "Bronze Player" ? "bronze" : "";
 
     // Show only the unlocked medal theme in the menu; hide the others.
+    // (Developer override shows all three.)
     ["gold", "silver", "bronze"].forEach(v => {
       document.querySelectorAll(
         '#setting-theme .setting-dropdown-option[data-value="' + v + '"]'
-      ).forEach(opt => opt.classList.toggle("hidden", v !== unlocked));
+      ).forEach(opt => opt.classList.toggle("hidden", !devOverride && v !== unlocked));
     });
+
+    if (devOverride) return;
 
     // Revoking an active medal theme is only safe once we KNOW the real
     // medal status. That needs three things settled — otherwise a slow
@@ -776,7 +811,12 @@
   window.addEventListener("rankingmedalschange", applyMedalThemeGate);
   // Mark auth resolved on the first auth callback, then re-run the gate so
   // a confirmed sign-out (or completed sign-in) is acted on.
-  window.onAuthChange(() => { medalGateAuthReady = true; applyMedalThemeGate(); });
+  window.onAuthChange(() => {
+    medalGateAuthReady = true;
+    achievementGateAuthReady = true;
+    applyMedalThemeGate();
+    applyAchievementThemeGate();
+  });
 
   function devEscHtml(s) {
     return String(s == null ? "" : s)
