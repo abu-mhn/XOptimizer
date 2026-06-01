@@ -35,9 +35,12 @@
       theme: "dragonslayer",
       themeLabel: "Dragon Slayer",
       target: 100,
-      shortDescription: "Defeat 100 opponents whose deck included Dran, Drake or Dragoon.",
-      // Per-match credit: did the LOSER use one of these parts in this match?
-      creditOnWin: (winnerDeck, loserDeck) => deckHasAnyPartName(loserDeck, DRAGON_NAMES)
+      shortDescription: "Defeat 100 opponents using Dran, Drake or Dragoon while your own deck includes any Knight part.",
+      // Per-match credit: did the LOSER use a Dragon-named part AND did
+      // the WINNER bring a Knight-named part to slay them with?
+      creditOnWin: (winnerDeck, loserDeck) =>
+        deckHasAnyPartName(loserDeck, DRAGON_NAMES)
+        && deckHasAnyPartName(winnerDeck, KNIGHT_NAMES)
     },
     {
       id: "lonewolf",
@@ -71,6 +74,9 @@
   // deck stores display names, so we case-fold and look for the substring.
   const DRAGON_NAMES = ["dran", "drake", "dragoon"];
   const WOLF_NAMES = ["wolf"];
+  // Knight match — any part with "knight" in its name qualifies the
+  // winner for Dragon Slayer credit (any blade / ratchet / bit / etc.).
+  const KNIGHT_NAMES = ["knight"];
   // Clock Mirage check uses the full display name (no other blade contains
   // "clock mirage" as a substring, so the substring approach is safe).
   const CLOCK_MIRAGE_NAMES = ["clock mirage"];
