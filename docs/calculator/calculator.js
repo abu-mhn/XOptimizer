@@ -1565,7 +1565,7 @@ function initSettingDropdown(id, storageKey, defaultVal, onChange) {
 
 // Theme setting — exposed so auth.js can apply the Revox-Admin default.
 window.themeSetting = initSettingDropdown("setting-theme", "theme", "dark", (val) => {
-  document.body.classList.remove("light-mode", "space-mode", "tropical-mode", "stormy-mode", "mono-mode", "love-mode", "forest-mode", "revox-mode", "gold-mode", "silver-mode", "bronze-mode", "dragontamer-mode", "dragonslayer-mode", "lonewolf-mode", "rushhour-mode");
+  document.body.classList.remove("light-mode", "space-mode", "tropical-mode", "stormy-mode", "mono-mode", "love-mode", "forest-mode", "revox-mode", "gold-mode", "silver-mode", "bronze-mode", "dragontamer-mode", "dragonslayer-mode", "lonewolf-mode", "rushhour-mode", "kingofjungle-mode", "sharknado-mode", "sorcerersupreme-mode");
   if (val === "light") document.body.classList.add("light-mode");
   if (val === "space") document.body.classList.add("space-mode");
   if (val === "tropical") document.body.classList.add("tropical-mode");
@@ -1584,13 +1584,13 @@ window.themeSetting = initSettingDropdown("setting-theme", "theme", "dark", (val
   if (val === "dragonslayer") document.body.classList.add("dragonslayer-mode");
   if (val === "lonewolf") document.body.classList.add("lonewolf-mode");
   if (val === "rushhour") document.body.classList.add("rushhour-mode");
-  const titleLogo = document.getElementById("app-title-logo");
-  if (titleLogo) {
-    // Love and Forest use light surfaces (blush / moss-cream), so they
-    // get the dark logo variant for readable contrast.
-    const isLightLike = val === "light" || val === "tropical" || val === "love" || val === "forest";
-    titleLogo.src = "assets/icons/" + (isLightLike ? "XOptimizerLight.webp" : "XOptimizerDark.webp");
-  }
+  if (val === "kingofjungle") document.body.classList.add("kingofjungle-mode");
+  if (val === "sharknado") document.body.classList.add("sharknado-mode");
+  if (val === "sorcerersupreme") document.body.classList.add("sorcerersupreme-mode");
+  // (The previous per-theme src swap between XOptimizerLight.webp /
+  // XOptimizerDark.webp is gone — #app-title-logo is now a CSS-masked
+  // span that takes currentColor, so the wordmark follows the active
+  // theme without needing two PNG variants.)
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.content = val === "light" ? "#f6f8fa"
     : val === "space" ? "#0b0d1a"
@@ -1607,6 +1607,9 @@ window.themeSetting = initSettingDropdown("setting-theme", "theme", "dark", (val
     : val === "dragonslayer" ? "#0e1320"
     : val === "lonewolf" ? "#0c1014"
     : val === "rushhour" ? "#1a1206"
+    : val === "kingofjungle" ? "#1a1404"
+    : val === "sharknado" ? "#081420"
+    : val === "sorcerersupreme" ? "#160a24"
     : "#0a4797";
   document.querySelectorAll('img.footer-logo').forEach(img => {
     img.src = (val === "light" || val === "tropical" || val === "love" || val === "forest") ? "assets/icons/revoxNameLight.webp" : "assets/icons/revoxName.webp";

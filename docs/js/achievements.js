@@ -60,12 +60,64 @@
       theme: "rushhour",
       themeLabel: "Rush Hour",
       target: 100,
-      shortDescription: "Win 100 matches with Clock Mirage AND any Rush-named part in your deck.",
-      // Per-match credit: did the WINNER's deck include BOTH a Clock Mirage
-      // (exact blade name) AND a Rush-named part somewhere in the deck?
+      shortDescription: "Win 100 matches with a Clock Mirage + Rush-named bit combo in your deck.",
+      // Per-match credit: does at least ONE slot in the winner's deck pair
+      // Clock Mirage (blade) with a Rush-named bit? That's the meta combo
+      // — Clock Mirage is built around a Rush bit — so the achievement
+      // requires the parts in the SAME slot, not just both somewhere in
+      // the 3-combo deck.
+      creditOnWin: (winnerDeck /*, loserDeck */) => deckHasSlotWhere(
+        winnerDeck,
+        parts => partNameMatches(parts.blade, CLOCK_MIRAGE_NAMES)
+              && partNameMatches(parts.bit, RUSH_NAMES)
+      )
+    },
+    {
+      id: "kingOfJungle",
+      title: "King of Jungle",
+      tag: "King of Jungle",
+      theme: "kingofjungle",
+      themeLabel: "King of Jungle",
+      target: 100,
+      shortDescription: "Win 100 matches with a Leon-named part in your deck.",
+      // Per-match credit: did the WINNER's deck contain any Leon-named part?
+      creditOnWin: (winnerDeck /*, loserDeck */) => deckHasAnyPartName(winnerDeck, LEON_NAMES)
+    },
+    {
+      id: "sharknado",
+      title: "Sharknado",
+      tag: "Sharknado",
+      theme: "sharknado",
+      themeLabel: "Sharknado",
+      target: 100,
+      shortDescription: "Win 100 matches with a Shark-named part on a Balance-type slot.",
+      // Per-match credit: any slot in the winner's deck that BOTH contains a
+      // Shark-named part AND classifies as a Balance-type combo via the
+      // shared getType() heuristic (no single stat hitting 100). The
+      // achievement is about pairing a Shark blade/ratchet/bit with the
+      // OTHER parts so the slot ends up balanced rather than glass-cannon.
+      creditOnWin: (winnerDeck /*, loserDeck */) => deckHasSlotWhere(
+        winnerDeck,
+        parts => slotHasAnyPartName(parts, SHARK_NAMES) && slotTypeIsBalance(parts)
+      )
+    },
+    {
+      id: "sorcererSupreme",
+      title: "Sorcerer Supreme",
+      tag: "Sorcerer Supreme",
+      theme: "sorcerersupreme",
+      themeLabel: "Sorcerer Supreme",
+      target: 100,
+      shortDescription: "Win 100 matches with a Wizard slot flanked by two Attack-type slots.",
+      // Per-match credit: of the deck's 3 slots, exactly ONE contains a
+      // Wizard-named part and the OTHER TWO classify as pure Attack-type
+      // combos. The Wizard slot itself can be any type — the achievement is
+      // about hard-carrying a slow control slot with two attackers.
       creditOnWin: (winnerDeck /*, loserDeck */) =>
-        deckHasAnyPartName(winnerDeck, CLOCK_MIRAGE_NAMES)
-        && deckHasAnyPartName(winnerDeck, RUSH_NAMES)
+        deckSplitMatches(winnerDeck, slot => slotHasAnyPartName(slot.parts, WIZARD_NAMES), {
+          markedCount: 1,
+          otherPredicate: slot => slotTypeLabel(slot.parts) === "Attack"
+        })
     }
   ];
 
@@ -83,6 +135,16 @@
   // Rush match against any part containing "rush" in its name (Rush Bit,
   // any Rush-prefixed ratchet or assist blade, etc.).
   const RUSH_NAMES = ["rush"];
+  // Leon match — any part with "leon" in its name (Leon Crest / Leon
+  // Claw / any Leon-prefixed blade or ratchet, etc.).
+  const LEON_NAMES = ["leon"];
+  // Shark match — any part with "shark" in its name (Shark Edge, Shark
+  // Scale, etc.). Used by the Sharknado achievement combined with a
+  // per-slot Balance-type check.
+  const SHARK_NAMES = ["shark"];
+  // Wizard match — any part with "wizard" in its name (Wizard Arrow,
+  // Wizard Rod, etc.). Used by the Sorcerer Supreme achievement.
+  const WIZARD_NAMES = ["wizard"];
 
   // Walk every named part across all 3 slots in a bey-check deck. Each slot
   // can be in standard / cx / cxExpand mode with different fields; we just
@@ -120,6 +182,118 @@
       }
     });
     return n;
+  }
+
+  // True if any single slot's `parts` object satisfies `predicate`. Used
+  // by Rush Hour to require the Clock Mirage + Rush-bit combo within the
+  // SAME slot, not just both somewhere across the 3-combo deck.
+  function deckHasSlotWhere(deck, predicate) {
+    if (!Array.isArray(deck)) return false;
+    for (const slot of deck) {
+      if (slot && slot.parts && predicate(slot.parts)) return true;
+    }
+    return false;
+  }
+
+  // Case-insensitive substring test against a list of needles.
+  function partNameMatches(name, needles) {
+    if (typeof name !== "string" || !name) return false;
+    const low = name.toLowerCase();
+    for (const needle of needles) {
+      if (low.indexOf(needle) !== -1) return true;
+    }
+    return false;
+  }
+
+  // True if any field in a single slot's `parts` map matches one of the
+  // substring needles. Per-slot variant of `deckHasAnyPartName` — used
+  // when a creditOnWin callback needs to test a SLOT (not the whole
+  // deck) for a named part.
+  function slotHasAnyPartName(parts, needles) {
+    if (!parts) return false;
+    for (const key of Object.keys(parts)) {
+      if (partNameMatches(parts[key], needles)) return true;
+    }
+    return false;
+  }
+
+  // Classify a single slot via the same heuristic the Calculator uses
+  // (getType() in js/core.js) — sum ATK/DEF/STA across every named part
+  // in the slot, look the part up in DATA for its stats, and pass to
+  // getType. Returns the type label (e.g. "Balance", "Balance II",
+  // "Perfect Balance", "Attack", "Defense", "Stamina") or "" if the
+  // shared globals aren't loaded yet.
+  //
+  // Field → DATA collection mapping mirrors the Bey Check form. Bits
+  // include both normal bits and ratchet-bits after mergeBits() runs in
+  // core.js, so the isRatchetBit flag on the matched bit drives the
+  // ratchet-bit branch of getType (which uses different thresholds).
+  const FIELD_TO_DATA = {
+    blade: "blades",
+    lockChip: "lockChips",
+    mainBlade: "mainBlades",
+    metalBlade: "metalBlades",
+    overBlade: "overBlades",
+    assistBlade: "assistBlades",
+    ratchet: "ratchets",
+    bit: "bits"
+  };
+  function slotTypeLabel(parts) {
+    if (!parts || typeof window === "undefined" || !window.DATA) return "";
+    let atk = 0, def = 0, sta = 0;
+    let isRatchetBit = false;
+    for (const field of Object.keys(FIELD_TO_DATA)) {
+      const name = parts[field];
+      if (typeof name !== "string" || !name) continue;
+      // The "__NO_RATCHET__" sentinel and any other non-data name will
+      // simply not match below — no need to special-case it.
+      const collection = window.DATA[FIELD_TO_DATA[field]];
+      if (!Array.isArray(collection)) continue;
+      const part = collection.find(p => p && p.name === name);
+      if (!part) continue;
+      atk += (part.atk || 0);
+      def += (part.def || 0);
+      sta += (part.sta || 0);
+      if (field === "bit" && part.isRatchetBit) isRatchetBit = true;
+    }
+    if (typeof window.getType !== "function") return "";
+    return window.getType(atk, def, sta, isRatchetBit);
+  }
+
+  // Convenience predicate — true when slotTypeLabel returns any Balance
+  // variant ("Balance", "Balance II", "Balance III", "Perfect Balance",
+  // "Ultimate Balance"). Used by Sharknado.
+  function slotTypeIsBalance(parts) {
+    const t = slotTypeLabel(parts);
+    return typeof t === "string" && t.indexOf("Balance") !== -1;
+  }
+
+  // Generic deck split — partitions every slot into "marked" (passes
+  // `markedPredicate`) vs "other", then enforces:
+  //   1. Exactly `opts.markedCount` slots are marked.
+  //   2. Every non-marked slot satisfies `opts.otherPredicate`.
+  // Used by Sorcerer Supreme (markedCount: 1 Wizard slot + the OTHER 2
+  // slots must be Attack-type). Falls back to false if the deck shape
+  // isn't an array of 3 valid slots — partial decks shouldn't credit.
+  function deckSplitMatches(deck, markedPredicate, opts) {
+    if (!Array.isArray(deck) || deck.length < 3) return false;
+    opts = opts || {};
+    const otherPred = typeof opts.otherPredicate === "function" ? opts.otherPredicate : null;
+    let markedSeen = 0;
+    let othersOk = true;
+    let validSlots = 0;
+    for (const slot of deck) {
+      if (!slot || !slot.parts) continue;
+      validSlots++;
+      if (markedPredicate(slot)) {
+        markedSeen++;
+      } else if (otherPred && !otherPred(slot)) {
+        othersOk = false;
+      }
+    }
+    if (validSlots < 3) return false;
+    if (typeof opts.markedCount === "number" && markedSeen !== opts.markedCount) return false;
+    return othersOk;
   }
 
   // Firebase key for the username -> uid lookup. Same encoding as winRates

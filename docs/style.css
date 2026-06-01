@@ -45,6 +45,39 @@ h1 {
     height: auto;
 }
 
+/* Title logo rendered as a CSS-masked silhouette filled with currentColor.
+   The X-Optimizer wordmark + X icon adopts the active theme's text color
+   on every page (matches the tab-icon + achievement-card-icon pattern).
+   The original PNG keeps shipping as the mask source, only the alpha
+   channel is used so either Light or Dark variant works the same.
+
+   Sized with a fixed pixel height + capped width — the mask is centered
+   horizontally so a wide span doesn't leave a tail of empty bg-color on
+   the right (which made the logo look weirdly off-center on mobile). */
+.title-logo-mask {
+    display: block;
+    width: 100%;
+    max-width: 180px;
+    height: 40px;
+    margin: 0 auto;
+    background-color: currentColor;
+    -webkit-mask-image: url("assets/icons/XOptimizerLight.webp");
+            mask-image: url("assets/icons/XOptimizerLight.webp");
+    -webkit-mask-size: contain;
+            mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+            mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+            mask-position: center;
+}
+
+@media (max-width: 600px) {
+    .title-logo-mask {
+        max-width: 140px;
+        height: 32px;
+    }
+}
+
 
 /* =======================
    TABS (FIXED FLEX SAFETY)
@@ -14471,4 +14504,119 @@ body.rushhour-mode .btn {
     background: linear-gradient(135deg, #d04030, #f08020);
     color: #fff;
     border-color: #5c3a14;
+}
+
+/* --- King of Jungle: savanna gold + deep jungle green (Leon parts —
+       lion, regal, sunlit savanna at the edge of the rainforest). --- */
+body.kingofjungle-mode {
+    background: #1a1404;
+    background-image:
+        radial-gradient(ellipse 60% 40% at 20% 15%, rgba(210, 170, 60, 0.22) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 35% at 80% 30%, rgba(80, 130, 60, 0.18) 0%, transparent 70%),
+        radial-gradient(ellipse 70% 45% at 50% 90%, rgba(180, 130, 40, 0.2) 0%, transparent 70%);
+    background-attachment: fixed;
+    color: #f0dd9c;
+}
+body.kingofjungle-mode .mode-tabs,
+body.kingofjungle-mode .sub-tabs,
+body.kingofjungle-mode .history-sub-tabs,
+body.kingofjungle-mode .tournament-sub-tabs {
+    background: rgba(32, 24, 8, 0.85);
+    border-bottom-color: #5a4418;
+}
+body.kingofjungle-mode .tab,
+body.kingofjungle-mode .sub-tab {
+    color: #e6c870;
+}
+body.kingofjungle-mode .tab.active,
+body.kingofjungle-mode .sub-tab.active {
+    background: linear-gradient(135deg, #c8962a, #4a7a3a);
+    color: #fff;
+}
+body.kingofjungle-mode fieldset,
+body.kingofjungle-mode .popup-card {
+    background: #28200c;
+    border-color: #5a4418;
+}
+body.kingofjungle-mode .btn {
+    background: linear-gradient(135deg, #c8962a, #4a7a3a);
+    color: #fff;
+    border-color: #5a4418;
+}
+
+/* --- Sharknado: deep ocean blue + storm gray, with lightning-yellow
+       accents. Shark Edge / Shark Scale + balanced combo → ocean tempest. */
+body.sharknado-mode {
+    background: #081420;
+    background-image:
+        radial-gradient(ellipse 60% 40% at 20% 15%, rgba(60, 100, 160, 0.22) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 35% at 80% 30%, rgba(120, 140, 160, 0.18) 0%, transparent 70%),
+        radial-gradient(ellipse 70% 45% at 50% 90%, rgba(40, 70, 120, 0.2) 0%, transparent 70%);
+    background-attachment: fixed;
+    color: #c8dceb;
+}
+body.sharknado-mode .mode-tabs,
+body.sharknado-mode .sub-tabs,
+body.sharknado-mode .history-sub-tabs,
+body.sharknado-mode .tournament-sub-tabs {
+    background: rgba(10, 22, 36, 0.85);
+    border-bottom-color: #1f3a5a;
+}
+body.sharknado-mode .tab,
+body.sharknado-mode .sub-tab {
+    color: #a8c0d4;
+}
+body.sharknado-mode .tab.active,
+body.sharknado-mode .sub-tab.active {
+    background: linear-gradient(135deg, #2a5a8c, #f0d020);
+    color: #fff;
+}
+body.sharknado-mode fieldset,
+body.sharknado-mode .popup-card {
+    background: #122236;
+    border-color: #1f3a5a;
+}
+body.sharknado-mode .btn {
+    background: linear-gradient(135deg, #2a5a8c, #f0d020);
+    color: #0a1a28;
+    border-color: #1f3a5a;
+}
+
+/* --- Sorcerer Supreme: mystical violet + arcane gold (Wizard slot
+       carried by two Attack-type combos → robe + spellbook + flanking
+       attackers). Dark-based, deep purple canvas with gold accents. --- */
+body.sorcerersupreme-mode {
+    background: #160a24;
+    background-image:
+        radial-gradient(ellipse 60% 40% at 20% 15%, rgba(140, 80, 200, 0.22) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 35% at 80% 30%, rgba(220, 180, 70, 0.18) 0%, transparent 70%),
+        radial-gradient(ellipse 70% 45% at 50% 90%, rgba(90, 50, 140, 0.2) 0%, transparent 70%);
+    background-attachment: fixed;
+    color: #e6d8f4;
+}
+body.sorcerersupreme-mode .mode-tabs,
+body.sorcerersupreme-mode .sub-tabs,
+body.sorcerersupreme-mode .history-sub-tabs,
+body.sorcerersupreme-mode .tournament-sub-tabs {
+    background: rgba(26, 12, 40, 0.85);
+    border-bottom-color: #3a205a;
+}
+body.sorcerersupreme-mode .tab,
+body.sorcerersupreme-mode .sub-tab {
+    color: #c8a8e8;
+}
+body.sorcerersupreme-mode .tab.active,
+body.sorcerersupreme-mode .sub-tab.active {
+    background: linear-gradient(135deg, #6a3aa4, #e0b440);
+    color: #fff;
+}
+body.sorcerersupreme-mode fieldset,
+body.sorcerersupreme-mode .popup-card {
+    background: #221038;
+    border-color: #3a205a;
+}
+body.sorcerersupreme-mode .btn {
+    background: linear-gradient(135deg, #6a3aa4, #e0b440);
+    color: #fff;
+    border-color: #3a205a;
 }

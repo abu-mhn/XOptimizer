@@ -658,7 +658,10 @@
     dragontamer: "Dragon Tamer",
     dragonslayer: "Dragon Slayer",
     lonewolf: "Lonewolf",
-    rushhour: "Rush Hour"
+    rushhour: "Rush Hour",
+    kingofjungle: "King of Jungle",
+    sharknado: "Sharknado",
+    sorcerersupreme: "Sorcerer Supreme"
   };
   // Becomes true after Firebase reports the first auth state — lets the
   // achievement gate tell a confirmed "signed out" from "auth not resolved

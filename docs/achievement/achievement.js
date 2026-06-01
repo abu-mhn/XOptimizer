@@ -21,7 +21,10 @@
     dragonTamer: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/fantasy.png\')"></span>',
     dragonSlayer: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/knight.png\')"></span>',
     lonewolf: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/dog.png\')"></span>',
-    rushHour: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/fast-time.png\')"></span>'
+    rushHour: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/fast-time.png\')"></span>',
+    kingOfJungle: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/animal.png\')"></span>',
+    sharknado: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/shark.png\')"></span>',
+    sorcererSupreme: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/wizard.png\')"></span>'
   };
 
   const defs = (window.ACHIEVEMENTS || []);
