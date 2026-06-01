@@ -49,9 +49,30 @@
       theme: "lonewolf",
       themeLabel: "Lonewolf",
       target: 100,
-      shortDescription: "Win 100 matches where your deck has exactly one Wolf part.",
-      // Per-match credit: did the WINNER's deck contain EXACTLY ONE Wolf-named part?
-      creditOnWin: (winnerDeck /*, loserDeck */) => countDeckPartsByName(winnerDeck, WOLF_NAMES) === 1
+      shortDescription: "Win 100 matches where your deck has exactly one Wolf part — and that slot's combo type is unique across the deck (the other two slots must be a different type).",
+      // Per-match credit:
+      //   1. Exactly one Wolf-named part appears anywhere in the winner's
+      //      3-combo deck (the original Lonewolf rule).
+      //   2. The slot CONTAINING that Wolf part has a combo type (Attack /
+      //      Defense / Stamina / Balance via the shared getType heuristic)
+      //      that NEITHER of the other two slots matches. The wolf walks
+      //      its own type — if it's a Stamina build, the rest of the deck
+      //      can't also be Stamina.
+      creditOnWin: (winnerDeck /*, loserDeck */) => {
+        if (!Array.isArray(winnerDeck) || winnerDeck.length < 3) return false;
+        if (countDeckPartsByName(winnerDeck, WOLF_NAMES) !== 1) return false;
+        let wolfSlot = null;
+        const otherSlots = [];
+        for (const slot of winnerDeck) {
+          if (!slot || !slot.parts) return false;
+          if (slotHasAnyPartName(slot.parts, WOLF_NAMES)) wolfSlot = slot;
+          else otherSlots.push(slot);
+        }
+        if (!wolfSlot || otherSlots.length !== 2) return false;
+        const wolfType = slotBaseType(wolfSlot.parts);
+        if (!wolfType) return false;
+        return otherSlots.every(s => slotBaseType(s.parts) !== wolfType);
+      }
     },
     {
       id: "rushHour",
@@ -114,16 +135,19 @@
       theme: "sorcerersupreme",
       themeLabel: "Sorcerer Supreme",
       target: 100,
-      shortDescription: "Win 100 matches with a Wizard slot flanked by two Attack-type slots.",
-      // Per-match credit: of the deck's 3 slots, exactly ONE contains a
-      // Wizard-named part and the OTHER TWO classify as pure Attack-type
-      // combos. The Wizard slot itself can be any type — the achievement is
-      // about hard-carrying a slow control slot with two attackers.
-      creditOnWin: (winnerDeck /*, loserDeck */) =>
-        deckSplitMatches(winnerDeck, slot => slotHasAnyPartName(slot.parts, WIZARD_NAMES), {
-          markedCount: 1,
-          otherPredicate: slot => slotTypeLabel(slot.parts) === "Attack"
-        })
+      shortDescription: "Win 100 matches with a Wizard-named part in every slot of your deck.",
+      // Per-match credit: every one of the deck's 3 slots contains at
+      // least one Wizard-named part. Pure wizard council, no exceptions.
+      creditOnWin: (winnerDeck /*, loserDeck */) => {
+        if (!Array.isArray(winnerDeck) || winnerDeck.length < 3) return false;
+        let validSlots = 0;
+        for (const slot of winnerDeck) {
+          if (!slot || !slot.parts) return false;
+          validSlots++;
+          if (!slotHasAnyPartName(slot.parts, WIZARD_NAMES)) return false;
+        }
+        return validSlots >= 3;
+      }
     }
   ];
 
@@ -277,6 +301,17 @@
   function slotTypeIsBalance(parts) {
     const t = slotTypeLabel(parts);
     return typeof t === "string" && t.indexOf("Balance") !== -1;
+  }
+
+  // Coarse type bucket — collapses every Balance variant down to a single
+  // "Balance" label so achievements can compare a slot's type identity
+  // without caring about Balance / Balance II / Perfect Balance grades.
+  // Returns "Attack" / "Defense" / "Stamina" / "Balance" / "".
+  function slotBaseType(parts) {
+    const label = slotTypeLabel(parts);
+    if (typeof label !== "string" || !label) return "";
+    if (label.indexOf("Balance") !== -1) return "Balance";
+    return label;
   }
 
   // Generic deck split — partitions every slot into "marked" (passes
