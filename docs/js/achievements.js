@@ -24,7 +24,7 @@
       theme: "dragontamer",
       themeLabel: "Dragon Tamer",
       target: 100,
-      shortDescription: "Win 100 matches using parts with Dran, Drake or Dragoon in the name.",
+      shortDescription: "Win 100 matches using parts named Dran, Drake, Dragoon, Wyvern, Bahamut or Ragna.",
       // Per-match credit: did the WINNER use one of these parts in this match?
       creditOnWin: (winnerDeck /*, loserDeck */) => deckHasAnyPartName(winnerDeck, DRAGON_NAMES)
     },
@@ -35,7 +35,7 @@
       theme: "dragonslayer",
       themeLabel: "Dragon Slayer",
       target: 100,
-      shortDescription: "Defeat 100 opponents using Dran, Drake or Dragoon while your own deck includes any Knight part.",
+      shortDescription: "Defeat 100 opponents using Dran / Drake / Dragoon / Wyvern / Bahamut / Ragna while your own deck includes any Knight part.",
       // Per-match credit: did the LOSER use a Dragon-named part AND did
       // the WINNER bring a Knight-named part to slay them with?
       creditOnWin: (winnerDeck, loserDeck) =>
@@ -79,9 +79,15 @@
       theme: "kingofjungle",
       themeLabel: "King of Jungle",
       target: 100,
-      shortDescription: "Win 100 matches with a Leon-named part in your deck.",
-      // Per-match credit: did the WINNER's deck contain any Leon-named part?
-      creditOnWin: (winnerDeck /*, loserDeck */) => deckHasAnyPartName(winnerDeck, LEON_NAMES)
+      shortDescription: "Win 100 matches with a Leon slot flanked by two slots that each carry Rhino / Fox / Wolf / Viper / Tiger / Bear / Goat parts.",
+      // Per-match credit: exactly ONE slot has a Leon-named part (the lion
+      // king) and the OTHER TWO slots each carry at least one part named
+      // for another jungle/wild animal — the pride flanking the king.
+      creditOnWin: (winnerDeck /*, loserDeck */) =>
+        deckSplitMatches(winnerDeck, slot => slotHasAnyPartName(slot.parts, LEON_NAMES), {
+          markedCount: 1,
+          otherPredicate: slot => slotHasAnyPartName(slot.parts, JUNGLE_ANIMAL_NAMES)
+        })
     },
     {
       id: "sharknado",
@@ -124,7 +130,7 @@
   // Substring matches — case-insensitive. Part names in DATA include both the
   // codename ("BULLETGRIFFON") and the display name ("Bullet Griffon"); the
   // deck stores display names, so we case-fold and look for the substring.
-  const DRAGON_NAMES = ["dran", "drake", "dragoon"];
+  const DRAGON_NAMES = ["dran", "drake", "dragoon", "wyvern", "bahamut", "ragna"];
   const WOLF_NAMES = ["wolf"];
   // Knight match — any part with "knight" in its name qualifies the
   // winner for Dragon Slayer credit (any blade / ratchet / bit / etc.).
@@ -138,6 +144,11 @@
   // Leon match — any part with "leon" in its name (Leon Crest / Leon
   // Claw / any Leon-prefixed blade or ratchet, etc.).
   const LEON_NAMES = ["leon"];
+  // Other jungle / wild animals used to flank the Leon slot in the King
+  // of Jungle achievement (the king with his pride). Substring match —
+  // catches Rhino Horn, Fox Bit, Silver Wolf, Viper Tail, Weiss Tiger,
+  // Bear Scratch, Goat Tackle, etc.
+  const JUNGLE_ANIMAL_NAMES = ["rhino", "fox", "wolf", "viper", "tiger", "bear", "goat"];
   // Shark match — any part with "shark" in its name (Shark Edge, Shark
   // Scale, etc.). Used by the Sharknado achievement combined with a
   // per-slot Balance-type check.
