@@ -155,16 +155,33 @@ h1 {
     margin-left: 4px;
 }
 
-.tab[data-mode="deck"] img,
-.tab[data-mode="swiss"] img,
-.tab[data-mode="revox"] img {
-    filter: brightness(0) invert(1);
+/* CSS-masked tab icon — used for PNGs that ship as dark-on-transparent
+   silhouettes (layout / bluetooth / play-button / coding). Each tab sets
+   --tab-icon to the asset URL via inline style; the silhouette is filled
+   with currentColor so the icon follows the active theme automatically.
+   Sized to match the surrounding .tab img height. */
+.tab-icon-mask {
+    display: block;
+    width: 18px;
+    height: 18px;
+    background-color: currentColor;
+    -webkit-mask-image: var(--tab-icon);
+            mask-image: var(--tab-icon);
+    -webkit-mask-size: contain;
+            mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+            mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+            mask-position: center;
 }
 
-.tab[data-mode="calculator"] img,
-.tab[data-mode="settings"] img {
-    filter: brightness(0) invert(1);
-}
+/* Note: prior `.tab[data-mode="..."] img { filter: brightness(0) invert(1) }`
+   blocks for deck / swiss / revox / calculator / settings have been removed.
+   Those tabs now use `.tab-icon-mask` spans filled with currentColor, so
+   the icon adapts to the active theme automatically — no per-theme override
+   needed. Per-theme `.tab[data-mode="..."] img` selectors that remain below
+   (light, tropical, mono, love, forest blocks) are now no-ops because the
+   target img elements no longer exist; they can be cleaned up safely. */
 
 /* =======================
    SUB-TABS
@@ -7249,15 +7266,28 @@ body.mono-mode .popup-ok:hover {
 }
 
 .swiss-toolbar-actions {
-    display: inline-flex;
+    display: flex;
     flex-wrap: nowrap;
     gap: 6px;
-    flex: 0 0 auto;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.swiss-toolbar-actions::-webkit-scrollbar {
+    display: none;
 }
 
 .swiss-toolbar .btn-icon-sm {
-    padding: 3px 6px;
+    padding: 3px 8px;
     flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
 }
 
 .swiss-toolbar .btn-icon-sm img {
@@ -7271,6 +7301,62 @@ body.mono-mode .popup-ok:hover {
     width: 14px;
     height: 14px;
     display: block;
+}
+
+/* Remove-participant popup — scrollable name list with an × button per row.
+   Used by showRemoveParticipantsPopup during round 1 of a running tournament. */
+.remove-participant-list {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+    max-height: 320px;
+    overflow-y: auto;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+}
+
+.remove-participant-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 10px;
+    border-bottom: 1px solid #30363d;
+}
+
+.remove-participant-row:last-child {
+    border-bottom: 0;
+}
+
+.remove-participant-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.remove-participant-btn {
+    flex: 0 0 auto;
+}
+
+/* Text label sitting next to each toolbar button's icon. Kept compact so a
+   row of four buttons (Share / Sub-hosts / Add / Leave) still fits on a
+   narrow phone — `font-size` slightly smaller than body copy, no wrap. */
+.swiss-toolbar-btn-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+    line-height: 1;
+}
+
+/* The Add (+) button uses a text glyph in place of an icon. Bump the glyph
+   size so it visually matches the share/exit icons next to it. */
+.swiss-toolbar-btn-plus-icon {
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1;
 }
 
 /* Sub-hosts popup — username input row + the designated co-host list. */
@@ -8592,6 +8678,139 @@ body.mono-mode .history-sub-tab.active img {
     opacity: 0.75;
     padding: 10px 4px;
     text-align: center;
+}
+
+/* Achievement tab — progress cards stack vertically, one per achievement. */
+.achievement-hint {
+    opacity: 0.75;
+    text-align: center;
+    padding: 24px 8px;
+    margin: 0;
+}
+
+.achievement-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.achievement-card {
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    background: rgba(127, 127, 127, 0.08);
+}
+
+.achievement-card-icon {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(127, 127, 127, 0.15);
+}
+
+.achievement-card-icon svg,
+.achievement-card-icon img {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+}
+
+/* Masked PNG icon — the achievement.js entries set --ach-icon to the
+   asset URL; the silhouette is rendered in currentColor so it follows
+   the active theme on every page (no fixed black / white). Falls back
+   to nothing visible if the asset is missing — the card title + text
+   still read fine without an icon. */
+.achievement-icon-mask {
+    display: block;
+    width: 28px;
+    height: 28px;
+    background-color: currentColor;
+    -webkit-mask-image: var(--ach-icon);
+            mask-image: var(--ach-icon);
+    -webkit-mask-size: contain;
+            mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+            mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+            mask-position: center;
+}
+
+.achievement-card-body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.achievement-card-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.achievement-card-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.achievement-card-desc {
+    margin: 0 0 8px;
+    font-size: 0.85rem;
+    opacity: 0.8;
+    line-height: 1.4;
+}
+
+.achievement-progress {
+    width: 100%;
+    height: 8px;
+    border-radius: 4px;
+    background: rgba(127, 127, 127, 0.2);
+    overflow: hidden;
+}
+
+.achievement-progress-bar {
+    height: 100%;
+    background: #58a6ff;
+    border-radius: 4px;
+    transition: width 240ms ease;
+}
+
+.achievement-progress-count {
+    margin-top: 4px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    opacity: 0.85;
+}
+
+.achievement-card.is-unlocked {
+    border-color: rgba(255, 209, 102, 0.7);
+    background: rgba(255, 209, 102, 0.08);
+}
+
+.achievement-card.is-unlocked .achievement-progress-bar {
+    background: #ffd166;
+}
+
+.achievement-unlocked-badge {
+    flex: 0 0 auto;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(255, 209, 102, 0.25);
+    color: #c89800;
+    border: 1px solid rgba(255, 209, 102, 0.6);
+    white-space: nowrap;
 }
 
 .tournament-ranking-points {
@@ -14096,3 +14315,122 @@ body.bronze-mode .result-part-name {
 }
 
 body.bronze-mode .swiss-reg-format-editable { border-color: #c68044; }
+
+/* =============================================================
+   ACHIEVEMENT THEMES — unlocked by Dragon Tamer / Dragon Slayer /
+   Lonewolf titles (100 wins on the matching condition). All three
+   are dark-based variants with a distinct accent palette. Kept
+   intentionally light on overrides so they sit on top of the
+   default Dark theme without touching every component.
+   ============================================================= */
+
+/* --- Dragon Tamer: warm reds + ember gold (fire / tamed dragon). --- */
+body.dragontamer-mode {
+    background: #1a0d0d;
+    background-image:
+        radial-gradient(ellipse 60% 40% at 20% 15%, rgba(190, 80, 50, 0.22) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 35% at 80% 30%, rgba(220, 140, 60, 0.18) 0%, transparent 70%),
+        radial-gradient(ellipse 70% 45% at 50% 90%, rgba(140, 50, 35, 0.2) 0%, transparent 70%);
+    background-attachment: fixed;
+    color: #f5d6c2;
+}
+body.dragontamer-mode .mode-tabs,
+body.dragontamer-mode .sub-tabs,
+body.dragontamer-mode .history-sub-tabs,
+body.dragontamer-mode .tournament-sub-tabs {
+    background: rgba(40, 18, 14, 0.85);
+    border-bottom-color: #4d2218;
+}
+body.dragontamer-mode .tab,
+body.dragontamer-mode .sub-tab {
+    color: #f0c8b0;
+}
+body.dragontamer-mode .tab.active,
+body.dragontamer-mode .sub-tab.active {
+    background: linear-gradient(135deg, #c44a2a, #e87038);
+    color: #fff;
+}
+body.dragontamer-mode fieldset,
+body.dragontamer-mode .popup-card {
+    background: #2a1612;
+    border-color: #4d2218;
+}
+body.dragontamer-mode .btn {
+    background: linear-gradient(135deg, #c44a2a, #e87038);
+    color: #fff;
+    border-color: #4d2218;
+}
+
+/* --- Dragon Slayer: cool steel blue + silver (knight / forged blade). --- */
+body.dragonslayer-mode {
+    background: #0e1320;
+    background-image:
+        radial-gradient(ellipse 60% 40% at 20% 15%, rgba(80, 110, 180, 0.22) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 35% at 80% 30%, rgba(140, 160, 200, 0.18) 0%, transparent 70%),
+        radial-gradient(ellipse 70% 45% at 50% 90%, rgba(60, 90, 140, 0.2) 0%, transparent 70%);
+    background-attachment: fixed;
+    color: #d8e0ee;
+}
+body.dragonslayer-mode .mode-tabs,
+body.dragonslayer-mode .sub-tabs,
+body.dragonslayer-mode .history-sub-tabs,
+body.dragonslayer-mode .tournament-sub-tabs {
+    background: rgba(16, 22, 38, 0.85);
+    border-bottom-color: #2a3a55;
+}
+body.dragonslayer-mode .tab,
+body.dragonslayer-mode .sub-tab {
+    color: #b8c5d8;
+}
+body.dragonslayer-mode .tab.active,
+body.dragonslayer-mode .sub-tab.active {
+    background: linear-gradient(135deg, #5a7aa6, #8aa6c8);
+    color: #fff;
+}
+body.dragonslayer-mode fieldset,
+body.dragonslayer-mode .popup-card {
+    background: #1a2238;
+    border-color: #2a3a55;
+}
+body.dragonslayer-mode .btn {
+    background: linear-gradient(135deg, #5a7aa6, #8aa6c8);
+    color: #fff;
+    border-color: #2a3a55;
+}
+
+/* --- Lonewolf: deep slate + moon teal (night, solitude). --- */
+body.lonewolf-mode {
+    background: #0c1014;
+    background-image:
+        radial-gradient(ellipse 60% 40% at 20% 15%, rgba(70, 95, 110, 0.22) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 35% at 80% 30%, rgba(120, 140, 150, 0.15) 0%, transparent 70%),
+        radial-gradient(ellipse 70% 45% at 50% 90%, rgba(50, 70, 85, 0.2) 0%, transparent 70%);
+    background-attachment: fixed;
+    color: #c8d2d8;
+}
+body.lonewolf-mode .mode-tabs,
+body.lonewolf-mode .sub-tabs,
+body.lonewolf-mode .history-sub-tabs,
+body.lonewolf-mode .tournament-sub-tabs {
+    background: rgba(16, 20, 26, 0.85);
+    border-bottom-color: #28323a;
+}
+body.lonewolf-mode .tab,
+body.lonewolf-mode .sub-tab {
+    color: #a8b4be;
+}
+body.lonewolf-mode .tab.active,
+body.lonewolf-mode .sub-tab.active {
+    background: linear-gradient(135deg, #4a6470, #7a96a4);
+    color: #fff;
+}
+body.lonewolf-mode fieldset,
+body.lonewolf-mode .popup-card {
+    background: #18222a;
+    border-color: #28323a;
+}
+body.lonewolf-mode .btn {
+    background: linear-gradient(135deg, #4a6470, #7a96a4);
+    color: #fff;
+    border-color: #28323a;
+}

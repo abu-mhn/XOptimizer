@@ -1565,7 +1565,7 @@ function initSettingDropdown(id, storageKey, defaultVal, onChange) {
 
 // Theme setting — exposed so auth.js can apply the Revox-Admin default.
 window.themeSetting = initSettingDropdown("setting-theme", "theme", "dark", (val) => {
-  document.body.classList.remove("light-mode", "space-mode", "tropical-mode", "stormy-mode", "mono-mode", "love-mode", "forest-mode", "revox-mode", "gold-mode", "silver-mode", "bronze-mode");
+  document.body.classList.remove("light-mode", "space-mode", "tropical-mode", "stormy-mode", "mono-mode", "love-mode", "forest-mode", "revox-mode", "gold-mode", "silver-mode", "bronze-mode", "dragontamer-mode", "dragonslayer-mode", "lonewolf-mode");
   if (val === "light") document.body.classList.add("light-mode");
   if (val === "space") document.body.classList.add("space-mode");
   if (val === "tropical") document.body.classList.add("tropical-mode");
@@ -1578,6 +1578,11 @@ window.themeSetting = initSettingDropdown("setting-theme", "theme", "dark", (val
   if (val === "gold") document.body.classList.add("gold-mode");
   if (val === "silver") document.body.classList.add("silver-mode");
   if (val === "bronze") document.body.classList.add("bronze-mode");
+  // Achievement themes (unlocked by Dragon Tamer / Dragon Slayer / Lonewolf
+  // titles awarded at 100 wins). Dark-based, like the medal themes.
+  if (val === "dragontamer") document.body.classList.add("dragontamer-mode");
+  if (val === "dragonslayer") document.body.classList.add("dragonslayer-mode");
+  if (val === "lonewolf") document.body.classList.add("lonewolf-mode");
   const titleLogo = document.getElementById("app-title-logo");
   if (titleLogo) {
     // Love and Forest use light surfaces (blush / moss-cream), so they
@@ -1597,6 +1602,9 @@ window.themeSetting = initSettingDropdown("setting-theme", "theme", "dark", (val
     : val === "gold" ? "#1a1408"
     : val === "silver" ? "#14171a"
     : val === "bronze" ? "#1a1109"
+    : val === "dragontamer" ? "#1a0d0d"
+    : val === "dragonslayer" ? "#0e1320"
+    : val === "lonewolf" ? "#0c1014"
     : "#0a4797";
   document.querySelectorAll('img.footer-logo').forEach(img => {
     img.src = (val === "light" || val === "tropical" || val === "love" || val === "forest") ? "assets/icons/revoxNameLight.webp" : "assets/icons/revoxName.webp";

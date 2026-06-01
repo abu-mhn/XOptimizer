@@ -402,10 +402,54 @@
           tags: tags
         };
         window.dispatchEvent(new Event("userprofilechange"));
+        // Background pass: read /achievements/{usernameKey} and mirror any
+        // awarded achievements onto the user's tags. Lets a player who
+        // crossed 100 wins in a tournament see the matching title + theme
+        // on their next sign-in / refresh without a manual step.
+        mirrorAchievementTags(u, currentProfile);
         return currentProfile;
       })
       .catch(() => null);
   };
+
+  // Reads /achievements/{uid} (keyed by Firebase Auth UID — see
+  // js/achievements.js) and ensures every awarded achievement has its
+  // matching tag on users/{uid}/tags. No-op when nothing to mirror
+  // (counters not yet at target, or tag already present). Failures are
+  // non-fatal so a missing rule / read denial doesn't break sign-in.
+  function mirrorAchievementTags(user, profile) {
+    if (!user || !profile || !profile.username) return;
+    if (!window.ACHIEVEMENTS) return; // shared module not loaded on this page
+    let db;
+    try { db = firebase.database(); } catch (e) { db = null; }
+    if (!db) return;
+    db.ref("achievements/" + user.uid).once("value").then(snap => {
+      const v = snap.val() || {};
+      const existing = Array.isArray(profile.tags) ? profile.tags.slice() : [];
+      const existingSet = new Set(existing);
+      const updates = {};
+      let touched = false;
+      for (const def of window.ACHIEVEMENTS) {
+        const node = v[def.id];
+        if (!node || node.awarded !== true) continue;
+        if (existingSet.has(def.tag)) continue;
+        updates["tags/" + def.tag] = true;
+        existing.push(def.tag);
+        existingSet.add(def.tag);
+        touched = true;
+      }
+      if (!touched) return;
+      const ref = db.ref("users/" + user.uid);
+      ref.update(updates).then(() => {
+        // Refresh the local cache so the new tag is visible immediately —
+        // medal-theme gate, profile card, settings dropdown all read from
+        // currentProfile.tags, so a fire-and-forget re-dispatch keeps the
+        // UI honest without a second profile read.
+        currentProfile = Object.assign({}, currentProfile, { tags: existing });
+        window.dispatchEvent(new Event("userprofilechange"));
+      }).catch(e => console.warn("Achievement tag mirror failed:", e && e.message));
+    }).catch(() => { /* read failed — try again next sign-in */ });
+  }
 
   // Persist the signed-in user's profile. `username` is trimmed/capped and
   // must be unique across accounts; `photo` is a (downscaled) data-URL or "".
@@ -592,6 +636,48 @@
     document.querySelectorAll('.tab[data-mode="revox"]').forEach(tab => {
       tab.classList.toggle("hidden", !show && !tab.classList.contains("active"));
     });
+  }
+
+  // The Achievement tab is visible to any signed-in account (no tag gate —
+  // anyone with a profile can see their own achievements). Same "current
+  // page's own tab is never hidden" rule applies so a signed-out user
+  // already on the page doesn't watch the tab blink out.
+  function paintAchievementTab() {
+    const show = !!currentProfile;
+    document.querySelectorAll('.tab[data-mode="achievement"]').forEach(tab => {
+      tab.classList.toggle("hidden", !show && !tab.classList.contains("active"));
+    });
+  }
+
+  // Achievement themes — Dragon Tamer / Dragon Slayer / Lonewolf. Each is
+  // gated on the matching achievement tag (awarded at 100 wins, see
+  // tournament.js + js/achievements.js). The theme-menu entry is shown
+  // only while the tag is held; if the account loses the tag and a
+  // restricted achievement theme is active, it falls back to Dark.
+  const ACHIEVEMENT_THEME_TAGS = {
+    dragontamer: "Dragon Tamer",
+    dragonslayer: "Dragon Slayer",
+    lonewolf: "Lonewolf"
+  };
+  function applyAchievementThemeGate() {
+    const unlocked = {};
+    Object.keys(ACHIEVEMENT_THEME_TAGS).forEach(v => {
+      unlocked[v] = hasTag(ACHIEVEMENT_THEME_TAGS[v]);
+      document.querySelectorAll(
+        '#setting-theme .setting-dropdown-option[data-value="' + v + '"]'
+      ).forEach(opt => opt.classList.toggle("hidden", !unlocked[v]));
+    });
+    // Demote an active achievement theme if the tag has been revoked.
+    let stored = null;
+    try { stored = localStorage.getItem("theme"); } catch (e) {}
+    if (stored && Object.prototype.hasOwnProperty.call(unlocked, stored) && !unlocked[stored]) {
+      const theme = window.themeSetting;
+      if (theme && theme.set) theme.set("dark");
+      else {
+        document.body.classList.remove(stored + "-mode");
+        try { localStorage.setItem("theme", "dark"); } catch (e) {}
+      }
+    }
   }
 
   // The Revox theme is for Revox club accounts — "Revox Admin" and "Revox
@@ -1458,28 +1544,36 @@
   window.addEventListener("userprofilechange", () => {
     paintDeveloperTab();
     paintRevoxTab();
+    paintAchievementTab();
     ensureActiveTabVisible();
     applyRevoxThemeGate();
     applyMedalThemeGate();
+    applyAchievementThemeGate();
     renderDeveloperPage();
   });
   window.onAuthChange(() => {
     paintDeveloperTab();
     paintRevoxTab();
+    paintAchievementTab();
     ensureActiveTabVisible();
+    applyAchievementThemeGate();
     renderDeveloperPage();
   });
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {
       paintDeveloperTab();
       paintRevoxTab();
+      paintAchievementTab();
       ensureActiveTabVisible();
+      applyAchievementThemeGate();
       initDeveloperPageControls();
     });
   } else {
     paintDeveloperTab();
     paintRevoxTab();
+    paintAchievementTab();
     ensureActiveTabVisible();
+    applyAchievementThemeGate();
     initDeveloperPageControls();
   }
 })();

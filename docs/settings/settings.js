@@ -86,7 +86,9 @@ Tournament
 - Each registrant row carries a deck-status badge so the host can spot problem entries at a glance: green "Deck ✓" when every slot has every required part for its mode (standard / CX / CX Expand), amber "Incomplete" when at least one slot is missing a required part (tooltip names the offending slot numbers), red "No deck" when all 3 slots are empty, or red "Banned parts" when any slot contains a part on the room's Banned Parts list (tooltip names the banned parts + slot numbers). The banned-parts check is cross-field — a banned name (e.g. a banned ratchet) flags the deck no matter which slot field it appears in, so registrants who entered BEFORE a ban was added are flagged automatically without re-asking them to edit. Bullet Griffon slots pass "Deck ✓" without a ratchet (BG has a built-in ratchet, so its ratchet field is optional)
 - Leave Room also unregisters you — tapping the leave button during the registering phase removes any registrant entries the device owns (matched by createdBy = auth.uid, or by per-room localStorage tracking for unauthed Become Guest entries). No need to ping the host to remove your name. Hosts use the existing × next to each name (with an "Are you sure you want to remove [name]?" confirm to prevent accidental boots) — and when the host removes you that way, your device auto-disconnects from the room with a clear notice so no stale session is left open
 - Pre-Start deck check — tapping Start Tournament sweeps every registrant and surfaces deck problems in one combined prompt: account registrants with no deck, anyone with incomplete slots (and which slots), and anyone whose deck contains banned parts (and which parts). Guests with no deck are intentionally skipped (deck is optional for guests). The host can fix the listed issues or override and start anyway
-- Add a participant during round 1 — name + 3-combo deck; Swiss and Round Robin slot them in as a free win, or pair them against an existing bye, with no reset
+- Add participants in bulk during round 1 — paste a list of names (one per line) into the + Add popup and every entry is created as a deckless guest. Swiss / Round Robin slots them in as round-1 free wins (or pairs them against existing byes), no reset; Single Elim confirms once and regenerates the bracket with every new name included
+- Remove participants before round 2 — the − Remove button opens a list of every player with × buttons. Confirming removes the chosen player and regenerates the format from the remaining names (same gate as Add — round 1 only). Round-1 matches that have been scored are lost in the regen and the host is warned before that happens
+- Toolbar buttons show icon + text labels (Share / Sub-hosts / + Add / − Remove / Reset or Leave) and sit on a horizontal row with an invisible scroller, so the row scrolls sideways on narrow phone screens instead of clipping or wrapping
 - Rename any participant after the tournament starts — tap their name in a group's Standings
 - Adjust the total round count mid-tournament — tap "Round X / Y" in a group header; already-played rounds are kept
 - Registered decks pre-fill every match; judges can override per match
@@ -102,6 +104,15 @@ Tournament
 - Past tournaments stay viewable in history after reset (cached snapshot)
 - Cleaner finish view: once a tournament reaches "Tournament Complete" the running-view toolbar drops the Share, Co-hosts and Add Participant buttons — only the Close button stays, since none of those actions apply after the final is decided
 - Parts-usage pie charts at tournament end as an auto-sliding carousel (theme-aware palette)
+
+Achievement
+- New tab visible to any signed-in account — sits between Tournament and Battle Pass in the tab bar. Each achievement is a progress card on the tab (icon + title + description + bar + N / 100 count); once the count hits 100 the card flips to "Unlocked · [Theme name] theme"
+- Forward-only tracking — counters start at 0 for every account on launch and only matches scored from this version onward contribute. Past tournament history is not backfilled
+- Dragon Tamer — win 100 matches while your deck includes a part named Dran, Drake or Dragoon (any slot, any field). Awards the "Dragon Tamer" profile tag + unlocks the Dragon Tamer theme (warm reds + ember gold)
+- Dragon Slayer — defeat 100 opponents whose deck included a part named Dran, Drake or Dragoon. Awards the "Dragon Slayer" profile tag + unlocks the Dragon Slayer theme (steel blue + silver)
+- Lonewolf — win 100 matches where your deck contains exactly one Wolf-named part (one slot only — two or more disqualifies the match). Awards the "Lonewolf" profile tag + unlocks the Lonewolf theme (slate gray + moon teal)
+- Storage lives at /achievements/{uid} (keyed by Firebase Auth UID). Reads are private to the user (or Developer); writes happen on the scoring device once a match is finalised. The tag is mirrored onto the user's profile the next time they sign in, gated by a Firebase rule that only lets the player self-claim a title when the matching achievement node is already flagged awarded
+- Guests and tied matches don't credit any achievement (same gate as global ranking points)
 
 Revox
 - Dedicated tab and theme for accounts tagged "Revox Admin" (full edit); "Revox Member" accounts see the tab view-only
@@ -133,6 +144,7 @@ History
 Settings
 - Themes: Dark, Light, Space, Tropical, Stormy, Monochrome, Love, Forest (plus Revox, for Revox accounts)
 - Medal themes: Gold, Silver and Bronze are reward themes — each is unlocked only while the account holds the matching medal tag (top 3 of the tournament ranking); the menu entry appears when the medal is earned and disappears when it's lost, reverting to Dark if that medal theme was active
+- Achievement themes: Dragon Tamer (warm reds + ember gold), Dragon Slayer (steel blue + silver) and Lonewolf (slate gray + moon teal). Each appears in the theme menu only while the matching achievement tag is held (awarded at 100 wins — see the Achievement tab); same demote-to-Dark behavior as the medal themes if the tag is ever lost
 - Stat display: Bar or Radar
 - Additional button mode picker (Random / Meta)
 - Account: sign up / sign in with username or email + password, forgot-password reset, sign out
@@ -166,9 +178,9 @@ Developer
 - Write permissions still enforced by Firebase rules — Developers can write users / profiles / ranking / revoxRanking / winRates / judges / revoxAccounts / openTournaments / swissViewCodes / userDecks / userTournaments, but swissRooms is still host-only and usernames is still owner-only. Failed writes surface a PERMISSION_DENIED alert
 
 Other
-- Per-tab URLs: /dashboard/, /calculator/, /library/, /deck/, /tournament/, /revox/, /battlepass/, /reel/, /history/, /settings/, /account/, /developer/
+- Per-tab URLs: /dashboard/, /calculator/, /library/, /deck/, /tournament/, /achievement/, /revox/, /battlepass/, /reel/, /history/, /settings/, /account/, /developer/
 - "What's New" landing page at the site root
-- Single-line horizontal tab bar (invisible scrollbar) — each tab shows its icon with a name label below; scroll position preserved across navigation, centered on desktop
+- Single-line horizontal tab bar (invisible scrollbar) — each tab shows its icon with a name label below; scroll position preserved across navigation, centered on desktop. Every static tab icon is rendered as a CSS mask filled with the active theme's text color, so switching themes (Dark / Light / Tropical / Stormy / Mono / Love / Forest / Revox / Gold / Silver / Bronze / Dragon Tamer / Dragon Slayer / Lonewolf) re-colors every icon at once with no per-theme overrides. The Profile tab is the only exception — it shows the user's own avatar photo, not a mask
 - Live Firebase sync across host / co-host / participant / viewer devices
 - Multi-mode part images (Eclipse, Dual, Turbo, Operate, Scorpio Spear, Lightning L-Drago) display correctly everywhere — defaults to mode 0 when no mode is recorded
 - Broken-image fallback hides only the image (rank chip + name stay), so Best Parts 1st / 2nd / 3rd rows never shift out of alignment

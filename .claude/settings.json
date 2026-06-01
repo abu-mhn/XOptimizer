@@ -3,7 +3,10 @@
     "allow": [
       "Bash(node -e ' *)",
       "Bash(node --check docs/js/auth.js)",
-      "Bash(node --check docs/sw.js)"
+      "Bash(node --check docs/sw.js)",
+      "Bash(powershell -Command \"\\(Get-Content c:\\\\Users\\\\admin\\\\Downloads\\\\demo\\\\docs\\\\style.css | Measure-Object -Line\\).Lines\")",
+      "Bash(powershell -Command \"Get-Content c:\\\\Users\\\\admin\\\\Downloads\\\\demo\\\\docs\\\\style.css -Tail 5\")",
+      "Bash(powershell -Command \"\\(Get-Content c:\\\\Users\\\\admin\\\\Downloads\\\\demo\\\\docs\\\\style.css\\).Count\")"
     ]
   }
 }

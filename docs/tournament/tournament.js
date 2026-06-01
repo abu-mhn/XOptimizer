@@ -2050,8 +2050,9 @@ const SHARE_TOURNAMENT_INSTRUCTIONS = "New here? On the Tournament page, tap the
 
 function renderSwissShareButton() {
   return `<button type="button" id="swiss-share" class="btn btn-icon-sm swiss-share-btn" aria-label="Copy tournament details" title="Copy tournament details to clipboard">
-    <img src="assets/icons/share.png" alt="Copy"
+    <img src="assets/icons/share.png" alt=""
          onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21AA;');">
+    <span class="swiss-toolbar-btn-label">Share</span>
   </button>`;
 }
 
@@ -2060,6 +2061,7 @@ function renderSwissShareButton() {
 function renderCoHostsButton() {
   return `<button type="button" id="swiss-cohosts" class="btn btn-icon-sm swiss-cohosts-btn" aria-label="Manage sub-hosts" title="Manage sub-hosts">` +
     `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>` +
+    `<span class="swiss-toolbar-btn-label">Sub-hosts</span>` +
     `</button>`;
 }
 
@@ -2950,10 +2952,12 @@ function renderSwiss() {
         <div class="swiss-toolbar-actions">
           ${tournamentComplete ? "" : renderSwissShareButton()}
           ${swissIsHost && !tournamentComplete ? renderCoHostsButton() : ""}
-          ${canEdit && !tournamentComplete && canAddParticipant(state) ? `<button type="button" id="swiss-edit-participants" class="btn btn-icon-sm btn-icon-plus" aria-label="Add participant" title="Add participant">+</button>` : ""}
+          ${canEdit && !tournamentComplete && canAddParticipant(state) ? `<button type="button" id="swiss-edit-participants" class="btn btn-icon-sm btn-icon-plus" aria-label="Add participant" title="Add participant"><span class="swiss-toolbar-btn-plus-icon">+</span><span class="swiss-toolbar-btn-label">Add</span></button>` : ""}
+          ${canEdit && !tournamentComplete && canAddParticipant(state) ? `<button type="button" id="swiss-remove-participants" class="btn btn-icon-sm btn-icon-minus" aria-label="Remove participant" title="Remove participant"><span class="swiss-toolbar-btn-plus-icon">&minus;</span><span class="swiss-toolbar-btn-label">Remove</span></button>` : ""}
           <button type="button" id="swiss-clear" class="btn btn-reset btn-icon-sm" title="${resetTitle}">
-            <img src="assets/icons/exit-button.png" alt="${resetTitle}"
+            <img src="assets/icons/exit-button.png" alt=""
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
+            <span class="swiss-toolbar-btn-label">${inRoomNonHost ? "Leave" : "Reset"}</span>
           </button>
         </div>
       </div>
@@ -2996,7 +3000,8 @@ function renderSwiss() {
   bindTournamentProfileNames(view);
   hydrateTop8Banners(view);
   view.querySelector("#swiss-start-bracket")?.addEventListener("click", startSwissBracket);
-  view.querySelector("#swiss-edit-participants")?.addEventListener("click", showAddParticipantPopup);
+  view.querySelector("#swiss-edit-participants")?.addEventListener("click", showBulkAddParticipantsPopup);
+  view.querySelector("#swiss-remove-participants")?.addEventListener("click", showRemoveParticipantsPopup);
   view.querySelector("#swiss-cohosts")?.addEventListener("click", showCoHostsPopup);
   view.querySelector("#swiss-edit-name")?.addEventListener("click", showEditTournamentNamePopup);
   bindSwissShareButton(view);
@@ -3237,8 +3242,9 @@ function renderSwissRegisteringMarkup(state) {
           ${renderSwissShareButton()}
           ${swissIsHost ? renderCoHostsButton() : ""}
           <button type="button" id="swiss-clear" class="btn btn-reset btn-icon-sm" title="${isHost ? "Reset Tournament" : "Leave Room"}">
-            <img src="assets/icons/exit-button.png" alt="Leave"
+            <img src="assets/icons/exit-button.png" alt=""
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
+            <span class="swiss-toolbar-btn-label">${isHost ? "Reset" : "Leave"}</span>
           </button>
         </div>
       </div>
@@ -4224,6 +4230,68 @@ function winRateKey(name) {
     .replace(/[.#$/\[\]]/g, "_");
 }
 
+// Transactional +1 to a single achievement counter, keyed by the player's
+// Firebase Auth UID (resolved via the public usernames index). When the
+// bumped count reaches the achievement's target, sets `awarded: true` on
+// the same node so the player's own client (auth.js) can mirror the
+// matching tag onto their profile next time they sign in. Forward-only.
+function bumpAchievement(name, achievementId) {
+  if (!name || !achievementId) return;
+  if (!window.ACHIEVEMENTS || !window.achievementUsernameKeyFor) return;
+  const def = window.ACHIEVEMENTS.find(a => a.id === achievementId);
+  if (!def) return;
+  const db = (typeof initFirebase === "function") ? initFirebase() : null;
+  if (!db) return;
+  const uKey = window.achievementUsernameKeyFor(name);
+  if (!uKey) return;
+  // Look up the player's UID first — /achievements is keyed by UID so the
+  // tag-claim rule in /users/{uid}/tags can verify the awarded flag with a
+  // direct lookup. Skips silently if the name has no usernames entry
+  // (guests / test players — already filtered out by the caller via
+  // nameIsAccountRegistrant, this is belt-and-suspenders).
+  db.ref(`usernames/${uKey}/uid`).once("value").then(snap => {
+    const uid = snap.val();
+    if (!uid || typeof uid !== "string") return;
+    const ref = db.ref(`achievements/${uid}/${achievementId}`);
+    return ref.transaction(curr => {
+      const c = (curr && typeof curr === "object") ? curr : {};
+      const next = {
+        count: (c.count || 0) + 1,
+        awarded: !!c.awarded,
+        awardedAt: c.awardedAt || null,
+        updatedAt: new Date().toISOString()
+      };
+      if (!next.awarded && next.count >= def.target) {
+        next.awarded = true;
+        next.awardedAt = next.updatedAt;
+      }
+      return next;
+    });
+  }).catch(e => console.warn("achievement bump failed for", uKey, achievementId, e && e.message));
+}
+
+// Inspect a freshly-scored match and bump every achievement the WINNER
+// qualified for under the match's decks. Called from maybeApplyMatchWinRate
+// alongside the win-rate bump — same gating, same idempotency via wrApplied.
+function applyMatchAchievements(match, winnerName, loserName) {
+  if (!winnerName) return; // ties give no achievement credit
+  const defs = window.ACHIEVEMENTS || [];
+  if (!defs.length) return;
+  const decks = (match && match.decks) || {};
+  // The match record stores decks keyed by side (a / b); resolve which
+  // side was the winner / loser so the per-achievement creditOnWin
+  // callback can look at the right deck.
+  const winnerDeck = (match.a === winnerName) ? decks.a : (match.b === winnerName) ? decks.b : null;
+  const loserDeck = loserName
+    ? ((match.a === loserName) ? decks.a : (match.b === loserName) ? decks.b : null)
+    : null;
+  for (const def of defs) {
+    let credit = false;
+    try { credit = !!def.creditOnWin(winnerDeck, loserDeck); } catch (e) { credit = false; }
+    if (credit) bumpAchievement(winnerName, def.id);
+  }
+}
+
 // Transactional +1 to wins / losses / ties for a single player.
 function bumpWinRate(name, kind) {
   if (!name) return;
@@ -4267,12 +4335,17 @@ function maybeApplyMatchWinRate(matchId, storedBefore, state) {
   if (scoreA > scoreB) {
     if (aCounts) bumpWinRate(match.a, "win");
     if (bCounts) bumpWinRate(match.b, "loss");
+    // Achievements: winner = a. Only credit the winner if they have an
+    // account (guests don't earn achievements, same gate as ranking).
+    if (aCounts) applyMatchAchievements(match, match.a, match.b);
   } else if (scoreB > scoreA) {
     if (aCounts) bumpWinRate(match.a, "loss");
     if (bCounts) bumpWinRate(match.b, "win");
+    if (bCounts) applyMatchAchievements(match, match.b, match.a);
   } else {
     if (aCounts) bumpWinRate(match.a, "tie");
     if (bCounts) bumpWinRate(match.b, "tie");
+    // Ties don't credit any achievement (all three require a win).
   }
   // Mark the match locally so the host's own listener tick (and any sibling
   // tab) won't re-apply, and return the patch for the Firebase push.
@@ -5871,11 +5944,12 @@ function canAddParticipant(state) {
 // reset. The newcomer enters round 1 as a free win (a bye) — UNLESS a bye
 // already exists in round 1, in which case they're paired against that bye
 // player, turning the existing free win into a real match. True on success.
-function addSwissParticipantRound1(name, deck) {
+function addSwissParticipantRound1(name, deck, opts) {
+  opts = opts || {};
   const s = loadSwiss();
   if (!Array.isArray(s.groups) || !s.groups.length) return false;
   if (!canAddParticipant(s)) {
-    alert("Participants can only be added during round 1 — round 2 has already started.");
+    if (!opts.silent) alert("Participants can only be added during round 1 — round 2 has already started.");
     return false;
   }
   // Look for an existing round-1 bye (free win) to pair the newcomer into.
@@ -5920,6 +5994,7 @@ function addSwissParticipantRound1(name, deck) {
   const writerUid = (window.getCurrentUser && window.getCurrentUser()?.uid) || null;
   const entry = { name, deck };
   if (writerUid) entry.createdBy = writerUid;
+  if (opts.isGuest) entry.isGuest = true;
   s.registrants[regId] = entry;
   persistSwiss(s);
   if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
@@ -5931,6 +6006,294 @@ function addSwissParticipantRound1(name, deck) {
     swissRoomRef.update(updates).catch(e => console.warn("Add participant push failed:", e));
   }
   return true;
+}
+
+// Remove a participant from a running tournament — same gate as add
+// (canAddParticipant — only allowed before round 2 starts). Both formats
+// regenerate from scratch with the named player dropped: simplest and
+// avoids fragile per-format match-unwinding logic. The host is warned
+// that current round-1 matches and scores will be lost.
+function showRemoveParticipantsPopup() {
+  if (!swissCanEdit) return;
+  const state = loadSwiss();
+  if (!canAddParticipant(state)) {
+    alert("Participants can only be removed during round 1 — round 2 has already started.");
+    return;
+  }
+  const current = getParticipants(state);
+  if (!current.length) {
+    alert("No participants to remove.");
+    return;
+  }
+
+  document.getElementById("remove-participants-popup")?.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "remove-participants-popup";
+  overlay.className = "popup-overlay";
+  const rowsHtml = current.map((name, i) => `
+    <li class="remove-participant-row">
+      <span class="remove-participant-name">${i + 1}. ${escapeHtml(name)}</span>
+      <button type="button" class="swiss-reg-remove remove-participant-btn" data-name="${escapeHtml(name)}" title="Remove ${escapeHtml(name)}" aria-label="Remove ${escapeHtml(name)}">&times;</button>
+    </li>
+  `).join("");
+  overlay.innerHTML = `
+    <div class="popup-card">
+      <h2 class="popup-title">Remove Participant</h2>
+      <p class="popup-text" style="text-align: justify;">Tap × next to a name to remove that player. The bracket (or groups) regenerates from scratch, so any current round-1 matches and scores will be lost. You'll confirm before that happens.</p>
+      <ul class="remove-participant-list">${rowsHtml}</ul>
+      <div id="remove-participants-status" class="swiss-join-status"></div>
+      <div class="popup-actions">
+        <button type="button" id="remove-participants-close" class="btn popup-cancel">Close</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const status = overlay.querySelector("#remove-participants-status");
+  const closeBtn = overlay.querySelector("#remove-participants-close");
+  const setStatus = (msg, kind) => {
+    if (!status) return;
+    status.textContent = msg || "";
+    status.classList.remove("is-ok", "is-err", "is-pending");
+    if (kind) status.classList.add(`is-${kind}`);
+  };
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener("keydown", onKey);
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") { e.preventDefault(); close(); }
+  };
+  document.addEventListener("keydown", onKey);
+  closeBtn.onclick = close;
+
+  overlay.querySelectorAll(".remove-participant-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const name = btn.dataset.name;
+      if (!name) return;
+      if (!confirm(`Remove ${name}? The bracket will regenerate and any current round-1 matches will be lost.`)) return;
+      const ok = removeRunningParticipantByRegen(name);
+      if (!ok) {
+        setStatus(`Couldn't remove ${name}. Try again.`, "err");
+        return;
+      }
+      setStatus(`Removed ${name} ✓`, "ok");
+      // Re-render the room view (it has fewer rows now) — and close after
+      // a short pause so the host can read the confirmation.
+      renderSwiss();
+      setTimeout(close, 600);
+    });
+  });
+}
+
+// Drop `name` from a running tournament and regenerate the format from the
+// remaining participants. Carries registrants forward (minus the removed
+// entries — matched by name). Returns true on success.
+function removeRunningParticipantByRegen(name) {
+  const state = loadSwiss();
+  if (!canAddParticipant(state)) return false;
+  const current = getParticipants(state);
+  const remaining = current.filter(n => (n || "").toLowerCase() !== name.toLowerCase());
+  if (remaining.length === current.length) return false; // not found
+  if (remaining.length === 0) {
+    alert("Can't remove the last participant — reset the tournament from the toolbar instead.");
+    return false;
+  }
+  let next;
+  if (state.mode === "single-elim") {
+    next = generateSingleElimFromText(remaining.join("\n"), state.tournamentName);
+  } else {
+    next = generateSwissFromText(remaining.join("\n"), state.tournamentName,
+      getRoundCount(state), getGroupCount(state), state.pairing);
+    if (next && state.mode === "swiss-only") next.mode = "swiss-only";
+  }
+  if (!next) return false; // generator already alerted
+  if (typeof state.ranked === "boolean") next.ranked = state.ranked;
+  next.hostUid = state.hostUid || null;
+  // Carry registrants forward minus any entries that match the removed name
+  // (case-insensitive). Multiple registrants can share a name in odd edge
+  // cases — drop them all so the regenerated list stays consistent.
+  const droppedKey = name.toLowerCase();
+  next.registrants = {};
+  Object.entries(state.registrants || {}).forEach(([id, r]) => {
+    if (r && typeof r.name === "string" && r.name.toLowerCase() === droppedKey) return;
+    next.registrants[id] = r;
+  });
+  persistSwiss(next);
+  if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
+    const payload = { ...next };
+    if (swissViewCode) payload.viewCode = swissViewCode;
+    swissRoomRef.set(payload).catch(e => console.warn("Remove participant push failed:", e));
+  }
+  return true;
+}
+
+// Bulk-add participants to a running tournament — names only, one per line.
+// Each entry is created as a deckless guest (isGuest:true, empty deck) so the
+// host can paste a name list in one shot; the judge fills in decks at match
+// time. Mirrors the registering-phase Bulk Guests popup, but routed through
+// the mid-tournament code paths:
+//   - Swiss / Round Robin in round 1: addSwissParticipantRound1 per name
+//     (each newcomer gets a free-win bye or pairs against an existing bye).
+//   - Single Elim, or Swiss/RR past round 1: the bracket can't slot anyone
+//     in, so we regenerate from scratch with the combined name list after a
+//     single confirm.
+function showBulkAddParticipantsPopup() {
+  if (!swissCanEdit) return;
+  const state = loadSwiss();
+  if (!canAddParticipant(state)) {
+    alert("Participants can only be added during round 1 — round 2 has already started.");
+    return;
+  }
+
+  // Re-open: drop any stale instance first.
+  document.getElementById("bulk-add-participants-popup")?.remove();
+
+  const hasGroups = Array.isArray(state.groups) && state.groups.length;
+  const canSlotIn = state.mode !== "single-elim" && hasGroups;
+  const blurb = canSlotIn
+    ? "Enter one name per line. Each player slots into round 1 as a free win (or pairs against an existing bye) — no reset, no decks required. The judge fills in decks at match time."
+    : "Enter one name per line. Single-elimination brackets can't take new players mid-tournament, so the bracket regenerates from scratch — current matches and scores will be lost. You'll confirm before that happens.";
+
+  const overlay = document.createElement("div");
+  overlay.id = "bulk-add-participants-popup";
+  overlay.className = "popup-overlay";
+  overlay.innerHTML = `
+    <div class="popup-card">
+      <h2 class="popup-title">Add Participants</h2>
+      <p class="popup-text" style="text-align: justify;">${blurb}</p>
+      <textarea id="bulk-add-input" class="account-bio" rows="8" placeholder="Alice
+Bob
+Charlie" style="width:100%; min-height:140px; resize:vertical;"></textarea>
+      <p class="popup-text" style="font-size:0.78rem; margin-top:6px; text-align: justify;">Duplicate names (matching existing participants or each other) are skipped.</p>
+      <div id="bulk-add-status" class="swiss-join-status"></div>
+      <div class="popup-actions">
+        <button type="button" id="bulk-add-submit" class="btn">Add</button>
+        <button type="button" id="bulk-add-cancel" class="btn popup-cancel">Cancel</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const textarea = overlay.querySelector("#bulk-add-input");
+  const status = overlay.querySelector("#bulk-add-status");
+  const submitBtn = overlay.querySelector("#bulk-add-submit");
+  const cancelBtn = overlay.querySelector("#bulk-add-cancel");
+
+  const setStatus = (msg, kind) => {
+    if (!status) return;
+    status.textContent = msg || "";
+    status.classList.remove("is-ok", "is-err", "is-pending");
+    if (kind) status.classList.add(`is-${kind}`);
+  };
+
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener("keydown", onKey);
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") { e.preventDefault(); close(); }
+  };
+  document.addEventListener("keydown", onKey);
+  cancelBtn.onclick = close;
+  setTimeout(() => textarea?.focus(), 0);
+
+  submitBtn.onclick = () => {
+    const seen = new Set();
+    const names = (textarea.value || "")
+      .split(/\r?\n/)
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
+      .filter(s => {
+        const k = s.toLowerCase();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+    if (names.length === 0) {
+      setStatus("Enter at least one name (one per line).", "err");
+      return;
+    }
+    const tooLong = names.find(n => n.length > 60);
+    if (tooLong) {
+      setStatus(`"${tooLong.slice(0, 40)}" is over 60 characters.`, "err");
+      return;
+    }
+    // Filter out names already in the tournament.
+    const current = getParticipants(loadSwiss());
+    const existing = new Set(current.map(n => (n || "").toLowerCase()));
+    const dupes = [];
+    const toAdd = [];
+    for (const n of names) {
+      if (existing.has(n.toLowerCase())) { dupes.push(n); continue; }
+      toAdd.push(n);
+    }
+    if (toAdd.length === 0) {
+      setStatus("All those names are already in the tournament.", "err");
+      return;
+    }
+
+    submitBtn.disabled = true;
+    if (canSlotIn) {
+      // Loop the round-1 slot helper per name. Each call writes its own
+      // targeted Firebase update (group + match + registrant), so all the
+      // entries land separately — fine for low-N batches.
+      let added = 0;
+      for (const n of toAdd) {
+        if (addSwissParticipantRound1(n, emptyBeyCheckDeck(), { isGuest: true, silent: true })) added++;
+      }
+      renderSwiss();
+      const dupeTxt = dupes.length ? ` (skipped ${dupes.length} duplicate${dupes.length === 1 ? "" : "s"})` : "";
+      setStatus(`Added ${added} participant${added === 1 ? "" : "s"} ✓${dupeTxt}`, "ok");
+      setTimeout(close, 700);
+      return;
+    }
+
+    // Single-elim (or RR with no groups) → regen from scratch with the
+    // combined name list. ONE confirm covers the whole batch.
+    const combined = current.concat(toAdd);
+    const isRR = state.pairing === "round-robin";
+    const reason = isRR
+      ? "a round robin re-pairs everyone against everyone, so it"
+      : "a single-elimination bracket can't take new players mid-tournament, so it";
+    const msg = `Adding ${toAdd.length} player${toAdd.length === 1 ? "" : "s"} brings the tournament to ${combined.length} participants. ` +
+                `Because ${reason} will be regenerated — all current matches and scores will be lost. Continue?`;
+    if (!confirm(msg)) { submitBtn.disabled = false; return; }
+
+    const namesText = combined.join("\n");
+    let next;
+    if (state.mode === "single-elim") {
+      next = generateSingleElimFromText(namesText, state.tournamentName);
+    } else {
+      next = generateSwissFromText(namesText, state.tournamentName,
+        getRoundCount(state), getGroupCount(state), state.pairing);
+      if (next && state.mode === "swiss-only") next.mode = "swiss-only";
+    }
+    if (!next) { submitBtn.disabled = false; return; } // generator already alerted
+    if (typeof state.ranked === "boolean") next.ranked = state.ranked;
+    next.hostUid = state.hostUid || null;
+    // Carry registrants forward so existing players keep their registered
+    // decks, then add a deckless isGuest entry for each new name.
+    next.registrants = { ...(state.registrants || {}) };
+    const writerUid = (window.getCurrentUser && window.getCurrentUser()?.uid) || null;
+    for (const n of toAdd) {
+      const id = generateRegistrantId();
+      const entry = { name: n, deck: emptyBeyCheckDeck(), isGuest: true };
+      if (writerUid) entry.createdBy = writerUid;
+      next.registrants[id] = entry;
+    }
+    persistSwiss(next);
+    if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
+      const payload = { ...next };
+      if (swissViewCode) payload.viewCode = swissViewCode;
+      swissRoomRef.set(payload).catch(e => console.warn("Bulk add participants push failed:", e));
+    }
+    renderSwiss();
+    const dupeTxt = dupes.length ? ` (skipped ${dupes.length} duplicate${dupes.length === 1 ? "" : "s"})` : "";
+    setStatus(`Added ${toAdd.length} participant${toAdd.length === 1 ? "" : "s"} ✓${dupeTxt}`, "ok");
+    setTimeout(close, 700);
+  };
 }
 
 // Add a single participant — name + a 3-combo deck — to a running tournament.

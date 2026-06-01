@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
+  <base href="../">
+
+  <!-- ================= FAVICON ================= -->
+  <link id="app-favicon" rel="icon" type="image/png" href="assets/icons/M.webp">
+  <link id="app-apple-icon" rel="apple-touch-icon" href="assets/icons/M.webp">
+  <script>
+    (function () {
+      var img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = function () {
+        var size = 256;
+        var c = document.createElement('canvas');
+        c.width = size;
+        c.height = size;
+        var ctx = c.getContext('2d');
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, size, size);
+        var pad = Math.round(size * 0.1);
+        var box = size - pad * 2;
+        var r = Math.min(box / img.width, box / img.height);
+        var w = img.width * r;
+        var h = img.height * r;
+        ctx.drawImage(img, Math.round((size - w) / 2), Math.round((size - h) / 2), w, h);
+        var href = c.toDataURL('image/png');
+        var fav = document.getElementById('app-favicon');
+        var apl = document.getElementById('app-apple-icon');
+        if (fav) fav.href = href;
+        if (apl) apl.href = href;
+      };
+      img.src = 'assets/icons/M.webp';
+    })();
+  </script>
+
+  <!-- Optional theme color -->
+  <meta name="theme-color" content="#0a4797">
+
+  <title>Achievement — X Optimizer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("theme");
+        if (t && /^[a-z]+$/.test(t) && t !== "dark") {
+          document.body.classList.add(t + "-mode");
+        }
+      } catch (e) {}
+    })();
+  </script>
+
+  <div class="container">
+    <header class="app-header">
+      <h1><img id="app-title-logo" src="assets/icons/XOptimizerLight.webp" alt="X-Optimizer" class="title-logo"></h1>
+    </header>
+
+    <!-- ================= TAB MENU ================= -->
+    <div class="mode-tabs">
+      <a class="tab" href="dashboard/" data-mode="dashboard" aria-label="Dashboard">
+        <span class="tab-icon-mask" role="img" aria-label="Dashboard" style="--tab-icon: url('assets/icons/layout.png')"></span>
+        <span class="tab-label">Dashboard</span>
+      </a>
+
+      <a class="tab" href="calculator/" data-mode="calculator" aria-label="Calculator">
+        <span class="tab-icon-mask" role="img" aria-label="Calculator" style="--tab-icon: url('assets/icons/calculator.png')"></span>
+        <span class="tab-label">Calculator</span>
+      </a>
+
+      <a class="tab" href="library/" data-mode="library" aria-label="Library">
+        <span class="tab-icon-mask" role="img" aria-label="Library" style="--tab-icon: url('assets/icons/book1.webp')"></span>
+        <span class="tab-label">Library</span>
+      </a>
+
+      <a class="tab" href="deck/" data-mode="deck" aria-label="Deck">
+        <span class="tab-icon-mask" role="img" aria-label="Deck" style="--tab-icon: url('assets/icons/cards.png')"></span>
+        <span class="tab-label">Deck</span>
+      </a>
+
+      <a class="tab" href="tournament/" data-mode="swiss" aria-label="Tournament">
+        <span class="tab-icon-mask" role="img" aria-label="Tournament" style="--tab-icon: url('assets/icons/confrontation.png')"></span>
+        <span class="tab-label">Tournament</span>
+      </a>
+
+      <a class="tab active hidden" href="achievement/" data-mode="achievement" aria-label="Achievement">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false" style="width: 18px; height: 18px;">
+          <path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z"/>
+        </svg>
+        <span class="tab-label">Achievement</span>
+      </a>
+
+      <a class="tab" href="battlepass/" data-mode="battlepass" aria-label="Battle Pass">
+        <span class="tab-icon-mask" role="img" aria-label="Battle Pass" style="--tab-icon: url('assets/icons/bluethooth.png')"></span>
+        <span class="tab-label">Battle Pass</span>
+      </a>
+
+      <a class="tab" href="reel/" data-mode="reel" aria-label="Buzz Bey">
+        <span class="tab-icon-mask" role="img" aria-label="Buzz Bey" style="--tab-icon: url('assets/icons/play-button.png')"></span>
+        <span class="tab-label">Buzz Bey</span>
+      </a>
+
+      <a class="tab" href="history/" data-mode="history" aria-label="History">
+        <span class="tab-icon-mask" role="img" aria-label="History" style="--tab-icon: url('assets/icons/history1.webp')"></span>
+        <span class="tab-label">History</span>
+      </a>
+
+      <a class="tab tab-settings" href="settings/" data-mode="settings" aria-label="Settings">
+        <span class="tab-icon-mask" role="img" aria-label="Settings" style="--tab-icon: url('assets/icons/setting.png')"></span>
+        <span class="tab-label">Settings</span>
+      </a>
+
+      <a class="tab" href="account/" data-mode="account" aria-label="Profile">
+        <img id="account-tab-avatar" class="tab-account-avatar" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%2321262d'/%3E%3Ccircle cx='32' cy='24' r='12' fill='%23484f58'/%3E%3Cpath d='M11 57c0-12 10-20 21-20s21 8 21 20z' fill='%23484f58'/%3E%3C/svg%3E" alt="Profile">
+        <span class="tab-label">Profile</span>
+      </a>
+
+      <a class="tab hidden" href="revox/" data-mode="revox" aria-label="Revox">
+        <span class="tab-icon-mask" role="img" aria-label="Revox" style="--tab-icon: url('assets/icons/revox.webp')"></span>
+        <span class="tab-label">Revox</span>
+      </a>
+
+      <a class="tab hidden" href="developer/" data-mode="developer" aria-label="Developer">
+        <span class="tab-icon-mask" role="img" aria-label="Developer" style="--tab-icon: url('assets/icons/coding.png')"></span>
+        <span class="tab-label">Developer</span>
+      </a>
+    </div>
+
+    <!-- ================= ACHIEVEMENT ================= -->
+    <section id="form-achievement" class="calc-form">
+      <fieldset>
+        <legend>Achievement</legend>
+        <p id="achievement-signin-hint" class="achievement-hint hidden">Sign in to start tracking achievements.</p>
+        <div id="achievement-list" class="achievement-list"></div>
+      </fieldset>
+    </section>
+  </div>
+
+  <!-- ================= FOOTER ================= -->
+  <footer class="app-footer">
+    <div class="footer-inner">
+      <span>X Optimizer</span>
+      <span class="footer-dot">•</span>
+      <span>Created by <strong>RvX Ashwolf</strong></span>
+      <span>Powered by <a href="https://teamrevox.com/" target="_blank" rel="noopener noreferrer"><img
+            src="assets/icons/revoxName.webp" alt="Revox" class="footer-logo"></a></span>
+    </div>
+  </footer>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="data.js"></script>
+  <script src="js/core.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/achievements.js"></script>
+  <script src="achievement/achievement.js"></script>
+  <script src="app.js"></script>
+</body>
+
+</html>
