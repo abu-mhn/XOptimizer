@@ -85,21 +85,59 @@
   // re-paint. /achievements is keyed by Firebase Auth UID (see
   // js/achievements.js). Falls back to "signed out" view when the user
   // isn't signed in yet.
+  // Active Firebase listener (ref + callback) so we can detach when the
+  // signed-in user changes — otherwise a sign-out + sign-in-as-someone-else
+  // would leave the previous account's listener firing into stale UI.
+  let achListenerRef = null;
+  let achListenerCb = null;
+  function detachAchListener() {
+    if (achListenerRef && achListenerCb) {
+      try { achListenerRef.off("value", achListenerCb); } catch (e) {}
+    }
+    achListenerRef = null;
+    achListenerCb = null;
+  }
+
   function refresh() {
     const user = (window.getCurrentUser && window.getCurrentUser()) || null;
     const profile = (window.getUserProfile && window.getUserProfile()) || null;
-    if (!user || !profile || !profile.username) {
+    if (!user) {
+      console.info("[achievement-page] no firebase user — auth unresolved or signed out");
+      detachAchListener();
       showSignedOut();
       return;
     }
-    showLoading();
-    const db = (typeof initFirebase === "function") ? initFirebase() : null;
-    if (!db) return; // still rendered as 0/100 from showLoading
-    db.ref("achievements/" + user.uid).once("value").then(snap => {
-      renderAll(snap.val() || {});
-    }).catch(() => {
-      // Read failure (rules / network) — still render zeros so the page
-      // isn't blank; the user can refresh later.
+    if (!profile || !profile.username) {
+      console.info("[achievement-page] user signed in but profile not loaded yet — staying in loading state", user.uid);
+      showLoading();
+      return;
+    }
+    // Use firebase.database() directly — initFirebase() is defined in
+    // tournament.js, which isn't loaded on the Achievement page. Without
+    // this, the read previously bailed silently (no log) because db was
+    // null. Fall back to that path only if the global function does
+    // happen to exist (e.g. on a page that loads tournament.js).
+    let db = null;
+    try {
+      if (typeof initFirebase === "function") db = initFirebase();
+      if (!db && typeof firebase !== "undefined" && firebase.database) db = firebase.database();
+    } catch (e) { db = null; }
+    if (!db) {
+      console.warn("[achievement-page] no firebase.database() available — bailing");
+      return;
+    }
+    // Replace any prior listener (sign-out + sign-in as a different user)
+    // so updates only flow into the active account's cards.
+    detachAchListener();
+    const ref = db.ref("achievements/" + user.uid);
+    console.info("[achievement-page] subscribing to /achievements/" + user.uid + " (username: " + profile.username + ")");
+    achListenerRef = ref;
+    achListenerCb = ref.on("value", snap => {
+      const v = snap.val();
+      console.info("[achievement-page] update for " + user.uid, v);
+      renderAll(v || {});
+    }, err => {
+      console.warn("[achievement-page] subscription failed for " + user.uid, err && err.message);
       renderAll({});
     });
   }

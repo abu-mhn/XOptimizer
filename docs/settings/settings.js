@@ -78,6 +78,7 @@ Tournament
 - Lobby cards flag a tournament you've been invited to co-host with a small "!" alert badge
 - Edit the format while waiting for players — tap the format chip to switch between Swiss, Round Robin and Single Elimination, or the groups / rounds chips to adjust them; registrants are kept, no reset needed. Switching INTO a knockout format (Swiss + Top N or Round Robin + Top N) re-opens the Top-N picker so the host picks the bracket size right there — same flow as create time
 - Test button: bulk-adds synthetic participants for QA — visible only to accounts tagged "Tester"
+- Auto-build (Test) button in the Register popup — Tester-only. Prompts for one of the seven achievements and fills the 3-slot deck with a pre-built combo guaranteed to satisfy that achievement's win condition. Lets a tester verify each achievement's `creditOnWin` end-to-end without hand-rolling parts
 - Copy Names button (Tester-only, host / co-host): copies every registrant's name to the clipboard, one per line — a QA aid; the button flashes the copied count
 - Test decks obey "one of each part per deck" across all 3 slots (only light lock chips can repeat; Emperor / Valkyrie cannot)
 - Test deck mode mix is weighted realistic: ~75% Standard, ~13% CX, ~12% CX Expand
@@ -106,7 +107,7 @@ Tournament
 - Parts-usage pie charts at tournament end as an auto-sliding carousel (theme-aware palette)
 
 Achievement
-- New tab visible to any signed-in account — sits between Profile and Revox in the tab bar. Each achievement is a progress card on the tab (icon + title + description + bar + N / 100 count); once the count hits 100 the card flips to "Unlocked · [Theme name] theme"
+- New tab visible to any signed-in account — sits between Profile and Revox in the tab bar. Each achievement is a progress card on the tab (icon + title + description + bar + N / 100 count); once the count hits 100 the card flips to "Unlocked · [Theme name] theme". The card subscribes to Firebase live, so counters tick up in real time as matches credit (no manual reload)
 - Forward-only tracking — counters start at 0 for every account on launch and only matches scored from this version onward contribute. Past tournament history is not backfilled
 - Dragon Tamer — win 100 matches while your deck includes a part named Dran, Drake, Dragoon, Wyvern, Bahamut or Ragna (any slot, any field). Awards the "Dragon Tamer" profile tag + unlocks the Dragon Tamer theme (warm reds + ember gold)
 - Dragon Slayer — defeat 100 opponents whose deck included a part named Dran, Drake, Dragoon, Wyvern, Bahamut or Ragna, while your OWN deck contains any Knight-named part (the knight slays the dragon). Awards the "Dragon Slayer" profile tag + unlocks the Dragon Slayer theme (steel blue + silver)
@@ -117,6 +118,8 @@ Achievement
 - Sorcerer Supreme — win 100 matches where every one of your 3 deck slots contains at least one Wizard-named part (a full wizard council, no non-wizard slots). Awards the "Sorcerer Supreme" profile tag + unlocks the Sorcerer Supreme theme (mystical violet + arcane gold)
 - Storage lives at /achievements/{uid} (keyed by Firebase Auth UID). Reads are private to the user (or Developer); writes happen on the scoring device once a match is finalised. The tag is mirrored onto the user's profile the next time they sign in, gated by a Firebase rule that only lets the player self-claim a title when the matching achievement node is already flagged awarded
 - Guests and tied matches don't credit any achievement (same gate as global ranking points)
+- Format-agnostic — Swiss groups, Round Robin groups, knockout brackets (Swiss + Top N) and Single Elimination matches all run the same scoring path. Every scored win where the winner is a non-guest registrant runs the achievement check on the winner's match deck
+- Deck resolution falls back through three sources so a host who scores a match without first opening Bey Check doesn't silently skip achievement credit: (1) the per-match Bey Check deck if it was saved, (2) the player's registered deck from when they signed up, (3) the most recent prior-match deck (legacy pre-self-registration tournaments)
 
 Revox
 - Dedicated tab and theme for accounts tagged "Revox Admin" (full edit); "Revox Member" accounts see the tab view-only
@@ -175,7 +178,7 @@ Developer
 - Users sub-tab: lists every registered user with a total count, searchable by username or email; each user's current tags show as badges
 - Developers can add AND remove tags on any user (multiple tags per user)
 - Hover or click a username in the list to open that account's profile card
-- Database sub-tab: scrollable row of tabs across every readable top-level node (swissRooms, openTournaments, users, usernames, profiles, ranking, revoxRanking, winRates, judges, revoxAccounts, swissViewCodes, userDecks, userTournaments). Pick a node, see all entries as a sortable table — every field that exists across any row gets a column, heavy fields (photo / banner data URLs) summarized as "[N KB]", nested objects shown as "{count} firstKey, secondKey, …"
+- Database sub-tab: scrollable row of tabs across every readable top-level node (swissRooms, openTournaments, users, usernames, profiles, ranking, revoxRanking, winRates, achievements, judges, revoxAccounts, swissViewCodes, userDecks, userTournaments). Pick a node, see all entries as a sortable table — every field that exists across any row gets a column, heavy fields (photo / banner data URLs) summarized as "[N KB]", nested objects shown as "{count} firstKey, secondKey, …". The achievements table is keyed by UID with one column per achievement ID (dragonTamer / dragonSlayer / lonewolf / rushHour / kingOfJungle / sharknado / sorcererSupreme)
 - Per-row actions: ✎ Edit fields (type-aware inputs — text / number / checkbox / textarea; photo / banner / smallBanner render as image preview + file picker, never raw base64), {} Edit raw JSON (pretty-printed textarea, parse on save, set to literal null to delete), 🗑 Delete (confirm prompt, then null-write)
 - + Add entry at the top opens the JSON editor in new-entry mode — exposes a Key input + JSON value
 - winRates table joins with /profiles to show the real cased username next to each W/L/T row

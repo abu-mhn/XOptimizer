@@ -274,7 +274,17 @@
     bit: "bits"
   };
   function slotTypeLabel(parts) {
-    if (!parts || typeof window === "undefined" || !window.DATA) return "";
+    if (!parts) return "";
+    // `DATA` and `getType` are declared with `const` / `function` at the
+    // top level of data.js / core.js. `const` doesn't attach to `window`
+    // in classic scripts, so `window.DATA` is undefined — read the names
+    // directly off the global scope instead. Wrap in try/catch so a page
+    // that didn't load data.js doesn't throw ReferenceError.
+    let dataRef = null;
+    let getTypeFn = null;
+    try { dataRef = (typeof DATA !== "undefined") ? DATA : null; } catch (e) { dataRef = null; }
+    try { getTypeFn = (typeof getType === "function") ? getType : (window && typeof window.getType === "function" ? window.getType : null); } catch (e) { getTypeFn = null; }
+    if (!dataRef) return "";
     let atk = 0, def = 0, sta = 0;
     let isRatchetBit = false;
     for (const field of Object.keys(FIELD_TO_DATA)) {
@@ -282,7 +292,7 @@
       if (typeof name !== "string" || !name) continue;
       // The "__NO_RATCHET__" sentinel and any other non-data name will
       // simply not match below — no need to special-case it.
-      const collection = window.DATA[FIELD_TO_DATA[field]];
+      const collection = dataRef[FIELD_TO_DATA[field]];
       if (!Array.isArray(collection)) continue;
       const part = collection.find(p => p && p.name === name);
       if (!part) continue;
@@ -291,8 +301,8 @@
       sta += (part.sta || 0);
       if (field === "bit" && part.isRatchetBit) isRatchetBit = true;
     }
-    if (typeof window.getType !== "function") return "";
-    return window.getType(atk, def, sta, isRatchetBit);
+    if (!getTypeFn) return "";
+    return getTypeFn(atk, def, sta, isRatchetBit);
   }
 
   // Convenience predicate — true when slotTypeLabel returns any Balance

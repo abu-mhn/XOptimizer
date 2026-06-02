@@ -4236,14 +4236,29 @@ function winRateKey(name) {
 // the same node so the player's own client (auth.js) can mirror the
 // matching tag onto their profile next time they sign in. Forward-only.
 function bumpAchievement(name, achievementId) {
-  if (!name || !achievementId) return;
-  if (!window.ACHIEVEMENTS || !window.achievementUsernameKeyFor) return;
+  if (!name || !achievementId) {
+    console.warn("[achievement] bumpAchievement called with empty name/id", { name, achievementId });
+    return;
+  }
+  if (!window.ACHIEVEMENTS || !window.achievementUsernameKeyFor) {
+    console.warn("[achievement] shared module (achievements.js) not loaded — bump aborted");
+    return;
+  }
   const def = window.ACHIEVEMENTS.find(a => a.id === achievementId);
-  if (!def) return;
+  if (!def) {
+    console.warn("[achievement] unknown achievementId", achievementId);
+    return;
+  }
   const db = (typeof initFirebase === "function") ? initFirebase() : null;
-  if (!db) return;
+  if (!db) {
+    console.warn("[achievement] Firebase not initialised — bump aborted");
+    return;
+  }
   const uKey = window.achievementUsernameKeyFor(name);
-  if (!uKey) return;
+  if (!uKey) {
+    console.warn("[achievement] couldn't derive usernameKey for", name);
+    return;
+  }
   // Look up the player's UID first — /achievements is keyed by UID so the
   // tag-claim rule in /users/{uid}/tags can verify the awarded flag with a
   // direct lookup. Skips silently if the name has no usernames entry
@@ -4251,44 +4266,98 @@ function bumpAchievement(name, achievementId) {
   // nameIsAccountRegistrant, this is belt-and-suspenders).
   db.ref(`usernames/${uKey}/uid`).once("value").then(snap => {
     const uid = snap.val();
-    if (!uid || typeof uid !== "string") return;
+    if (!uid || typeof uid !== "string") {
+      console.warn("[achievement] no /usernames/" + uKey + "/uid lookup — winner is likely a guest or unregistered. Achievement skipped.");
+      return;
+    }
+    console.info("[achievement] writing", achievementId, "for uid", uid);
     const ref = db.ref(`achievements/${uid}/${achievementId}`);
     return ref.transaction(curr => {
       const c = (curr && typeof curr === "object") ? curr : {};
+      // Only include `awardedAt` when it has a real ISO string value —
+      // emitting `awardedAt: null` on the first bump trips the Firebase
+      // .validate rule (newData.isString() is false for null), aborting
+      // the transaction silently.
       const next = {
         count: (c.count || 0) + 1,
         awarded: !!c.awarded,
-        awardedAt: c.awardedAt || null,
         updatedAt: new Date().toISOString()
       };
+      if (typeof c.awardedAt === "string" && c.awardedAt) {
+        next.awardedAt = c.awardedAt;
+      }
       if (!next.awarded && next.count >= def.target) {
         next.awarded = true;
         next.awardedAt = next.updatedAt;
       }
       return next;
     });
-  }).catch(e => console.warn("achievement bump failed for", uKey, achievementId, e && e.message));
+  }).then(result => {
+    if (result && typeof result === "object" && result.committed === false) {
+      console.warn("[achievement] transaction aborted for", uKey, achievementId, "— likely a Firebase rule rejection. Check that the rules whitelist includes this achievementId.");
+    }
+  }).catch(e => console.warn("[achievement] bump failed for", uKey, achievementId, e && e.message));
 }
 
 // Inspect a freshly-scored match and bump every achievement the WINNER
 // qualified for under the match's decks. Called from maybeApplyMatchWinRate
 // alongside the win-rate bump — same gating, same idempotency via wrApplied.
-function applyMatchAchievements(match, winnerName, loserName) {
-  if (!winnerName) return; // ties give no achievement credit
+//
+// Format-agnostic: a match record is the same shape whether it came from
+// a Swiss group, a Round Robin group, or a Single Elimination bracket
+// node. As long as match.a / match.b / scoreA / scoreB are populated and
+// the players are non-guest registrants, the credit fires.
+//
+// Deck resolution falls back through three sources so that scoring a
+// match without first running Bey Check (which would normally write
+// match.decks) doesn't silently break the achievement check:
+//   1. match.decks.a / match.decks.b — the per-match judge override
+//      written by Bey Check (most accurate, includes any overrides).
+//   2. the player's registered deck (state.registrants → r.deck).
+//   3. the most recent deck the player used in a prior match (legacy
+//      pre-self-registration tournaments).
+function applyMatchAchievements(match, winnerName, loserName, state) {
+  if (!winnerName) {
+    console.info("[achievement] no winner (tie?) — skipping");
+    return;
+  }
   const defs = window.ACHIEVEMENTS || [];
-  if (!defs.length) return;
+  if (!defs.length) {
+    console.warn("[achievement] window.ACHIEVEMENTS empty — achievements.js may not have loaded");
+    return;
+  }
   const decks = (match && match.decks) || {};
-  // The match record stores decks keyed by side (a / b); resolve which
-  // side was the winner / loser so the per-achievement creditOnWin
-  // callback can look at the right deck.
-  const winnerDeck = (match.a === winnerName) ? decks.a : (match.b === winnerName) ? decks.b : null;
-  const loserDeck = loserName
-    ? ((match.a === loserName) ? decks.a : (match.b === loserName) ? decks.b : null)
-    : null;
+  const matchId = match && match.id;
+  const resolveDeck = (name) => {
+    if (!name) return null;
+    let raw = (match.a === name) ? decks.a : (match.b === name) ? decks.b : null;
+    if (!isBeyCheckDeckEmpty(raw)) return raw;
+    if (typeof getRegisteredDeckForParticipant === "function") {
+      const reg = getRegisteredDeckForParticipant(state, name);
+      if (!isBeyCheckDeckEmpty(reg)) return reg;
+    }
+    if (typeof findLatestDeckForParticipant === "function") {
+      const prev = findLatestDeckForParticipant(state, name, matchId);
+      if (!isBeyCheckDeckEmpty(prev)) return prev;
+    }
+    return null;
+  };
+  const winnerDeck = resolveDeck(winnerName);
+  const loserDeck = resolveDeck(loserName);
+  console.info("[achievement] evaluating", { winner: winnerName, loser: loserName, hasWinnerDeck: !!winnerDeck, hasLoserDeck: !!loserDeck });
+  if (!winnerDeck) {
+    console.warn("[achievement] no deck resolved for winner — every deck-based check will fail. Open Bey Check before scoring, or register a deck.");
+  }
   for (const def of defs) {
     let credit = false;
-    try { credit = !!def.creditOnWin(winnerDeck, loserDeck); } catch (e) { credit = false; }
-    if (credit) bumpAchievement(winnerName, def.id);
+    try { credit = !!def.creditOnWin(winnerDeck, loserDeck); } catch (e) {
+      console.warn("[achievement] creditOnWin threw for", def.id, e);
+      credit = false;
+    }
+    if (credit) {
+      console.info("[achievement] CREDIT", def.id, "for", winnerName);
+      bumpAchievement(winnerName, def.id);
+    }
   }
 }
 
@@ -4319,33 +4388,34 @@ function bumpWinRate(name, kind) {
 // match as "counted" and the host listener doesn't re-apply on the way
 // back through Firebase.
 function maybeApplyMatchWinRate(matchId, storedBefore, state) {
-  if (!swissCanEdit) return null;          // only scoring devices apply
+  if (!swissCanEdit) { console.info("[achievement] skip — not host/co-host"); return null; }
   const match = state.matches && state.matches[matchId];
-  if (!match) return null;
-  if (match.wrApplied) return null;        // already counted
-  if (match.bye) return null;              // skip BYEs
-  if (!match.a || !match.b) return null;   // half-filled
+  if (!match) { console.info("[achievement] skip — match not in state", matchId); return null; }
+  if (match.wrApplied) { console.info("[achievement] skip — match already counted (wrApplied)", matchId); return null; }
+  if (match.bye) { console.info("[achievement] skip — bye match", matchId); return null; }
+  if (!match.a || !match.b) { console.info("[achievement] skip — half-filled match", matchId); return null; }
   const scoreA = match.scoreA, scoreB = match.scoreB;
-  if (scoreA == null || scoreB == null) return null; // not scored yet
+  if (scoreA == null || scoreB == null) { console.info("[achievement] skip — match not scored yet", matchId); return null; }
 
   const aCounts = nameIsAccountRegistrant(state, match.a);
   const bCounts = nameIsAccountRegistrant(state, match.b);
-  if (!aCounts && !bCounts) return null;   // nothing to write
+  console.info("[achievement] match qualifies", matchId, { a: match.a, b: match.b, scoreA, scoreB, aCounts, bCounts });
+  if (!aCounts && !bCounts) { console.info("[achievement] skip — both players are guests"); return null; }
 
   if (scoreA > scoreB) {
     if (aCounts) bumpWinRate(match.a, "win");
     if (bCounts) bumpWinRate(match.b, "loss");
     // Achievements: winner = a. Only credit the winner if they have an
     // account (guests don't earn achievements, same gate as ranking).
-    if (aCounts) applyMatchAchievements(match, match.a, match.b);
+    if (aCounts) applyMatchAchievements(match, match.a, match.b, state);
   } else if (scoreB > scoreA) {
     if (aCounts) bumpWinRate(match.a, "loss");
     if (bCounts) bumpWinRate(match.b, "win");
-    if (bCounts) applyMatchAchievements(match, match.b, match.a);
+    if (bCounts) applyMatchAchievements(match, match.b, match.a, state);
   } else {
     if (aCounts) bumpWinRate(match.a, "tie");
     if (bCounts) bumpWinRate(match.b, "tie");
-    // Ties don't credit any achievement (all three require a win).
+    // Ties don't credit any achievement (all achievements require a win).
   }
   // Mark the match locally so the host's own listener tick (and any sibling
   // tab) won't re-apply, and return the patch for the Firebase push.
@@ -7877,6 +7947,97 @@ function joinTournamentAsParticipant(room) {
   hostingTab?.click();
 }
 
+// Tester-only deck builder — produces a 3-slot deck guaranteed to satisfy
+// the chosen achievement's creditOnWin condition. Bound to the Auto-build
+// button in the Register popup so a tester can quickly verify each
+// achievement without hand-rolling parts. Each branch returns hard-coded
+// part names sourced from data.js; if a name doesn't match the local DATA
+// (e.g. data.js was updated mid-development) the slot's part field will
+// be empty and the user can paste a corrected deck.
+function buildTestDeckForAchievement(id) {
+  // Helper — a standard (BX) slot.
+  const std = (blade, ratchet, bit) => ({
+    mode: "standard",
+    parts: { blade, ratchet, bit }
+  });
+  switch (id) {
+    case "dragonTamer":
+      // Needs a Dran / Drake / Dragoon / Wyvern / Bahamut / Ragna part
+      // anywhere in the deck — any slot works.
+      return [
+        std("Dran Sword", "4-50", "Flat"),
+        std("Phoenix Wing", "4-55", "Free Flat"),
+        std("Knight Lance", "9-65", "Low Flat")
+      ];
+    case "dragonSlayer":
+      // Your deck needs a Knight part. Opponent's deck must have a
+      // dragon name — make sure your test opponent's deck does.
+      return [
+        std("Knight Shield", "4-50", "Flat"),
+        std("Knight Lance", "4-55", "Free Flat"),
+        std("Dran Sword", "9-65", "Low Flat")
+      ];
+    case "lonewolf":
+      // Exactly one Wolf-named part, on a slot whose combo type is
+      // different from the other two. Silver Wolf (15/30/65) + 1-50
+      // (18/9/3) + Low Orb (5/25/55) totals 38/64/123 — STA hits 100+,
+      // so slot 1 classifies as Stamina. Slot 2 = Attack (Dran Sword
+      // pushes ATK ≥ 100). Slot 3 = Balance (Knight Lance + M-85 +
+      // Free Flat totals 73/94/40 — no single stat hits 100). Either
+      // way, neither slot 2 nor slot 3 is Stamina, so the wolf slot's
+      // type is unique across the deck.
+      return [
+        std("Silver Wolf", "1-50", "Low Orb"),
+        std("Dran Sword", "4-50", "Flat"),
+        std("Knight Lance", "M-85", "Free Flat")
+      ];
+    case "rushHour":
+      // Clock Mirage (blade) + any Rush-named bit in the SAME slot.
+      // Clock Mirage needs a ratchet ending in 5 — 4-55 works.
+      return [
+        std("Clock Mirage", "4-55", "Rush"),
+        std("Dran Sword", "4-50", "Flat"),
+        std("Phoenix Wing", "9-65", "Low Flat")
+      ];
+    case "kingOfJungle":
+      // Slot 1: Leon. Slots 2 & 3: each carry a Rhino / Fox / Wolf /
+      // Viper / Tiger / Bear / Goat part.
+      return [
+        std("Leon Claw", "4-50", "Flat"),
+        std("Rhino Horn", "4-55", "Free Flat"),
+        std("Viper Tail", "9-65", "Low Flat")
+      ];
+    case "sharknado":
+      // Shark Edge on a slot whose total stays Balance (no stat ≥ 100).
+      // Shark Edge (60/25/15) + 1-50 (18/9/3) + Low Orb (5/25/55) =
+      // 83/59/73 — all under 100 → Balance.
+      return [
+        std("Shark Edge", "1-50", "Low Orb"),
+        std("Dran Sword", "4-50", "Flat"),
+        std("Phoenix Wing", "9-65", "Low Flat")
+      ];
+    case "sorcererSupreme":
+      // Every slot must contain a Wizard part. Wizard Arrow and Wizard
+      // Rod are blades; the 3rd slot uses CX mode with the "Wizard"
+      // lockChip so it also has a Wizard part.
+      return [
+        std("Wizard Arrow", "4-50", "Flat"),
+        std("Wizard Rod", "4-55", "Free Flat"),
+        {
+          mode: "cx",
+          parts: {
+            lockChip: "Wizard",
+            mainBlade: "Blast",
+            assistBlade: "Heavy",
+            ratchet: "1-50",
+            bit: "Low Orb"
+          }
+        }
+      ];
+  }
+  return null;
+}
+
 function showRegistrationPopup(room, options = {}) {
   const popup = document.getElementById("register-popup");
   if (!popup) return;
@@ -7887,6 +8048,7 @@ function showRegistrationPopup(room, options = {}) {
   const submitBtn = popup.querySelector("#register-submit");
   const cancelBtn = popup.querySelector("#register-cancel");
   const pasteBtn = popup.querySelector("#register-paste");
+  const autoBuildBtn = popup.querySelector("#register-autobuild");
   const selfRegister = !!options.selfRegister;
   const editRegistrantId = options.editRegistrantId || null;
   // Edit mode is implicitly self-managed too (writes via swissRoomRef,
@@ -7967,9 +8129,48 @@ function showRegistrationPopup(room, options = {}) {
     submitBtn.onclick = null;
     cancelBtn.onclick = null;
     if (pasteBtn) pasteBtn.onclick = null;
+    if (autoBuildBtn) autoBuildBtn.onclick = null;
     if (nameInput) nameInput.onkeydown = null;
   };
   cancelBtn.onclick = close;
+
+  // Tester-only Auto-build button. Hidden by default; revealed only for
+  // accounts tagged "Tester" so a tester can quickly drop in a deck that
+  // satisfies a specific achievement and verify the counter increments.
+  if (autoBuildBtn) {
+    const showAuto = typeof window.isTester === "function" && window.isTester();
+    autoBuildBtn.classList.toggle("hidden", !showAuto);
+    if (showAuto) {
+      autoBuildBtn.onclick = () => {
+        const defs = (window.ACHIEVEMENTS || []);
+        if (!defs.length) {
+          setStatus("Achievements module not loaded — can't auto-build.", "err");
+          return;
+        }
+        // Number-picker prompt. Cheap UX for a dev tool — no separate popup
+        // needed.
+        const lines = defs.map((d, i) => `${i + 1}. ${d.title}`).join("\n");
+        const raw = window.prompt(
+          "Auto-build a test deck for which achievement?\n\n" + lines + "\n\nEnter a number 1-" + defs.length + ":",
+          "1"
+        );
+        if (raw == null) return; // cancelled
+        const idx = parseInt(String(raw).trim(), 10) - 1;
+        if (!(idx >= 0 && idx < defs.length)) {
+          setStatus("Invalid selection — pick a number from the list.", "err");
+          return;
+        }
+        const built = buildTestDeckForAchievement(defs[idx].id);
+        if (!built) {
+          setStatus("No builder for that achievement.", "err");
+          return;
+        }
+        deck = normalizeBeyCheckDeck(built);
+        renderSlots();
+        setStatus(`Built test deck for "${defs[idx].title}".`, "ok");
+      };
+    }
+  }
 
   // Paste from Deck tab. Reads the JSON payload that the Deck tab's Copy
   // button writes to the clipboard, validates the wrapper, then drops the

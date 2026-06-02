@@ -1116,6 +1116,7 @@
     "ranking",
     "revoxRanking",
     "winRates",
+    "achievements",
     "judges",
     "revoxAccounts",
     "swissViewCodes"
@@ -1130,6 +1131,10 @@
     ranking:         ["points"],
     revoxRanking:    ["points", "results"],
     winRates:        ["username", "wins", "losses", "ties", "updatedAt"],
+    // Keys are UIDs. Each cell shows the nested {count, awarded, ...} object
+    // for that achievement (the generic renderer summarizes it as
+    // "{4} count, awarded, awardedAt, updatedAt").
+    achievements:    ["dragonTamer", "dragonSlayer", "lonewolf", "rushHour", "kingOfJungle", "sharknado", "sorcererSupreme"],
     judges:          [],  // value is a plain string
     revoxAccounts:   [],
     swissViewCodes:  []

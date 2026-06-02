@@ -8152,8 +8152,24 @@ button.swiss-reg-name-edit:focus-visible {
 }
 .register-deck-actions {
     display: flex;
-    justify-content: flex-end;
+    flex-wrap: nowrap;
+    gap: 8px;
     margin: 8px 0 4px;
+}
+
+/* Buttons share the row equally — both grow to fill the available width
+   so the row stays single-line on every viewport instead of stacking
+   awkwardly when both buttons need their full label space. */
+.register-deck-actions .btn {
+    flex: 1 1 0;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.register-deck-actions .btn .btn-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .swiss-hint {
     margin: 4px 0 6px;
@@ -9311,6 +9327,7 @@ body.bronze-mode .revox-row-btn:hover { background: rgba(198, 128, 68, 0.3); bor
 #swiss-rooms-refresh,
 #swiss-rooms-tutorial,
 #register-paste,
+#register-autobuild,
 #register-submit,
 #register-cancel,
 #account-save-btn,
@@ -9325,6 +9342,7 @@ body.bronze-mode .revox-row-btn:hover { background: rgba(198, 128, 68, 0.3); bor
 }
 
 #register-paste img,
+#register-autobuild img,
 #register-submit img,
 #register-cancel img,
 #account-save-btn img,
