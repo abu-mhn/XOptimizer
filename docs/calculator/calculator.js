@@ -1565,7 +1565,7 @@ function initSettingDropdown(id, storageKey, defaultVal, onChange) {
 
 // Theme setting — exposed so auth.js can apply the Revox-Admin default.
 window.themeSetting = initSettingDropdown("setting-theme", "theme", "dark", (val) => {
-  document.body.classList.remove("light-mode", "space-mode", "tropical-mode", "stormy-mode", "mono-mode", "love-mode", "forest-mode", "revox-mode", "gold-mode", "silver-mode", "bronze-mode", "dragontamer-mode", "dragonslayer-mode", "lonewolf-mode", "rushhour-mode", "kingofjungle-mode", "sharknado-mode", "sorcerersupreme-mode", "paleonerd-mode");
+  document.body.classList.remove("light-mode", "space-mode", "tropical-mode", "stormy-mode", "mono-mode", "love-mode", "forest-mode", "revox-mode", "gold-mode", "silver-mode", "bronze-mode", "dragontamer-mode", "dragonslayer-mode", "lonewolf-mode", "rushhour-mode", "kingofjungle-mode", "sharknado-mode", "sorcerersupreme-mode", "paleonerd-mode", "kingofalltypes-mode");
   if (val === "light") document.body.classList.add("light-mode");
   if (val === "space") document.body.classList.add("space-mode");
   if (val === "tropical") document.body.classList.add("tropical-mode");
@@ -1588,6 +1588,7 @@ window.themeSetting = initSettingDropdown("setting-theme", "theme", "dark", (val
   if (val === "sharknado") document.body.classList.add("sharknado-mode");
   if (val === "sorcerersupreme") document.body.classList.add("sorcerersupreme-mode");
   if (val === "paleonerd") document.body.classList.add("paleonerd-mode");
+  if (val === "kingofalltypes") document.body.classList.add("kingofalltypes-mode");
   // (The previous per-theme src swap between XOptimizerLight.webp /
   // XOptimizerDark.webp is gone — #app-title-logo is now a CSS-masked
   // span that takes currentColor, so the wordmark follows the active
@@ -1612,6 +1613,7 @@ window.themeSetting = initSettingDropdown("setting-theme", "theme", "dark", (val
     : val === "sharknado" ? "#081420"
     : val === "sorcerersupreme" ? "#160a24"
     : val === "paleonerd" ? "#1a1208"
+    : val === "kingofalltypes" ? "#0e1320"
     : "#0a4797";
   document.querySelectorAll('img.footer-logo').forEach(img => {
     img.src = (val === "light" || val === "tropical" || val === "love" || val === "forest") ? "assets/icons/revoxNameLight.webp" : "assets/icons/revoxName.webp";

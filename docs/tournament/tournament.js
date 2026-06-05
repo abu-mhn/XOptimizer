@@ -8055,6 +8055,17 @@ function buildTestDeckForAchievement(id) {
         std("Tricera Press", "4-55", "Free Flat"),
         std("Mammoth Tusk", "9-65", "Low Flat")
       ];
+    case "kingOfAllTypes":
+      // At least one slot must have Bullet Griffon AND be tuned out of
+      // Balance. BG's blade is 45/45/40; pairing it with Quake (55/15/5)
+      // pushes the slot to 100/60/45 — ATK hits 100 → Attack type.
+      // BG's built-in ratchet means the ratchet field uses the shared
+      // NO_RATCHET sentinel so the slot still passes deck validation.
+      return [
+        { mode: "standard", parts: { blade: "Bullet Griffon", ratchet: NO_RATCHET, bit: "Quake" } },
+        std("Dran Sword", "4-50", "Flat"),
+        std("Phoenix Wing", "9-65", "Low Flat")
+      ];
   }
   return null;
 }

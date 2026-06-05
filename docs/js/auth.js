@@ -662,7 +662,8 @@
     kingofjungle: "King of The Jungle",
     sharknado: "Sharknado",
     sorcerersupreme: "Sorcerer Supreme",
-    paleonerd: "Paleonerd"
+    paleonerd: "Paleonerd",
+    kingofalltypes: "King of All Types"
   };
   // Becomes true after Firebase reports the first auth state — lets the
   // achievement gate tell a confirmed "signed out" from "auth not resolved

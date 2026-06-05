@@ -78,7 +78,7 @@ Tournament
 - Lobby cards flag a tournament you've been invited to co-host with a small "!" alert badge
 - Edit the format while waiting for players — tap the format chip to switch between Swiss, Round Robin and Single Elimination, or the groups / rounds chips to adjust them; registrants are kept, no reset needed. Switching INTO a knockout format (Swiss + Top N or Round Robin + Top N) re-opens the Top-N picker so the host picks the bracket size right there — same flow as create time
 - Test button: bulk-adds synthetic participants for QA — visible only to accounts tagged "Tester"
-- Auto-build (Test) button in the Register popup — Tester-only. Prompts for one of the eight achievements and fills the 3-slot deck with a pre-built combo guaranteed to satisfy that achievement's win condition. Lets a tester verify each achievement's creditOnWin end-to-end without hand-rolling parts
+- Auto-build (Test) button in the Register popup — Tester-only. Prompts for one of the nine achievements and fills the 3-slot deck with a pre-built combo guaranteed to satisfy that achievement's win condition. Lets a tester verify each achievement's creditOnWin end-to-end without hand-rolling parts
 - Copy Names button (Tester-only, host / co-host): copies every registrant's name to the clipboard, one per line — a QA aid; the button flashes the copied count
 - Test decks obey "one of each part per deck" across all 3 slots (only light lock chips can repeat; Emperor / Valkyrie cannot)
 - Test deck mode mix is weighted realistic: ~75% Standard, ~13% CX, ~12% CX Expand
@@ -117,6 +117,7 @@ Achievement
 - Sharknado — win 100 matches where at least one slot has a Shark-named part AND that slot classifies as a Balance-type combo (no single stat hitting 100). Awards the "Sharknado" profile tag + unlocks the Sharknado theme (deep ocean blue + lightning yellow)
 - Sorcerer Supreme — win 100 matches where every one of your 3 deck slots contains at least one Wizard-named part (a full wizard council, no non-wizard slots). Awards the "Sorcerer Supreme" profile tag + unlocks the Sorcerer Supreme theme (mystical violet + arcane gold)
 - Paleonerd — win 100 matches where every one of your 3 deck slots carries a Tyranno / Tricera / Ptera / Mammoth or Brachio part. Awards the "Paleonerd" profile tag + unlocks the Paleonerd theme (amber fossil + Jurassic jungle green)
+- King of All Types — win 100 matches with a Bullet Griffon slot tuned out of its default Balance configuration into Attack / Defense / Stamina (any non-Balance combo type). Bullet Griffon's built-in ratchet leaves the slot at BG-blade + bit; picking a bit that pushes a stat ≥ 100 is what flips the slot into a non-Balance type. Awards the "King of All Types" profile tag + unlocks the King of All Types theme (platinum silver + royal blue)
 - Storage lives at /achievements/{uid} (keyed by Firebase Auth UID). Reads are private to the user (or Developer); writes happen on the scoring device once a match is finalised. The tag is mirrored onto the user's profile the next time they sign in, gated by a Firebase rule that only lets the player self-claim a title when the matching achievement node is already flagged awarded
 - Guests and tied matches don't credit any achievement (same gate as global ranking points)
 - Format-agnostic — Swiss groups, Round Robin groups, knockout brackets (Swiss + Top N) and Single Elimination matches all run the same scoring path. Every scored win where the winner is a non-guest registrant runs the achievement check on the winner's match deck
@@ -152,7 +153,7 @@ History
 Settings
 - Themes: Dark, Light, Space, Tropical, Stormy, Monochrome, Love, Forest (plus Revox, for Revox accounts)
 - Medal themes: Gold, Silver and Bronze are reward themes — each is unlocked only while the account holds the matching medal tag (top 3 of the tournament ranking); the menu entry appears when the medal is earned and disappears when it's lost, reverting to Dark if that medal theme was active
-- Achievement themes: Dragon Tamer (warm reds + ember gold), Dragon Slayer (steel blue + silver), Lone Wolf (slate gray + moon teal), Rush Hour (deep amber + traffic-light red), King of The Jungle (savanna gold + jungle green), Sharknado (ocean blue + lightning yellow), Sorcerer Supreme (mystical violet + arcane gold) and Paleonerd (amber fossil + Jurassic jungle green). Each appears in the theme menu only while the matching achievement tag is held (awarded at 100 wins — see the Achievement tab); same demote-to-Dark behavior as the medal themes if the tag is ever lost
+- Achievement themes: Dragon Tamer (warm reds + ember gold), Dragon Slayer (steel blue + silver), Lone Wolf (slate gray + moon teal), Rush Hour (deep amber + traffic-light red), King of The Jungle (savanna gold + jungle green), Sharknado (ocean blue + lightning yellow), Sorcerer Supreme (mystical violet + arcane gold), Paleonerd (amber fossil + Jurassic jungle green) and King of All Types (platinum silver + royal blue). Each appears in the theme menu only while the matching achievement tag is held (awarded at 100 wins — see the Achievement tab); same demote-to-Dark behavior as the medal themes if the tag is ever lost
 - Developer theme preview: accounts tagged "Developer" see every locked theme entry in the menu (Revox, all three Medal themes, all Achievement themes) regardless of whether they hold the matching tag. The demote-on-revoke logic is also bypassed for Developers, so picking a preview theme sticks until they switch manually. Useful for QA and screenshots; non-Developer accounts still follow the normal tag-gate
 - Stat display: Bar or Radar
 - Additional button mode picker (Random / Meta)
@@ -175,7 +176,7 @@ Profile
 
 Developer
 - Extra tab shown only to accounts tagged "Developer"
-- Two sub-tabs: Users (the registered-user list + tag controls) and Database (raw Firebase data browser)
+- Three sub-tabs: Users (the registered-user list + tag controls), Database (raw Firebase data browser), and Tags (reference list of every tag the app recognises — Admin / Role, Medal, Achievement — with the real badge styling and a short explanation of what each one unlocks)
 - Users sub-tab: lists every registered user with a total count, searchable by username or email; each user's current tags show as badges
 - Developers can add AND remove tags on any user (multiple tags per user)
 - Hover or click a username in the list to open that account's profile card
@@ -189,7 +190,7 @@ Developer
 Other
 - Per-tab URLs: /dashboard/, /calculator/, /library/, /deck/, /tournament/, /achievement/, /revox/, /battlepass/, /reel/, /history/, /settings/, /account/, /developer/
 - "What's New" landing page at the site root
-- Single-line horizontal tab bar (invisible scrollbar) — each tab shows its icon with a name label below; scroll position preserved across navigation. On desktop the bar spans the full viewport and stays centered regardless of which conditional tabs (Achievement / Revox / Developer) are visible. Every static tab icon is rendered as a CSS mask filled with the active theme's text color, so switching themes (Dark / Light / Tropical / Stormy / Mono / Love / Forest / Revox / Gold / Silver / Bronze / Dragon Tamer / Dragon Slayer / Lone Wolf / Rush Hour / King of The Jungle / Sharknado / Sorcerer Supreme / Paleonerd) re-colors every icon at once with no per-theme overrides. The Profile tab is the only exception — it shows the user's own avatar photo, not a mask
+- Single-line horizontal tab bar (invisible scrollbar) — each tab shows its icon with a name label below; scroll position preserved across navigation. On desktop the bar spans the full viewport and stays centered regardless of which conditional tabs (Achievement / Revox / Developer) are visible. Every static tab icon is rendered as a CSS mask filled with the active theme's text color, so switching themes (Dark / Light / Tropical / Stormy / Mono / Love / Forest / Revox / Gold / Silver / Bronze / Dragon Tamer / Dragon Slayer / Lone Wolf / Rush Hour / King of The Jungle / Sharknado / Sorcerer Supreme / Paleonerd / King of All Types) re-colors every icon at once with no per-theme overrides. The Profile tab is the only exception — it shows the user's own avatar photo, not a mask
 - X-Optimizer wordmark in the header is also a CSS-masked silhouette filled with currentColor, so the title logo adopts the active theme's text color on every page (the per-theme img-src swap is gone — one shared PNG works for every palette)
 - Live Firebase sync across host / co-host / participant / viewer devices
 - Multi-mode part images (Eclipse, Dual, Turbo, Operate, Scorpio Spear, Lightning L-Drago) display correctly everywhere — defaults to mode 0 when no mode is recorded

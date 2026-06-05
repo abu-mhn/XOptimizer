@@ -24,7 +24,7 @@
       theme: "dragontamer",
       themeLabel: "Dragon Tamer",
       target: 100,
-      shortDescription: "Win 100 matches using parts named Dran, Drake, Dragoon, Wyvern, Bahamut or Ragna.",
+      shortDescription: "Win 100 matches using parts named Dran / Drake / Dragoon / Wyvern / Bahamut or Ragna.",
       // Per-match credit: did the WINNER use one of these parts in this match?
       creditOnWin: (winnerDeck /*, loserDeck */) => deckHasAnyPartName(winnerDeck, DRAGON_NAMES)
     },
@@ -169,6 +169,30 @@
         }
         return validSlots >= 3;
       }
+    },
+    {
+      id: "kingOfAllTypes",
+      title: "King of All Types",
+      tag: "King of All Types",
+      theme: "kingofalltypes",
+      themeLabel: "King of All Types",
+      target: 100,
+      shortDescription: "Win 100 matches with a Bullet Griffon slot tuned into a non-Balance combo (Attack / Defense / Stamina).",
+      // Per-match credit: the winner's deck has at least ONE slot that
+      // contains Bullet Griffon AND that slot's combo type is NOT
+      // Balance. Bullet Griffon's built-in ratchet leaves the slot at
+      // BG-blade + bit — picking a bit that pushes one stat ≥ 100
+      // converts the slot into Attack / Defense / Stamina, which is
+      // what "King of All Types" rewards (mastery over BG in every
+      // non-Balance type, not just the default Balance configuration).
+      creditOnWin: (winnerDeck /*, loserDeck */) => deckHasSlotWhere(
+        winnerDeck,
+        parts => {
+          if (!slotHasAnyPartName(parts, BULLET_GRIFFON_NAMES)) return false;
+          const t = slotBaseType(parts);
+          return !!t && t !== "Balance";
+        }
+      )
     }
   ];
 
@@ -205,6 +229,12 @@
   // these substrings (Tyranno Beat, Tyranno Roar, Tricera Press,
   // Ptera Swing, Mammoth Tusk, Brachio lockChip). Used by Paleonerd.
   const DINOSAUR_NAMES = ["tyranno", "tricera", "ptera", "mammoth", "brachio"];
+  // Bullet Griffon match — the only blade with this substring in
+  // its display name, so the per-slot lookup is unambiguous. Used by
+  // King of All Types (requires BG in a slot whose combo type is
+  // not Balance, proving the player has tuned BG away from its
+  // default balanced configuration).
+  const BULLET_GRIFFON_NAMES = ["bullet griffon"];
 
   // Walk every named part across all 3 slots in a bey-check deck. Each slot
   // can be in standard / cx / cxExpand mode with different fields; we just
@@ -221,13 +251,22 @@
     }
   }
 
+  // Substring test with a small exclusion list — "dran" matches Dran Sword /
+  // Dagger / Strike / Buster but must NOT credit Dranzer Spiral (it shares the
+  // prefix but isn't part of the Dragon family for these achievements).
+  function needleMatchesName(lowName, needle) {
+    if (lowName.indexOf(needle) === -1) return false;
+    if (needle === "dran" && lowName.indexOf("dranzer") !== -1) return false;
+    return true;
+  }
+
   function deckHasAnyPartName(deck, needles) {
     let hit = false;
     eachDeckPartName(deck, (name) => {
       if (hit) return;
       const low = name.toLowerCase();
       for (const needle of needles) {
-        if (low.indexOf(needle) !== -1) { hit = true; return; }
+        if (needleMatchesName(low, needle)) { hit = true; return; }
       }
     });
     return hit;
@@ -238,7 +277,7 @@
     eachDeckPartName(deck, (name) => {
       const low = name.toLowerCase();
       for (const needle of needles) {
-        if (low.indexOf(needle) !== -1) { n++; return; }
+        if (needleMatchesName(low, needle)) { n++; return; }
       }
     });
     return n;
@@ -255,12 +294,13 @@
     return false;
   }
 
-  // Case-insensitive substring test against a list of needles.
+  // Case-insensitive substring test against a list of needles. Routes through
+  // needleMatchesName so the Dranzer/Dran exclusion applies here too.
   function partNameMatches(name, needles) {
     if (typeof name !== "string" || !name) return false;
     const low = name.toLowerCase();
     for (const needle of needles) {
-      if (low.indexOf(needle) !== -1) return true;
+      if (needleMatchesName(low, needle)) return true;
     }
     return false;
   }

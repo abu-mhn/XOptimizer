@@ -433,22 +433,32 @@
           <button type="button" id="deck-shuffle" class="btn btn-shuffle" aria-label="Shuffle Deck" title="Shuffle Deck">
             <img src="assets/icons/shuffle.png" alt="Shuffle"
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x1F3B2;');">
+            <span class="btn-label">Shuffle</span>
           </button>
           <button type="button" id="deck-download" class="btn btn-download" aria-label="Download Deck as PNG" title="Download Deck as PNG">
             <img src="assets/icons/download.png" alt="Download"
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x2B07;');">
+            <span class="btn-label">Download</span>
           </button>
           <button type="button" id="deck-share" class="btn btn-share" aria-label="Share Deck" title="Share Deck">
             <img src="assets/icons/share.png" alt="Share"
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x1F517;');">
+            <span class="btn-label">Share</span>
           </button>
           <button type="button" id="deck-copy" class="btn btn-copy" aria-label="Copy Deck for Tournament Registration" title="Copy this deck — paste into a tournament registration form">
             <img src="assets/icons/copy.png" alt="Copy"
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x1F4CB;');">
+            <span class="btn-label">Copy</span>
           </button>
           <button type="button" id="deck-paste" class="btn btn-paste" aria-label="Paste a copied deck" title="Paste a copied deck">
             <img src="assets/icons/paste.png" alt="Paste"
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x1F4CB;');">
+            <span class="btn-label">Paste</span>
+          </button>
+          <button type="button" id="deck-autobuild" class="btn btn-autobuild" aria-label="Generate a deck for an achievement" title="Generate a deck that satisfies an achievement's win condition">
+            <img src="assets/icons/dice.png" alt="Auto"
+                 onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x1F3B2;');">
+            <span class="btn-label">Auto</span>
           </button>
         </div>
         <div id="deck-list"></div>
@@ -530,6 +540,7 @@
               <div class="setting-dropdown-option hidden" data-value="sharknado">Sharknado</div>
               <div class="setting-dropdown-option hidden" data-value="sorcerersupreme">Sorcerer Supreme</div>
               <div class="setting-dropdown-option hidden" data-value="paleonerd">Paleonerd</div>
+            <div class="setting-dropdown-option hidden" data-value="kingofalltypes">King of All Types</div>
             </div>
           </div>
         </div>
@@ -645,6 +656,18 @@
       <div class="popup-actions">
         <button type="button" id="tournament-cohost-code-submit" class="btn">Join</button>
         <button type="button" id="tournament-cohost-code-cancel" class="btn popup-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= ACHIEVEMENT AUTO-BUILD POPUP ================= -->
+  <div id="deck-autobuild-popup" class="popup-overlay hidden">
+    <div class="popup-card">
+      <h2 class="popup-title">Generate Deck for Achievement</h2>
+      <p class="popup-text">Pick an achievement and we'll fill the active deck with a 3-slot combo that satisfies its win condition. Useful for chasing a specific badge.</p>
+      <div id="deck-autobuild-list" class="deck-autobuild-list"></div>
+      <div class="popup-actions">
+        <button type="button" id="deck-autobuild-cancel" class="btn popup-cancel"><img src="assets/icons/exit-button.png" alt="" onerror="this.style.display='none'"><span class="btn-label">Cancel</span></button>
       </div>
     </div>
   </div>
@@ -1092,10 +1115,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="data.js"></script>
   <script src="js/core.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="js/achievements.js?v=20260602b"></script>
+  <script src="js/auth.js?v=20260605d"></script>
+  <script src="js/achievements.js?v=20260605d"></script>
   <script src="js/scoreboard.js"></script>
-  <script src="calculator/calculator.js"></script>
+  <script src="calculator/calculator.js?v=20260605d"></script>
   <script src="deck/deck.js"></script>
   <script src="library/library.js"></script>
   <script src="tournament/tournament.js"></script>

@@ -923,3 +923,464 @@ function saveDeckEdit() {
   input.value = loadDeckName();
   input.addEventListener("input", () => saveDeckName(input.value));
 })();
+
+// =========================
+// AUTO-BUILD DECK FROM ACHIEVEMENT
+// =========================
+// The "Auto" button opens a popup listing every Achievement; picking one
+// fills the active deck with a 3-slot combo that satisfies that achievement's
+// `creditOnWin` check (see js/achievements.js). Generators build slot data
+// directly (no form round-trip) so the same parts the user copies into a
+// tournament also pass the achievement predicate after deckSlotToBeyCheckShape.
+
+const AUTOBUILD_NEEDLES = {
+  dragon: ["dran", "drake", "dragoon", "wyvern", "bahamut", "ragna"],
+  knight: ["knight"],
+  wolf: ["wolf"],
+  leon: ["leon"],
+  jungle: ["rhino", "fox", "wolf", "viper", "tiger", "bear", "goat"],
+  shark: ["shark"],
+  wizard: ["wizard"],
+  dinosaur: ["tyranno", "tricera", "ptera", "mammoth", "brachio"],
+  clockMirage: ["clock mirage"],
+  rush: ["rush"],
+  bulletGriffon: ["bullet griffon"]
+};
+
+function autobuildNameMatches(name, needles) {
+  if (typeof name !== "string" || !name) return false;
+  const low = name.toLowerCase();
+  return needles.some(n => {
+    if (low.indexOf(n) === -1) return false;
+    // "Dranzer" shares the "dran" prefix but isn't part of the Dragon family
+    // for the achievement matchers — must stay out of the dragon pool.
+    if (n === "dran" && low.indexOf("dranzer") !== -1) return false;
+    return true;
+  });
+}
+
+function autobuildFilterByName(arr, needles) {
+  if (!Array.isArray(arr)) return [];
+  return arr.filter(p => autobuildNameMatches(p.name, needles));
+}
+
+function autobuildShuffled(arr) {
+  const out = (arr || []).slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+function autobuildAvailable(arr, used) {
+  return (arr || []).filter(p => !used.has(p.name));
+}
+
+function autobuildMarkUsed(slot, used) {
+  const parts = slot && slot.data && slot.data.parts;
+  if (!parts) return;
+  for (const [k, n] of Object.entries(parts)) {
+    if (isCountedPart(k, n)) used.add(n);
+  }
+}
+
+// Build a BX-mode slot data object from blade/ratchet/bit. `ratchet` may be
+// null — the no-ratchet path used for Bullet Griffon.
+function autobuildMakeBXSlot(blade, ratchet, bit) {
+  const r = ratchet || { atk: 0, def: 0, sta: 0, weight: 0 };
+  const totalAtk = (blade.atk || 0) + r.atk + (bit?.atk || 0);
+  const totalDef = (blade.def || 0) + r.def + (bit?.def || 0);
+  const totalSta = (blade.sta || 0) + r.sta + (bit?.sta || 0);
+  const totalWeight = (blade.weight || 0) + r.weight + (bit?.weight || 0);
+  const isBG = blade.codename === "BULLETGRIFFON";
+  const bHeight = ratchet ? ratchet.height : null;
+  const comboName = (blade.codename || blade.name)
+    + (ratchet ? ratchet.name : "")
+    + (bit ? (bit.codename || bit.name) : "");
+  return {
+    mode: "BX",
+    time: new Date().toISOString(),
+    data: {
+      comboName,
+      top: { spinDirection: blade.spindirection || "R" },
+      parts: {
+        blade: blade.name,
+        ratchet: ratchet ? ratchet.name : null,
+        bit: bit ? bit.name : null
+      },
+      partModes: {},
+      grandTotal: {
+        ATK: totalAtk,
+        DEF: totalDef,
+        STA: totalSta,
+        Weight: `${totalWeight.toFixed(1)} g`,
+        ...(isBG ? {} : {
+          Height: bHeight == null ? "TBA" : `${(Number(bHeight) / 10).toFixed(1)} mm`
+        }),
+        Dash: bit ? bit.dash : undefined,
+        "Burst Res": bit ? bit.burstRes : undefined
+      }
+    }
+  };
+}
+
+// Build a CX-mode slot data object.
+function autobuildMakeCXSlot(lc, mb, ab, ratchet, bit) {
+  const r = ratchet || { atk: 0, def: 0, sta: 0, weight: 0, height: 0 };
+  const totalAtk = (mb.atk || 0) + (ab.atk || 0) + r.atk + (bit?.atk || 0);
+  const totalDef = (mb.def || 0) + (ab.def || 0) + r.def + (bit?.def || 0);
+  const totalSta = (mb.sta || 0) + (ab.sta || 0) + r.sta + (bit?.sta || 0);
+  const totalWeight = (lc.weight || 0) + (mb.weight || 0) + (ab.weight || 0)
+    + r.weight + (bit?.weight || 0);
+  const totalHeight = (ab?.height || 0) + (r.height || 0);
+  const comboName = (lc.codename || lc.name)
+    + (mb.codename || mb.name)
+    + (ab.codename || ab.name)
+    + (ratchet ? ratchet.name : "")
+    + (bit ? (bit.codename || bit.name) : "");
+  return {
+    mode: "CX",
+    time: new Date().toISOString(),
+    data: {
+      comboName,
+      top: { spinDirection: mb.spindirection || "R" },
+      parts: {
+        lockChip: lc.name,
+        mainBlade: mb.name,
+        assistBlade: ab.name,
+        ratchet: ratchet ? ratchet.name : null,
+        bit: bit ? bit.name : null
+      },
+      partModes: {},
+      grandTotal: {
+        ATK: totalAtk,
+        DEF: totalDef,
+        STA: totalSta,
+        Weight: `${totalWeight.toFixed(1)} g`,
+        Height: `${(totalHeight / 10).toFixed(1)} mm`,
+        Dash: bit ? bit.dash : undefined,
+        "Burst Res": bit ? bit.burstRes : undefined
+      }
+    }
+  };
+}
+
+// Coarse type bucket (Attack / Defense / Stamina / Balance) for a BX combo.
+function autobuildBaseTypeForBX(blade, ratchet, bit) {
+  const atk = (blade.atk || 0) + (ratchet?.atk || 0) + (bit?.atk || 0);
+  const def = (blade.def || 0) + (ratchet?.def || 0) + (bit?.def || 0);
+  const sta = (blade.sta || 0) + (ratchet?.sta || 0) + (bit?.sta || 0);
+  const t = getType(atk, def, sta, false);
+  if (typeof t !== "string") return "";
+  if (t.indexOf("Balance") !== -1) return "Balance";
+  return t;
+}
+
+// Brute-force search for a (ratchet, bit) pair that gives `blade` the
+// requested base type (Attack / Defense / Stamina / Balance), avoiding any
+// part name in `used`. Pass `opts.noRatchet: true` for the Bullet Griffon
+// path (no ratchet, normal bit — see the tool_bullet_griffon memory).
+function autobuildPickRatchetBitForType(blade, targetType, used, opts) {
+  opts = opts || {};
+  const ratchetPool = opts.noRatchet
+    ? [null]
+    : autobuildShuffled(autobuildAvailable(DATA.ratchets, used));
+  const bitPool = autobuildShuffled(
+    autobuildAvailable(DATA.bits, used).filter(b => !b.isRatchetBit)
+  );
+  for (const r of ratchetPool) {
+    for (const b of bitPool) {
+      const t = autobuildBaseTypeForBX(blade, r, b);
+      if (!targetType || t === targetType) return { ratchet: r, bit: b };
+    }
+  }
+  return null;
+}
+
+// Build a BX slot for `blade`, recording used parts. Returns null when no
+// ratchet/bit combination meets `targetType` against the remaining pool.
+function autobuildBuildBXSlotFor(blade, used, targetType, opts) {
+  const pick = autobuildPickRatchetBitForType(blade, targetType, used, opts);
+  if (!pick) return null;
+  const slot = autobuildMakeBXSlot(blade, pick.ratchet, pick.bit);
+  autobuildMarkUsed(slot, used);
+  return slot;
+}
+
+// Fill remaining slots with random non-conflicting BX combos. `excludeNames`
+// is a list of substring needles to skip (e.g. ["bullet griffon"] so fillers
+// don't grab the achievement's themed blade by accident).
+function autobuildFillRemaining(slots, used, excludeNeedles) {
+  const blades = autobuildShuffled(
+    DATA.blades.filter(b =>
+      !used.has(b.name)
+      && !(excludeNeedles && autobuildNameMatches(b.name, excludeNeedles))
+    )
+  );
+  for (const blade of blades) {
+    if (slots.length === 3) return true;
+    const s = autobuildBuildBXSlotFor(blade, used, null);
+    if (s) slots.push(s);
+  }
+  return slots.length === 3;
+}
+
+// ----- Per-achievement generators (return { ok, slots } | { ok: false, reason }) -----
+
+function autobuildDragonTamerDeck() {
+  const used = new Set();
+  const slots = [];
+  for (const blade of autobuildShuffled(autobuildFilterByName(DATA.blades, AUTOBUILD_NEEDLES.dragon))) {
+    if (slots.length === 3) break;
+    if (used.has(blade.name)) continue;
+    const s = autobuildBuildBXSlotFor(blade, used, null);
+    if (s) slots.push(s);
+  }
+  if (slots.length < 3) return { ok: false, reason: "Not enough dragon blades available." };
+  return { ok: true, slots };
+}
+
+function autobuildDragonSlayerDeck() {
+  const used = new Set();
+  const slots = [];
+  for (const blade of autobuildShuffled(autobuildFilterByName(DATA.blades, AUTOBUILD_NEEDLES.knight))) {
+    if (slots.length === 3) break;
+    if (used.has(blade.name)) continue;
+    const s = autobuildBuildBXSlotFor(blade, used, null);
+    if (s) slots.push(s);
+  }
+  if (slots.length < 3) return { ok: false, reason: "Not enough Knight blades available." };
+  return { ok: true, slots };
+}
+
+function autobuildLoneWolfDeck() {
+  const used = new Set();
+  const wolfBlades = autobuildShuffled(autobuildFilterByName(DATA.blades, AUTOBUILD_NEEDLES.wolf));
+  if (!wolfBlades.length) return { ok: false, reason: "No Wolf blade available." };
+  // Aim for a Stamina wolf slot (Silver Wolf is sta-heavy); fall back to any.
+  let wolfSlot = null, wolfType = null;
+  for (const blade of wolfBlades) {
+    for (const tType of ["Stamina", "Defense", "Attack", "Balance"]) {
+      const s = autobuildBuildBXSlotFor(blade, used, tType);
+      if (s) { wolfSlot = s; wolfType = tType; break; }
+    }
+    if (wolfSlot) break;
+  }
+  if (!wolfSlot) return { ok: false, reason: "Couldn't tune the Wolf slot." };
+  // The other two slots must have a coarse type different from the wolf's.
+  const otherTargets = autobuildShuffled(
+    ["Attack", "Defense", "Stamina", "Balance"].filter(t => t !== wolfType)
+  );
+  const slots = [wolfSlot];
+  const otherBladePool = autobuildShuffled(
+    DATA.blades.filter(b => !autobuildNameMatches(b.name, AUTOBUILD_NEEDLES.wolf))
+  );
+  for (const blade of otherBladePool) {
+    if (slots.length === 3) break;
+    if (used.has(blade.name)) continue;
+    let placed = null;
+    for (const t of otherTargets) {
+      placed = autobuildBuildBXSlotFor(blade, used, t);
+      if (placed) break;
+    }
+    if (placed) slots.push(placed);
+  }
+  if (slots.length < 3) return { ok: false, reason: "Couldn't fill remaining slots." };
+  return { ok: true, slots };
+}
+
+function autobuildRushHourDeck() {
+  const used = new Set();
+  const clockMirage = (DATA.blades || []).find(b => autobuildNameMatches(b.name, AUTOBUILD_NEEDLES.clockMirage));
+  if (!clockMirage) return { ok: false, reason: "Clock Mirage blade not in data." };
+  const rushBits = autobuildShuffled(
+    DATA.bits.filter(b => !b.isRatchetBit && autobuildNameMatches(b.name, AUTOBUILD_NEEDLES.rush))
+  );
+  if (!rushBits.length) return { ok: false, reason: "No Rush bit in data." };
+  const bit = rushBits[0];
+  used.add(bit.name);
+  // Clock Mirage convention: only pair with ratchets whose name ends in "5"
+  // (e.g. 4-55, 3-85, M-85, 9-65, 7-55).
+  const ratchet = autobuildShuffled(
+    autobuildAvailable(DATA.ratchets, used).filter(r => /5$/.test(r.name))
+  )[0];
+  if (!ratchet) return { ok: false, reason: "No Clock Mirage-compatible ratchet available." };
+  const rushSlot = autobuildMakeBXSlot(clockMirage, ratchet, bit);
+  autobuildMarkUsed(rushSlot, used);
+  const slots = [rushSlot];
+  if (!autobuildFillRemaining(slots, used, AUTOBUILD_NEEDLES.clockMirage)) {
+    return { ok: false, reason: "Couldn't fill remaining slots." };
+  }
+  return { ok: true, slots };
+}
+
+function autobuildKingOfJungleDeck() {
+  const used = new Set();
+  const leonBlades = autobuildShuffled(autobuildFilterByName(DATA.blades, AUTOBUILD_NEEDLES.leon));
+  if (!leonBlades.length) return { ok: false, reason: "No Leon blade available." };
+  let leonSlot = null;
+  for (const blade of leonBlades) {
+    leonSlot = autobuildBuildBXSlotFor(blade, used, null);
+    if (leonSlot) break;
+  }
+  if (!leonSlot) return { ok: false, reason: "Couldn't build Leon slot." };
+  const slots = [leonSlot];
+  // Two more slots — each carries a jungle-animal-named blade (not Leon).
+  const jungleBlades = autobuildShuffled(
+    DATA.blades.filter(b =>
+      !autobuildNameMatches(b.name, AUTOBUILD_NEEDLES.leon)
+      && autobuildNameMatches(b.name, AUTOBUILD_NEEDLES.jungle)
+    )
+  );
+  for (const blade of jungleBlades) {
+    if (slots.length === 3) break;
+    if (used.has(blade.name)) continue;
+    const s = autobuildBuildBXSlotFor(blade, used, null);
+    if (s) slots.push(s);
+  }
+  if (slots.length < 3) return { ok: false, reason: "Not enough jungle animal blades." };
+  return { ok: true, slots };
+}
+
+function autobuildSharknadoDeck() {
+  const used = new Set();
+  const sharkBlades = autobuildShuffled(autobuildFilterByName(DATA.blades, AUTOBUILD_NEEDLES.shark));
+  if (!sharkBlades.length) return { ok: false, reason: "No Shark blade available." };
+  let sharkSlot = null;
+  for (const blade of sharkBlades) {
+    sharkSlot = autobuildBuildBXSlotFor(blade, used, "Balance");
+    if (sharkSlot) break;
+  }
+  if (!sharkSlot) return { ok: false, reason: "Couldn't find a Balance-type Shark slot." };
+  const slots = [sharkSlot];
+  if (!autobuildFillRemaining(slots, used, AUTOBUILD_NEEDLES.shark)) {
+    return { ok: false, reason: "Couldn't fill remaining slots." };
+  }
+  return { ok: true, slots };
+}
+
+function autobuildSorcererSupremeDeck() {
+  const used = new Set();
+  const wizardBlades = autobuildShuffled(autobuildFilterByName(DATA.blades, AUTOBUILD_NEEDLES.wizard));
+  const slots = [];
+  // First two slots: BX with Wizard-named blades.
+  for (const blade of wizardBlades) {
+    if (slots.length === 2) break;
+    if (used.has(blade.name)) continue;
+    const s = autobuildBuildBXSlotFor(blade, used, null);
+    if (s) slots.push(s);
+  }
+  if (slots.length < 2) return { ok: false, reason: "Not enough Wizard blades available." };
+  // Third slot: CX combo using the Wizard lock chip so the slot still has
+  // a Wizard-named part (any main blade / assist blade pair will do).
+  const wizardLC = (DATA.lockChips || []).find(lc => autobuildNameMatches(lc.name, AUTOBUILD_NEEDLES.wizard));
+  if (!wizardLC) return { ok: false, reason: "No Wizard lock chip available." };
+  const mb = autobuildShuffled(autobuildAvailable(DATA.mainBlades, used))[0];
+  const ab = autobuildShuffled(autobuildAvailable(DATA.assistBlades, used))[0];
+  const r = autobuildShuffled(autobuildAvailable(DATA.ratchets, used))[0];
+  const b = autobuildShuffled(
+    autobuildAvailable(DATA.bits, used).filter(x => !x.isRatchetBit)
+  )[0];
+  if (!mb || !ab || !r || !b) return { ok: false, reason: "Couldn't build Wizard CX slot." };
+  const cxSlot = autobuildMakeCXSlot(wizardLC, mb, ab, r, b);
+  autobuildMarkUsed(cxSlot, used);
+  slots.push(cxSlot);
+  return { ok: true, slots };
+}
+
+function autobuildPaleonerdDeck() {
+  const used = new Set();
+  const slots = [];
+  for (const blade of autobuildShuffled(autobuildFilterByName(DATA.blades, AUTOBUILD_NEEDLES.dinosaur))) {
+    if (slots.length === 3) break;
+    if (used.has(blade.name)) continue;
+    const s = autobuildBuildBXSlotFor(blade, used, null);
+    if (s) slots.push(s);
+  }
+  if (slots.length < 3) return { ok: false, reason: "Not enough prehistoric blades." };
+  return { ok: true, slots };
+}
+
+function autobuildKingOfAllTypesDeck() {
+  const used = new Set();
+  const bg = (DATA.blades || []).find(b => autobuildNameMatches(b.name, AUTOBUILD_NEEDLES.bulletGriffon));
+  if (!bg) return { ok: false, reason: "Bullet Griffon not in data." };
+  // Bullet Griffon: no ratchet, normal bit, push into a non-Balance type.
+  let bgSlot = null;
+  for (const tType of autobuildShuffled(["Attack", "Defense", "Stamina"])) {
+    bgSlot = autobuildBuildBXSlotFor(bg, used, tType, { noRatchet: true });
+    if (bgSlot) break;
+  }
+  if (!bgSlot) return { ok: false, reason: "Couldn't tune Bullet Griffon away from Balance." };
+  const slots = [bgSlot];
+  if (!autobuildFillRemaining(slots, used, AUTOBUILD_NEEDLES.bulletGriffon)) {
+    return { ok: false, reason: "Couldn't fill remaining slots." };
+  }
+  return { ok: true, slots };
+}
+
+const AUTOBUILD_GENERATORS = {
+  dragonTamer: autobuildDragonTamerDeck,
+  dragonSlayer: autobuildDragonSlayerDeck,
+  lonewolf: autobuildLoneWolfDeck,
+  rushHour: autobuildRushHourDeck,
+  kingOfJungle: autobuildKingOfJungleDeck,
+  sharknado: autobuildSharknadoDeck,
+  sorcererSupreme: autobuildSorcererSupremeDeck,
+  paleonerd: autobuildPaleonerdDeck,
+  kingOfAllTypes: autobuildKingOfAllTypesDeck
+};
+
+function openAutobuildPopup() {
+  const list = document.getElementById("deck-autobuild-list");
+  const popup = document.getElementById("deck-autobuild-popup");
+  if (!list || !popup) return;
+  const defs = (typeof window !== "undefined" && Array.isArray(window.ACHIEVEMENTS))
+    ? window.ACHIEVEMENTS : [];
+  list.innerHTML = defs.map(d => `
+    <button type="button" class="deck-autobuild-item" data-ach-id="${escapeHtml(d.id)}">
+      <span class="deck-autobuild-item-title">${escapeHtml(d.title)}</span>
+      <span class="deck-autobuild-item-desc">${escapeHtml(d.shortDescription || "")}</span>
+    </button>
+  `).join("");
+  list.querySelectorAll(".deck-autobuild-item").forEach(btn => {
+    btn.addEventListener("click", () => handleAutobuildPick(btn.dataset.achId));
+  });
+  popup.classList.remove("hidden");
+}
+
+function closeAutobuildPopup() {
+  document.getElementById("deck-autobuild-popup")?.classList.add("hidden");
+}
+
+function handleAutobuildPick(achId) {
+  const gen = AUTOBUILD_GENERATORS[achId];
+  const def = (window.ACHIEVEMENTS || []).find(d => d.id === achId);
+  if (!gen) {
+    alert("No generator for this achievement.");
+    return;
+  }
+  const current = loadDeck();
+  if (current.some(s => s != null) &&
+      !confirm("Replace the current deck with an auto-built one?")) return;
+  const result = gen();
+  if (!result.ok) {
+    alert(result.reason || "Couldn't auto-build this deck.");
+    return;
+  }
+  const slots = result.slots.slice(0, DECK_SIZE);
+  while (slots.length < DECK_SIZE) slots.push(null);
+  persistDeck(slots);
+  if (def && def.title) saveDeckName(def.title);
+  const nameInput = document.getElementById("deck-name");
+  if (nameInput) nameInput.value = loadDeckName();
+  renderDeck();
+  closeAutobuildPopup();
+}
+
+document.getElementById("deck-autobuild")?.addEventListener("click", openAutobuildPopup);
+document.getElementById("deck-autobuild-cancel")?.addEventListener("click", closeAutobuildPopup);
+document.getElementById("deck-autobuild-popup")?.addEventListener("click", e => {
+  if (e.target === e.currentTarget) closeAutobuildPopup();
+});

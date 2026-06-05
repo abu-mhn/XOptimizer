@@ -1320,6 +1320,95 @@ body.tropical-mode .developer-sub-tab.active { border-color: #ffd8a8; border-bot
 body.love-mode     .developer-sub-tab.active { border-color: #ffc1d2; border-bottom-color: #ffffff; }
 body.forest-mode   .developer-sub-tab.active { border-color: #b5c89a; border-bottom-color: #ffffff; }
 
+/* Tags panel — reference list of every tag the app recognises, grouped by
+   how the tag is assigned (admin / medal / achievement). Each row pairs
+   the real badge styling with a short explanation. */
+.developer-tag-group-title {
+    margin: 6px 0 0;
+    font-size: 0.95rem;
+}
+.developer-tag-group-hint {
+    margin-top: 0;
+}
+.developer-tag-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.developer-tag-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.developer-tag-list .account-tag {
+    flex: 0 0 auto;
+}
+.developer-tag-desc {
+    flex: 1 1 200px;
+    font-size: 0.85rem;
+    line-height: 1.35;
+    color: #8b949e;
+}
+body.light-mode    .developer-tag-desc,
+body.tropical-mode .developer-tag-desc,
+body.love-mode     .developer-tag-desc,
+body.forest-mode   .developer-tag-desc { color: #57606a; }
+
+/* Achievement tag badges — each one carries its theme's signature gradient
+   so a reader can recognise the unlocked theme at a glance. Borders are
+   nudged toward the gradient's start-color. Sharknado uses dark text
+   because its end-color is a bright yellow that white sits poorly on (the
+   Sharknado theme's btn rule already makes the same swap). */
+.account-tag.account-tag-dragontamer {
+    background: linear-gradient(135deg, #c44a2a, #e87038);
+    color: #fff;
+    border-color: #4d2218;
+}
+.account-tag.account-tag-dragonslayer {
+    background: linear-gradient(135deg, #5a7aa6, #8aa6c8);
+    color: #fff;
+    border-color: #2a3a55;
+}
+.account-tag.account-tag-lonewolf {
+    background: linear-gradient(135deg, #4a6470, #7a96a4);
+    color: #fff;
+    border-color: #28323a;
+}
+.account-tag.account-tag-rushhour {
+    background: linear-gradient(135deg, #d04030, #f08020);
+    color: #fff;
+    border-color: #5c3a14;
+}
+.account-tag.account-tag-kingofjungle {
+    background: linear-gradient(135deg, #c8962a, #4a7a3a);
+    color: #fff;
+    border-color: #5a4418;
+}
+.account-tag.account-tag-sharknado {
+    background: linear-gradient(135deg, #2a5a8c, #f0d020);
+    color: #0a1a28;
+    border-color: #1f3a5a;
+}
+.account-tag.account-tag-sorcerersupreme {
+    background: linear-gradient(135deg, #6a3aa4, #e0b440);
+    color: #fff;
+    border-color: #3a205a;
+}
+.account-tag.account-tag-paleonerd {
+    background: linear-gradient(135deg, #a07028, #4a7a3a);
+    color: #fff;
+    border-color: #5a3f1a;
+}
+.account-tag.account-tag-kingofalltypes {
+    background: linear-gradient(135deg, #4a6aa8, #c0c8d4);
+    color: #fff;
+    border-color: #2e3a4f;
+}
+
 /* Database panel — node tabs + refresh + scrollable monospace-ish table. */
 .developer-db-tabs {
     display: flex;
@@ -3959,16 +4048,27 @@ body.forest-mode .image-popup-dot.active {
 
 .deck-toolbar {
     display: flex;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: 6px;
     margin-bottom: 8px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.deck-toolbar::-webkit-scrollbar {
+    display: none;
 }
 
 .deck-toolbar .btn {
-    padding: 6px 8px;
-    font-size: 0;
-    line-height: 0;
+    padding: 6px 10px;
     flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    line-height: 1;
 }
 
 .deck-toolbar .btn img {
@@ -3976,6 +4076,13 @@ body.forest-mode .image-popup-dot.active {
     height: 16px;
     object-fit: contain;
     filter: brightness(0) invert(1);
+}
+
+.deck-toolbar .btn .btn-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+    line-height: 1;
 }
 
 .btn-shuffle {
@@ -4203,6 +4310,110 @@ body.forest-mode .deck-edit-field-label {
     object-fit: contain;
     filter: brightness(0) invert(1);
 }
+
+/* Auto-build button — generates a 3-slot deck that satisfies a chosen
+   achievement's win condition. Teal so it sits visually apart from the
+   other toolbar actions. */
+.btn-autobuild {
+    background: #1f9aa8;
+    flex: 0 0 auto;
+}
+.btn-autobuild:hover {
+    background: #25b3c3;
+}
+.btn-autobuild img {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+}
+body.light-mode .btn-autobuild,
+body.tropical-mode .btn-autobuild,
+body.love-mode .btn-autobuild,
+body.forest-mode .btn-autobuild {
+    background: #5ec5d1;
+    color: #1f2328;
+}
+body.light-mode .btn-autobuild:hover,
+body.tropical-mode .btn-autobuild:hover,
+body.love-mode .btn-autobuild:hover,
+body.forest-mode .btn-autobuild:hover {
+    background: #44b4c1;
+}
+
+/* Achievement picker — vertical list of buttons inside the auto-build
+   popup. Each row shows the achievement title; clicking it builds the
+   matching test deck and dismisses the popup. */
+.deck-autobuild-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 12px 0;
+    max-height: 60vh;
+    overflow-y: auto;
+    scrollbar-width: none;
+}
+.deck-autobuild-list::-webkit-scrollbar {
+    display: none;
+}
+#deck-autobuild-cancel {
+    gap: 6px;
+}
+#deck-autobuild-cancel img {
+    filter: brightness(0) invert(1);
+}
+body.light-mode    #deck-autobuild-cancel img,
+body.tropical-mode #deck-autobuild-cancel img,
+body.love-mode     #deck-autobuild-cancel img,
+body.forest-mode   #deck-autobuild-cancel img,
+body.mono-mode     #deck-autobuild-cancel img {
+    filter: brightness(0);
+}
+.deck-autobuild-item {
+    appearance: none;
+    border: 1px solid #30363d;
+    background: #161b22;
+    color: inherit;
+    padding: 10px 12px;
+    border-radius: 8px;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+.deck-autobuild-item:hover {
+    background: #1f262e;
+    border-color: #4a5566;
+}
+.deck-autobuild-item-title {
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+.deck-autobuild-item-desc {
+    font-size: 0.8rem;
+    line-height: 1.35;
+    color: #8b949e;
+}
+body.light-mode    .deck-autobuild-item,
+body.tropical-mode .deck-autobuild-item,
+body.love-mode     .deck-autobuild-item,
+body.forest-mode   .deck-autobuild-item {
+    background: #ffffff;
+    border-color: #d1d9e0;
+}
+body.light-mode    .deck-autobuild-item:hover,
+body.tropical-mode .deck-autobuild-item:hover,
+body.love-mode     .deck-autobuild-item:hover,
+body.forest-mode   .deck-autobuild-item:hover {
+    background: #f6f8fa;
+}
+body.light-mode    .deck-autobuild-item-desc,
+body.tropical-mode .deck-autobuild-item-desc,
+body.love-mode     .deck-autobuild-item-desc,
+body.forest-mode   .deck-autobuild-item-desc { color: #57606a; }
 
 .btn-paste {
     background: #6e40c9;
@@ -14710,4 +14921,60 @@ body.paleonerd-mode .btn {
     background: linear-gradient(135deg, #a07028, #4a7a3a);
     color: #fff;
     border-color: #5a3f1a;
+}
+
+/* --- King of All Types: platinum silver + royal blue (Bullet Griffon's
+       chromed shell, tuned out of its default Balance configuration into
+       Attack / Defense / Stamina — the "king" who masters every type). --- */
+body.kingofalltypes-mode {
+    background: #0e1320;
+    background-image:
+        radial-gradient(ellipse 60% 40% at 20% 15%, rgba(180, 195, 210, 0.22) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 35% at 80% 30%, rgba(74, 106, 168, 0.2) 0%, transparent 70%),
+        radial-gradient(ellipse 70% 45% at 50% 90%, rgba(140, 160, 180, 0.18) 0%, transparent 70%);
+    background-attachment: fixed;
+    color: #d8dee8;
+}
+body.kingofalltypes-mode .mode-tabs,
+body.kingofalltypes-mode .sub-tabs,
+body.kingofalltypes-mode .history-sub-tabs,
+body.kingofalltypes-mode .tournament-sub-tabs {
+    background: rgba(16, 22, 38, 0.85);
+    border-bottom-color: #2e3a4f;
+}
+body.kingofalltypes-mode .tab,
+body.kingofalltypes-mode .sub-tab {
+    color: #b8c2d0;
+}
+body.kingofalltypes-mode .tab.active,
+body.kingofalltypes-mode .sub-tab.active {
+    background: linear-gradient(135deg, #4a6aa8, #c0c8d4);
+    color: #fff;
+}
+body.kingofalltypes-mode fieldset,
+body.kingofalltypes-mode .popup-card {
+    background: #1a2236;
+    border-color: #2e3a4f;
+}
+body.kingofalltypes-mode .btn {
+    background: linear-gradient(135deg, #4a6aa8, #c0c8d4);
+    color: #fff;
+    border-color: #2e3a4f;
+}
+
+/* Random / "I'm Feeling Lucky" dice icon — force white on every
+   achievement theme so it doesn't sit dark against the saturated
+   gradient backgrounds those themes apply to .btn. Matches the
+   per-theme filter already used by space / revox / tropical /
+   stormy / love / forest / gold / silver / bronze. */
+body.dragontamer-mode    .btn-lucky img,
+body.dragonslayer-mode   .btn-lucky img,
+body.lonewolf-mode       .btn-lucky img,
+body.rushhour-mode       .btn-lucky img,
+body.kingofjungle-mode   .btn-lucky img,
+body.sharknado-mode      .btn-lucky img,
+body.sorcerersupreme-mode .btn-lucky img,
+body.paleonerd-mode      .btn-lucky img,
+body.kingofalltypes-mode .btn-lucky img {
+    filter: brightness(0) invert(1);
 }

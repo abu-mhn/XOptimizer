@@ -530,6 +530,7 @@
               <div class="setting-dropdown-option hidden" data-value="sharknado">Sharknado</div>
               <div class="setting-dropdown-option hidden" data-value="sorcerersupreme">Sorcerer Supreme</div>
               <div class="setting-dropdown-option hidden" data-value="paleonerd">Paleonerd</div>
+            <div class="setting-dropdown-option hidden" data-value="kingofalltypes">King of All Types</div>
             </div>
           </div>
         </div>
@@ -575,6 +576,7 @@
           <div class="developer-sub-tabs" role="tablist">
             <button type="button" class="developer-sub-tab active" data-developer-view="users" role="tab" aria-selected="true">Users</button>
             <button type="button" class="developer-sub-tab" data-developer-view="database" role="tab" aria-selected="false">Database</button>
+            <button type="button" class="developer-sub-tab" data-developer-view="tags" role="tab" aria-selected="false">Tags</button>
           </div>
           <div class="developer-sub-panel" id="developer-panel-users">
             <p class="developer-count" id="developer-count">Registered users: …</p>
@@ -587,6 +589,65 @@
           </div>
           <div class="developer-sub-panel hidden" id="developer-panel-database">
             <p class="account-hint">Database tools coming soon.</p>
+          </div>
+          <div class="developer-sub-panel hidden" id="developer-panel-tags">
+            <p class="account-hint">Every tag the app recognises. Grouped by how it's assigned. Free-form tags can still be typed in the Users tab — only the ones listed here drive in-app behavior (tabs, themes, badges, gated buttons).</p>
+
+            <h3 class="developer-tag-group-title">Admin / Role</h3>
+            <p class="account-hint developer-tag-group-hint">Added manually by a Developer on the Users tab.</p>
+            <ul class="developer-tag-list">
+              <li>
+                <span class="account-tag account-tag-developer">Developer</span>
+                <span class="developer-tag-desc">Sees the Developer tab; can preview every locked theme regardless of which tags they hold.</span>
+              </li>
+              <li>
+                <span class="account-tag account-tag-tester">Tester</span>
+                <span class="developer-tag-desc">Unlocks tournament QA tools — the Test button, Auto-build in the Register popup, and Copy Names.</span>
+              </li>
+              <li>
+                <span class="account-tag account-tag-judge">Judge</span>
+                <span class="developer-tag-desc">Required to Create Tournament; listed in the Sub-hosts typeahead.</span>
+              </li>
+              <li>
+                <span class="account-tag account-tag-revox account-tag-revox-admin">Revox Admin</span>
+                <span class="developer-tag-desc">Full edit on the Revox tab (Add Result, edit/delete rows). Auto-unlocks the Revox theme.</span>
+              </li>
+              <li>
+                <span class="account-tag account-tag-revox">Revox Member</span>
+                <span class="developer-tag-desc">View-only on the Revox tab; auto-entered into the Revox ranking on Top-8 finishes. Auto-unlocks the Revox theme.</span>
+              </li>
+            </ul>
+
+            <h3 class="developer-tag-group-title">Medal</h3>
+            <p class="account-hint developer-tag-group-hint">Auto-derived from the live tournament ranking — not stored on the account. Shifts automatically as standings change.</p>
+            <ul class="developer-tag-list">
+              <li>
+                <span class="account-tag account-tag-gold">Gold Player</span>
+                <span class="developer-tag-desc">Rank #1 of the tournament ranking. Unlocks the Gold theme.</span>
+              </li>
+              <li>
+                <span class="account-tag account-tag-silver">Silver Player</span>
+                <span class="developer-tag-desc">Rank #2. Unlocks the Silver theme.</span>
+              </li>
+              <li>
+                <span class="account-tag account-tag-bronze">Bronze Player</span>
+                <span class="developer-tag-desc">Rank #3. Unlocks the Bronze theme.</span>
+              </li>
+            </ul>
+
+            <h3 class="developer-tag-group-title">Achievement</h3>
+            <p class="account-hint developer-tag-group-hint">Self-claimed when the matching 100-win achievement unlocks (see the Achievement tab). Each one also unlocks the matching theme in Settings.</p>
+            <ul class="developer-tag-list">
+              <li><span class="account-tag account-tag-dragontamer">Dragon Tamer</span><span class="developer-tag-desc">100 wins with a Dran / Drake / Dragoon / Wyvern / Bahamut / Ragna part in any slot.</span></li>
+              <li><span class="account-tag account-tag-dragonslayer">Dragon Slayer</span><span class="developer-tag-desc">Defeat 100 opponents who had a dragon-named part, while your deck contains a Knight-named part.</span></li>
+              <li><span class="account-tag account-tag-lonewolf">Lone Wolf</span><span class="developer-tag-desc">100 wins with exactly one Wolf-named part, in a slot whose combo type is unique in your deck.</span></li>
+              <li><span class="account-tag account-tag-rushhour">Rush Hour</span><span class="developer-tag-desc">100 wins where at least one slot pairs a Clock Mirage blade with a Rush-named bit.</span></li>
+              <li><span class="account-tag account-tag-kingofjungle">King of The Jungle</span><span class="developer-tag-desc">100 wins with exactly one Leon-named slot and the other two slots carrying jungle parts (Rhino / Fox / Wolf / Viper / Tiger / Bear / Goat).</span></li>
+              <li><span class="account-tag account-tag-sharknado">Sharknado</span><span class="developer-tag-desc">100 wins where a slot carries a Shark-named part AND that slot is a Balance combo.</span></li>
+              <li><span class="account-tag account-tag-sorcerersupreme">Sorcerer Supreme</span><span class="developer-tag-desc">100 wins where every one of your 3 slots contains a Wizard-named part.</span></li>
+              <li><span class="account-tag account-tag-paleonerd">Paleonerd</span><span class="developer-tag-desc">100 wins where every slot carries a Tyranno / Tricera / Ptera / Mammoth / Brachio part.</span></li>
+              <li><span class="account-tag account-tag-kingofalltypes">King of All Types</span><span class="developer-tag-desc">100 wins with a Bullet Griffon slot tuned into a non-Balance combo (BG's built-in ratchet leaves the slot at BG + bit — picking a bit that pushes a stat ≥ 100 flips the slot into Attack / Defense / Stamina).</span></li>
+            </ul>
           </div>
         </div>
       </fieldset>
@@ -1120,10 +1181,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="data.js"></script>
   <script src="js/core.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="js/achievements.js?v=20260602b"></script>
+  <script src="js/auth.js?v=20260605d"></script>
+  <script src="js/achievements.js?v=20260605d"></script>
   <script src="js/scoreboard.js"></script>
-  <script src="calculator/calculator.js"></script>
+  <script src="calculator/calculator.js?v=20260605d"></script>
   <script src="deck/deck.js"></script>
   <script src="library/library.js"></script>
   <script src="tournament/tournament.js"></script>
