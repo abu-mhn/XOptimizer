@@ -124,6 +124,36 @@ h1 {
     margin-inline-end: auto;
 }
 
+/* Desktop: let the tab bar break out of the .container max-width (640px)
+   and stretch across the viewport so all 13 tabs fit on one row without
+   the horizontal scroller hiding the first 5 (Dashboard / Calculator /
+   Library / Deck / Tournament). The `calc(50% - 50vw)` trick on left/right
+   margins pulls each edge to the viewport boundary regardless of the
+   container's width cap. Padding stays at 16px so the row breathes.
+
+   Resetting the first/last-of-type auto-margin rules below — those were
+   designed for the mobile overflow path (they collapse to 0 when the row
+   overflows). On desktop there's no overflow, so the auto margins win
+   over justify-content and shove the tabs to one side whenever the first
+   or last DOM tab happens to be hidden (Revox / Developer / Achievement
+   are conditional). Zeroing them lets justify-content actually center. */
+@media (min-width: 900px) {
+    .mode-tabs {
+        width: 100vw;
+        max-width: none;
+        margin-left: calc(50% - 50vw);
+        margin-right: calc(50% - 50vw);
+        padding-left: max(24px, calc((100vw - 1280px) / 2));
+        padding-right: max(24px, calc((100vw - 1280px) / 2));
+        justify-content: center;
+    }
+    .mode-tabs > .tab:first-of-type,
+    .mode-tabs > .tab:last-of-type {
+        margin-inline-start: 0;
+        margin-inline-end: 0;
+    }
+}
+
 .tab:hover:not(.active) {
     background: #21262d;
     border-color: #484f58;

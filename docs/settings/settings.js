@@ -78,7 +78,7 @@ Tournament
 - Lobby cards flag a tournament you've been invited to co-host with a small "!" alert badge
 - Edit the format while waiting for players — tap the format chip to switch between Swiss, Round Robin and Single Elimination, or the groups / rounds chips to adjust them; registrants are kept, no reset needed. Switching INTO a knockout format (Swiss + Top N or Round Robin + Top N) re-opens the Top-N picker so the host picks the bracket size right there — same flow as create time
 - Test button: bulk-adds synthetic participants for QA — visible only to accounts tagged "Tester"
-- Auto-build (Test) button in the Register popup — Tester-only. Prompts for one of the eight achievements and fills the 3-slot deck with a pre-built combo guaranteed to satisfy that achievement's win condition. Lets a tester verify each achievement's `creditOnWin` end-to-end without hand-rolling parts
+- Auto-build (Test) button in the Register popup — Tester-only. Prompts for one of the eight achievements and fills the 3-slot deck with a pre-built combo guaranteed to satisfy that achievement's win condition. Lets a tester verify each achievement's creditOnWin end-to-end without hand-rolling parts
 - Copy Names button (Tester-only, host / co-host): copies every registrant's name to the clipboard, one per line — a QA aid; the button flashes the copied count
 - Test decks obey "one of each part per deck" across all 3 slots (only light lock chips can repeat; Emperor / Valkyrie cannot)
 - Test deck mode mix is weighted realistic: ~75% Standard, ~13% CX, ~12% CX Expand
@@ -189,7 +189,7 @@ Developer
 Other
 - Per-tab URLs: /dashboard/, /calculator/, /library/, /deck/, /tournament/, /achievement/, /revox/, /battlepass/, /reel/, /history/, /settings/, /account/, /developer/
 - "What's New" landing page at the site root
-- Single-line horizontal tab bar (invisible scrollbar) — each tab shows its icon with a name label below; scroll position preserved across navigation, centered on desktop. Every static tab icon is rendered as a CSS mask filled with the active theme's text color, so switching themes (Dark / Light / Tropical / Stormy / Mono / Love / Forest / Revox / Gold / Silver / Bronze / Dragon Tamer / Dragon Slayer / Lone Wolf / Rush Hour / King of The Jungle / Sharknado / Sorcerer Supreme / Paleonerd) re-colors every icon at once with no per-theme overrides. The Profile tab is the only exception — it shows the user's own avatar photo, not a mask
+- Single-line horizontal tab bar (invisible scrollbar) — each tab shows its icon with a name label below; scroll position preserved across navigation. On desktop the bar spans the full viewport and stays centered regardless of which conditional tabs (Achievement / Revox / Developer) are visible. Every static tab icon is rendered as a CSS mask filled with the active theme's text color, so switching themes (Dark / Light / Tropical / Stormy / Mono / Love / Forest / Revox / Gold / Silver / Bronze / Dragon Tamer / Dragon Slayer / Lone Wolf / Rush Hour / King of The Jungle / Sharknado / Sorcerer Supreme / Paleonerd) re-colors every icon at once with no per-theme overrides. The Profile tab is the only exception — it shows the user's own avatar photo, not a mask
 - X-Optimizer wordmark in the header is also a CSS-masked silhouette filled with currentColor, so the title logo adopts the active theme's text color on every page (the per-theme img-src swap is gone — one shared PNG works for every palette)
 - Live Firebase sync across host / co-host / participant / viewer devices
 - Multi-mode part images (Eclipse, Dual, Turbo, Operate, Scorpio Spear, Lightning L-Drago) display correctly everywhere — defaults to mode 0 when no mode is recorded
@@ -493,6 +493,7 @@ if ("serviceWorker" in navigator) {
 
     // Toggle the signed-in / signed-out panes and load the profile.
     const render = (user) => {
+      try { console.info("[account] render called with user:", !!user, user && user.email); } catch (e) {}
       if (user) {
         signedOut?.classList.add("hidden");
         signedIn?.classList.remove("hidden");
@@ -509,8 +510,55 @@ if ("serviceWorker" in navigator) {
       }
     };
 
-    if (typeof window.onAuthChange === "function") window.onAuthChange(render);
-    else render(null);
+    // Resolve the current user from whichever source is ready. onAuthChange
+    // can miss its first callback on bfcache restore or when auth.js hasn't
+    // attached its listener yet; falling through to firebase.auth() directly
+    // covers that gap so the signed-in view doesn't get stuck behind the
+    // sign-in pane on a returning session.
+    const resolveCurrentUser = () => {
+      try {
+        if (typeof window.getCurrentUser === "function") {
+          const u = window.getCurrentUser();
+          if (u) return u;
+        }
+        if (typeof firebase !== "undefined" && firebase.auth) {
+          return firebase.auth().currentUser || null;
+        }
+      } catch (e) {}
+      return null;
+    };
+
+    if (typeof window.onAuthChange === "function") {
+      try { console.info("[account] registering onAuthChange"); } catch (e) {}
+      window.onAuthChange(render);
+    }
+    if (typeof firebase !== "undefined" && firebase.auth) {
+      try {
+        firebase.auth().onAuthStateChanged(render);
+        console.info("[account] registered firebase.auth().onAuthStateChanged");
+      } catch (e) {}
+    }
+    // Synchronous render with whatever auth state is already known. Then
+    // poll for up to ~4 seconds in case the auth listeners never fire (we
+    // have seen this on disk-cache restores). Once we see a user, render
+    // and stop polling.
+    const initial = resolveCurrentUser();
+    try { console.info("[account] initial resolveCurrentUser:", !!initial); } catch (e) {}
+    render(initial);
+    if (!initial) {
+      let tries = 0;
+      const poll = setInterval(() => {
+        tries++;
+        const u = resolveCurrentUser();
+        if (u) {
+          try { console.info("[account] poll resolved user after", tries, "tries"); } catch (e) {}
+          clearInterval(poll);
+          render(u);
+        } else if (tries >= 20) {
+          clearInterval(poll);
+        }
+      }, 200);
+    }
 
     signInBtn?.addEventListener("click", () => {
       if (typeof window.showSignInPopup === "function") window.showSignInPopup({}).catch(() => {});

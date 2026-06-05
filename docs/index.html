@@ -25,17 +25,16 @@
     <header class="updates-header">
       <h1 class="updates-title">What's New</h1>
       <p class="updates-subtitle">Recent changes to X Optimizer.</p>
-      <p class="updates-version">Version <span class="updates-version-num">v1.5.9</span></p>
+      <p class="updates-version">Version <span class="updates-version-num">v1.5.10</span></p>
     </header>
 
     <!-- Bump data-version when the list below changes so the splash flags
          it as fresh for returning users. Keep this attribute in sync with
          the visible version number above. -->
-    <article class="updates-card" data-version="v1.5.9">
+    <article class="updates-card" data-version="v1.5.10">
       <ul class="popup-list">
-        <li><strong>New achievement — Paleonerd.</strong> Win 100 matches where every slot carries a Tyranno / Tricera / Ptera / Mammoth or Brachio part. Unlocks the Paleonerd title and an amber-jungle theme.</li>
-        <li><strong>Two achievement renames.</strong> "Lonewolf" is now "Lone Wolf" and "King of Jungle" is now "King of The Jungle" — same conditions, cleaner titles.</li>
-        <li><strong>Native share for tournaments.</strong> The Share Tournament popup now opens your phone's OS share sheet (WhatsApp, Discord, Messages, etc.) instead of just copying. Desktop browsers without native share still get the clipboard copy. Cancel and Share buttons gained icons to match the rest of the toolbar.</li>
+        <li><strong>Profile pane restore fix.</strong> Opening the Profile tab on a returning session now reliably loads your account card. It could previously stick on the "Sign in" prompt even when you were already signed in — auth detection now falls through onAuthChange, the Firebase listener and a short poll so the signed-in view appears whichever path resolves first.</li>
+        <li><strong>Desktop tab bar centering.</strong> On desktop the top tab bar spans the full window and stays centered. Tabs that don't apply to you (Achievement before any unlock, Revox or Developer if you don't hold the tag) no longer shift the visible tabs off to one side.</li>
       </ul>
     </article>
 
