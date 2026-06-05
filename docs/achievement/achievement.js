@@ -24,7 +24,8 @@
     rushHour: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/fast-time.png\')"></span>',
     kingOfJungle: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/animal.png\')"></span>',
     sharknado: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/shark.png\')"></span>',
-    sorcererSupreme: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/wizard.png\')"></span>'
+    sorcererSupreme: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/wizard.png\')"></span>',
+    paleonerd: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/dinosaur.png\')"></span>'
   };
 
   const defs = (window.ACHIEVEMENTS || []);

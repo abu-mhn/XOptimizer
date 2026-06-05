@@ -44,10 +44,10 @@
     },
     {
       id: "lonewolf",
-      title: "Lonewolf",
-      tag: "Lonewolf",
+      title: "Lone Wolf",
+      tag: "Lone Wolf",
       theme: "lonewolf",
-      themeLabel: "Lonewolf",
+      themeLabel: "Lone Wolf",
       target: 100,
       shortDescription: "Win 100 matches where your deck has exactly one Wolf part — and that slot's combo type is unique across the deck (the other two slots must be a different type).",
       // Per-match credit:
@@ -95,10 +95,10 @@
     },
     {
       id: "kingOfJungle",
-      title: "King of Jungle",
-      tag: "King of Jungle",
+      title: "King of The Jungle",
+      tag: "King of The Jungle",
       theme: "kingofjungle",
-      themeLabel: "King of Jungle",
+      themeLabel: "King of The Jungle",
       target: 100,
       shortDescription: "Win 100 matches with a Leon slot flanked by two slots that each carry Rhino / Fox / Wolf / Viper / Tiger / Bear / Goat parts.",
       // Per-match credit: exactly ONE slot has a Leon-named part (the lion
@@ -148,6 +148,27 @@
         }
         return validSlots >= 3;
       }
+    },
+    {
+      id: "paleonerd",
+      title: "Paleonerd",
+      tag: "Paleonerd",
+      theme: "paleonerd",
+      themeLabel: "Paleonerd",
+      target: 100,
+      shortDescription: "Win 100 matches with every slot carrying a Tyranno / Tricera / Ptera / Mammoth or Brachio part.",
+      // Per-match credit: every one of the deck's 3 slots contains at
+      // least one prehistoric-creature-named part. Full Jurassic deck.
+      creditOnWin: (winnerDeck /*, loserDeck */) => {
+        if (!Array.isArray(winnerDeck) || winnerDeck.length < 3) return false;
+        let validSlots = 0;
+        for (const slot of winnerDeck) {
+          if (!slot || !slot.parts) return false;
+          validSlots++;
+          if (!slotHasAnyPartName(slot.parts, DINOSAUR_NAMES)) return false;
+        }
+        return validSlots >= 3;
+      }
     }
   ];
 
@@ -180,6 +201,10 @@
   // Wizard match — any part with "wizard" in its name (Wizard Arrow,
   // Wizard Rod, etc.). Used by the Sorcerer Supreme achievement.
   const WIZARD_NAMES = ["wizard"];
+  // Prehistoric / dinosaur match — any part name containing one of
+  // these substrings (Tyranno Beat, Tyranno Roar, Tricera Press,
+  // Ptera Swing, Mammoth Tusk, Brachio lockChip). Used by Paleonerd.
+  const DINOSAUR_NAMES = ["tyranno", "tricera", "ptera", "mammoth", "brachio"];
 
   // Walk every named part across all 3 slots in a bey-check deck. Each slot
   // can be in standard / cx / cxExpand mode with different fields; we just

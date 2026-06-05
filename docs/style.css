@@ -9337,6 +9337,8 @@ body.bronze-mode .revox-row-btn:hover { background: rgba(198, 128, 68, 0.3); bor
 #bp-clear,
 #features-copy,
 #features-close,
+#tournament-share-submit,
+#tournament-share-cancel,
 #tutorial-close {
     gap: 6px;
 }
@@ -9353,6 +9355,8 @@ body.bronze-mode .revox-row-btn:hover { background: rgba(198, 128, 68, 0.3); bor
 #features-copy img,
 #features-close img,
 #swiss-rooms-tutorial img,
+#tournament-share-submit img,
+#tournament-share-cancel img,
 #tutorial-close img {
     width: 14px;
     height: 14px;
@@ -14637,4 +14641,43 @@ body.sorcerersupreme-mode .btn {
     background: linear-gradient(135deg, #6a3aa4, #e0b440);
     color: #fff;
     border-color: #3a205a;
+}
+
+/* --- Paleonerd: amber fossil + Jurassic jungle green on a deep earth
+       canvas (a full Tyranno / Tricera / Ptera / Mammoth / Brachio
+       deck — prehistoric, dusty, alive). Dark-based for legibility. --- */
+body.paleonerd-mode {
+    background: #1a1208;
+    background-image:
+        radial-gradient(ellipse 60% 40% at 20% 15%, rgba(190, 140, 60, 0.22) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 35% at 80% 30%, rgba(80, 130, 70, 0.18) 0%, transparent 70%),
+        radial-gradient(ellipse 70% 45% at 50% 90%, rgba(160, 110, 50, 0.2) 0%, transparent 70%);
+    background-attachment: fixed;
+    color: #f0e0c0;
+}
+body.paleonerd-mode .mode-tabs,
+body.paleonerd-mode .sub-tabs,
+body.paleonerd-mode .history-sub-tabs,
+body.paleonerd-mode .tournament-sub-tabs {
+    background: rgba(28, 20, 10, 0.85);
+    border-bottom-color: #5a3f1a;
+}
+body.paleonerd-mode .tab,
+body.paleonerd-mode .sub-tab {
+    color: #d8b878;
+}
+body.paleonerd-mode .tab.active,
+body.paleonerd-mode .sub-tab.active {
+    background: linear-gradient(135deg, #a07028, #4a7a3a);
+    color: #fff;
+}
+body.paleonerd-mode fieldset,
+body.paleonerd-mode .popup-card {
+    background: #261a0a;
+    border-color: #5a3f1a;
+}
+body.paleonerd-mode .btn {
+    background: linear-gradient(135deg, #a07028, #4a7a3a);
+    color: #fff;
+    border-color: #5a3f1a;
 }

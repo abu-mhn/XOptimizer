@@ -657,11 +657,12 @@
   const ACHIEVEMENT_THEME_TAGS = {
     dragontamer: "Dragon Tamer",
     dragonslayer: "Dragon Slayer",
-    lonewolf: "Lonewolf",
+    lonewolf: "Lone Wolf",
     rushhour: "Rush Hour",
-    kingofjungle: "King of Jungle",
+    kingofjungle: "King of The Jungle",
     sharknado: "Sharknado",
-    sorcerersupreme: "Sorcerer Supreme"
+    sorcerersupreme: "Sorcerer Supreme",
+    paleonerd: "Paleonerd"
   };
   // Becomes true after Firebase reports the first auth state — lets the
   // achievement gate tell a confirmed "signed out" from "auth not resolved

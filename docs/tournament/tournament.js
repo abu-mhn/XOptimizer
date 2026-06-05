@@ -2302,11 +2302,24 @@ function copyTextToClipboard(text) {
   return Promise.resolve(legacyCopyText(text));
 }
 
-function dispatchShareMessage(message, btn) {
-  // Copy the message to the clipboard — the host then pastes it wherever
-  // they want (WhatsApp, Discord, etc.). No native share sheet, so the
-  // behaviour is identical on every device.
-  copyTextToClipboard(message).then(ok => { if (ok) flashShareButton(btn); });
+async function dispatchShareMessage(message, btn) {
+  // Prefer the native Web Share API (system share sheet — pick WhatsApp /
+  // Discord / Messages / etc. from the OS list). Falls back to clipboard
+  // copy when the API isn't available (most desktop browsers). User
+  // cancelling the share sheet is a no-op (no clipboard fallback —
+  // they explicitly backed out).
+  if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+    try {
+      await navigator.share({ text: message });
+      flashShareButton(btn);
+      return;
+    } catch (err) {
+      if (err && (err.name === "AbortError" || err.code === 20)) return; // user cancelled
+      // Any other share failure falls through to clipboard.
+    }
+  }
+  const ok = await copyTextToClipboard(message);
+  if (ok) flashShareButton(btn);
 }
 
 // Tester QA aid — copy every registrant name (one per line) to the
@@ -8033,6 +8046,14 @@ function buildTestDeckForAchievement(id) {
             bit: "Low Orb"
           }
         }
+      ];
+    case "paleonerd":
+      // Every slot must carry a Tyranno / Tricera / Ptera / Mammoth /
+      // Brachio part. Three different prehistoric blades fill it cleanly.
+      return [
+        std("Tyranno Beat", "4-50", "Flat"),
+        std("Tricera Press", "4-55", "Free Flat"),
+        std("Mammoth Tusk", "9-65", "Low Flat")
       ];
   }
   return null;
