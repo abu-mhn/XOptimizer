@@ -24,6 +24,8 @@ Calculator
 - Meta picker for Clock Mirage picks a -5 ratchet uniformly at random (no -5 ratchet is flagged meta, so the previous meta-first preference was dead code); same rule now applies to Test mode's auto-generated decks
 - CX / CX Expand results show the lock chip, blade(s) and assist blade assembled into one combined image (also used in the Deck, History and Dashboard)
 - Tap the combined blade to flip through its parts in an auto-sliding, swipeable carousel
+- Polished result card: framed stat-chart, part-thumbnail and data panels, a spec-sheet stats table (muted labels, bold right-aligned values), and refined action buttons
+- The part mode renders as a tappable chip (tap to cycle its mode); a downloaded / shared photo flattens it to plain text so the image stays clean
 - Share the result as an image — Web Share on mobile, download fallback on desktop
 
 Library
@@ -41,6 +43,10 @@ Deck (3 Slots)
 - Copy a deck to paste into a tournament registration
 - Paste a copied deck straight into the active deck with the Paste button
 - Edit any slot's combo in place — tap the pencil to rebuild it: swap parts or switch its mode (BX / CX / CX Expand)
+- Each slot is its own card with a collapsible Stat Graph (tap + / − to open) that draws a bar or radar chart, following your Settings → Stat display choice
+- Switch a multi-mode part's mode straight from the slot — parts like Operate (Defense / Attack) show an inline mode chip; tap it to switch and the combo's thumbnail + stats recompute on the spot. The pencil editor has the same per-part mode control
+- Ratchet-bits (Turbo, Operate) show their thumbnail in the slot instead of a blank tile
+- On desktop a vertical mouse wheel scrolls the part rows, the toolbar and the deck switcher sideways (touch swipe still works)
 - Cross-device sync when signed in — decks follow your account everywhere
 
 Tournament
@@ -49,6 +55,7 @@ Tournament
 - Round Robin reuses the Swiss group stage, standings and Top-N knockout — only the per-round pairing differs (fixed everyone-vs-everyone schedule vs. Swiss standings-based pairing)
 - A Round Robin bye (forced by an odd group size) is a sit-out, not a win — only real matches count toward standings and the bracket seeding
 - Pick Swiss or Round Robin, then choose whether to add a knockout bracket (any top-N) or finish on group records. The knockout size is asked at create time AND any time the host switches an existing tournament into a knockout format mid-registration — Top 4 / 8 / 16 / 32 presets plus a custom number input (2-64). Non-power-of-2 sizes (Top 10, Top 12, …) are padded with byes via the same engine single-elim uses
+- Single Elimination placement depth — set how many finishers to rank to any number (not just Top 8 / 12 / 16) via a free-form picker that matches the Knockout Bracket Size layout; the bracket builds the matching consolation / loser-bracket matches and ranks as deep as its structure allows. Editable from the registration screen
 - Configurable groups: 2, 3, or 4 (Swiss and Round Robin)
 - Configurable rounds per group for Swiss: 3, 4, 5 (Round Robin derives rounds from group size)
 - Hosting requires a free email account (Settings → Account, or prompted on Create Tournament)
