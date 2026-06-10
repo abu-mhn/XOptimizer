@@ -251,6 +251,10 @@ function renderResultCanvas(el, onReady) {
   const dlBtn = el.querySelector(".download-row");
   if (dlBtn) dlBtn.style.display = "none";
 
+  // Flatten interactive affordances for the static image — the mode "chip"
+  // and its ↻ cycle hint only make sense on the live page.
+  el.classList.add("png-capturing");
+
   // Temporarily allow part images to wrap onto multiple rows for the capture
   const partsEl = el.querySelector(".result-parts");
   const origFlexWrap = partsEl?.style.flexWrap;
@@ -307,6 +311,7 @@ function renderResultCanvas(el, onReady) {
     el.style.left = origLeft;
     el.style.width = origWidth;
     if (dlBtn) dlBtn.style.display = "";
+    el.classList.remove("png-capturing");
     footer.remove();
     restoreParts();
     if (savedSrcs) restoreImageSources(el, savedSrcs);

@@ -878,7 +878,33 @@ function getParticipants(state) {
 // (bracket-r0-*, bracket-r1-*, ...) for pre-final rounds and bracket-f-0
 // for the final. 3rd place match is included when at least 4 participants
 // are present (otherwise there's nothing meaningful to play for 3rd).
-function generateSingleElimFromText(text, tournamentName) {
+//
+// `placementDepth` is any integer ≥ 2 — how many finishers the host wants
+// ranked. The bracket is built in pairs (each placement match decides two
+// adjacent places), so a placement match is created when its higher (odd)
+// place is within the depth. Structure grows in tiers, each needing a
+// deep-enough bracket:
+//   - 2:    just the Final (1st/2nd)
+//   - 3–4:  + 3rd-place match (needs ≥ 4 players)
+//   - 5–8:  + CQF consolation → 5th and 7th matches (needs a QF round)
+//   - 9–16: + a Loser Bracket off the R16 round → 9th…15th matches
+//           (needs an R16 round, i.e. bracketSize ≥ 16)
+// The host may enter any number, but the loser bracket only hangs off R16,
+// so the deepest place the engine can actually rank is 16th. Requested
+// depth is clamped down to whatever the bracket can host (effectiveDepth) —
+// e.g. an 8-player bracket caps at 8, a 4-player at 4, and SE_DEPTH_CEILING
+// (16) is the structural ceiling for any size.
+const SE_DEPTH_MIN = 2;
+const SE_DEPTH_CEILING = 16; // deepest place the current loser-bracket structure can rank
+// Accepts any number ≥ 2 — no upper limit. The bracket caps the *effective*
+// ranking depth at generation time (SE_DEPTH_CEILING / bracket size), so a
+// large request just ranks as deep as the structure allows.
+function clampPlacementDepth(v, fallback = 8) {
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(SE_DEPTH_MIN, n);
+}
+function generateSingleElimFromText(text, tournamentName, placementDepth) {
   const names = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
   const seen = new Set();
   const unique = [];
@@ -898,6 +924,18 @@ function generateSingleElimFromText(text, tournamentName) {
   // get the byes.
   while (shuffled.length < bracketSize) shuffled.push(null);
 
+  const requestedDepth = clampPlacementDepth(placementDepth);
+  // Each tier needs a deep-enough bracket to host its consolation rounds:
+  // R16 loser bracket (9–16) needs preFinalRounds ≥ 3, the CQF consolation
+  // (5–8) needs ≥ 2, the 3rd-place match (3–4) needs ≥ 1. Clamp the requested
+  // depth down to what this bracket can actually rank so generation,
+  // propagation and rendering all stay consistent.
+  const capByBracket = preFinalRounds >= 3 ? SE_DEPTH_CEILING
+    : preFinalRounds >= 2 ? 8
+    : preFinalRounds >= 1 ? 4
+    : 2;
+  const effectiveDepth = Math.min(requestedDepth, capByBracket);
+
   const state = {
     groups: null,
     matches: {},
@@ -905,6 +943,7 @@ function generateSingleElimFromText(text, tournamentName) {
     mode: "single-elim",
     bracketSize,
     preFinalRounds,
+    placementDepth: effectiveDepth,
     participants: unique,
     tournamentName: (tournamentName || "").trim() || null
   };
@@ -938,17 +977,50 @@ function generateSingleElimFromText(text, tournamentName) {
       }
     }
     state.matches["bracket-f-0"] = emptyBracketMatch("f", 0);
-    if (unique.length >= 4) {
+    // Each placement match decides a pair of places — build it when its
+    // higher (odd) place is within the depth (3rd ranks 3rd/4th, 5th ranks
+    // 5th/6th, …). Feeder rounds (cqf, c16) are built when any placement
+    // match they feed is built.
+    if (unique.length >= 4 && effectiveDepth >= 3) {
       state.matches["bracket-3rd-0"] = emptyBracketMatch("3rd", 0);
     }
-    // Top-8: QF losers feed two consolation QFs which in turn feed the
+    // 5th–8th: QF losers feed two consolation QFs which in turn feed the
     // 5th- and 7th-place matches. Mirrors Swiss + Top 8. Requires a real
     // QF round (bracketSize ≥ 8 → preFinalRounds ≥ 2).
-    if (preFinalRounds >= 2) {
+    if (preFinalRounds >= 2 && effectiveDepth >= 5) {
       state.matches["bracket-cqf-0"] = emptyBracketMatch("cqf", 0);
       state.matches["bracket-cqf-1"] = emptyBracketMatch("cqf", 1);
       state.matches["bracket-5th-0"] = emptyBracketMatch("5th", 0);
-      state.matches["bracket-7th-0"] = emptyBracketMatch("7th", 0);
+      if (effectiveDepth >= 7) {
+        state.matches["bracket-7th-0"] = emptyBracketMatch("7th", 0);
+      }
+    }
+    // 9th–16th: a Loser Bracket fed by R16 losers (8 players). The R16 round
+    // only exists in brackets with preFinalRounds ≥ 3 (bracketSize ≥ 16).
+    // Mini single-elim:
+    //   c16-r0 (4 matches: 8 R16 losers play)
+    //     → winners feed c16-sfw (2 matches: top-half SF)
+    //       → 9th (depth ≥ 9) & 11th (depth ≥ 11) place finals
+    //     → losers feed c16-sfl (2 matches: bottom-half SF — depth ≥ 13)
+    //       → 13th (depth ≥ 13) & 15th (depth ≥ 15) place finals
+    if (preFinalRounds >= 3 && effectiveDepth >= 9) {
+      for (let j = 0; j < 4; j++) {
+        state.matches[`bracket-c16-r0-${j}`] = emptyBracketMatch("c16-r0", j);
+      }
+      state.matches["bracket-c16-sfw-0"] = emptyBracketMatch("c16-sfw", 0);
+      state.matches["bracket-c16-sfw-1"] = emptyBracketMatch("c16-sfw", 1);
+      state.matches["bracket-9th-0"] = emptyBracketMatch("9th", 0);
+      if (effectiveDepth >= 11) {
+        state.matches["bracket-11th-0"] = emptyBracketMatch("11th", 0);
+      }
+      if (effectiveDepth >= 13) {
+        state.matches["bracket-c16-sfl-0"] = emptyBracketMatch("c16-sfl", 0);
+        state.matches["bracket-c16-sfl-1"] = emptyBracketMatch("c16-sfl", 1);
+        state.matches["bracket-13th-0"] = emptyBracketMatch("13th", 0);
+        if (effectiveDepth >= 15) {
+          state.matches["bracket-15th-0"] = emptyBracketMatch("15th", 0);
+        }
+      }
     }
   }
 
@@ -999,6 +1071,24 @@ function bracketUpstreamSource(round, bracketIndex, slot, state) {
   }
   if (round === "5th" || round === "7th") {
     return `bracket-cqf-${slot === "a" ? 0 : 1}`;
+  }
+  // Loser-bracket rounds (depth ≥ 12). c16-r0 is fed by R16 losers; the
+  // c16-sfw/sfl rounds are fed by c16-r0 winners / losers; the 9-15
+  // placement finals are fed by the matching sfw / sfl match.
+  if (round === "c16-r0") {
+    if (preFinal < 3) return null;
+    const j = bracketIndex * 2 + (slot === "a" ? 0 : 1);
+    return `bracket-r${preFinal - 3}-${j}`;
+  }
+  if (round === "c16-sfw" || round === "c16-sfl") {
+    const j = bracketIndex * 2 + (slot === "a" ? 0 : 1);
+    return `bracket-c16-r0-${j}`;
+  }
+  if (round === "9th" || round === "11th") {
+    return `bracket-c16-sfw-${slot === "a" ? 0 : 1}`;
+  }
+  if (round === "13th" || round === "15th") {
+    return `bracket-c16-sfl-${slot === "a" ? 0 : 1}`;
   }
   return null;
 }
@@ -1907,6 +1997,10 @@ function renderSingleElimBracket(state) {
     seventh: seventhMatch ? { id: "bracket-7th-0", m: seventhMatch } : null
   });
 
+  // Loser Bracket — only present when placementDepth ≥ 9 produced the c16
+  // matches. Rendered as its own section under the main bracket.
+  const loserHtml = renderSingleElimLoserBracket(state);
+
   return `
     <section class="swiss-bracket">
       <header class="swiss-bracket-header">
@@ -1916,7 +2010,81 @@ function renderSingleElimBracket(state) {
       <div class="swiss-rounds-scroll">
         ${columnHtml.join("")}
       </div>
+      ${loserHtml}
     </section>
+  `;
+}
+
+// Render the depth-12/16 loser-bracket section. Returns "" when the c16
+// matches don't exist (depth = 8 or bracket too small for R16).
+function renderSingleElimLoserBracket(state) {
+  const r0 = [
+    state.matches["bracket-c16-r0-0"],
+    state.matches["bracket-c16-r0-1"],
+    state.matches["bracket-c16-r0-2"],
+    state.matches["bracket-c16-r0-3"]
+  ];
+  if (!r0.some(Boolean)) return "";
+
+  const sfw = [state.matches["bracket-c16-sfw-0"], state.matches["bracket-c16-sfw-1"]];
+  const sfl = [state.matches["bracket-c16-sfl-0"], state.matches["bracket-c16-sfl-1"]];
+  const ninth = state.matches["bracket-9th-0"];
+  const eleventh = state.matches["bracket-11th-0"];
+  const thirteenth = state.matches["bracket-13th-0"];
+  const fifteenth = state.matches["bracket-15th-0"];
+
+  const r0Cards = r0.map((m, i) => m ? renderSwissBracketCard(`L${i + 1}`, `bracket-c16-r0-${i}`, m) : "").join("");
+
+  const semiCols = [];
+  if (sfw.some(Boolean)) {
+    const sfwCards = sfw.map((m, i) => m ? renderSwissBracketCard(`9-12 SF${i + 1}`, `bracket-c16-sfw-${i}`, m) : "").join("");
+    semiCols.push(`
+      <div class="swiss-round-col">
+        <div class="swiss-round-title">9th-12th</div>
+        <div class="swiss-match-list">${sfwCards}</div>
+      </div>
+    `);
+  }
+  if (sfl.some(Boolean)) {
+    const sflCards = sfl.map((m, i) => m ? renderSwissBracketCard(`13-16 SF${i + 1}`, `bracket-c16-sfl-${i}`, m) : "").join("");
+    semiCols.push(`
+      <div class="swiss-round-col">
+        <div class="swiss-round-title">13th-16th</div>
+        <div class="swiss-match-list">${sflCards}</div>
+      </div>
+    `);
+  }
+
+  const finalsCol = [];
+  if (ninth) {
+    finalsCol.push(`<div class="swiss-round-subtitle">9th Place</div>`);
+    finalsCol.push(`<div class="swiss-match-list">${renderSwissBracketCard("9th", "bracket-9th-0", ninth)}</div>`);
+  }
+  if (eleventh) {
+    finalsCol.push(`<div class="swiss-round-subtitle">11th Place</div>`);
+    finalsCol.push(`<div class="swiss-match-list">${renderSwissBracketCard("11th", "bracket-11th-0", eleventh)}</div>`);
+  }
+  if (thirteenth) {
+    finalsCol.push(`<div class="swiss-round-subtitle">13th Place</div>`);
+    finalsCol.push(`<div class="swiss-match-list">${renderSwissBracketCard("13th", "bracket-13th-0", thirteenth)}</div>`);
+  }
+  if (fifteenth) {
+    finalsCol.push(`<div class="swiss-round-subtitle">15th Place</div>`);
+    finalsCol.push(`<div class="swiss-match-list">${renderSwissBracketCard("15th", "bracket-15th-0", fifteenth)}</div>`);
+  }
+
+  return `
+    <header class="swiss-bracket-header swiss-bracket-subheader">
+      <span class="swiss-bracket-title">Loser Bracket</span>
+    </header>
+    <div class="swiss-rounds-scroll">
+      <div class="swiss-round-col">
+        <div class="swiss-round-title">R16 Losers</div>
+        <div class="swiss-match-list">${r0Cards}</div>
+      </div>
+      ${semiCols.join("")}
+      <div class="swiss-round-col">${finalsCol.join("")}</div>
+    </div>
   `;
 }
 
@@ -2887,10 +3055,7 @@ function renderSwiss() {
   // Final and (if present) the 3rd place match.
   const isSingleElim = state.mode === "single-elim";
   const placementIds = isSingleElim
-    ? ["bracket-f-0"]
-        .concat(state.matches["bracket-3rd-0"] ? ["bracket-3rd-0"] : [])
-        .concat(state.matches["bracket-5th-0"] ? ["bracket-5th-0"] : [])
-        .concat(state.matches["bracket-7th-0"] ? ["bracket-7th-0"] : [])
+    ? singleElimPlacementIds(state.matches)
     : ["bracket-f-0", "bracket-3rd-0", "bracket-5th-0", "bracket-7th-0"];
   const allPlacementsDone = bracketActive && placementIds.every(id => isMatchDecided(state.matches[id]));
   const isSwissOnly = state.mode === "swiss-only";
@@ -3110,6 +3275,14 @@ function renderSwissRegisteringMarkup(state) {
         formatBits.push(`<span class="swiss-reg-format-bit">${getRoundCount(state)} rounds</span>`);
       }
     }
+  } else {
+    // Single elimination — show (and let the host edit) the placement depth.
+    const depthLabel = `Top ${clampPlacementDepth(state.placementDepth)}`;
+    if (canEdit) {
+      formatBits.push(`<button type="button" class="swiss-reg-format-bit swiss-reg-format-editable" id="swiss-edit-depth" title="Tap to change placement depth">${depthLabel}</button>`);
+    } else {
+      formatBits.push(`<span class="swiss-reg-format-bit">${depthLabel}</span>`);
+    }
   }
 
   const nameValue = state.tournamentName || "";
@@ -3306,6 +3479,12 @@ function bindSwissRegisteringHandlers(view, state) {
   });
   view.querySelector("#swiss-edit-rounds")?.addEventListener("click", () => {
     showSwissRoundsPopup((rc) => updateRegisteringSetting({ roundCount: rc }));
+  });
+  view.querySelector("#swiss-edit-depth")?.addEventListener("click", () => {
+    showSingleElimDepthPopup((depth) => {
+      if (depth == null) return;
+      updateRegisteringSetting({ placementDepth: clampPlacementDepth(depth) });
+    }, state.placementDepth);
   });
   view.querySelector("#swiss-reg-start")?.addEventListener("click", startRegisteringTournament);
   view.querySelector("#swiss-reg-self")?.addEventListener("click", showSelfRegisterPopup);
@@ -4534,7 +4713,7 @@ function startRegisteringTournament() {
   }
   const namesText = names.join("\n");
   const generated = state.mode === "single-elim"
-    ? generateSingleElimFromText(namesText, state.tournamentName)
+    ? generateSingleElimFromText(namesText, state.tournamentName, state.placementDepth)
     : generateSwissFromText(namesText, state.tournamentName, getRoundCount(state), getGroupCount(state), state.pairing);
   if (!generated) return; // generator already alerted
   // Carry forward registrants + metadata; flip phase to running. hostUid must
@@ -4705,7 +4884,7 @@ function isGroupStageComplete(state) {
 
 function getBracketPropagation(round, bracketIndex, state) {
   // Return both winner and loser destinations. Placement-final rounds
-  // (f, 3rd, 5th, 7th) are terminal and return null.
+  // (f, 3rd, 5th, 7th, 9th, 11th, 13th, 15th) are terminal and return null.
   if (round === "qf") {
     const sfIdx = Math.floor(bracketIndex / 2);
     const slot = bracketIndex % 2 === 0 ? "a" : "b";
@@ -4723,9 +4902,43 @@ function getBracketPropagation(round, bracketIndex, state) {
   }
   if (round === "cqf") {
     const slot = bracketIndex === 0 ? "a" : "b";
+    // The 7th-place match only exists at depth ≥ 7; below that the CQF
+    // losers are simply unranked.
+    const has7th = !!(state && state.matches && state.matches["bracket-7th-0"]);
     return {
       winner: { toId: "bracket-5th-0", slot },
-      loser:  { toId: "bracket-7th-0", slot }
+      loser:  has7th ? { toId: "bracket-7th-0", slot } : null
+    };
+  }
+  // Loser-bracket placement rounds (single-elim, depth ≥ 12).
+  // c16-r0 (4 matches, 8 R16 losers) →
+  //   winners feed c16-sfw (top-half SF) which produces 9th/11th
+  //   losers feed c16-sfl (bottom-half SF — depth-16 only) which produces 13th/15th
+  if (round === "c16-r0") {
+    const downIdx = Math.floor(bracketIndex / 2);
+    const slot = bracketIndex % 2 === 0 ? "a" : "b";
+    const hasSfl = !!(state && state.matches && state.matches["bracket-c16-sfl-0"]);
+    return {
+      winner: { toId: `bracket-c16-sfw-${downIdx}`, slot },
+      loser:  hasSfl ? { toId: `bracket-c16-sfl-${downIdx}`, slot } : null
+    };
+  }
+  if (round === "c16-sfw") {
+    const slot = bracketIndex === 0 ? "a" : "b";
+    // The 11th match only exists at depth ≥ 11.
+    const has11th = !!(state && state.matches && state.matches["bracket-11th-0"]);
+    return {
+      winner: { toId: "bracket-9th-0", slot },
+      loser:  has11th ? { toId: "bracket-11th-0", slot } : null
+    };
+  }
+  if (round === "c16-sfl") {
+    const slot = bracketIndex === 0 ? "a" : "b";
+    // The 15th match only exists at depth ≥ 15.
+    const has15th = !!(state && state.matches && state.matches["bracket-15th-0"]);
+    return {
+      winner: { toId: "bracket-13th-0", slot },
+      loser:  has15th ? { toId: "bracket-15th-0", slot } : null
     };
   }
   // Single-elimination (variable size) — numeric round index.
@@ -4733,6 +4946,7 @@ function getBracketPropagation(round, bracketIndex, state) {
     const preFinal = state && typeof state.preFinalRounds === "number" ? state.preFinalRounds : 0;
     const isSemi = round === preFinal - 1;
     const isQuarter = round === preFinal - 2;
+    const isR16 = round === preFinal - 3;
     const slot = bracketIndex % 2 === 0 ? "a" : "b";
     if (isSemi) {
       const has3rd = !!(state && state.matches && state.matches["bracket-3rd-0"]);
@@ -4748,6 +4962,16 @@ function getBracketPropagation(round, bracketIndex, state) {
       return {
         winner: { toId: `bracket-r${round + 1}-${Math.floor(bracketIndex / 2)}`, slot },
         loser:  hasCqf ? { toId: `bracket-cqf-${Math.floor(bracketIndex / 2)}`, slot } : null
+      };
+    }
+    if (isR16) {
+      // Depth 12/16: R16 losers seed bracket-c16-r0-{floor(r16Idx/2)}.
+      // The slot inside the c16-r0 mirrors the R16 index parity, so
+      // sibling R16 matches' losers face each other in the loser bracket.
+      const hasC16 = !!(state && state.matches && state.matches["bracket-c16-r0-0"]);
+      return {
+        winner: { toId: `bracket-r${round + 1}-${Math.floor(bracketIndex / 2)}`, slot },
+        loser:  hasC16 ? { toId: `bracket-c16-r0-${Math.floor(bracketIndex / 2)}`, slot } : null
       };
     }
     return {
@@ -5200,14 +5424,27 @@ function isTournamentComplete(state) {
   const matches = state.matches || {};
   const decided = (m) => m && m.scoreA != null && m.scoreB != null && m.scoreA !== m.scoreB;
   const placementIds = isSingleElim
-    ? ["bracket-f-0"]
-        .concat(matches["bracket-3rd-0"] ? ["bracket-3rd-0"] : [])
-        .concat(matches["bracket-5th-0"] ? ["bracket-5th-0"] : [])
-        .concat(matches["bracket-7th-0"] ? ["bracket-7th-0"] : [])
+    ? singleElimPlacementIds(matches)
     : ["bracket-f-0", "bracket-3rd-0", "bracket-5th-0", "bracket-7th-0"];
   return placementIds.every(id => decided(matches[id]));
 }
 window.isTournamentComplete = isTournamentComplete;
+
+// Collect every placement-final match id present on a single-elim state.
+// Covers the main bracket (Final + 3rd) and the optional consolation /
+// loser-bracket finals, each built only when the depth reaches its place
+// (5th≥5, 7th≥7 from cqf; 9th≥9, 11th≥11 from c16-sfw; 13th≥13, 15th≥15
+// from c16-sfl). Filtering by presence keeps completion depth-agnostic.
+const SINGLE_ELIM_PLACEMENT_FINAL_IDS = [
+  "bracket-f-0", "bracket-3rd-0",
+  "bracket-5th-0", "bracket-7th-0",
+  "bracket-9th-0", "bracket-11th-0",
+  "bracket-13th-0", "bracket-15th-0"
+];
+function singleElimPlacementIds(matches) {
+  if (!matches) return ["bracket-f-0"];
+  return SINGLE_ELIM_PLACEMENT_FINAL_IDS.filter(id => matches[id]);
+}
 
 // Write the Best Parts panel snapshot the Dashboard reads, using the
 // finished tournament's parts usage. The storage key MUST match the
@@ -6185,7 +6422,7 @@ function removeRunningParticipantByRegen(name) {
   }
   let next;
   if (state.mode === "single-elim") {
-    next = generateSingleElimFromText(remaining.join("\n"), state.tournamentName);
+    next = generateSingleElimFromText(remaining.join("\n"), state.tournamentName, state.placementDepth);
   } else {
     next = generateSwissFromText(remaining.join("\n"), state.tournamentName,
       getRoundCount(state), getGroupCount(state), state.pairing);
@@ -6347,7 +6584,7 @@ Charlie" style="width:100%; min-height:140px; resize:vertical;"></textarea>
     const namesText = combined.join("\n");
     let next;
     if (state.mode === "single-elim") {
-      next = generateSingleElimFromText(namesText, state.tournamentName);
+      next = generateSingleElimFromText(namesText, state.tournamentName, state.placementDepth);
     } else {
       next = generateSwissFromText(namesText, state.tournamentName,
         getRoundCount(state), getGroupCount(state), state.pairing);
@@ -6506,7 +6743,7 @@ function showAddParticipantPopup() {
     if (!confirm(msg)) return;
     let next;
     if (state.mode === "single-elim") {
-      next = generateSingleElimFromText(names.join("\n"), state.tournamentName);
+      next = generateSingleElimFromText(names.join("\n"), state.tournamentName, state.placementDepth);
     } else {
       next = generateSwissFromText(names.join("\n"), state.tournamentName,
         getRoundCount(state), getGroupCount(state), state.pairing);
@@ -6659,6 +6896,70 @@ function showTopNPickerPopup(onPick, defaultN) {
   setTimeout(() => input?.focus(), 0);
 }
 
+// After the host picks Single Elimination, ask how deep to rank the
+// finishers — any number ≥ 2 (no upper limit on the input). Same shape as
+// the Knockout Bracket Size picker: quick presets plus a free-form custom
+// field. The depth is clamped down to whatever the bracket can host inside
+// generateSingleElimFromText — the loser bracket only hangs off R16, so the
+// engine ranks at most 16 places; bigger requests just rank as deep as the
+// structure allows (and a Top 16 pick on an 8-player field ranks Top 8).
+// The bracket builds matches in pairs, so an odd depth also reveals the
+// next even place. Dynamically built so no new HTML is required on the
+// per-tab index.html files.
+const SE_DEPTH_PRESETS = [4, 8, 12, 16];
+function showSingleElimDepthPopup(onPick, defaultDepth) {
+  document.getElementById("se-depth-popup")?.remove();
+  const def = clampPlacementDepth(defaultDepth);
+  const overlay = document.createElement("div");
+  overlay.id = "se-depth-popup";
+  overlay.className = "popup-overlay";
+  const presetBtns = SE_DEPTH_PRESETS.map(n =>
+    `<button type="button" class="btn topn-preset se-depth-option" data-depth="${n}">Top ${n}</button>`
+  ).join("");
+  overlay.innerHTML = `
+    <div class="popup-card">
+      <h2 class="popup-title">Placement Depth</h2>
+      <p class="popup-text">How many finishers should the tournament rank?</p>
+      <div class="popup-actions" style="flex-wrap:wrap; gap:6px; margin-bottom:8px;">${presetBtns}</div>
+      <label class="popup-text" style="display:block; margin-top:6px;">Or pick a custom depth (2 or more):</label>
+      <input type="number" id="se-depth-custom" class="account-bio" min="2" step="1" value="${def}" style="width:100%; padding:8px 10px;">
+      <p class="popup-text" style="opacity:.7; font-size:.85em; margin-top:4px;">The bracket ranks as deep as it can — currently up to 16th place.</p>
+      <div class="popup-actions">
+        <button type="button" id="se-depth-confirm" class="btn">Confirm</button>
+        <button type="button" id="se-depth-cancel" class="btn popup-cancel">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const input = overlay.querySelector("#se-depth-custom");
+  const valid = v => Number.isFinite(v) && v >= SE_DEPTH_MIN;
+  const finish = (n) => {
+    overlay.remove();
+    document.removeEventListener("keydown", onKey);
+    onPick(n);
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") { e.preventDefault(); finish(null); }
+    else if (e.key === "Enter" && document.activeElement === input) {
+      e.preventDefault();
+      const v = parseInt(input.value, 10);
+      if (valid(v)) finish(v);
+    }
+  };
+  document.addEventListener("keydown", onKey);
+
+  overlay.querySelectorAll(".se-depth-option").forEach(btn => {
+    btn.onclick = () => finish(Number(btn.dataset.depth));
+  });
+  overlay.querySelector("#se-depth-confirm").onclick = () => {
+    const v = parseInt(input.value, 10);
+    if (!valid(v)) { alert("Pick a number of 2 or more."); return; }
+    finish(v);
+  };
+  overlay.querySelector("#se-depth-cancel").onclick = () => finish(null);
+  setTimeout(() => input?.focus(), 0);
+}
+
 function showTopEightPopup(onPick, isRoundRobin) {
   const popup = document.getElementById("tournament-top-eight-popup");
   if (!popup) { onPick("swiss"); return; }
@@ -6740,7 +7041,10 @@ function showTournamentModePopup(onPick) {
   singleBtn.onclick = () => {
     const name = nameInput ? nameInput.value.trim() : "";
     teardown();
-    onPick("single-elim", name, undefined, true, undefined);
+    showSingleElimDepthPopup((depth) => {
+      if (depth == null) return; // cancelled at the depth step
+      onPick("single-elim", name, undefined, true, undefined, undefined, undefined, depth);
+    });
   };
   cancelBtn.onclick = () => teardown();
   popup.classList.remove("hidden");
@@ -6807,7 +7111,11 @@ function showSwissFormatPopup() {
   };
   if (singleBtn) singleBtn.onclick = () => {
     teardown();
-    updateRegisteringSetting({ mode: "single-elim", pairing: null });
+    const currentDepth = (typeof s.placementDepth === "number") ? s.placementDepth : 8;
+    showSingleElimDepthPopup((depth) => {
+      if (depth == null) return; // cancelled the format change at the depth step
+      updateRegisteringSetting({ mode: "single-elim", pairing: null, placementDepth: depth });
+    }, currentDepth);
   };
   if (cancelBtn) cancelBtn.onclick = teardown;
   popup.classList.remove("hidden");
@@ -6919,12 +7227,13 @@ document.getElementById("swiss-generate")?.addEventListener("click", async () =>
   } catch (e) {
     return; // user cancelled the sign-in modal
   }
-  showTournamentModePopup((mode, tournamentName, roundCount, ranked, groupCount, pairing, topN) => {
+  showTournamentModePopup((mode, tournamentName, roundCount, ranked, groupCount, pairing, topN, placementDepth) => {
     // Open Registration only — empty room in registering phase. Players
     // self-register with their decks via the Rooms tab, then the host
     // clicks Start to generate groups / bracket from the registrants.
     const next = createRegisteringTournamentState({
-      mode, tournamentName, roundCount, ranked, groupCount, pairing, topN, hostUid: user ? user.uid : null
+      mode, tournamentName, roundCount, ranked, groupCount, pairing, topN, placementDepth,
+      hostUid: user ? user.uid : null
     });
     startTournamentFromState(next);
   });
@@ -6936,7 +7245,7 @@ document.getElementById("swiss-generate")?.addEventListener("click", async () =>
 // Firebase Auth uid of the user creating the tournament — Reset / Start
 // flows check it to ensure only the original host (signed into the same
 // account on any device) can wipe or kick off the room.
-function createRegisteringTournamentState({ mode, tournamentName, roundCount, ranked, groupCount, pairing, topN, hostUid }) {
+function createRegisteringTournamentState({ mode, tournamentName, roundCount, ranked, groupCount, pairing, topN, placementDepth, hostUid }) {
   const safeMode = mode === "single-elim" ? "single-elim"
     : mode === "swiss-only" ? "swiss-only"
     : "swiss";
@@ -6972,6 +7281,12 @@ function createRegisteringTournamentState({ mode, tournamentName, roundCount, ra
       const nVal = Number(topN);
       state.topN = (Number.isFinite(nVal) && nVal >= 2 && nVal <= 64) ? nVal : 8;
     }
+  } else {
+    // Single-elim placement depth — any integer 2–16 (default 8). Carried
+    // through generateSingleElimFromText, which clamps it down to whatever
+    // the bracket can actually host and builds the matching consolation
+    // matches.
+    state.placementDepth = clampPlacementDepth(placementDepth);
   }
   return state;
 }

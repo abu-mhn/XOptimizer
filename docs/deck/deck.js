@@ -294,6 +294,96 @@ function renderDeckSelector() {
   container.querySelector("#deck-new")?.addEventListener("click", createNewDeck);
 }
 
+const PART_FOLDER = {
+  blade: "blades", lockChip: "lockChips",
+  mainBlade: "mainBlades", assistBlade: "assistBlades",
+  metalBlade: "metalBlades", overBlade: "overBlades",
+  ratchet: "ratchets", bit: "bits", ratchetBit: "ratchetBits"
+};
+// A ratchet-bit (e.g. "Operate") is saved under the `bit` key, but its images
+// live in assets/ratchetBits — not assets/bits. mergeBits() tags each merged
+// ratchet-bit with `_folder`, so resolve the bit folder from there (same as
+// the History view). Without this the image 404s and the onerror handler
+// hides the whole part (blank thumbnail).
+function partFolderFor(key, name) {
+  if (key !== "bit") return PART_FOLDER[key];
+  const found = DATA.bits?.find(b => b.name === name);
+  return found?._folder || "bits";
+}
+// Fixed top -> bottom display order, regardless of how `parts` was keyed.
+const PART_ORDER = [
+  "blade", "lockChip", "mainBlade", "metalBlade", "overBlade",
+  "assistBlade", "ratchet", "ratchetBit", "bit"
+];
+
+// The selectable modes for a slot part (e.g. Operate: Defense / Attack), or
+// null when the part has 0/1 modes. Looks in the image folder, which for a
+// ratchet-bit is the modes-bearing record.
+function deckPartModeList(key, name) {
+  const rec = (DATA[partFolderFor(key, name)] || []).find(p => p.name === name);
+  return (rec && Array.isArray(rec.modes) && rec.modes.length > 1) ? rec.modes : null;
+}
+
+// Re-run the calculator for a slot with one part's mode overridden, then save
+// the recomputed combo. Mirrors saveDeckEdit's recalc, but sources the parts
+// from the stored slot instead of the edit popup — used by the inline mode
+// toggle on each slot so changing a part's mode updates its image + stats.
+function runDeckSlotModeChange(slotIdx, field, newModeIdx) {
+  const deck = loadDeck();
+  const slot = deck[slotIdx];
+  if (!slot || !slot.data) return;
+  const lineMode = DECK_EDIT_FIELDS[slot.mode] ? slot.mode : "BX";
+  const formId = lineMode === "CX" ? "form-cx" : lineMode === "CX_EXPAND" ? "form-cxExpand" : "form-standard";
+  const form = document.getElementById(formId);
+  const calcFn = lineMode === "CX" ? (typeof calcCX === "function" && calcCX)
+    : lineMode === "CX_EXPAND" ? (typeof calcCXExpand === "function" && calcCXExpand)
+    : (typeof calcStandard === "function" && calcStandard);
+  if (!form || !calcFn) { alert("Calculator isn't available on this page."); return; }
+
+  const parts = slot.data.parts || {};
+  const savedModes = slot.data.partModes || {};
+
+  // Replay every field of the combo into the hidden calculator form, applying
+  // the requested mode override (and keeping each other part's saved mode).
+  (DECK_EDIT_FIELDS[lineMode] || DECK_EDIT_FIELDS.BX).forEach(([f]) => {
+    const arrKey = DECK_EDIT_FIELD_ARR[f];
+    const target = form.querySelector(`[name="${f}"]`);
+    const name = parts[f];
+    if (f === "ratchet" && !name) { if (target) target.value = NO_RATCHET; return; }
+    if (!name) { if (target) target.value = ""; return; }
+    const list = DATA[arrKey] || [];
+    const i = list.findIndex(p => p.name === name);
+    if (i < 0) { if (target) target.value = ""; return; }
+    if (target) target.value = String(i);
+    const part = list[i];
+    if (part && Array.isArray(part.modes) && part.modes.length) {
+      const ov = (f === field) ? newModeIdx : savedModes[f];
+      const m = (typeof ov === "number" && ov >= 0) ? Math.min(ov, part.modes.length - 1) : 0;
+      part._modeIndex = m;
+    }
+  });
+
+  // Snapshot history + result so the silent recalc doesn't leak into either.
+  const HKEY = "beyblade_history";
+  const histBefore = localStorage.getItem(HKEY);
+  const resultEl = document.getElementById("result");
+  const resultWasHidden = resultEl ? resultEl.classList.contains("hidden") : true;
+  let fresh = null;
+  try {
+    calcFn(form);
+    fresh = (JSON.parse(localStorage.getItem(HKEY) || "[]"))[0] || null;
+  } catch (e) {
+    fresh = null;
+  }
+  localStorage.setItem(HKEY, histBefore || "[]");
+  if (resultEl && resultWasHidden) resultEl.classList.add("hidden");
+  if (!fresh || !fresh.data) { alert("Couldn't recalculate this combo."); return; }
+
+  deck[slotIdx] = { mode: fresh.mode, time: new Date().toISOString(), data: fresh.data };
+  persistDeck(deck);
+  renderDeck();
+}
+
 function renderDeck() {
   renderDeckSelector();
   const container = document.getElementById("deck-list");
@@ -302,18 +392,6 @@ function renderDeck() {
   if (nameInput && nameInput.value !== loadDeckName()) nameInput.value = loadDeckName();
   const deck = loadDeck();
   container.innerHTML = "";
-
-  const PART_FOLDER = {
-    blade: "blades", lockChip: "lockChips",
-    mainBlade: "mainBlades", assistBlade: "assistBlades",
-    metalBlade: "metalBlades", overBlade: "overBlades",
-    ratchet: "ratchets", bit: "bits", ratchetBit: "ratchetBits"
-  };
-  // Fixed top -> bottom display order, regardless of how `parts` was keyed.
-  const PART_ORDER = [
-    "blade", "lockChip", "mainBlade", "metalBlade", "overBlade",
-    "assistBlade", "ratchet", "ratchetBit", "bit"
-  ];
 
   deck.forEach((item, idx) => {
     const div = document.createElement("div");
@@ -335,7 +413,7 @@ function renderDeck() {
     const partModes = data.partModes || {};
     const resolvePart = (key, name) => {
       const modeIdx = partModes[key] != null ? partModes[key] : null;
-      const folder = PART_FOLDER[key];
+      const folder = partFolderFor(key, name);
       return { src: partImgPath(folder, name, modeIdx), codename: partRecordCodename(folder, name, modeIdx) };
     };
     let partsHtml = "";
@@ -348,16 +426,32 @@ function renderDeck() {
       if (!name || !PART_FOLDER[key]) continue;
       if (combined && combined.usedKeys.has(key)) continue;
       const modeIdx = partModes[key] != null ? partModes[key] : null;
-      const src = partImgPath(PART_FOLDER[key], name, modeIdx);
+      const src = partImgPath(partFolderFor(key, name), name, modeIdx);
+      // Multi-mode parts (e.g. Operate: Defense / Attack) get an inline mode
+      // toggle right under the thumbnail — tap to switch and recompute.
+      const modeList = deckPartModeList(key, name);
+      let modeBadge = "";
+      if (modeList) {
+        const mi = (modeIdx != null && modeIdx >= 0 && modeIdx < modeList.length) ? modeIdx : 0;
+        const modeName = modeList[mi].modeName || `Mode ${mi + 1}`;
+        modeBadge = `<button type="button" class="result-part-mode" data-slot="${idx}" data-field="${key}" title="Switch mode">
+          <span class="result-part-mode-name">${modeName}</span>
+          <span class="result-part-mode-arrow" aria-hidden="true">&#8635;</span>
+        </button>`;
+      }
       partsHtml += `<div class="result-part">
         <div class="result-part-img-box">
           <img src="${src}" alt="${name}" class="result-part-img"
                onerror="this.closest('.result-part').style.display='none'">
         </div>
         <span class="result-part-name">${name}</span>
+        ${modeBadge}
       </div>`;
     }
 
+    // Stat graph (bar or radar, following the user's Stat-display setting).
+    // renderStatBars lives in calculator.js, which loads before this file.
+    const graphHtml = (typeof renderStatBars === "function") ? renderStatBars(total) : "";
     div.innerHTML = `
       <div class="deck-slot-header">
         <strong class="deck-slot-label">Slot ${idx + 1}</strong>
@@ -380,6 +474,12 @@ function renderDeck() {
         <span><b>STA:</b> ${sta ?? "-"}</span>
         <span><b>Weight:</b> ${total.Weight ?? "-"}</span>
       </div>
+      ${graphHtml ? `
+      <button type="button" class="deck-slot-graph-toggle" aria-expanded="false">
+        <span class="deck-slot-graph-toggle-label">Stat Graph</span>
+        <span class="deck-slot-graph-caret" aria-hidden="true">+</span>
+      </button>
+      <div class="deck-slot-graph hidden">${graphHtml}</div>` : ""}
       <hr/>
     `;
     container.appendChild(div);
@@ -391,6 +491,39 @@ function renderDeck() {
   container.querySelectorAll(".btn-deck-edit").forEach(btn => {
     btn.addEventListener("click", () => openDeckEdit(Number(btn.dataset.slot)));
   });
+  // Inline part mode toggle — cycle a multi-mode part (e.g. Operate) to its
+  // next mode and recompute the slot.
+  container.querySelectorAll(".result-part-mode").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const slotIdx = Number(btn.dataset.slot);
+      const field = btn.dataset.field;
+      const item = loadDeck()[slotIdx];
+      const name = item && item.data && item.data.parts ? item.data.parts[field] : null;
+      const modeList = name ? deckPartModeList(field, name) : null;
+      if (!modeList) return;
+      const cur = (item.data.partModes && typeof item.data.partModes[field] === "number")
+        ? item.data.partModes[field] : 0;
+      runDeckSlotModeChange(slotIdx, field, (cur + 1) % modeList.length);
+    });
+  });
+  // Collapsible stat-graph dropdown per slot.
+  container.querySelectorAll(".deck-slot-graph-toggle").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const graph = btn.nextElementSibling;
+      if (!graph) return;
+      const isOpen = graph.classList.toggle("hidden") === false;
+      btn.setAttribute("aria-expanded", String(isOpen));
+      btn.classList.toggle("open", isOpen);
+      const caret = btn.querySelector(".deck-slot-graph-caret");
+      if (caret) caret.textContent = isOpen ? "−" : "+"; // − / +
+    });
+  });
+  // Part rows scroll sideways via swipe on touch; on desktop translate a
+  // vertical mouse wheel into horizontal scroll so longer combos (CX) reach
+  // every part. No-op on touch (no wheel events) and when nothing overflows.
+  if (typeof enableHorizontalWheelScroll === "function") {
+    container.querySelectorAll(".result-parts").forEach(enableHorizontalWheelScroll);
+  }
 }
 
 // Render the current deck to a square PNG canvas off-screen and hand it to
@@ -431,6 +564,9 @@ function renderDeckCanvas(onReady) {
   // also takes the edit button's blue focus border with it.
   clone.querySelectorAll(".deck-slot-actions").forEach(el => el.remove());
   clone.querySelectorAll(".btn-deck-remove, .btn-deck-edit").forEach(b => b.remove());
+  // The stat-graph dropdown and inline part mode toggles are interactive
+  // controls — drop them so the exported image stays clean.
+  clone.querySelectorAll(".deck-slot-graph-toggle, .deck-slot-graph, .result-part-mode").forEach(el => el.remove());
   wrap.appendChild(clone);
 
   const footer = document.createElement("div");
@@ -539,6 +675,16 @@ document.getElementById("deck-share")?.addEventListener("click", shareDeck);
 document.getElementById("deck-reset")?.addEventListener("click", resetDeck);
 document.getElementById("deck-shuffle")?.addEventListener("click", shuffleDeck);
 document.getElementById("deck-copy")?.addEventListener("click", copyDeckForTournamentRegistration);
+
+// The toolbar + deck-name pill rows scroll sideways when their buttons
+// overflow (icon + label can't fit on narrow viewports). On touch a swipe
+// scrolls them; on desktop translate a vertical mouse wheel into horizontal
+// scroll. These containers are static (only their innerHTML changes on
+// re-render), so bind once here to avoid stacking duplicate wheel listeners.
+if (typeof enableHorizontalWheelScroll === "function") {
+  enableHorizontalWheelScroll(document.querySelector(".deck-toolbar"));
+  enableHorizontalWheelScroll(document.getElementById("deck-selector"));
+}
 
 // Serialize the active deck into the same shape the Bey Check / tournament
 // registration popup uses (each slot: { mode, parts }) and write it to the
@@ -707,6 +853,48 @@ let deckEditMode = "BX";
 // mode switches so shared fields (ratchet/bit/lock chip/assist blade) keep
 // their selection.
 let deckEditValues = {};
+// Chosen mode index per field for multi-mode parts (a blade/bit/etc. with a
+// `.modes` array). Seeded from the slot's saved partModes, reset to 0 when the
+// part itself changes, and applied at save time.
+let deckEditPartModes = {};
+
+// The DATA part currently selected for a field (null for empty / No-Ratchet).
+function deckEditPartFor(field) {
+  const arrKey = DECK_EDIT_FIELD_ARR[field];
+  const v = deckEditValues[field];
+  if (!arrKey || v == null || v === "" || v === NO_RATCHET) return null;
+  return (DATA[arrKey] || [])[Number(v)] || null;
+}
+
+// The selectable modes for a field, or null when the part has 0/1 modes
+// (nothing to switch).
+function deckEditModesFor(field) {
+  const part = deckEditPartFor(field);
+  return (part && Array.isArray(part.modes) && part.modes.length > 1) ? part.modes : null;
+}
+
+// Render (or hide) the mode switch for one field, reflecting the current
+// selection and chosen mode index.
+function updateDeckEditModeRow(field) {
+  const row = document.querySelector(`#deck-edit-fields .deck-edit-mode-row[data-mode-field="${field}"]`);
+  if (!row) return;
+  const modes = deckEditModesFor(field);
+  if (!modes) {
+    row.hidden = true;
+    row.innerHTML = "";
+    return;
+  }
+  let idx = deckEditPartModes[field];
+  if (typeof idx !== "number" || idx < 0 || idx >= modes.length) { idx = 0; }
+  deckEditPartModes[field] = idx;
+  const name = modes[idx].modeName || `Mode ${idx + 1}`;
+  row.hidden = false;
+  row.innerHTML = `<span class="deck-edit-mode-key">Mode</span>
+    <button type="button" class="deck-edit-mode-btn" data-mode-field="${field}" title="Switch mode">
+      <span class="deck-edit-mode-name">${name}</span>
+      <span class="deck-edit-mode-arrow" aria-hidden="true">&#8635;</span>
+    </button>`;
+}
 
 function buildDeckEditPopup() {
   if (document.getElementById("deck-edit-popup")) return;
@@ -757,6 +945,18 @@ function buildDeckEditPopup() {
       renderDeckEditFields();
     });
   });
+  // Cycle a multi-mode part's mode. Delegated on the fields host (bound once)
+  // so it survives every renderDeckEditFields rebuild.
+  document.getElementById("deck-edit-fields").addEventListener("click", (e) => {
+    const btn = e.target.closest(".deck-edit-mode-btn");
+    if (!btn) return;
+    const field = btn.dataset.modeField;
+    const modes = deckEditModesFor(field);
+    if (!modes) return;
+    const cur = (typeof deckEditPartModes[field] === "number") ? deckEditPartModes[field] : 0;
+    deckEditPartModes[field] = (cur + 1) % modes.length;
+    updateDeckEditModeRow(field);
+  });
 }
 
 function setDeckEditModeTab() {
@@ -784,10 +984,13 @@ function renderDeckEditFields() {
   const fields = DECK_EDIT_FIELDS[deckEditMode] || DECK_EDIT_FIELDS.BX;
   const host = document.getElementById("deck-edit-fields");
   host.innerHTML = fields.map(([key, label]) =>
-    `<label class="deck-edit-field">
-      <span class="deck-edit-field-label">${label}</span>
-      <select data-field="${key}"></select>
-    </label>`
+    `<div class="deck-edit-field-group">
+      <label class="deck-edit-field">
+        <span class="deck-edit-field-label">${label}</span>
+        <select data-field="${key}"></select>
+      </label>
+      <div class="deck-edit-mode-row" data-mode-field="${key}" hidden></div>
+    </div>`
   ).join("");
 
   fields.forEach(([key]) => {
@@ -802,7 +1005,15 @@ function renderDeckEditFields() {
       if (cur === NO_RATCHET) wrapper._select(NO_RATCHET);
       else if (cur != null && cur !== "" && list[Number(cur)]) wrapper._select(Number(cur));
     }
-    sel.addEventListener("change", () => { deckEditValues[key] = sel.value; });
+    // Listener attaches AFTER the preselect above, so seeding a value never
+    // counts as a user change — that keeps the slot's saved mode intact.
+    sel.addEventListener("change", () => {
+      deckEditValues[key] = sel.value;
+      // A different part was chosen — its old mode index no longer applies.
+      delete deckEditPartModes[key];
+      updateDeckEditModeRow(key);
+    });
+    updateDeckEditModeRow(key);
   });
 }
 
@@ -827,6 +1038,13 @@ function openDeckEdit(slotIdx) {
   });
   if (!parts.ratchet) deckEditValues.ratchet = NO_RATCHET;
 
+  // Seed each multi-mode part's chosen mode from the slot's saved partModes.
+  deckEditPartModes = {};
+  const savedModes = (slot.data && slot.data.partModes) || {};
+  Object.keys(savedModes).forEach(k => {
+    if (typeof savedModes[k] === "number" && savedModes[k] >= 0) deckEditPartModes[k] = savedModes[k];
+  });
+
   document.getElementById("deck-edit-subtitle").textContent = `Slot ${slotIdx + 1}`;
   setDeckEditModeTab();
   renderDeckEditFields();
@@ -846,7 +1064,6 @@ function saveDeckEdit() {
     : (typeof calcStandard === "function" && calcStandard);
   if (!form || !calcFn) { alert("Calculator isn't available on this page."); return; }
 
-  const slotPartModes = (slot.data && slot.data.partModes) || {};
   const selects = [...document.querySelectorAll("#deck-edit-fields select[data-field]")];
 
   // Every part except the ratchet must be chosen.
@@ -856,7 +1073,7 @@ function saveDeckEdit() {
   }
 
   // Push the chosen parts into the hidden calculator form, and set the mode
-  // index for any multi-mode part (kept from the slot, clamped to range).
+  // index for any multi-mode part from the editor's chosen mode (clamped).
   selects.forEach(sel => {
     const field = sel.dataset.field;
     const target = form.querySelector(`[name="${field}"]`);
@@ -864,7 +1081,7 @@ function saveDeckEdit() {
     const arrKey = DECK_EDIT_FIELD_ARR[field];
     const part = (sel.value !== NO_RATCHET && sel.value !== "" && DATA[arrKey]) ? DATA[arrKey][sel.value] : null;
     if (part && Array.isArray(part.modes) && part.modes.length) {
-      const m = slotPartModes[field];
+      const m = deckEditPartModes[field];
       part._modeIndex = (typeof m === "number" && m >= 0) ? Math.min(m, part.modes.length - 1) : 0;
     }
   });

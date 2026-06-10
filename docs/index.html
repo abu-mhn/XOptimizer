@@ -25,19 +25,20 @@
     <header class="updates-header">
       <h1 class="updates-title">What's New</h1>
       <p class="updates-subtitle">Recent changes to X Optimizer.</p>
-      <p class="updates-version">Version <span class="updates-version-num">v1.6.0</span></p>
+      <p class="updates-version">Version <span class="updates-version-num">v1.7.0</span></p>
     </header>
 
     <!-- Bump data-version when the list below changes so the splash flags
          it as fresh for returning users. Keep this attribute in sync with
          the visible version number above. -->
-    <article class="updates-card" data-version="v1.6.0">
+    <article class="updates-card" data-version="v1.7.0">
       <ul class="popup-list">
-        <li><strong>New achievement — King of All Types.</strong> Win 100 matches with a Bullet Griffon slot tuned out of its default Balance configuration into Attack / Defense / Stamina. Unlocks the King of All Types title and a platinum-silver / royal-blue theme.</li>
-        <li><strong>Deck toolbar — text labels + invisible scroller.</strong> The Reset / Shuffle / Download / Share / Copy / Paste buttons now show icon + label and the row scrolls sideways on narrow phones instead of clipping or wrapping.</li>
-        <li><strong>Developer — Tags sub-tab.</strong> A new reference sub-tab listing every tag the app recognises (Admin / Role, Medal, Achievement), each with its real badge color and a short explanation of what holding the tag unlocks.</li>
-        <li><strong>Profile pane restore fix.</strong> Opening the Profile tab on a returning session now reliably loads your account card. It could previously stick on the "Sign in" prompt even when you were already signed in — auth detection now falls through onAuthChange, the Firebase listener and a short poll so the signed-in view appears whichever path resolves first.</li>
-        <li><strong>Desktop tab bar centering.</strong> On desktop the top tab bar spans the full window and stays centered. Tabs that don't apply to you (Achievement before any unlock, Revox or Developer if you don't hold the tag) no longer shift the visible tabs off to one side.</li>
+        <li><strong>Deck slots — card layout + stat graphs.</strong> Every combo is now its own card, with a collapsible <em>Stat Graph</em> (tap + / − to open) that draws a bar or radar chart following your Stat-display setting.</li>
+        <li><strong>Switch a part's mode from the Deck.</strong> Multi-mode parts like Operate (Defense / Attack) show an inline mode chip on the slot — tap it to switch and the combo's image and stats recompute on the spot. The combo editor gained the same per-part mode control.</li>
+        <li><strong>Ratchet-bit thumbnails fixed.</strong> Ratchet-bits such as Turbo and Operate now show their image in the Deck instead of a blank tile.</li>
+        <li><strong>Mouse-wheel scrolling on desktop.</strong> The deck's part rows, toolbar and deck switcher now scroll sideways with a vertical mouse wheel — no trackpad swipe needed.</li>
+        <li><strong>Tournament — set any placement depth.</strong> Single Elimination now lets you rank any number of finishers (not just Top 8 / 12 / 16), with a free-form picker that matches the Knockout Bracket Size layout and is editable from the registration screen.</li>
+        <li><strong>Calculator result — fresh look.</strong> A rounded result card with framed stat, parts and data panels, a spec-sheet stats table, the part mode shown as a chip, and refined action buttons. Downloaded and shared photos render cleanly too.</li>
       </ul>
     </article>
 
