@@ -84,7 +84,7 @@ function initLibrarySearch() {
     if (!obj) return "";
 
     let html = "";
-    const EXCLUDE_KEYS = ["name", "meta", "exclusive"];
+    const EXCLUDE_KEYS = ["name", "meta", "exclusive", "expandcx"];
 
     Object.entries(obj).forEach(([k, v]) => {
       if (k.startsWith("_")) return;

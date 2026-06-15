@@ -1210,7 +1210,7 @@ function autobuildMakeBXSlot(blade, ratchet, bit) {
   const totalDef = (blade.def || 0) + r.def + (bit?.def || 0);
   const totalSta = (blade.sta || 0) + r.sta + (bit?.sta || 0);
   const totalWeight = (blade.weight || 0) + r.weight + (bit?.weight || 0);
-  const isBG = blade.codename === "BULLETGRIFFON";
+  const isBG = isExpandCxBlade(blade);
   const bHeight = ratchet ? ratchet.height : null;
   const comboName = (blade.codename || blade.name)
     + (ratchet ? ratchet.name : "")

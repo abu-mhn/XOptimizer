@@ -5922,8 +5922,9 @@ function renderBeyCheckSlot(slotIdx, slot) {
     const bitInput = bitWrapper && bitWrapper.querySelector("input");
     bladeSel?.addEventListener("change", () => {
       const idx = bladeSel.value;
-      const codename = idx !== "" && DATA.blades[idx] ? DATA.blades[idx].codename : "";
-      if (codename === "BULLETGRIFFON") {
+      const blade = idx !== "" && DATA.blades[idx] ? DATA.blades[idx] : null;
+      const codename = blade ? blade.codename : "";
+      if (isExpandCxBlade(blade)) {
         if (ratchetWrapper) {
           ratchetWrapper._filterFn = null;
           ratchetWrapper._select(NO_RATCHET);
@@ -8927,14 +8928,15 @@ function buildMetaSlot(mode, used) {
     };
   }
 
-  // standard — honour Bullet Griffon (no ratchet) and Clock Mirage (ratchet
-  // must end in "5") the same way the calculator's selectMeta does.
+  // standard — honour expandCx blades (no ratchet, e.g. Bullet Griffon) and
+  // Clock Mirage (ratchet must end in "5") the same way the calculator's
+  // selectMeta does.
   const blade = pickMetaFrom(DATA.blades || [], used);
   const codename = blade?.codename || "";
-  if (codename === "BULLETGRIFFON") {
-    // BG's built-in ratchet → record NO_RATCHET explicitly so the slot
-    // reads as "complete" everywhere (matches what the form auto-fills
-    // when a user picks BG in Bey Check).
+  if (isExpandCxBlade(blade)) {
+    // No ratchet slot → record NO_RATCHET explicitly so the slot reads as
+    // "complete" everywhere (matches what the form auto-fills when a user
+    // picks an expandCx blade in Bey Check).
     return { mode, parts: { blade: blade.name, ratchet: NO_RATCHET, bit: bitName } };
   }
   if (codename === "CLOCKMIRAGE") {

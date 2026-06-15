@@ -68,11 +68,14 @@ const DATA = {
     { atk: 30, def: 60, sta: 20, weight: 37.5, spindirection: "R", name: "Mummy Curse", codename: "MUMMYCURSE", meta: true },
     { atk: 55, def: 30, sta: 15, weight: 25.1, spindirection: "L", name: "Dragoon Storm", codename: "DRAGOONSTORM" },
     { atk: 30, def: 40, sta: 30, weight: 31.0, spindirection: "R", name: "Storm Spriggan", codename: "STORMSPRIGGAN" },
-    { atk: 45, def: 45, sta: 40, weight: 60.6, spindirection: "R", name: "Bullet Griffon", codename: "BULLETGRIFFON", meta: true },
+    { atk: 45, def: 45, sta: 40, weight: 60.6, spindirection: "R", name: "Bullet Griffon", codename: "BULLETGRIFFON", meta: true, expandCx: true },
     { atk: 58, def: 25, sta: 17, weight: 41.4, spindirection: "R", name: "Dran Strike", codename: "DRANSTRIKE" },
     { atk: 60, def: 25, sta: 30, weight: 38.7, spindirection: "R", name: "Aero Pegasus", codename: "AEROPEGASUS", exclusive: true },
     { atk: 13, def: 60, sta: 27, weight: 35.1, spindirection: "R", name: "Wyvern Hover", codename: "WYVERNHOVER", exclusive: true },
     { atk: 0, def: 0, sta: 0, weight: 36.6, spindirection: "R", name: "Orochi Cluster", codename: "OROCHICLUSTER", exclusive: true },
+    { atk: 55, def: 15, sta: 30, weight: 31.0, spindirection: "R", name: "Storm Pegasis", codename: "STORMPEGASIS"},
+    { atk: 10, def: 60, sta: 30, weight: 37.4, spindirection: "R", name: "Heavens Ring", codename: "HEAVENSRING"},
+    { atk: 85, def: 35, sta: 25, weight: 0, spindirection: "R", name: "Glory Valkyrie", codename: "GLORYVALKYRIE", expandCx: true }
   ],
 
   lockChips: [
@@ -123,7 +126,7 @@ const DATA = {
     { atk: 10, def: 20, sta: 10, weight: 27.7, spindirection: "R", name: "Fortress", codename: "FORTRESS", meta: true },
     { atk: 10, def: 10, sta: 29, weight: 27.4, spindirection: "R", name: "Rage", codename: "RAGE" },
     { atk: 15, def: 15, sta: 10, weight: 27.8, spindirection: "R", name: "Delta", codename: "DELTA" },
-    { atk: 4, def: 10, sta: 16, weight: 0, spindirection: "R", name: "Whip", codename: "WHIP", meta: true },
+    { atk: 4, def: 10, sta: 16, weight: 28.0, spindirection: "R", name: "Whip", codename: "WHIP", meta: true },
   ],
 
   overBlades: [
@@ -131,7 +134,7 @@ const DATA = {
     { atk: 5, def: 10, sta: 5, weight: 3.4, spindirection: "R", name: "Guard", codename: "G" },
     { atk: 5, def: 5, sta: 10, weight: 3.7, spindirection: "R", name: "Flow", codename: "F" },
     { atk: 8, def: 7, sta: 5, weight: 3.5, spindirection: "R", name: "Peak", codename: "P" },
-    { atk: 4, def: 10, sta: 16, weight: 0, spindirection: "R", name: "Outer", codename: "O" },
+    { atk: 4, def: 10, sta: 16, weight: 3.6, spindirection: "R", name: "Outer", codename: "O" },
   ],
 
   assistBlades: [
@@ -251,7 +254,8 @@ const DATA = {
     { atk: 50, def: 15, sta: 5, dash: 30, burstRes: 80, weight: 2.4, name: "Ignition", codename: "I" },
     { atk: 40, def: 15, sta: 15, dash: 30, burstRes: 80, weight: 2.3, name: "Free Flat", codename: "FF", meta: true },
     { atk: 30, def: 20, sta: 20, dash: 30, burstRes: 80, weight: 2.3, name: "Gear Unite", codename: "GU" },
-    { atk: 15, def: 20, sta: 60, dash: 5, burstRes: 30, weight: 0, name: "Narrow", codename: "Nr" }
+    { atk: 15, def: 20, sta: 60, dash: 5, burstRes: 30, weight: 1.9, name: "Narrow", codename: "Nr" },
+    { atk: 5, def: 55, sta: 40, dash: 10, burstRes: 20, weight: 3.1, name: "Disk Spike", codename: "DS" }
   ],
 
   ratchetBits: [

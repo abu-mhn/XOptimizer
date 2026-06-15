@@ -215,6 +215,14 @@ function spinLogo(dir) {
 // Sentinel selected in the Ratchet dropdown to signal "use a ratchet-bit bit".
 const NO_RATCHET = "__NO_RATCHET__";
 
+// A blade flagged `expandCx` has no ratchet slot — it's built blade + bit only
+// (a regular bit, never a ratchet-bit), the same way Bullet Griffon works
+// (which carries this flag too). Shared so the calculator, deck editor,
+// dashboard and Bey Check all treat these blades identically.
+function isExpandCxBlade(blade) {
+  return !!(blade && blade.expandCx === true);
+}
+
 function applyBitFilter(form) {
   const ratchetSel = form.querySelector('[name="ratchet"]');
   const bitWrapper = form.querySelector('[name="bit"]')?.nextElementSibling;

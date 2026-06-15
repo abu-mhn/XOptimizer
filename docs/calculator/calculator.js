@@ -556,7 +556,7 @@ function calcStandard(form) {
 
       Weight: finalWeight,
 
-      ...(bladeA.codename === "BULLETGRIFFON" ? {} : {
+      ...(isExpandCxBlade(bladeA) ? {} : {
         Height: bHeight == null
           ? "TBA"
           : `${(Number(bHeight) / 10).toFixed(1)} mm`
@@ -602,7 +602,7 @@ function calcStandard(form) {
 
       Weight: finalWeight,
 
-      ...(bladeA.codename === "BULLETGRIFFON" ? {} : {
+      ...(isExpandCxBlade(bladeA) ? {} : {
         Height: bHeight == null
           ? "TBA"
           : `${(Number(bHeight) / 10).toFixed(1)} mm`
@@ -1212,7 +1212,8 @@ initDropdowns();
 
   bladeSel.addEventListener("change", () => {
     const idx = bladeSel.value;
-    const codename = idx !== "" ? DATA.blades[idx].codename : "";
+    const blade = idx !== "" ? DATA.blades[idx] : null;
+    const codename = blade ? blade.codename : "";
 
     if (codename === "CLOCKMIRAGE") {
       // Clock Mirage: filter ratchet to *5; bit list restricted to regular bits
@@ -1222,8 +1223,9 @@ initDropdowns();
       bitWrapper._setFilter(b => !b.isRatchetBit);
       bitInput.disabled = false;
       bitInput.placeholder = "-- Select --";
-    } else if (codename === "BULLETGRIFFON") {
-      // Bullet Griffon: force "No Ratchet"; bit list restricted to normal bits
+    } else if (isExpandCxBlade(blade)) {
+      // expandCx blade (e.g. Bullet Griffon, Glory Valkyrie): no ratchet slot —
+      // force "No Ratchet" and restrict the bit list to regular (non-ratchet) bits.
       ratchetWrapper._filterFn = null;
       ratchetWrapper._select(NO_RATCHET);
       ratchetInput.disabled = true;
@@ -1727,7 +1729,7 @@ function selectMaxWeight(form, mode) {
     getWrapper(form, "blade")._select(bladeIdx);
     const codename = DATA.blades[bladeIdx].codename;
 
-    if (codename === "BULLETGRIFFON") {
+    if (isExpandCxBlade(DATA.blades[bladeIdx])) {
       selectHeaviestRBBit(form);
     } else if (codename === "CLOCKMIRAGE") {
       selectBottomRegularByWeight(form, false, r => r.name.endsWith("5"));
@@ -1754,7 +1756,7 @@ function selectMinWeight(form, mode) {
     getWrapper(form, "blade")._select(bladeIdx);
     const codename = DATA.blades[bladeIdx].codename;
 
-    if (codename === "BULLETGRIFFON") {
+    if (isExpandCxBlade(DATA.blades[bladeIdx])) {
       const idx = bestIdxByPredicate(DATA.bits, isNormalBit, b => b.weight ?? Infinity, (a, b) => a < b);
       if (idx >= 0) {
         getWrapper(form, "ratchet")._select(NO_RATCHET);
@@ -1808,7 +1810,7 @@ function selectMaxStat(form, mode, key) {
     getWrapper(form, "blade")._select(bladeIdx);
     const codename = DATA.blades[bladeIdx].codename;
 
-    if (codename === "BULLETGRIFFON") {
+    if (isExpandCxBlade(DATA.blades[bladeIdx])) {
       const idx = bestIdxByPredicate(DATA.bits, isNormalBit, statOf, (a, b) => a > b);
       if (idx >= 0) {
         getWrapper(form, "ratchet")._select(NO_RATCHET);
@@ -1868,7 +1870,7 @@ function selectRandom(form, mode) {
     getWrapper(form, "blade")._select(bladeIdx);
     const codename = DATA.blades[bladeIdx].codename;
 
-    if (codename === "BULLETGRIFFON") {
+    if (isExpandCxBlade(DATA.blades[bladeIdx])) {
       const idx = randIdxFromPredicate(DATA.bits, isNormalBit);
       if (idx >= 0) {
         getWrapper(form, "ratchet")._select(NO_RATCHET);
@@ -1921,7 +1923,7 @@ function selectMeta(form, mode) {
     getWrapper(form, "blade")._select(bladeIdx);
     const codename = DATA.blades[bladeIdx].codename;
 
-    if (codename === "BULLETGRIFFON") {
+    if (isExpandCxBlade(DATA.blades[bladeIdx])) {
       const idx = randIdxFromPredicate(DATA.bits, isNormalBit);
       if (idx >= 0) {
         getWrapper(form, "ratchet")._select(NO_RATCHET);
@@ -2010,7 +2012,7 @@ function selectComboOfDay(form, mode) {
     getWrapper(form, "blade")._select(bladeIdx);
     const codename = DATA.blades[bladeIdx].codename;
 
-    if (codename === "BULLETGRIFFON") {
+    if (isExpandCxBlade(DATA.blades[bladeIdx])) {
       const idx = pickFromPredicate(DATA.bits, isNormalBit);
       if (idx >= 0) {
         getWrapper(form, "ratchet")._select(NO_RATCHET);

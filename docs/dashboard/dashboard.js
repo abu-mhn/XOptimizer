@@ -63,7 +63,7 @@ function dashboardBestPart(list, field, dir) {
 // Returns null for blades with no special rules.
 function dashboardBladeConfig(blade) {
   if (!blade) return null;
-  if (blade.codename === "BULLETGRIFFON") {
+  if (isExpandCxBlade(blade)) {
     return { noRatchet: true, allowRatchetBit: false, ratchetFilter: null };
   }
   if (blade.codename === "CLOCKMIRAGE") {

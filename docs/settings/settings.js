@@ -12,7 +12,7 @@ Dashboard
 - Tap any part image for a larger preview
 - Best Parts carousel: top 3 most-used parts per type (Blade, Lock Chip, Ratchet, Bit, etc.) from the most recently FINISHED tournament, ranked 1st (gold) / 2nd (silver) / 3rd (bronze) — sourced from the top entry in Tournament History (any format: Swiss, Round Robin, or Single Elimination)
 - Best Parts survive a tournament reset — once a tournament finishes, its cached entry in Tournament History keeps feeding the panel until a newer tournament finishes on top of it
-- Respects calculator constraints: Bullet Griffon's built-in ratchet (no ratchet slot), Clock Mirage's -5 ratchet requirement
+- Respects calculator constraints: ratchet-less "expandCX" blades (Bullet Griffon, Glory Valkyrie) build with a blade + bit only and no ratchet slot, Clock Mirage's -5 ratchet requirement
 - Combo of the Day is seeded by today's date — every visitor sees the same combo until local midnight
 
 Calculator
@@ -22,6 +22,7 @@ Calculator
 - Action buttons (Calculate / Reset / Random) show icon + label inline
 - Additional button modes: Random, Meta
 - Meta picker for Clock Mirage picks a -5 ratchet uniformly at random (no -5 ratchet is flagged meta, so the previous meta-first preference was dead code); same rule now applies to Test mode's auto-generated decks
+- Ratchet-less "expandCX" blades (e.g. Bullet Griffon, Glory Valkyrie) auto-force "No Ratchet" and restrict the bit list to regular (non-ratchet) bits — they compute and build as blade + bit everywhere (Calculator, Deck, Dashboard, Bey Check)
 - CX / CX Expand results show the lock chip, blade(s) and assist blade assembled into one combined image (also used in the Deck, History and Dashboard)
 - Tap the combined blade to flip through its parts in an auto-sliding, swipeable carousel
 - Polished result card: framed stat-chart, part-thumbnail and data panels, a spec-sheet stats table (muted labels, bold right-aligned values), and refined action buttons
