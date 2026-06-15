@@ -1,0 +1,333 @@
+{
+  "rules": {
+    "swissRooms": {
+      ".read": "auth != null && (root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')",
+      "$code": {
+        ".read": true,
+        ".write": "auth != null && (!data.exists() || data.child('hostUid').val() === auth.uid)",
+
+        "hostUid": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 128 && (data.exists() ? newData.val() === data.val() : newData.val() === auth.uid)"
+        },
+
+        "coHostUids": {
+          "$coUid": {
+            ".write": "auth != null && (auth.uid === $coUid || root.child('swissRooms').child($code).child('hostUid').val() === auth.uid)",
+            ".validate": "newData.isBoolean() && newData.val() === true"
+          }
+        },
+
+        "tournamentName": {
+          ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || root.child('swissRooms').child($code).child('coHostUids').child(auth.uid).val() === true)",
+          ".validate": "newData.isString() && newData.val().length <= 80"
+        },
+        "mode": {
+          ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || root.child('swissRooms').child($code).child('coHostUids').child(auth.uid).val() === true)",
+          ".validate": "newData.isString() && (newData.val() === 'swiss' || newData.val() === 'swiss-only' || newData.val() === 'single-elim')"
+        },
+        "pairing": {
+          ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || root.child('swissRooms').child($code).child('coHostUids').child(auth.uid).val() === true)",
+          ".validate": "newData.isString() && (newData.val() === 'round-robin' || newData.val() === '')"
+        },
+        "roundCount": {
+          ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || root.child('swissRooms').child($code).child('coHostUids').child(auth.uid).val() === true)",
+          ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10"
+        },
+        "groupCount": {
+          ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || root.child('swissRooms').child($code).child('coHostUids').child(auth.uid).val() === true)",
+          ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 8"
+        },
+        "topN": {
+          ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || root.child('swissRooms').child($code).child('coHostUids').child(auth.uid).val() === true)",
+          ".validate": "newData.isNumber() && newData.val() >= 2 && newData.val() <= 64"
+        },
+        "placementDepth": {
+          ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || root.child('swissRooms').child($code).child('coHostUids').child(auth.uid).val() === true)",
+          ".validate": "newData.isNumber() && newData.val() >= 2 && newData.val() <= 10000"
+        },
+        "maxParticipants": {
+          ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || root.child('swissRooms').child($code).child('coHostUids').child(auth.uid).val() === true)",
+          ".validate": "newData.isNumber() && newData.val() >= 2 && newData.val() <= 10000"
+        },
+        "bracketSize": {
+          ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || root.child('swissRooms').child($code).child('coHostUids').child(auth.uid).val() === true)",
+          ".validate": "newData.isNumber() && newData.val() >= 2 && newData.val() <= 128"
+        },
+        "preFinalRounds": {
+          ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || root.child('swissRooms').child($code).child('coHostUids').child(auth.uid).val() === true)",
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 8"
+        },
+        "ranked": {
+          ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || root.child('swissRooms').child($code).child('coHostUids').child(auth.uid).val() === true)",
+          ".validate": "newData.isBoolean()"
+        },
+        "phase": {
+          ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || root.child('swissRooms').child($code).child('coHostUids').child(auth.uid).val() === true)",
+          ".validate": "newData.isString()"
+        },
+        "groups": {
+          ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || root.child('swissRooms').child($code).child('coHostUids').child(auth.uid).val() === true)"
+        },
+        "groupRounds": {
+          ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || root.child('swissRooms').child($code).child('coHostUids').child(auth.uid).val() === true)"
+        },
+        "bracket": {
+          ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || root.child('swissRooms').child($code).child('coHostUids').child(auth.uid).val() === true)"
+        },
+        "subHosts": {
+          ".write": "auth != null && root.child('swissRooms').child($code).child('hostUid').val() === auth.uid",
+          "$key": { ".validate": "newData.isString() && newData.val().length <= 30" }
+        },
+        "awarded": {
+          ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || root.child('swissRooms').child($code).child('coHostUids').child(auth.uid).val() === true)"
+        },
+
+        "bannedParts": {
+          ".write": "auth != null && root.child('swissRooms').child($code).child('hostUid').val() === auth.uid",
+          "blade":       { "$idx": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" } },
+          "lockChip":    { "$idx": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 30" } },
+          "mainBlade":   { "$idx": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" } },
+          "metalBlade":  { "$idx": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" } },
+          "overBlade":   { "$idx": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" } },
+          "assistBlade": { "$idx": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" } },
+          "ratchet":     { "$idx": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 30" } },
+          "bit":         { "$idx": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" } },
+          "$other":      { ".validate": false }
+        },
+
+        "eventDetails": {
+          ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || root.child('swissRooms').child($code).child('coHostUids').child(auth.uid).val() === true)",
+          "date":    { ".validate": "newData.isString() && newData.val().length <= 20" },
+          "time":    { ".validate": "newData.isString() && newData.val().length <= 10" },
+          "stadium": { ".validate": "newData.isString() && (newData.val() === '' || newData.val() === 'Xtreme' || newData.val() === 'Double Xtreme' || newData.val() === 'Infinity')" },
+          "rule":    { ".validate": "newData.isString() && (newData.val() === '' || newData.val() === 'Official' || newData.val() === 'Unofficial')" },
+          "remark":  { ".validate": "newData.isString() && newData.val().length <= 500" },
+          "$other":  { ".validate": false }
+        },
+
+        "matches": {
+          ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || root.child('swissRooms').child($code).child('coHostUids').child(auth.uid).val() === true)",
+          "$matchId": {
+            "decks": {
+              "$side": {
+                ".validate": "$side === 'a' || $side === 'b'",
+                "$slot": {
+                  ".validate": "$slot.matches(/^[0-2]$/) && newData.hasChild('mode')",
+                  "mode": {
+                    ".validate": "newData.isString() && (newData.val() === 'standard' || newData.val() === 'cx' || newData.val() === 'cxExpand')"
+                  },
+                  "parts": {
+                    "blade":       { ".validate": "newData.isString() && newData.val().length <= 60" },
+                    "lockChip":    { ".validate": "newData.isString() && newData.val().length <= 30" },
+                    "mainBlade":   { ".validate": "newData.isString() && newData.val().length <= 60" },
+                    "metalBlade":  { ".validate": "newData.isString() && newData.val().length <= 60" },
+                    "overBlade":   { ".validate": "newData.isString() && newData.val().length <= 60" },
+                    "assistBlade": { ".validate": "newData.isString() && newData.val().length <= 60" },
+                    "ratchet":     { ".validate": "newData.isString() && newData.val().length <= 30" },
+                    "bit":         { ".validate": "newData.isString() && newData.val().length <= 60" },
+                    "$other":      { ".validate": false }
+                  },
+                  "$other": { ".validate": false }
+                }
+              }
+            }
+          }
+        },
+
+        "registrants": {
+          "$regId": {
+            ".write": "(auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || root.child('swissRooms').child($code).child('coHostUids').child(auth.uid).val() === true || (root.child('swissRooms').child($code).child('phase').val() === 'registering' && (!data.exists() ? (newData.exists() && newData.child('createdBy').val() === auth.uid) : data.child('createdBy').val() === auth.uid)))) || (root.child('swissRooms').child($code).child('phase').val() === 'registering' && !data.exists() && newData.exists() && newData.child('isGuest').val() === true && newData.hasChild('name') && !newData.hasChild('createdBy')) || (root.child('swissRooms').child($code).child('phase').val() === 'registering' && data.exists() && !newData.exists() && data.child('isGuest').val() === true && !data.child('createdBy').exists()) || (root.child('swissRooms').child($code).child('phase').val() === 'registering' && data.exists() && newData.exists() && data.child('isGuest').val() === true && !data.child('createdBy').exists() && newData.child('isGuest').val() === true && newData.hasChild('name') && !newData.hasChild('createdBy'))",
+            "name": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60"
+            },
+            "deck": {
+              "$slot": {
+                ".validate": "$slot.matches(/^[0-2]$/) && newData.hasChild('mode')",
+                "mode":  { ".validate": "newData.isString() && (newData.val() === 'standard' || newData.val() === 'cx' || newData.val() === 'cxExpand')" },
+                "parts": {
+                  "blade":       { ".validate": "newData.isString() && newData.val().length <= 60" },
+                  "lockChip":    { ".validate": "newData.isString() && newData.val().length <= 30" },
+                  "mainBlade":   { ".validate": "newData.isString() && newData.val().length <= 60" },
+                  "metalBlade":  { ".validate": "newData.isString() && newData.val().length <= 60" },
+                  "overBlade":   { ".validate": "newData.isString() && newData.val().length <= 60" },
+                  "assistBlade": { ".validate": "newData.isString() && newData.val().length <= 60" },
+                  "ratchet":     { ".validate": "newData.isString() && newData.val().length <= 30" },
+                  "bit":         { ".validate": "newData.isString() && newData.val().length <= 60" },
+                  "$other":      { ".validate": false }
+                },
+                "$other": { ".validate": false }
+              }
+            },
+            "isGuest": {
+              ".validate": "newData.isBoolean()"
+            },
+            "paid": {
+              ".validate": "newData.isBoolean()"
+            },
+            "createdBy": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 128 && (!data.exists() ? newData.val() === auth.uid : newData.val() === data.val())"
+            },
+            "$other": { ".validate": false }
+          }
+        }
+      }
+    },
+
+    "swissViewCodes": {
+      ".read": "auth != null && (root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')",
+      "$code": {
+        ".read": true,
+        ".write": "auth != null"
+      }
+    },
+
+    "openTournaments": {
+      ".read": true,
+      "$code": {
+        ".write": "auth != null",
+        "editCode":        { ".validate": "newData.isString() && newData.val().length <= 16" },
+        "viewCode":        { ".validate": "newData.isString() && newData.val().length <= 16" },
+        "name":            { ".validate": "newData.isString() && newData.val().length <= 80" },
+        "mode":            { ".validate": "newData.isString() && (newData.val() === 'swiss' || newData.val() === 'swiss-only' || newData.val() === 'single-elim')" },
+        "roundCount":      { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10" },
+        "groupCount":      { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 8" },
+        "registrantCount": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000" },
+        "createdAt":       { ".validate": "newData.isString() && newData.val().length <= 32" },
+        "hostUid":         { ".validate": "newData.isString() && newData.val().length <= 128 && (data.exists() ? newData.val() === data.val() : newData.val() === auth.uid)" },
+        "$other":          { ".validate": false }
+      }
+    },
+
+    "userDecks": {
+      ".read":  "auth != null && (root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')",
+      "$uid": {
+        ".read":  "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "userTournaments": {
+      ".read":  "auth != null && (root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')",
+      "$uid": {
+        ".read":  "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')",
+        ".write": "auth != null && auth.uid === $uid",
+        "$code": {
+          "editCode":  { ".validate": "newData.isString() && newData.val().length <= 16" },
+          "viewCode":  { ".validate": "newData.isString() && newData.val().length <= 16" },
+          "name":      { ".validate": "newData.isString() && newData.val().length <= 80" },
+          "mode":      { ".validate": "newData.isString() && (newData.val() === 'swiss' || newData.val() === 'swiss-only' || newData.val() === 'single-elim')" },
+          "phase":     { ".validate": "newData.isString() && (newData.val() === 'registering' || newData.val() === 'running')" },
+          "createdAt": { ".validate": "newData.isString() && newData.val().length <= 32" },
+          "$other":    { ".validate": false }
+        }
+      }
+    },
+
+    "users": {
+      ".read": "auth != null && (root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')",
+      "$uid": {
+        ".read":  "auth != null && auth.uid === $uid",
+        ".write": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')",
+        "username":    { ".validate": "newData.isString() && newData.val().length <= 30" },
+        "photo":       { ".validate": "newData.isString() && newData.val().length <= 500000" },
+        "banner":      { ".validate": "newData.isString() && newData.val().length <= 1000000" },
+        "smallBanner": { ".validate": "newData.isString() && newData.val().length <= 200000" },
+        "bio":         { ".validate": "newData.isString() && newData.val().length <= 300" },
+        "photoPos":    { ".validate": "newData.isString() && newData.val().length <= 16" },
+        "bannerPos":   { ".validate": "newData.isString() && newData.val().length <= 16" },
+        "tag": {
+          ".validate": "newData.isString() && newData.val().length <= 30 && (root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')"
+        },
+        "tags": {
+          "$tag": {
+            ".validate": "newData.isBoolean() && ( root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer' || (auth.uid === $uid && newData.val() === true && (($tag === 'Dragon Tamer' && root.child('achievements').child($uid).child('dragonTamer').child('awarded').val() === true) || ($tag === 'Dragon Slayer' && root.child('achievements').child($uid).child('dragonSlayer').child('awarded').val() === true) || ($tag === 'Lone Wolf' && root.child('achievements').child($uid).child('lonewolf').child('awarded').val() === true) || ($tag === 'Rush Hour' && root.child('achievements').child($uid).child('rushHour').child('awarded').val() === true) || ($tag === 'King of The Jungle' && root.child('achievements').child($uid).child('kingOfJungle').child('awarded').val() === true) || ($tag === 'Sharknado' && root.child('achievements').child($uid).child('sharknado').child('awarded').val() === true) || ($tag === 'Sorcerer Supreme' && root.child('achievements').child($uid).child('sorcererSupreme').child('awarded').val() === true) || ($tag === 'Paleonerd' && root.child('achievements').child($uid).child('paleonerd').child('awarded').val() === true) || ($tag === 'King of All Types' && root.child('achievements').child($uid).child('kingOfAllTypes').child('awarded').val() === true))) )"
+          }
+        },
+        "$other": { ".validate": false }
+      }
+    },
+
+    "usernames": {
+      ".read": "auth != null && (root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tags').child('Revox Admin').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer' || root.child('users').child(auth.uid).child('tag').val() === 'Revox Admin')",
+      "$key": {
+        ".read": true,
+        ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid)",
+        "uid":      { ".validate": "newData.isString() && newData.val() === auth.uid" },
+        "email":    { ".validate": "newData.isString() && newData.val().length <= 254" },
+        "username": { ".validate": "newData.isString() && newData.val().length <= 30" },
+        "$other":   { ".validate": false }
+      }
+    },
+
+    "ranking": {
+      ".read": true,
+      "$name": { ".write": "auth != null" }
+    },
+
+    "revoxRanking": {
+      ".read": true,
+      "$name": { ".write": "auth != null" }
+    },
+
+    "winRates": {
+      ".read": true,
+      "$key": {
+        ".write": "auth != null",
+        "wins":      { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000" },
+        "losses":    { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000" },
+        "ties":      { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000" },
+        "updatedAt": { ".validate": "newData.isString() && newData.val().length <= 32" },
+        "$other":    { ".validate": false }
+      }
+    },
+
+    "achievements": {
+      ".read": "auth != null && (root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')",
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')",
+        ".write": "auth != null",
+        "$achievementId": {
+          ".validate": "$achievementId === 'dragonTamer' || $achievementId === 'dragonSlayer' || $achievementId === 'lonewolf' || $achievementId === 'rushHour' || $achievementId === 'kingOfJungle' || $achievementId === 'sharknado' || $achievementId === 'sorcererSupreme' || $achievementId === 'paleonerd' || $achievementId === 'kingOfAllTypes'",
+          "count":     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000" },
+          "awarded":   { ".validate": "newData.isBoolean()" },
+          "awardedAt": { ".validate": "newData.isString() && newData.val().length <= 32" },
+          "updatedAt": { ".validate": "newData.isString() && newData.val().length <= 32" },
+          "$other":    { ".validate": false }
+        }
+      }
+    },
+
+    "judges": {
+      ".read": true,
+      "$key": {
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')",
+        ".validate": "newData.isString() && newData.val().length <= 30"
+      }
+    },
+
+    "revoxAccounts": {
+      ".read": true,
+      "$key": {
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')",
+        ".validate": "newData.isString() && newData.val().length <= 30"
+      }
+    },
+
+    "profiles": {
+      ".read": "auth != null && (root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')",
+      "$key": {
+        ".read": true,
+        ".write": "auth != null && (root.child('usernames').child($key).child('uid').val() === auth.uid || root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')",
+        "username":    { ".validate": "newData.isString() && newData.val().length <= 30" },
+        "photo":       { ".validate": "newData.isString() && newData.val().length <= 500000" },
+        "banner":      { ".validate": "newData.isString() && newData.val().length <= 1000000" },
+        "smallBanner": { ".validate": "newData.isString() && newData.val().length <= 200000" },
+        "bio":         { ".validate": "newData.isString() && newData.val().length <= 300" },
+        "photoPos":    { ".validate": "newData.isString() && newData.val().length <= 16" },
+        "bannerPos":   { ".validate": "newData.isString() && newData.val().length <= 16" },
+        "tags":        { "$tag": { ".validate": "newData.isBoolean()" } },
+        "$other":      { ".validate": false }
+      }
+    }
+  }
+}

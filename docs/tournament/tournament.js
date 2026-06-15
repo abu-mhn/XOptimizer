@@ -549,8 +549,36 @@ function listRegistrants(state) {
   return Object.entries(reg).map(([id, r]) => ({
     id,
     name: (r && r.name) || "",
-    deck: normalizeBeyCheckDeck(r && r.deck)
+    deck: normalizeBeyCheckDeck(r && r.deck),
+    paid: !!(r && r.paid)
   }));
+}
+
+// True when the signed-in account may toggle fee-paid status: the host always,
+// or a Keeper who's in the room as a co-host (so the write passes the rules).
+function canMarkFeePaid() {
+  const isKeeperAcct = typeof window.isKeeper === "function" && window.isKeeper();
+  return !!swissCanEdit && (swissIsHost || isKeeperAcct);
+}
+
+// Toggle one registrant's fee-paid flag. Writes registrants/<id>/paid; the
+// room listener re-renders. Optimistically updates locally so the chip flips
+// immediately.
+function setRegistrantPaid(regId, paid) {
+  if (!regId || !canMarkFeePaid()) return;
+  const next = !!paid;
+  if (swissRoomRef) {
+    swissRoomRef.child("registrants/" + regId + "/paid").set(next).catch(e => {
+      console.warn("Couldn't update payment status:", e);
+      alert("Couldn't update the payment status — you may not have permission.");
+    });
+  }
+  const s = loadSwiss();
+  if (s && s.registrants && s.registrants[regId]) {
+    s.registrants[regId].paid = next;
+    persistSwiss(s);
+    renderSwiss();
+  }
 }
 
 function findRegistrantByName(state, name) {
@@ -2302,9 +2330,10 @@ let coHostUsernamePool = [];
 function loadCoHostUsernameList() {
   const db = initFirebase();
   if (!db) return;
-  // Read the public `judges/{usernameKey}: displayName` index — only users
-  // tagged "Judge" appear here, so the sub-host typeahead surfaces only
-  // valid hosting accounts.
+  // Read the public `judges/{usernameKey}: displayName` index — users tagged
+  // "Judge", "Guest Judge" or "Keeper" appear here (all map to this node), so
+  // the sub-host typeahead surfaces every account that can be invited to
+  // co-host (judges, guest judges, and fee keepers).
   db.ref("judges").once("value").then(snap => {
     const val = snap.val() || {};
     coHostUsernamePool = Object.values(val)
@@ -2683,6 +2712,10 @@ function revoxTagBadges(profile) {
       cls += " account-tag-developer";
     } else if (lower === "tester") {
       cls += " account-tag-tester";
+    } else if (lower === "guest judge") {
+      cls += " account-tag-guest-judge";
+    } else if (lower === "keeper") {
+      cls += " account-tag-keeper";
     } else if (lower === "judge") {
       cls += " account-tag-judge";
     } else if (lower === "gold player") {
@@ -3229,6 +3262,15 @@ function renderSwiss() {
   }
 }
 
+// Small muted line under the Registrants heading: the minimum needed to start
+// and (for the host / Keeper) the fee-paid tally. Returns "" when empty.
+function swissRegSubmeta(minTotal, paidCount) {
+  const parts = [];
+  if (minTotal) parts.push(`${minTotal} min`);
+  if (typeof paidCount === "number") parts.push(`${paidCount} paid`);
+  return parts.length ? `<span class="swiss-reg-submeta">${parts.join(" · ")}</span>` : "";
+}
+
 // Registration-phase render. Same toolbar shape as the running view (so the
 // room codes / leave button stay where users expect them), but the body is
 // the registrants list and a host-only Start button. Match-deck pre-fill
@@ -3246,6 +3288,12 @@ function renderSwissRegisteringMarkup(state) {
   );
   const minTotal = swissRegistrationMinimum(state);
   const enoughRegistrants = registrants.length >= minTotal;
+  const capVal = participantCap(state);
+  const isFull = capVal != null && registrants.length >= capVal;
+  // Fee tracking — the host and any Keeper (joined as co-host) can mark who
+  // has paid; everyone in the room sees the "Paid" badge.
+  const canMarkPaid = canMarkFeePaid();
+  const paidCount = registrants.filter(r => r.paid).length;
 
   const modeLabel = tournamentFormatLabel(state.mode, state.pairing, false, state.topN);
   // Hosts / co-hosts can tweak the format while still waiting for players —
@@ -3283,6 +3331,14 @@ function renderSwissRegisteringMarkup(state) {
     } else {
       formatBits.push(`<span class="swiss-reg-format-bit">${depthLabel}</span>`);
     }
+  }
+  // Participant cap — applies to every format. The host can set a maximum or
+  // clear it; others only see the chip once a cap is set.
+  if (canEdit) {
+    const capLabel = capVal != null ? `Cap ${capVal}` : "No cap";
+    formatBits.push(`<button type="button" class="swiss-reg-format-bit swiss-reg-format-editable" id="swiss-edit-cap" title="Tap to set a participant limit">${capLabel}</button>`);
+  } else if (capVal != null) {
+    formatBits.push(`<span class="swiss-reg-format-bit">Cap ${capVal}</span>`);
   }
 
   const nameValue = state.tournamentName || "";
@@ -3349,20 +3405,30 @@ function renderSwissRegisteringMarkup(state) {
         // (run after render) swaps in the real photo from the public
         // `profiles` index when the registrant name maps to an account.
         const avatarEl = `<img class="swiss-reg-avatar" src="${PROFILE_VIEW_PHOTO_PH}" alt="" data-reg-name="${escapeHtml(r.name || "")}">`;
+        // Fee status — a clickable toggle for the host / Keeper, a read-only
+        // badge (only when paid) for everyone else.
+        let paidEl = "";
+        if (canMarkPaid) {
+          paidEl = `<button type="button" class="swiss-reg-paid${r.paid ? " is-paid" : ""}" data-reg-id="${escapeHtml(r.id)}" data-paid="${r.paid ? "1" : "0"}" title="${r.paid ? "Fee paid — tap to mark unpaid" : "Tap to mark fee paid"}">${r.paid ? "Paid ✓" : "Unpaid"}</button>`;
+        } else if (r.paid) {
+          paidEl = `<span class="swiss-reg-paid is-paid" title="Fee paid">Paid ✓</span>`;
+        }
         // data-rank-name drives the banner background (hydrateRegistrantBanners).
         const rowNameAttr = r.name ? ` data-rank-name="${escapeHtml(r.name)}"` : "";
         return `<li class="swiss-reg-row"${rowNameAttr}>
           <span class="swiss-reg-num">${i + 1}</span>
           ${avatarEl}
-          ${nameEl}
-          ${deckBadge}
+          <div class="swiss-reg-body">
+            ${nameEl}
+            <span class="swiss-reg-badges">${deckBadge}${paidEl}</span>
+          </div>
           ${removeBtn}
         </li>`;
       }).join("")
     : `<li class="swiss-reg-empty">No one has registered yet. Players can find this tournament under Open Tournaments and sign up there.</li>`;
 
   const selfRegBtnHtml = canRegisterSelf
-    ? `<button type="button" id="swiss-reg-self" class="swiss-reg-self">+ Register Myself</button>`
+    ? `<button type="button" id="swiss-reg-self" class="swiss-reg-self"${isFull ? ' disabled title="Tournament is full"' : ""}>+ Register Myself</button>`
     : "";
   // "Register Others" adds a deck-optional guest player. Open to hosts /
   // co-hosts and to registered participants — a participant signing up
@@ -3375,7 +3441,7 @@ function renderSwissRegisteringMarkup(state) {
   // one line.
   const canRegisterOthers = canEdit || swissSessionRole === "participant";
   const bulkGuestsBtnHtml = canRegisterOthers
-    ? `<button type="button" id="swiss-reg-bulk-guests" class="swiss-reg-self">+ Bulk Guests</button>`
+    ? `<button type="button" id="swiss-reg-bulk-guests" class="swiss-reg-self"${isFull ? ' disabled title="Tournament is full"' : ""}>+ Bulk Guests</button>`
     : "";
   // Banned Parts management — host-only. Co-hosts can't edit because the
   // bannedParts field isn't listed in the per-child rule set, so writes
@@ -3444,7 +3510,8 @@ function renderSwissRegisteringMarkup(state) {
     <section class="swiss-registering">
       <div class="swiss-reg-format">${formatBits.join("")}</div>
       <div class="swiss-reg-heading-row">
-        <h3 class="swiss-reg-heading">Registrants <span class="swiss-reg-count">(${registrants.length}${minTotal ? ` / ${minTotal} min` : ""})</span></h3>
+        <h3 class="swiss-reg-heading">Registrants <span class="swiss-reg-count">${capVal != null ? `${registrants.length} / ${capVal}` : registrants.length}</span>${isFull ? `<span class="swiss-reg-full-pill">Full</span>` : ""}</h3>
+        ${swissRegSubmeta(minTotal, canMarkPaid ? paidCount : null)}
       </div>
       ${bannedPartsPanelHtml}
       ${(selfRegBtnHtml || bulkGuestsBtnHtml || banPartsBtnHtml || testRegBtnHtml || copyNamesBtnHtml)
@@ -3486,6 +3553,14 @@ function bindSwissRegisteringHandlers(view, state) {
       updateRegisteringSetting({ placementDepth: clampPlacementDepth(depth) });
     }, state.placementDepth);
   });
+  view.querySelector("#swiss-edit-cap")?.addEventListener("click", () => {
+    // Floor: can't cap below the minimum to run, nor below who's registered.
+    const floor = Math.max(swissRegistrationMinimum(state), listRegistrants(state).length);
+    showParticipantCapPopup((n) => {
+      if (n == null) return; // cancelled
+      updateRegisteringSetting({ maxParticipants: n > 0 ? n : null });
+    }, participantCap(state), floor);
+  });
   view.querySelector("#swiss-reg-start")?.addEventListener("click", startRegisteringTournament);
   view.querySelector("#swiss-reg-self")?.addEventListener("click", showSelfRegisterPopup);
   view.querySelector("#swiss-reg-bulk-guests")?.addEventListener("click", showBulkGuestsPopup);
@@ -3504,6 +3579,12 @@ function bindSwissRegisteringHandlers(view, state) {
     copyRegistrantNames(state, e.currentTarget);
   });
   bindSwissShareButton(view);
+  // Fee-paid toggle (host / Keeper only — read-only badges aren't buttons).
+  view.querySelectorAll("button.swiss-reg-paid[data-reg-id]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      setRegistrantPaid(btn.dataset.regId, btn.dataset.paid !== "1");
+    });
+  });
   view.querySelectorAll(".swiss-reg-remove").forEach(btn => {
     btn.addEventListener("click", () => {
       const id = btn.dataset.regId;
@@ -4277,6 +4358,18 @@ function bulkAddGuests(editCode, names, setStatus, onSuccess, onFail) {
       throw new Error("All those names are already registered.");
     }
 
+    // Participant cap — trim the batch to whatever room is left. If nothing
+    // fits, reject; otherwise add what we can and report the overflow.
+    const remaining = capSlotsRemaining(remote);
+    let capOverflow = [];
+    if (remaining <= 0) {
+      throw new Error("This tournament is full — no more guests can be added.");
+    }
+    if (toAdd.length > remaining) {
+      capOverflow = toAdd.slice(remaining);
+      toAdd.length = remaining;
+    }
+
     // Bulk write: one .update() so the listener fires once, every entry
     // shows up together. Each entry mirrors Register Others — isGuest:true,
     // empty deck (guests may skip the deck), createdBy = writer's uid when
@@ -4307,7 +4400,8 @@ function bulkAddGuests(editCode, names, setStatus, onSuccess, onFail) {
     }).then(() => {
       const addedTxt = `${toAdd.length} guest${toAdd.length === 1 ? "" : "s"}`;
       const dupeTxt = dupes.length ? ` (skipped ${dupes.length} duplicate${dupes.length === 1 ? "" : "s"})` : "";
-      setStatus(`Added ${addedTxt} ✓${dupeTxt}`, "ok");
+      const fullTxt = capOverflow.length ? ` — ${capOverflow.length} didn't fit (tournament full)` : "";
+      setStatus(`Added ${addedTxt} ✓${dupeTxt}${fullTxt}`, "ok");
       setTimeout(() => onSuccess?.(), 900);
     });
   }).catch(e => {
@@ -4630,6 +4724,26 @@ function swissRegistrationMinimum(state) {
     : (typeof state.topN === "number" && state.topN >= 2 ? state.topN : SWISS_BRACKET_SIZE);
   const minPerGroupForBracket = bracketN > 0 ? Math.ceil(bracketN / gc) : SWISS_MIN_PER_GROUP;
   return gc * Math.max(SWISS_MIN_PER_GROUP, minPerGroupForBracket);
+}
+
+// ---- Participant cap (host-set maximum) ----
+// A tournament may carry an optional `maxParticipants` ceiling. null / absent
+// or < 2 means "no cap". Works on either the local state or a fresh Firebase
+// snapshot (both carry `maxParticipants` + `registrants`).
+function participantCap(stateOrRemote) {
+  const v = stateOrRemote && stateOrRemote.maxParticipants;
+  return (typeof v === "number" && v >= 2) ? Math.floor(v) : null;
+}
+function registrantTotal(stateOrRemote) {
+  return Object.keys((stateOrRemote && stateOrRemote.registrants) || {}).length;
+}
+// Slots left before the cap (Infinity when uncapped). Pass a fresh Firebase
+// snapshot when enforcing a write so the count is authoritative against
+// concurrent registrations.
+function capSlotsRemaining(stateOrRemote) {
+  const cap = participantCap(stateOrRemote);
+  if (cap == null) return Infinity;
+  return Math.max(0, cap - registrantTotal(stateOrRemote));
 }
 
 function removeRegistrant(id) {
@@ -6960,6 +7074,72 @@ function showSingleElimDepthPopup(onPick, defaultDepth) {
   setTimeout(() => input?.focus(), 0);
 }
 
+// Set or clear the participant cap. `minAllowed` is the floor — at least the
+// registration minimum and never below who's already registered. onPick gets
+// a positive number to set the cap, 0 to remove it, or null on cancel.
+function showParticipantCapPopup(onPick, currentCap, minAllowed) {
+  document.getElementById("participant-cap-popup")?.remove();
+  const floor = Math.max(2, Math.floor(minAllowed || 2));
+  const def = (typeof currentCap === "number" && currentCap >= floor) ? currentCap : floor;
+  const overlay = document.createElement("div");
+  overlay.id = "participant-cap-popup";
+  overlay.className = "popup-overlay";
+  overlay.innerHTML = `
+    <div class="popup-card">
+      <h2 class="popup-title">Participant Limit</h2>
+      <p class="popup-text">Cap how many players can register. Turn it off for unlimited.</p>
+      <label class="popup-text" style="display:block; margin-top:6px;">Maximum participants (${floor} or more):</label>
+      <div class="participant-cap-stepper">
+        <button type="button" id="participant-cap-minus" class="participant-cap-step" aria-label="Decrease limit">&minus;</button>
+        <input type="number" id="participant-cap-input" class="account-bio" min="${floor}" step="1" value="${def}">
+        <button type="button" id="participant-cap-plus" class="participant-cap-step" aria-label="Increase limit">+</button>
+      </div>
+      <p class="popup-text" style="opacity:.7; font-size:.85em; margin-top:4px;">Can't be below ${floor} — the number needed to run, or already registered.</p>
+      <div class="popup-actions">
+        <button type="button" id="participant-cap-confirm" class="btn">Set limit</button>
+        <button type="button" id="participant-cap-none" class="btn popup-cancel">No limit</button>
+      </div>
+      <div class="popup-actions">
+        <button type="button" id="participant-cap-cancel" class="btn popup-cancel">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const input = overlay.querySelector("#participant-cap-input");
+  // −/+ steppers nudge the value, clamped to the floor (no upper bound).
+  const nudge = (delta) => {
+    const cur = parseInt(input.value, 10);
+    const base = Number.isFinite(cur) ? cur : floor;
+    input.value = String(Math.max(floor, base + delta));
+    input.focus();
+  };
+  overlay.querySelector("#participant-cap-minus").onclick = () => nudge(-1);
+  overlay.querySelector("#participant-cap-plus").onclick = () => nudge(1);
+  const finish = (n) => {
+    overlay.remove();
+    document.removeEventListener("keydown", onKey);
+    onPick(n);
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") { e.preventDefault(); finish(null); }
+    else if (e.key === "Enter" && document.activeElement === input) {
+      e.preventDefault();
+      const v = parseInt(input.value, 10);
+      if (Number.isFinite(v) && v >= floor) finish(v);
+    }
+  };
+  document.addEventListener("keydown", onKey);
+
+  overlay.querySelector("#participant-cap-confirm").onclick = () => {
+    const v = parseInt(input.value, 10);
+    if (!Number.isFinite(v) || v < floor) { alert(`Pick a number of ${floor} or more.`); return; }
+    finish(v);
+  };
+  overlay.querySelector("#participant-cap-none").onclick = () => finish(0);
+  overlay.querySelector("#participant-cap-cancel").onclick = () => finish(null);
+  setTimeout(() => input?.focus(), 0);
+}
+
 function showTopEightPopup(onPick, isRoundRobin) {
   const popup = document.getElementById("tournament-top-eight-popup");
   if (!popup) { onPick("swiss"); return; }
@@ -7001,6 +7181,16 @@ function showTournamentModePopup(onPick) {
     singleBtn.onclick = null;
     cancelBtn.onclick = null;
   };
+  // Last step of every chain: ask for an optional participant limit, then
+  // hand the full config to onPick (maxParticipants appended; null = no cap).
+  // Cancelling here aborts creation, like cancelling any earlier step.
+  const finishWithCap = (mode, name, rc, ranked, gc, pairing, topN, depth) => {
+    const floor = swissRegistrationMinimum({ mode, groupCount: gc, topN, pairing }) || 2;
+    showParticipantCapPopup((cap) => {
+      if (cap == null) return; // cancelled at the limit step
+      onPick(mode, name, rc, ranked, gc, pairing, topN, depth, cap > 0 ? cap : null);
+    }, null, floor);
+  };
   // Every tournament is ranked now — no password gate. Pass ranked=true
   // through unchanged for compatibility with existing call sites.
   swissBtn.onclick = () => {
@@ -7011,7 +7201,7 @@ function showTournamentModePopup(onPick) {
       if (!mode) return; // user cancelled at the knockout step
       const proceed = (topN) => {
         showSwissRoundsPopup((rc) => {
-          showSwissGroupsPopup((gc) => onPick(mode, name, rc, true, gc, undefined, topN), false);
+          showSwissGroupsPopup((gc) => finishWithCap(mode, name, rc, true, gc, undefined, topN), false);
         });
       };
       if (mode === "swiss-only") { proceed(null); return; }
@@ -7029,7 +7219,7 @@ function showTournamentModePopup(onPick) {
     showTopEightPopup((mode) => {
       if (!mode) return;
       const proceed = (topN) => {
-        showSwissGroupsPopup((gc) => onPick(mode, name, undefined, true, gc, "round-robin", topN), true);
+        showSwissGroupsPopup((gc) => finishWithCap(mode, name, undefined, true, gc, "round-robin", topN), true);
       };
       if (mode === "swiss-only") { proceed(null); return; }
       showTopNPickerPopup((n) => {
@@ -7043,7 +7233,7 @@ function showTournamentModePopup(onPick) {
     teardown();
     showSingleElimDepthPopup((depth) => {
       if (depth == null) return; // cancelled at the depth step
-      onPick("single-elim", name, undefined, true, undefined, undefined, undefined, depth);
+      finishWithCap("single-elim", name, undefined, true, undefined, undefined, undefined, depth);
     });
   };
   cancelBtn.onclick = () => teardown();
@@ -7227,12 +7417,12 @@ document.getElementById("swiss-generate")?.addEventListener("click", async () =>
   } catch (e) {
     return; // user cancelled the sign-in modal
   }
-  showTournamentModePopup((mode, tournamentName, roundCount, ranked, groupCount, pairing, topN, placementDepth) => {
+  showTournamentModePopup((mode, tournamentName, roundCount, ranked, groupCount, pairing, topN, placementDepth, maxParticipants) => {
     // Open Registration only — empty room in registering phase. Players
     // self-register with their decks via the Rooms tab, then the host
     // clicks Start to generate groups / bracket from the registrants.
     const next = createRegisteringTournamentState({
-      mode, tournamentName, roundCount, ranked, groupCount, pairing, topN, placementDepth,
+      mode, tournamentName, roundCount, ranked, groupCount, pairing, topN, placementDepth, maxParticipants,
       hostUid: user ? user.uid : null
     });
     startTournamentFromState(next);
@@ -7245,7 +7435,7 @@ document.getElementById("swiss-generate")?.addEventListener("click", async () =>
 // Firebase Auth uid of the user creating the tournament — Reset / Start
 // flows check it to ensure only the original host (signed into the same
 // account on any device) can wipe or kick off the room.
-function createRegisteringTournamentState({ mode, tournamentName, roundCount, ranked, groupCount, pairing, topN, placementDepth, hostUid }) {
+function createRegisteringTournamentState({ mode, tournamentName, roundCount, ranked, groupCount, pairing, topN, placementDepth, maxParticipants, hostUid }) {
   const safeMode = mode === "single-elim" ? "single-elim"
     : mode === "swiss-only" ? "swiss-only"
     : "swiss";
@@ -7265,6 +7455,9 @@ function createRegisteringTournamentState({ mode, tournamentName, roundCount, ra
     // device. Kept in step by the host's listener (handles renames).
     hostName: (window.getCurrentUsername && window.getCurrentUsername()) || null
   };
+  // Optional participant cap chosen at create time (null / absent = no cap).
+  const capN = Number(maxParticipants);
+  if (Number.isFinite(capN) && capN >= 2) state.maxParticipants = Math.floor(capN);
   if (safeMode !== "single-elim") {
     state.groupCount = SWISS_GROUP_OPTIONS.includes(Number(groupCount))
       ? Number(groupCount) : SWISS_GROUP_COUNT_DEFAULT;
@@ -7843,12 +8036,17 @@ function refreshOpenTournamentRooms() {
         const nameP = db.ref("swissRooms/" + r.editCode + "/tournamentName").once("value")
           .then(s => s.val())
           .catch(() => undefined);
-        return Promise.all([phaseP, regP, pairP, subP, nameP]).then(([phase, count, pairing, subHosts, liveName]) => ({
-          room: r, phase, count, pairing, subHosts, liveName
+        // Participant cap lives on the room (not the lobby summary, which has
+        // a field whitelist) — read it live so the lobby can show the limit.
+        const capP = db.ref("swissRooms/" + r.editCode + "/maxParticipants").once("value")
+          .then(s => s.val())
+          .catch(() => null);
+        return Promise.all([phaseP, regP, pairP, subP, nameP, capP]).then(([phase, count, pairing, subHosts, liveName, maxParticipants]) => ({
+          room: r, phase, count, pairing, subHosts, liveName, maxParticipants
         }));
       })).then(results => {
         const live = [];
-        results.forEach(({ room, phase, count, pairing, subHosts, liveName }) => {
+        results.forEach(({ room, phase, count, pairing, subHosts, liveName, maxParticipants }) => {
           // Registering AND running rooms stay listed — running ones just
           // can't take new registrations. Only a vanished room (phase is
           // null because the host reset/deleted it) gets pruned.
@@ -7862,6 +8060,7 @@ function refreshOpenTournamentRooms() {
             room.phase = phase;
             room.pairing = pairing || null;
             room.subHosts = subHosts || {};
+            room.maxParticipants = (typeof maxParticipants === "number" && maxParticipants >= 2) ? maxParticipants : null;
             if (liveName !== undefined) room.name = liveName || "";
             live.push(room);
           } else {
@@ -7897,11 +8096,19 @@ function renderLobbyRooms(list, rooms) {
     const name = (r.name || "").trim() || "(unnamed tournament)";
     const modeLabel = tournamentFormatLabel(r.mode, r.pairing, true, r.topN);
     const isRunning = r.phase === "running";
-    const meta = [`${r.registrantCount || 0} ${isRunning ? "players" : "registered"}`];
+    const count = r.registrantCount || 0;
+    const cap = (typeof r.maxParticipants === "number" && r.maxParticipants >= 2) ? r.maxParticipants : null;
+    const countLabel = isRunning ? "players" : "registered";
+    // Show the cap so players see the limit before joining (e.g. "5 / 16").
+    const meta = [cap != null ? `${count} / ${cap} ${countLabel}` : `${count} ${countLabel}`];
     if (r.mode !== "single-elim") {
       if (r.groupCount) meta.push(`${r.groupCount} groups`);
       if (r.roundCount) meta.push(`${r.roundCount} rounds`);
     }
+    const isFull = cap != null && count >= cap && !isRunning;
+    const fullBadge = isFull
+      ? `<span class="swiss-room-full-badge" title="Registration full">Full</span>`
+      : "";
     const hostingBadge = (myUid && r.hostUid && r.hostUid === myUid)
       ? `<span class="swiss-room-hosting-badge">Hosting</span>`
       : "";
@@ -7923,6 +8130,7 @@ function renderLobbyRooms(list, rooms) {
           ${hostingBadge}
           <span class="swiss-room-card-meta-text">${meta.map(escapeHtml).join(" · ")}</span>
           ${runningBadge}
+          ${fullBadge}
           ${cohostBadge}
         </div>
       </button>
@@ -8813,10 +9021,14 @@ function addTestRegistrants(count) {
     // anytime, the originating account additionally retains "creator"
     // rights during registering).
     const writerUid = (window.getCurrentUser && window.getCurrentUser()?.uid) || null;
+    // Don't blow past the participant cap — trim the batch to what fits.
+    const remaining = capSlotsRemaining(remote);
+    if (remaining <= 0) { alert("This tournament is full."); return; }
+    const target = Math.min(count, remaining);
     const updates = {};
     let added = 0;
     let nextNum = 1;
-    while (added < count) {
+    while (added < target) {
       const name = `Tester ${nextNum++}`;
       if (usedNames.has(name.toLowerCase())) continue;
       usedNames.add(name.toLowerCase());
@@ -8864,6 +9076,13 @@ function submitRegistration(room, name, deck, setStatus, onSuccess, options = {}
       });
       if (taken) throw new Error("That name is already registered. Pick a different one.");
 
+      // Participant cap — block NEW registrants once the room is full. Edits
+      // (same regId) don't count against the cap. Checked against the fresh
+      // snapshot so concurrent sign-ups can't slip past the limit.
+      if (!isEdit && capSlotsRemaining(remote) <= 0) {
+        throw new Error("This tournament is full — registration is closed.");
+      }
+
       const id = editRegistrantId || generateRegistrantId();
       const payload = { name: name.trim(), deck };
       // Preserve the existing guest flag when editing in place — the
@@ -8872,6 +9091,9 @@ function submitRegistration(room, name, deck, setStatus, onSuccess, options = {}
       // someone who was registered as a guest or via Register Others.
       const prevReg = (remote.registrants && remote.registrants[id]) || null;
       if (asGuest || (isEdit && prevReg && prevReg.isGuest)) payload.isGuest = true;
+      // Editing a registrant overwrites the whole entry — keep their fee-paid
+      // flag so a deck/name edit doesn't silently reset "Paid" to unpaid.
+      if (isEdit && prevReg && prevReg.paid) payload.paid = true;
       // Stamp the writer's UID onto the entry so the registrants/$regId
       // rule can scope edits during the registering phase to the
       // original creator (otherwise any authed user could rewrite anyone

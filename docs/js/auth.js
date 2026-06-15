@@ -306,15 +306,23 @@
   // Map of "user tag" → "public Firebase index node" that other tabs
   // read without needing access to the whole users tree:
   //   Judge          → judges/{usernameKey}: username
+  //   Guest Judge    → judges/{usernameKey}: username
   //   Revox Member   → revoxAccounts/{usernameKey}: username
   //   Revox Admin    → revoxAccounts/{usernameKey}: username
   //
-  // Two tags can target the same node (Revox Member / Admin both feed
-  // the Revox tab's Add-Result dropdown), so the helpers below collapse
-  // duplicates and only clear an index entry when the user no longer
-  // carries ANY tag pointing at it.
+  // Two tags can target the same node (Revox Member / Admin both feed the
+  // Revox tab's Add-Result dropdown; Judge / Guest Judge both feed the
+  // sub-host typeahead), so the helpers below collapse duplicates and only
+  // clear an index entry when the user no longer carries ANY tag pointing
+  // at it. A Guest Judge appears in the typeahead so a host can invite them
+  // as a sub-host, but — unlike a Judge — they can't create a tournament
+  // (that gate is the "Judge" tag via isJudge(), checked below).
+  // "Keeper" also feeds the judges/sub-host index so a host can invite a fee
+  // keeper as a co-host (which is the access they need to mark payments).
   const PUBLIC_TAG_INDEXES = {
     "Judge":        "judges",
+    "Guest Judge":  "judges",
+    "Keeper":       "judges",
     "Revox Member": "revoxAccounts",
     "Revox Admin":  "revoxAccounts"
   };
@@ -566,6 +574,15 @@
   // Exposed so the Tournament tab can gate "Create Tournament" — hosting
   // requires the "Judge" tag (set by a developer).
   window.isJudge = function isJudge() { return hasTag("Judge"); };
+
+  // A "Guest Judge" can be invited to co-host a tournament (they show up in
+  // the sub-host typeahead via the shared judges index) but can NOT create
+  // one — isJudge() above stays false for them.
+  window.isGuestJudge = function isGuestJudge() { return hasTag("Guest Judge"); };
+
+  // A "Keeper" handles participation fees — once invited to a tournament as a
+  // co-host, they (and the host) can mark which registrants have paid.
+  window.isKeeper = function isKeeper() { return hasTag("Keeper"); };
 
   // The signed-in account's username ("" when signed out / no profile yet).
   // Used by the tournament sub-host list to match designated co-hosts.

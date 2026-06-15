@@ -81,7 +81,9 @@ Tournament
 - Tutorial button next to QR / Refresh opens a two-tab walkthrough — Sign In and Guest. Each tab shows a single demo gif (assets/tutorial/signin/signin.gif and guest/guest.gif) with a one-line caption. No carousel, no swipe, no auto-advance — the gifs walk through the flow on their own
 - Header buttons (Tutorial / QR / Refresh / Create Tournament) sit on a single horizontal row with an invisible scroller
 - Only accounts tagged "Judge" can Create Tournament — the button hides entirely for signed-out or non-Judge accounts
-- Sub-hosts typeahead lists only accounts tagged "Judge" (via a public judges index synced from the Developer page)
+- Sub-hosts typeahead lists accounts tagged "Judge", "Guest Judge" or "Keeper" (via a public judges index synced from the Developer page). A "Guest Judge" can be invited to co-host but cannot create a tournament of their own
+- Fee tracking: a "Keeper" (handles participation fees), once invited to a tournament as a co-host, can tap each registrant to mark them Paid / Unpaid — the host can too. Everyone in the room sees a green "Paid ✓" badge, and the registrant count shows a "· N paid" tally for the host / Keeper. Stored per registrant (registrants/$id/paid)
+- Participant limit: set a maximum number of registrants when creating a tournament (a "Set limit / No limit" step after picking the format, with − / + steppers), or change it anytime from the registration screen via the "Cap N" chip. Registration closes automatically when the cap is reached — the count shows "N / cap", a red "Full" badge appears, and the self-register / bulk-guest buttons disable. The Open Tournaments lobby shows each room's limit ("5 / 16 registered") and a "Full" badge so players see it before joining
 - Lobby cards flag a tournament you've been invited to co-host with a small "!" alert badge
 - Edit the format while waiting for players — tap the format chip to switch between Swiss, Round Robin and Single Elimination, or the groups / rounds chips to adjust them; registrants are kept, no reset needed. Switching INTO a knockout format (Swiss + Top N or Round Robin + Top N) re-opens the Top-N picker so the host picks the bracket size right there — same flow as create time
 - Test button: bulk-adds synthetic participants for QA — visible only to accounts tagged "Tester"
@@ -422,6 +424,10 @@ if ("serviceWorker" in navigator) {
           variant = " account-tag-developer";
         } else if (lower === "tester") {
           variant = " account-tag-tester";
+        } else if (lower === "guest judge") {
+          variant = " account-tag-guest-judge";
+        } else if (lower === "keeper") {
+          variant = " account-tag-keeper";
         } else if (lower === "judge") {
           variant = " account-tag-judge";
         } else if (lower === "gold player") {

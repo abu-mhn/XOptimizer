@@ -1213,6 +1213,18 @@ body.bronze-mode .account-edit-hint { color: #a8896b; }
     color: #000000;
     border-color: #000000;
 }
+/* Guest Judge — a limited Judge (can co-host but not create). Same monochrome
+   family with a dashed border to read as the "guest" variant. */
+.account-tag-guest-judge {
+    background: #ffffff;
+    color: #333333;
+    border: 1px dashed #000000;
+}
+/* Keeper — handles participation fees. Green badge (money / paid). */
+.account-tag-keeper {
+    background: linear-gradient(135deg, #2ea043, #176c2c);
+    border-color: #3fb950;
+}
 /* Medal tags — auto-assigned to the ranking's top 3 (Gold / Silver /
    Bronze Player). Dark text on a metallic fill so they read as podium
    badges, distinct from the admin-assigned tag families above. */
@@ -8368,20 +8380,69 @@ body.forest-mode   .swiss-banned-chip { color: #b42d2d; }
 }
 .swiss-reg-heading-row {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
 }
 .swiss-reg-heading {
     margin: 0;
     font-size: 1rem;
     color: #f0f6fc;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
 }
 .swiss-reg-count {
     color: #8b949e;
     font-weight: 400;
     font-size: 0.85em;
+}
+/* Secondary line: "8 min · 0 paid". */
+.swiss-reg-submeta {
+    font-size: 0.78rem;
+    color: #8b949e;
+}
+/* −/+ stepper for the participant-limit popup. */
+.participant-cap-stepper {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+}
+.participant-cap-stepper #participant-cap-input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+    text-align: center;
+}
+.participant-cap-step {
+    flex: 0 0 auto;
+    width: 42px;
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1;
+    color: #c9d1d9;
+    background: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    cursor: pointer;
+}
+.participant-cap-step:hover {
+    background: #2d333b;
+    border-color: #484f58;
+}
+
+/* "Full" badge shown beside the registrant count when the cap is reached. */
+.swiss-reg-full-pill {
+    display: inline-block;
+    padding: 1px 8px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #fff;
+    background: #da3633;
+    border-radius: 999px;
 }
 .swiss-reg-list {
     list-style: none;
@@ -8422,6 +8483,35 @@ body.forest-mode   .swiss-banned-chip { color: #b42d2d; }
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+/* Name + status badges form the row body; the × stays the row action on the
+   far right. On desktop the body is a single inline line (name grows, badges
+   sit to its right). */
+.swiss-reg-body {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.swiss-reg-badges {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+/* On narrow phones, stack the body: name on top, its Deck / Paid badges on a
+   neat second line underneath — the × stays centered on the right. */
+@media (max-width: 480px) {
+    .swiss-reg-body {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+    }
+    .swiss-reg-body .swiss-reg-name,
+    .swiss-reg-body button.swiss-reg-name-edit {
+        max-width: 100%;
+    }
 }
 button.swiss-reg-name-edit {
     background: transparent;
@@ -8474,6 +8564,30 @@ button.swiss-reg-name-edit:focus-visible {
     border-color: rgba(248, 81, 73, 0.9);
     font-weight: 600;
 }
+/* Fee-paid status. A button for the host / Keeper (toggle), or a plain badge
+   for everyone else. "Unpaid" reads amber; "Paid ✓" reads green. */
+.swiss-reg-paid {
+    flex: 0 0 auto;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 999px;
+    white-space: nowrap;
+    background: rgba(210, 153, 34, 0.16);
+    color: #d29922;
+    border: 1px solid rgba(210, 153, 34, 0.4);
+}
+button.swiss-reg-paid {
+    cursor: pointer;
+}
+.swiss-reg-paid.is-paid {
+    background: rgba(63, 185, 80, 0.18);
+    color: #3fb950;
+    border-color: rgba(63, 185, 80, 0.4);
+}
+button.swiss-reg-paid:hover {
+    filter: brightness(1.15);
+}
 .swiss-reg-remove {
     background: transparent;
     border: none;
@@ -8522,6 +8636,11 @@ button.swiss-reg-name-edit:focus-visible {
     background: rgba(110, 118, 129, 0.18);
     border-color: rgba(110, 118, 129, 0.65);
     outline: none;
+}
+.swiss-reg-self:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
 }
 .swiss-reg-start {
     min-width: 180px;
@@ -8699,7 +8818,8 @@ button.swiss-reg-name-edit:focus-visible {
    card's meta row, which spaces with `gap`. */
 .swiss-room-card-meta > .swiss-room-hosting-badge,
 .swiss-room-card-meta > .swiss-room-cohost-badge,
-.swiss-room-card-meta > .swiss-room-running-badge {
+.swiss-room-card-meta > .swiss-room-running-badge,
+.swiss-room-card-meta > .swiss-room-full-badge {
     margin-left: 0;
 }
 
@@ -13311,6 +13431,20 @@ body.mono-mode     .swiss-reg-format-editable { border-color: #4a4a4a; }
     background: rgba(210, 153, 34, 0.18);
     color: #d29922;
     border: 1px solid rgba(210, 153, 34, 0.4);
+}
+
+/* "Full" badge on a lobby card — registration cap reached (red). */
+.swiss-room-full-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    vertical-align: middle;
+    background: rgba(218, 54, 51, 0.18);
+    color: #f85149;
+    border: 1px solid rgba(218, 54, 51, 0.45);
 }
 
 /* ===== GOLD THEME (medal reward) ===== */
