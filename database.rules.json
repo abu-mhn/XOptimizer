@@ -313,6 +313,40 @@
       }
     },
 
+    "battleRoyale": {
+      "players": {
+        ".read": true,
+        "$uid": {
+          ".write": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('tags').child('Judge').val() === true)",
+          "username":  { ".validate": "newData.isString() && newData.val().length <= 30" },
+          "isJudge":   { ".validate": "newData.isBoolean() && (newData.val() === false || root.child('users').child($uid).child('tags').child('Judge').val() === true)" },
+          "updatedAt": { ".validate": "newData.isString() && newData.val().length <= 32" },
+          "points": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000 && (root.child('users').child(auth.uid).child('tags').child('Judge').val() === true || (auth.uid === $uid && (!data.exists() ? newData.val() === 0 : newData.val() === data.val())))"
+          },
+          "$other": { ".validate": false }
+        }
+      },
+      "challenges": {
+        ".read": true,
+        "$cid": {
+          ".write": "auth != null && (!data.exists() ? newData.child('challengerUid').val() === auth.uid : (data.child('challengerUid').val() === auth.uid || data.child('opponentUid').val() === auth.uid || data.child('judgeUid').val() === auth.uid))",
+          "challengerUid":  { ".validate": "newData.isString() && newData.val().length <= 128" },
+          "challengerName": { ".validate": "newData.isString() && newData.val().length <= 30" },
+          "opponentUid":    { ".validate": "newData.isString() && newData.val().length <= 128" },
+          "opponentName":   { ".validate": "newData.isString() && newData.val().length <= 30" },
+          "judgeUid":       { ".validate": "newData.isString() && newData.val().length <= 128" },
+          "judgeName":      { ".validate": "newData.isString() && newData.val().length <= 30" },
+          "wager":          { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 1000000" },
+          "status":         { ".validate": "newData.isString() && (newData.val() === 'pending' || newData.val() === 'accepted' || newData.val() === 'declined' || newData.val() === 'resolved' || newData.val() === 'cancelled')" },
+          "winnerUid":      { ".validate": "newData.isString() && newData.val().length <= 128" },
+          "createdAt":      { ".validate": "newData.isString() && newData.val().length <= 32" },
+          "resolvedAt":     { ".validate": "newData.isString() && newData.val().length <= 32" },
+          "$other":         { ".validate": false }
+        }
+      }
+    },
+
     "profiles": {
       ".read": "auth != null && (root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')",
       "$key": {

@@ -8175,6 +8175,44 @@ body.light-mode .swiss-group-progress {
     border: 1px solid rgba(245, 158, 11, 0.35);
     margin-left: 8px;
 }
+/* Closed (private) tournament marker. */
+.swiss-reg-pill-closed {
+    background: rgba(110, 118, 129, 0.2);
+    color: #c9d1d9;
+    border-color: rgba(110, 118, 129, 0.5);
+}
+/* Tappable join-code chip (host copies it to share a Closed tournament). */
+.swiss-reg-joincode {
+    margin-left: 8px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    color: #58a6ff;
+    background: rgba(56, 139, 253, 0.12);
+    border: 1px solid rgba(56, 139, 253, 0.4);
+    cursor: pointer;
+    letter-spacing: 0.02em;
+}
+.swiss-reg-joincode strong {
+    letter-spacing: 0.08em;
+}
+.swiss-reg-joincode:hover {
+    background: rgba(56, 139, 253, 0.22);
+}
+
+/* "Closed" badge on a private lobby card (a code is required to join). */
+.swiss-room-closed-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    vertical-align: middle;
+    background: rgba(110, 118, 129, 0.22);
+    color: #c9d1d9;
+    border: 1px solid rgba(110, 118, 129, 0.5);
+}
 .swiss-reg-format {
     display: flex;
     flex-wrap: wrap;
@@ -8819,7 +8857,8 @@ button.swiss-reg-paid:hover {
 .swiss-room-card-meta > .swiss-room-hosting-badge,
 .swiss-room-card-meta > .swiss-room-cohost-badge,
 .swiss-room-card-meta > .swiss-room-running-badge,
-.swiss-room-card-meta > .swiss-room-full-badge {
+.swiss-room-card-meta > .swiss-room-full-badge,
+.swiss-room-card-meta > .swiss-room-closed-badge {
     margin-left: 0;
 }
 
@@ -15429,4 +15468,98 @@ body.sorcerersupreme-mode .btn-lucky img,
 body.paleonerd-mode      .btn-lucky img,
 body.kingofalltypes-mode .btn-lucky img {
     filter: brightness(0) invert(1);
+}
+
+/* =======================
+   BATTLE ROYALE
+======================= */
+.br-intro {
+    color: #8b949e;
+    font-size: 0.9rem;
+    margin: 0 0 12px;
+    line-height: 1.45;
+}
+.br-points {
+    font-size: 1.05rem;
+    margin-bottom: 14px;
+    color: #e6edf3;
+}
+.br-points strong { color: #58a6ff; }
+.br-judge-tag {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: #ffffff;
+    color: #000000;
+    border: 1px solid #000000;
+    vertical-align: middle;
+}
+.br-section { margin-bottom: 18px; }
+.br-h {
+    font-size: 0.95rem;
+    margin: 0 0 8px;
+    color: #f0f6fc;
+}
+.br-h .br-sub { color: #8b949e; font-weight: 400; font-size: 0.85em; }
+.br-empty {
+    color: #8b949e;
+    font-style: italic;
+    font-size: 0.9rem;
+    margin: 4px 0;
+}
+.br-card {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.br-card-main { min-width: 0; font-size: 0.9rem; color: #e6edf3; }
+.br-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.br-card-label { color: #8b949e; font-size: 0.82rem; }
+.br-players { list-style: none; margin: 0; padding: 0; }
+.br-player {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: rgba(110, 118, 129, 0.08);
+    border-radius: 8px;
+    margin-bottom: 6px;
+}
+.br-player-name { flex: 1 1 auto; min-width: 0; color: #f0f6fc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.br-player-points { flex: 0 0 auto; color: #8b949e; font-size: 0.85rem; }
+.br-btn {
+    flex: 0 0 auto;
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.br-btn-challenge { background: #1f6feb; color: #fff; }
+.br-btn-challenge:hover { background: #388bfd; }
+.br-btn-accept, .br-btn-win { background: #238636; color: #fff; }
+.br-btn-accept:hover, .br-btn-win:hover { background: #2ea043; }
+.br-btn-decline { background: transparent; color: #f85149; border-color: rgba(248, 81, 73, 0.5); }
+.br-btn-decline:hover { background: rgba(248, 81, 73, 0.12); }
+
+body.light-mode .br-card,
+body.tropical-mode .br-card,
+body.love-mode .br-card,
+body.forest-mode .br-card {
+    background: #ffffff;
+    border-color: #d1d9e0;
 }

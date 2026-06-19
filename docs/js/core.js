@@ -701,6 +701,10 @@ document.addEventListener("DOMContentLoaded", function initActiveTabRender() {
   if (mode === "revox") {
     if (typeof renderRevoxRanking === "function") renderRevoxRanking();
   }
+
+  if (mode === "battleroyale") {
+    if (typeof renderBattleRoyale === "function") renderBattleRoyale();
+  }
 });
 
 function escapeHtml(s) {

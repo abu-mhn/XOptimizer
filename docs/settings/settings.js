@@ -59,6 +59,7 @@ Tournament
 - Single Elimination placement depth — set how many finishers to rank to any number (not just Top 8 / 12 / 16) via a free-form picker that matches the Knockout Bracket Size layout; the bracket builds the matching consolation / loser-bracket matches and ranks as deep as its structure allows. Editable from the registration screen
 - Configurable groups: 2, 3, or 4 (Swiss and Round Robin)
 - Configurable rounds per group for Swiss: 3, 4, 5 (Round Robin derives rounds from group size)
+- Open or Closed access: at create time pick Open (listed publicly in the Open Tournaments lobby) or Closed (private). A Closed tournament still appears in the lobby with a "Closed" chip, but tapping it asks for the room code before the join picker opens; the host / invited sub-hosts skip the code. The host sees a copyable join code in the registering view to share
 - Hosting requires a free email account (Settings → Account, or prompted on Create Tournament)
 - Every tournament is ranked automatically — no host password
 - Self-registration via the Open Tournaments lobby (no manual name list)
@@ -149,6 +150,14 @@ Revox
 Battle Pass
 - Bluetooth connection to BEYBLADE_TOOL01 launcher (Chrome / Edge on desktop or Android, Bluefy browser on iOS)
 - Connect, Disconnect and Clear Data buttons each carry an icon — link, unlink, and a trash can — so the action reads at a glance
+
+Battle Royale
+- A points-duel tab: challenge another registered player, stake an equal wager, and a Judge declares the winner who takes the pot (the loser loses the same)
+- Points start at 0 and are earned ONLY by placing in tournaments — the tournament's placement points (1st = 5 down to 1) mirror into your Battle Royale balance when you finish, then you gamble them here. Points stay separate from the tournament ranking leaderboard
+- You can only challenge a player with the SAME points or FEWER (and at least 1, so there's a stake). The wager is capped to the lower of the two balances
+- Challenging requires picking a Judge — any user with the "Judge" tag who has opened Battle Royale. The opponent must Accept before the Judge is brought in; the Judge then declares the winner and points transfer
+- Notifications: the opponent is alerted when challenged, the Judge when the challenge is accepted, and both players when it's resolved (in-app toast + optional system notification, on any tab)
+- The Judge writes the point transfer — enforced by the DB rules, which only let a Judge-tagged account move another player's Battle Royale points
 
 Buzz Bey
 - Local, International, and Japan video embeds

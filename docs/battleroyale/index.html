@@ -6,20 +6,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
   <base href="../">
 
-  <!-- ================= OPEN GRAPH (link-preview card in chat apps) ================= -->
-  <title>X Optimizer — Tournament</title>
-  <meta name="description" content="Open Beyblade X tournaments — join as participant, watch as viewer, or host your own.">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://abu-mhn.github.io/XOptimizer/tournament/">
-  <meta property="og:site_name" content="X Optimizer">
-  <meta property="og:title" content="X Optimizer — Tournament">
-  <meta property="og:description" content="Open Beyblade X tournaments — join as participant, watch as viewer, or host your own.">
-  <meta property="og:image" content="https://abu-mhn.github.io/XOptimizer/assets/icons/XOptimizerDark.webp">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="X Optimizer — Tournament">
-  <meta name="twitter:description" content="Open Beyblade X tournaments — join as participant, watch as viewer, or host your own.">
-  <meta name="twitter:image" content="https://abu-mhn.github.io/XOptimizer/assets/icons/XOptimizerDark.webp">
-
   <!-- ================= FAVICON ================= -->
   <link id="app-favicon" rel="icon" type="image/png" href="assets/icons/M.webp">
   <link id="app-apple-icon" rel="apple-touch-icon" href="assets/icons/M.webp">
@@ -54,7 +40,7 @@
   <!-- Optional theme color -->
   <meta name="theme-color" content="#0a4797">
 
-  <title>Tournament — X Optimizer</title>
+  <title>Battle Royale — X Optimizer</title>
   <link rel="stylesheet" href="style.css">
 </head>
 
@@ -97,7 +83,7 @@
         <span class="tab-label">Deck</span>
       </a>
 
-      <a class="tab active" href="tournament/" data-mode="swiss" aria-label="Tournament">
+      <a class="tab" href="tournament/" data-mode="swiss" aria-label="Tournament">
         <span class="tab-icon-mask" role="img" aria-label="Tournament" style="--tab-icon: url('assets/icons/confrontation.png')"></span>
         <span class="tab-label">Tournament</span>
       </a>
@@ -107,7 +93,7 @@
         <span class="tab-label">Battle Pass</span>
       </a>
 
-      <a class="tab" href="battleroyale/" data-mode="battleroyale" aria-label="Battle Royale">
+      <a class="tab active" href="battleroyale/" data-mode="battleroyale" aria-label="Battle Royale">
         <span class="tab-icon-mask" role="img" aria-label="Battle Royale" style="--tab-icon: url('assets/icons/battle-royal.png')"></span>
         <span class="tab-label">Battle Royale</span>
       </a>
@@ -350,7 +336,7 @@
     </section>
 
     <!-- ================= SWISS ================= -->
-    <section id="form-swiss" class="calc-form">
+    <section id="form-swiss" class="calc-form hidden">
       <div class="tournament-sub-tabs" id="tournament-sub-tabs">
         <button type="button" class="tournament-sub-tab active" data-tournament-view="hosting">
           <img src="assets/icons/game.png" alt="" onerror="this.style.display='none'">
@@ -451,22 +437,32 @@
           <button type="button" id="deck-shuffle" class="btn btn-shuffle" aria-label="Shuffle Deck" title="Shuffle Deck">
             <img src="assets/icons/shuffle.png" alt="Shuffle"
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x1F3B2;');">
+            <span class="btn-label">Shuffle</span>
           </button>
           <button type="button" id="deck-download" class="btn btn-download" aria-label="Download Deck as PNG" title="Download Deck as PNG">
             <img src="assets/icons/download.png" alt="Download"
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x2B07;');">
+            <span class="btn-label">Download</span>
           </button>
           <button type="button" id="deck-share" class="btn btn-share" aria-label="Share Deck" title="Share Deck">
             <img src="assets/icons/share.png" alt="Share"
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x1F517;');">
+            <span class="btn-label">Share</span>
           </button>
           <button type="button" id="deck-copy" class="btn btn-copy" aria-label="Copy Deck for Tournament Registration" title="Copy this deck — paste into a tournament registration form">
             <img src="assets/icons/copy.png" alt="Copy"
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x1F4CB;');">
+            <span class="btn-label">Copy</span>
           </button>
           <button type="button" id="deck-paste" class="btn btn-paste" aria-label="Paste a copied deck" title="Paste a copied deck">
             <img src="assets/icons/paste.png" alt="Paste"
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x1F4CB;');">
+            <span class="btn-label">Paste</span>
+          </button>
+          <button type="button" id="deck-autobuild" class="btn btn-autobuild" aria-label="Generate a deck for an achievement" title="Generate a deck that satisfies an achievement's win condition">
+            <img src="assets/icons/dice.png" alt="Auto"
+                 onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x1F3B2;');">
+            <span class="btn-label">Auto</span>
           </button>
         </div>
         <div id="deck-list"></div>
@@ -474,7 +470,7 @@
     </section>
 
     <!-- ================= BATTLE ROYALE ================= -->
-    <section id="form-battleroyale" class="calc-form hidden">
+    <section id="form-battleroyale" class="calc-form">
       <fieldset>
         <legend>Battle Royale</legend>
         <p class="br-intro">Earn points by placing in tournaments, then challenge a player with the <strong>same points or fewer</strong> — both stake an equal wager and a Judge declares the winner, who takes the pot.</p>
@@ -677,6 +673,18 @@
     </div>
   </div>
 
+  <!-- ================= ACHIEVEMENT AUTO-BUILD POPUP ================= -->
+  <div id="deck-autobuild-popup" class="popup-overlay hidden">
+    <div class="popup-card">
+      <h2 class="popup-title">Generate Deck for Achievement</h2>
+      <p class="popup-text">Pick an achievement and we'll fill the active deck with a 3-slot combo that satisfies its win condition. Useful for chasing a specific badge.</p>
+      <div id="deck-autobuild-list" class="deck-autobuild-list"></div>
+      <div class="popup-actions">
+        <button type="button" id="deck-autobuild-cancel" class="btn popup-cancel"><img src="assets/icons/exit-button.png" alt="" onerror="this.style.display='none'"><span class="btn-label">Cancel</span></button>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= REGISTRATION POPUP ================= -->
   <div id="register-popup" class="popup-overlay hidden">
     <div class="popup-card bey-check-card">
@@ -688,7 +696,6 @@
       <div class="bey-check-slots" id="register-deck-slots"></div>
       <div class="register-deck-actions">
         <button type="button" id="register-paste" class="btn btn-sm"><img src="assets/icons/paste.png" alt="" onerror="this.style.display='none'"><span class="btn-label">Paste from Deck tab</span></button>
-        <button type="button" id="register-autobuild" class="btn btn-sm hidden" title="Tester only — auto-build a deck that satisfies an achievement"><img src="assets/icons/dice.png" alt="" onerror="this.style.display='none'"><span class="btn-label">Auto-build (Test)</span></button>
       </div>
       <div id="register-status" class="swiss-join-status"></div>
       <div class="popup-actions bey-check-actions">
@@ -941,8 +948,8 @@
 
 
       <div class="popup-actions">
-        <button type="button" id="tournament-share-submit" class="btn"><img src="assets/icons/share.png" alt="" onerror="this.style.display='none'"><span class="btn-label">Share</span></button>
-        <button type="button" id="tournament-share-cancel" class="btn popup-cancel"><img src="assets/icons/exit-button.png" alt="" onerror="this.style.display='none'"><span class="btn-label">Cancel</span></button>
+        <button type="button" id="tournament-share-submit" class="btn">Share</button>
+        <button type="button" id="tournament-share-cancel" class="btn popup-cancel">Cancel</button>
       </div>
     </div>
   </div>
@@ -1127,7 +1134,7 @@
   <script src="calculator/calculator.js?v=20260605d"></script>
   <script src="deck/deck.js"></script>
   <script src="library/library.js"></script>
-  <script src="tournament/tournament.js?v=20260605d"></script>
+  <script src="tournament/tournament.js"></script>
   <script src="history/history.js"></script>
   <script src="reel/reel.js"></script>
   <script type="module" src="battlepass/battlepass-tab.js"></script>

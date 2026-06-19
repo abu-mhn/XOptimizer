@@ -93,6 +93,10 @@
         <span class="tab-label">Battle Pass</span>
       </a>
 
+      <a class="tab" href="battleroyale/" data-mode="battleroyale" aria-label="Battle Royale">
+        <span class="tab-icon-mask" role="img" aria-label="Battle Royale" style="--tab-icon: url('assets/icons/battle-royal.png')"></span>
+        <span class="tab-label">Battle Royale</span>
+      </a>
       <a class="tab" href="reel/" data-mode="reel" aria-label="Buzz Bey">
         <span class="tab-icon-mask" role="img" aria-label="Buzz Bey" style="--tab-icon: url('assets/icons/play-button.png')"></span>
         <span class="tab-label">Buzz Bey</span>
@@ -452,6 +456,15 @@
           </button>
         </div>
         <div id="deck-list"></div>
+      </fieldset>
+    </section>
+
+    <!-- ================= BATTLE ROYALE ================= -->
+    <section id="form-battleroyale" class="calc-form hidden">
+      <fieldset>
+        <legend>Battle Royale</legend>
+        <p class="br-intro">Earn points by placing in tournaments, then challenge a player with the <strong>same points or fewer</strong> — both stake an equal wager and a Judge declares the winner, who takes the pot.</p>
+        <div id="br-content"></div>
       </fieldset>
     </section>
 
@@ -1200,6 +1213,7 @@
   <script src="reel/reel.js"></script>
   <script type="module" src="battlepass/battlepass-tab.js"></script>
   <script src="dashboard/dashboard.js"></script>
+  <script src="battleroyale/battleroyale.js"></script>
   <script src="app.js"></script>
 </body>
 

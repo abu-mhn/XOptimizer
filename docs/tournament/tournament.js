@@ -3503,6 +3503,10 @@ function renderSwissRegisteringMarkup(state) {
       <div class="swiss-toolbar-row swiss-toolbar-info-row">
         <div class="swiss-toolbar-idgroup">
           <span class="swiss-reg-pill">Registration open</span>
+          ${state.visibility === "closed" ? `<span class="swiss-reg-pill swiss-reg-pill-closed" title="Private — not listed in the lobby; players join with the code">Closed</span>` : ""}
+          ${(state.visibility === "closed" && canEdit && (swissViewCode || state.viewCode))
+            ? `<button type="button" class="swiss-reg-joincode" id="swiss-share-joincode" data-code="${escapeHtml(swissViewCode || state.viewCode)}" title="Tap to copy — share this code so players can join">Join code: <strong>${escapeHtml(swissViewCode || state.viewCode)}</strong></button>`
+            : ""}
           ${renderSwissRoomBadge()}
         </div>
       </div>
@@ -3579,6 +3583,23 @@ function bindSwissRegisteringHandlers(view, state) {
     copyRegistrantNames(state, e.currentTarget);
   });
   bindSwissShareButton(view);
+  // Copy the join code (Closed tournaments) to the clipboard.
+  view.querySelector("#swiss-share-joincode")?.addEventListener("click", (e) => {
+    const btn = e.currentTarget;
+    const code = btn.dataset.code || "";
+    if (!code) return;
+    const flash = () => {
+      const strong = btn.querySelector("strong");
+      const prev = strong ? strong.textContent : "";
+      if (strong) strong.textContent = "Copied!";
+      setTimeout(() => { if (strong) strong.textContent = prev; }, 1200);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(flash).catch(flash);
+    } else {
+      flash();
+    }
+  });
   // Fee-paid toggle (host / Keeper only — read-only badges aren't buttons).
   view.querySelectorAll("button.swiss-reg-paid[data-reg-id]").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -7141,6 +7162,44 @@ function showParticipantCapPopup(onPick, currentCap, minAllowed) {
   setTimeout(() => input?.focus(), 0);
 }
 
+// Open vs Closed access. Open → listed in the public Open Tournaments lobby.
+// Closed → private: hidden from the lobby, joinable only via the room code the
+// host shares. onPick gets "open", "closed", or null on cancel.
+function showTournamentVisibilityPopup(onPick) {
+  document.getElementById("tournament-visibility-popup")?.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "tournament-visibility-popup";
+  overlay.className = "popup-overlay";
+  overlay.innerHTML = `
+    <div class="popup-card">
+      <h2 class="popup-title">Tournament Access</h2>
+      <p class="popup-subtitle">Who can find this tournament?</p>
+      <div class="tournament-mode-choices">
+        <button type="button" class="tournament-mode-btn" data-visibility="open">
+          <span class="tournament-mode-name">Open</span>
+          <span class="tournament-mode-desc">Listed in the public Open Tournaments lobby — anyone can find it and register.</span>
+        </button>
+        <button type="button" class="tournament-mode-btn" data-visibility="closed">
+          <span class="tournament-mode-name">Closed</span>
+          <span class="tournament-mode-desc">Private — hidden from the lobby. Players join only by entering the room code you share.</span>
+        </button>
+      </div>
+      <button type="button" id="tournament-visibility-cancel" class="btn popup-cancel">Cancel</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  const finish = (v) => {
+    overlay.remove();
+    document.removeEventListener("keydown", onKey);
+    onPick(v);
+  };
+  const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); finish(null); } };
+  document.addEventListener("keydown", onKey);
+  overlay.querySelectorAll(".tournament-mode-btn").forEach(btn => {
+    btn.onclick = () => finish(btn.dataset.visibility);
+  });
+  overlay.querySelector("#tournament-visibility-cancel").onclick = () => finish(null);
+}
+
 function showTopEightPopup(onPick, isRoundRobin) {
   const popup = document.getElementById("tournament-top-eight-popup");
   if (!popup) { onPick("swiss"); return; }
@@ -7189,7 +7248,11 @@ function showTournamentModePopup(onPick) {
     const floor = swissRegistrationMinimum({ mode, groupCount: gc, topN, pairing }) || 2;
     showParticipantCapPopup((cap) => {
       if (cap == null) return; // cancelled at the limit step
-      onPick(mode, name, rc, ranked, gc, pairing, topN, depth, cap > 0 ? cap : null);
+      // Final step: Open (public lobby) vs Closed (private, join by code).
+      showTournamentVisibilityPopup((visibility) => {
+        if (visibility == null) return; // cancelled at the access step
+        onPick(mode, name, rc, ranked, gc, pairing, topN, depth, cap > 0 ? cap : null, visibility);
+      });
     }, null, floor);
   };
   // Every tournament is ranked now — no password gate. Pass ranked=true
@@ -7418,12 +7481,12 @@ document.getElementById("swiss-generate")?.addEventListener("click", async () =>
   } catch (e) {
     return; // user cancelled the sign-in modal
   }
-  showTournamentModePopup((mode, tournamentName, roundCount, ranked, groupCount, pairing, topN, placementDepth, maxParticipants) => {
+  showTournamentModePopup((mode, tournamentName, roundCount, ranked, groupCount, pairing, topN, placementDepth, maxParticipants, visibility) => {
     // Open Registration only — empty room in registering phase. Players
     // self-register with their decks via the Rooms tab, then the host
     // clicks Start to generate groups / bracket from the registrants.
     const next = createRegisteringTournamentState({
-      mode, tournamentName, roundCount, ranked, groupCount, pairing, topN, placementDepth, maxParticipants,
+      mode, tournamentName, roundCount, ranked, groupCount, pairing, topN, placementDepth, maxParticipants, visibility,
       hostUid: user ? user.uid : null
     });
     startTournamentFromState(next);
@@ -7436,7 +7499,7 @@ document.getElementById("swiss-generate")?.addEventListener("click", async () =>
 // Firebase Auth uid of the user creating the tournament — Reset / Start
 // flows check it to ensure only the original host (signed into the same
 // account on any device) can wipe or kick off the room.
-function createRegisteringTournamentState({ mode, tournamentName, roundCount, ranked, groupCount, pairing, topN, placementDepth, maxParticipants, hostUid }) {
+function createRegisteringTournamentState({ mode, tournamentName, roundCount, ranked, groupCount, pairing, topN, placementDepth, maxParticipants, visibility, hostUid }) {
   const safeMode = mode === "single-elim" ? "single-elim"
     : mode === "swiss-only" ? "swiss-only"
     : "swiss";
@@ -7459,6 +7522,9 @@ function createRegisteringTournamentState({ mode, tournamentName, roundCount, ra
   // Optional participant cap chosen at create time (null / absent = no cap).
   const capN = Number(maxParticipants);
   if (Number.isFinite(capN) && capN >= 2) state.maxParticipants = Math.floor(capN);
+  // Closed = private (not listed in the public lobby; join by code). Open is
+  // the default, so only the "closed" flag is stored.
+  if (visibility === "closed") state.visibility = "closed";
   if (safeMode !== "single-elim") {
     state.groupCount = SWISS_GROUP_OPTIONS.includes(Number(groupCount))
       ? Number(groupCount) : SWISS_GROUP_COUNT_DEFAULT;
@@ -8042,12 +8108,17 @@ function refreshOpenTournamentRooms() {
         const capP = db.ref("swissRooms/" + r.editCode + "/maxParticipants").once("value")
           .then(s => s.val())
           .catch(() => null);
-        return Promise.all([phaseP, regP, pairP, subP, nameP, capP]).then(([phase, count, pairing, subHosts, liveName, maxParticipants]) => ({
-          room: r, phase, count, pairing, subHosts, liveName, maxParticipants
+        // Visibility (open / closed) — read live so the lobby can tag Closed
+        // rooms and gate them behind a code prompt.
+        const visP = db.ref("swissRooms/" + r.editCode + "/visibility").once("value")
+          .then(s => s.val())
+          .catch(() => null);
+        return Promise.all([phaseP, regP, pairP, subP, nameP, capP, visP]).then(([phase, count, pairing, subHosts, liveName, maxParticipants, visibility]) => ({
+          room: r, phase, count, pairing, subHosts, liveName, maxParticipants, visibility
         }));
       })).then(results => {
         const live = [];
-        results.forEach(({ room, phase, count, pairing, subHosts, liveName, maxParticipants }) => {
+        results.forEach(({ room, phase, count, pairing, subHosts, liveName, maxParticipants, visibility }) => {
           // Registering AND running rooms stay listed — running ones just
           // can't take new registrations. Only a vanished room (phase is
           // null because the host reset/deleted it) gets pruned.
@@ -8062,6 +8133,7 @@ function refreshOpenTournamentRooms() {
             room.pairing = pairing || null;
             room.subHosts = subHosts || {};
             room.maxParticipants = (typeof maxParticipants === "number" && maxParticipants >= 2) ? maxParticipants : null;
+            room.visibility = visibility === "closed" ? "closed" : "open";
             if (liveName !== undefined) room.name = liveName || "";
             live.push(room);
           } else {
@@ -8121,6 +8193,10 @@ function renderLobbyRooms(list, rooms) {
     const runningBadge = isRunning
       ? `<span class="swiss-room-running-badge">In progress</span>`
       : "";
+    // Closed (private) rooms are listed but locked — tapping asks for the code.
+    const closedBadge = r.visibility === "closed"
+      ? `<span class="swiss-room-closed-badge" title="Private — a code is required to join">Closed</span>`
+      : "";
     return `
       <button type="button" class="swiss-room-card" data-edit-code="${escapeHtml(r.editCode)}">
         <div class="swiss-room-card-name">
@@ -8132,6 +8208,7 @@ function renderLobbyRooms(list, rooms) {
           <span class="swiss-room-card-meta-text">${meta.map(escapeHtml).join(" · ")}</span>
           ${runningBadge}
           ${fullBadge}
+          ${closedBadge}
           ${cohostBadge}
         </div>
       </button>
@@ -8141,9 +8218,63 @@ function renderLobbyRooms(list, rooms) {
     btn.addEventListener("click", () => {
       const editCode = btn.dataset.editCode;
       const room = rooms.find(r => r.editCode === editCode);
-      if (room) showTournamentJoinChoicePopup(room);
+      if (!room) return;
+      // Closed rooms require the room code before the join picker opens — but
+      // the host (and invited sub-hosts) skip the gate since they own/run it.
+      const amSubHost = !!(myKey && room.subHosts && room.subHosts[myKey]);
+      if (room.visibility === "closed" && !isCurrentUserRoomHost(room) && !amSubHost) {
+        showClosedRoomCodePrompt(room);
+      } else {
+        showTournamentJoinChoicePopup(room);
+      }
     });
   });
+}
+
+// Code gate for a Closed (private) lobby room — verify the host's shared code
+// (matches the room's view OR host code) before opening the join picker.
+function showClosedRoomCodePrompt(room) {
+  document.getElementById("closed-room-code-popup")?.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "closed-room-code-popup";
+  overlay.className = "popup-overlay";
+  const name = (room.name || "").trim() || "(unnamed tournament)";
+  overlay.innerHTML = `
+    <div class="popup-card">
+      <h2 class="popup-title">Closed Tournament</h2>
+      <p class="popup-subtitle">${escapeHtml(name)} is private. Enter the code the host shared to join.</p>
+      <input type="text" id="closed-room-code-input" class="tournament-name-input" placeholder="Room code" maxlength="16" autocomplete="off" spellcheck="false" autocapitalize="characters">
+      <div id="closed-room-code-status" class="swiss-join-status"></div>
+      <div class="popup-actions">
+        <button type="button" id="closed-room-code-submit" class="btn">Join</button>
+        <button type="button" id="closed-room-code-cancel" class="btn popup-cancel">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const input = overlay.querySelector("#closed-room-code-input");
+  const status = overlay.querySelector("#closed-room-code-status");
+  const close = () => { overlay.remove(); document.removeEventListener("keydown", onKey); };
+  const submit = () => {
+    const entered = String(input.value || "").trim().toUpperCase();
+    if (!entered) { status.textContent = "Enter the room code."; return; }
+    const view = String(room.viewCode || "").toUpperCase();
+    const edit = String(room.editCode || "").toUpperCase();
+    if (entered === view || entered === edit) {
+      close();
+      showTournamentJoinChoicePopup(room);
+    } else {
+      status.textContent = "That code doesn't match. Try again.";
+    }
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") { e.preventDefault(); close(); }
+    else if (e.key === "Enter" && document.activeElement === input) { e.preventDefault(); submit(); }
+  };
+  document.addEventListener("keydown", onKey);
+  overlay.querySelector("#closed-room-code-submit").onclick = submit;
+  overlay.querySelector("#closed-room-code-cancel").onclick = close;
+  overlay.addEventListener("click", e => { if (e.target === overlay) close(); });
+  setTimeout(() => input?.focus(), 0);
 }
 
 // Three-way join picker shown when a user taps an entry in the Open
@@ -9202,6 +9333,29 @@ function bumpGlobalRanking(name, points) {
   }));
 }
 
+// Battle Royale points are earned ONLY from tournaments. When a signed-in
+// player is awarded ranking points, mirror them into their BR balance (keyed
+// by uid). The host runs this — hosts hold the Judge tag, which the DB rules
+// require to write another player's BR points.
+function registrantUidByName(name) {
+  const s = (typeof loadSwiss === "function") ? loadSwiss() : null;
+  const regs = (s && s.registrants) || {};
+  const target = String(name || "").trim().toLowerCase();
+  if (!target) return null;
+  const found = Object.values(regs).find(r =>
+    r && typeof r.name === "string" && r.name.trim().toLowerCase() === target &&
+    typeof r.createdBy === "string" && r.createdBy);
+  return found ? found.createdBy : null;
+}
+function bumpBattleRoyalePoints(uid, name, points) {
+  if (!uid || !points) return;
+  const db = initFirebase();
+  if (!db) return;
+  const ref = db.ref("battleRoyale/players/" + uid);
+  ref.child("points").transaction(p => ((Number(p) || 0) + Number(points))).catch(() => {});
+  if (name) ref.child("username").set(String(name).slice(0, 30)).catch(() => {});
+}
+
 // Claim the per-room per-player slot via transaction so concurrent hosts
 // can't double-award and later state ticks never re-award the same player.
 function awardPlayerIfNew(name, points) {
@@ -9218,6 +9372,9 @@ function awardPlayerIfNew(name, points) {
     (err, committed) => {
       if (err || !committed) return;
       bumpGlobalRanking(cleanName, points);
+      // Mirror the same points into Battle Royale for signed-in players.
+      const brUid = registrantUidByName(cleanName);
+      if (brUid) bumpBattleRoyalePoints(brUid, cleanName, points);
     }
   );
 }
