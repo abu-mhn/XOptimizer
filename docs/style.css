@@ -417,7 +417,7 @@ select {
     left: 0;
     right: 0;
     top: 100%;
-    max-height: 200px;
+    max-height: 320px;
     overflow-y: auto;
     background: #161b22;
     border: 1px solid #30363d;
@@ -427,14 +427,38 @@ select {
 }
 
 .search-dropdown.open .dd-list {
-    display: block;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    padding: 6px;
 }
 
 .search-dropdown .dd-item {
-    padding: 7px 10px;
-    font-size: .9rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    padding: 8px 6px;
+    font-size: .85rem;
+    text-align: center;
+    border-radius: 6px;
     cursor: pointer;
     color: #e6edf3;
+}
+
+.search-dropdown .dd-item-img {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    object-fit: contain;
+    border-radius: 0;
+}
+
+.search-dropdown .dd-item-label {
+    min-width: 0;
+    line-height: 1.2;
+    word-break: break-word;
 }
 
 .search-dropdown .dd-item:hover,
@@ -444,11 +468,15 @@ select {
 }
 
 .search-dropdown .dd-item-synthetic {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    justify-content: center;
     font-style: italic;
     border-bottom: 1px dashed #30363d;
 }
 
 .search-dropdown .dd-empty {
+    grid-column: 1 / -1;
     padding: 7px 10px;
     font-size: .85rem;
     color: #484f58;
@@ -5026,7 +5054,8 @@ body.light-mode {
 body.light-mode .mode-tabs,
 body.light-mode .sub-tabs,
 body.light-mode .history-sub-tabs,
-body.light-mode .tournament-sub-tabs {
+body.light-mode .tournament-sub-tabs ,
+body.light-mode .br-sub-tabs {
     background: rgba(246, 248, 250, 0.85);
     border-bottom-color: #d1d9e0;
     box-shadow: 0 6px 14px -8px rgba(15, 20, 30, 0.18);
@@ -5700,7 +5729,8 @@ body.space-mode {
 body.space-mode .mode-tabs,
 body.space-mode .sub-tabs,
 body.space-mode .history-sub-tabs,
-body.space-mode .tournament-sub-tabs {
+body.space-mode .tournament-sub-tabs ,
+body.space-mode .br-sub-tabs {
     background: rgba(11, 13, 26, 0.85);
     border-bottom-color: #1a1f3d;
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.55);
@@ -6002,7 +6032,8 @@ body.revox-mode .app-header {
 body.revox-mode .mode-tabs,
 body.revox-mode .sub-tabs,
 body.revox-mode .history-sub-tabs,
-body.revox-mode .tournament-sub-tabs {
+body.revox-mode .tournament-sub-tabs ,
+body.revox-mode .br-sub-tabs {
     background: rgba(14, 14, 18, 0.88);
     border-bottom-color: #34343f;
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.6);
@@ -6011,6 +6042,7 @@ body.revox-mode .tournament-sub-tabs {
 body.revox-mode .tab,
 body.revox-mode .sub-tab,
 body.revox-mode .tournament-sub-tab,
+body.revox-mode .br-sub-tab,
 body.revox-mode .history-sub-tab,
 body.revox-mode .reel-sub-tab,
 body.revox-mode .bey-check-mode-tab {
@@ -6021,6 +6053,7 @@ body.revox-mode .bey-check-mode-tab {
 
 body.revox-mode .tab.active,
 body.revox-mode .tournament-sub-tab.active,
+body.revox-mode .br-sub-tab.active,
 body.revox-mode .history-sub-tab.active,
 body.revox-mode .reel-sub-tab.active {
     background: linear-gradient(135deg, #e8402e, #b8301f);
@@ -6042,7 +6075,9 @@ body.revox-mode .tab:hover:not(.active),
 body.revox-mode .sub-tab:hover:not(.active),
 body.revox-mode .sub-tab:focus-visible,
 body.revox-mode .tournament-sub-tab:hover:not(.active),
+body.revox-mode .br-sub-tab:hover:not(.active),
 body.revox-mode .tournament-sub-tab:focus-visible,
+body.revox-mode .br-sub-tab:focus-visible,
 body.revox-mode .history-sub-tab:hover:not(.active),
 body.revox-mode .history-sub-tab:focus-visible,
 body.revox-mode .reel-sub-tab:hover:not(.active),
@@ -6341,7 +6376,8 @@ body.tropical-mode {
 body.tropical-mode .mode-tabs,
 body.tropical-mode .sub-tabs,
 body.tropical-mode .history-sub-tabs,
-body.tropical-mode .tournament-sub-tabs {
+body.tropical-mode .tournament-sub-tabs ,
+body.tropical-mode .br-sub-tabs {
     background: rgba(255, 246, 230, 0.85);
     border-bottom-color: #ffd8a8;
     box-shadow: 0 6px 14px -8px rgba(140, 90, 40, 0.18);
@@ -6774,7 +6810,8 @@ body.stormy-mode {
 body.stormy-mode .mode-tabs,
 body.stormy-mode .sub-tabs,
 body.stormy-mode .history-sub-tabs,
-body.stormy-mode .tournament-sub-tabs {
+body.stormy-mode .tournament-sub-tabs ,
+body.stormy-mode .br-sub-tabs {
     background: rgba(30, 35, 48, 0.85);
     border-bottom-color: #3a4054;
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.55);
@@ -7069,7 +7106,8 @@ body.mono-mode {
 body.mono-mode .mode-tabs,
 body.mono-mode .sub-tabs,
 body.mono-mode .history-sub-tabs,
-body.mono-mode .tournament-sub-tabs {
+body.mono-mode .tournament-sub-tabs ,
+body.mono-mode .br-sub-tabs {
     background: rgba(0, 0, 0, 0.88);
     border-bottom-color: #2a2a2a;
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.7);
@@ -9066,7 +9104,8 @@ button.swiss-reg-paid:hover {
 }
 
 .history-sub-tabs,
-.tournament-sub-tabs {
+.tournament-sub-tabs ,
+.br-sub-tabs {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 4px;
@@ -9085,7 +9124,8 @@ button.swiss-reg-paid:hover {
 
 
 .history-sub-tab,
-.tournament-sub-tab {
+.tournament-sub-tab ,
+.br-sub-tab {
     padding: 8px;
     min-height: 36px;
     border-radius: 6px;
@@ -9103,6 +9143,8 @@ button.swiss-reg-paid:hover {
 }
 
 .tournament-sub-tab img,
+
+.br-sub-tab img,
 .history-sub-tab img {
     width: 16px;
     height: 16px;
@@ -9117,17 +9159,23 @@ button.swiss-reg-paid:hover {
    background, so its white icon stays. On mono it's the reverse: the
    ACTIVE tab is white-backed (inactive is #111), so only the active
    icon needs flipping there. */
-body.light-mode .tournament-sub-tab:not(.active) img,
+body.light-mode .tournament-sub-tab:not(.active) img, so only the active
+   icon needs flipping there. */
+body.light-mode .br-sub-tab:not(.active) img,
 body.light-mode .history-sub-tab:not(.active) img,
 body.tropical-mode .tournament-sub-tab:not(.active) img,
+body.tropical-mode .br-sub-tab:not(.active) img,
 body.tropical-mode .history-sub-tab:not(.active) img,
 body.love-mode .tournament-sub-tab:not(.active) img,
+body.love-mode .br-sub-tab:not(.active) img,
 body.love-mode .history-sub-tab:not(.active) img,
 body.forest-mode .tournament-sub-tab:not(.active) img,
+body.forest-mode .br-sub-tab:not(.active) img,
 body.forest-mode .history-sub-tab:not(.active) img {
     filter: brightness(0);
 }
 body.mono-mode .tournament-sub-tab.active img,
+body.mono-mode .br-sub-tab.active img,
 body.mono-mode .history-sub-tab.active img {
     filter: brightness(0);
 }
@@ -9135,7 +9183,9 @@ body.mono-mode .history-sub-tab.active img {
 .history-sub-tab:hover:not(.active),
 .history-sub-tab:focus-visible,
 .tournament-sub-tab:hover:not(.active),
-.tournament-sub-tab:focus-visible {
+.br-sub-tab:hover:not(.active),
+.tournament-sub-tab:focus-visible ,
+.br-sub-tab:focus-visible {
     background: #21262d;
     border-color: #484f58;
     color: #e6edf3;
@@ -9143,7 +9193,8 @@ body.mono-mode .history-sub-tab.active img {
 }
 
 .history-sub-tab.active,
-.tournament-sub-tab.active {
+.tournament-sub-tab.active ,
+.br-sub-tab.active {
     background: #1a4a8a;
     color: #fff;
     border-color: #1a4a8a;
@@ -10889,7 +10940,8 @@ body.mono-mode .scoreboard-close:hover {
 /* ----- LIGHT ----- */
 body.light-mode .history-sub-tab,
 body.light-mode .reel-sub-tab,
-body.light-mode .tournament-sub-tab {
+body.light-mode .tournament-sub-tab ,
+body.light-mode .br-sub-tab {
     border-color: #d1d9e0;
     background: #ffffff;
     color: #656d76;
@@ -10900,7 +10952,9 @@ body.light-mode .history-sub-tab:focus-visible,
 body.light-mode .reel-sub-tab:hover:not(.active),
 body.light-mode .reel-sub-tab:focus-visible,
 body.light-mode .tournament-sub-tab:hover:not(.active),
-body.light-mode .tournament-sub-tab:focus-visible {
+body.light-mode .br-sub-tab:hover:not(.active),
+body.light-mode .tournament-sub-tab:focus-visible ,
+body.light-mode .br-sub-tab:focus-visible {
     background: #e1e4e8;
     border-color: #afb8c1;
     color: #1f2328;
@@ -10908,7 +10962,8 @@ body.light-mode .tournament-sub-tab:focus-visible {
 
 body.light-mode .history-sub-tab.active,
 body.light-mode .reel-sub-tab.active,
-body.light-mode .tournament-sub-tab.active {
+body.light-mode .tournament-sub-tab.active ,
+body.light-mode .br-sub-tab.active {
     background: #0550ae;
     color: #ffffff;
     border-color: #0550ae;
@@ -10966,7 +11021,8 @@ body.light-mode .tournament-mode-name {
 /* ----- SPACE ----- */
 body.space-mode .history-sub-tab,
 body.space-mode .reel-sub-tab,
-body.space-mode .tournament-sub-tab {
+body.space-mode .tournament-sub-tab ,
+body.space-mode .br-sub-tab {
     border-color: #1a1f3d;
     background: rgba(15, 18, 40, 0.8);
     color: #7b8cad;
@@ -10977,7 +11033,9 @@ body.space-mode .history-sub-tab:focus-visible,
 body.space-mode .reel-sub-tab:hover:not(.active),
 body.space-mode .reel-sub-tab:focus-visible,
 body.space-mode .tournament-sub-tab:hover:not(.active),
-body.space-mode .tournament-sub-tab:focus-visible {
+body.space-mode .br-sub-tab:hover:not(.active),
+body.space-mode .tournament-sub-tab:focus-visible ,
+body.space-mode .br-sub-tab:focus-visible {
     background: rgba(26, 35, 126, 0.3);
     border-color: #3949ab;
     color: #c8d6e5;
@@ -10985,7 +11043,8 @@ body.space-mode .tournament-sub-tab:focus-visible {
 
 body.space-mode .history-sub-tab.active,
 body.space-mode .reel-sub-tab.active,
-body.space-mode .tournament-sub-tab.active {
+body.space-mode .tournament-sub-tab.active ,
+body.space-mode .br-sub-tab.active {
     background: linear-gradient(135deg, #1a237e, #311b92);
     color: #fff;
     border-color: #5c6bc0;
@@ -11043,7 +11102,8 @@ body.space-mode .tournament-mode-name {
 /* ----- TROPICAL ----- */
 body.tropical-mode .history-sub-tab,
 body.tropical-mode .reel-sub-tab,
-body.tropical-mode .tournament-sub-tab {
+body.tropical-mode .tournament-sub-tab ,
+body.tropical-mode .br-sub-tab {
     border-color: #ffd8a8;
     background: #ffffff;
     color: #8a6d3b;
@@ -11054,7 +11114,9 @@ body.tropical-mode .history-sub-tab:focus-visible,
 body.tropical-mode .reel-sub-tab:hover:not(.active),
 body.tropical-mode .reel-sub-tab:focus-visible,
 body.tropical-mode .tournament-sub-tab:hover:not(.active),
-body.tropical-mode .tournament-sub-tab:focus-visible {
+body.tropical-mode .br-sub-tab:hover:not(.active),
+body.tropical-mode .tournament-sub-tab:focus-visible ,
+body.tropical-mode .br-sub-tab:focus-visible {
     background: #fff0d6;
     border-color: #f5b86b;
     color: #2d3a3a;
@@ -11062,7 +11124,8 @@ body.tropical-mode .tournament-sub-tab:focus-visible {
 
 body.tropical-mode .history-sub-tab.active,
 body.tropical-mode .reel-sub-tab.active,
-body.tropical-mode .tournament-sub-tab.active {
+body.tropical-mode .tournament-sub-tab.active ,
+body.tropical-mode .br-sub-tab.active {
     background: linear-gradient(135deg, #00b8a9, #0d8a80);
     color: #fff;
     border-color: #00b8a9;
@@ -11120,7 +11183,8 @@ body.tropical-mode .tournament-mode-name {
 /* ----- STORMY ----- */
 body.stormy-mode .history-sub-tab,
 body.stormy-mode .reel-sub-tab,
-body.stormy-mode .tournament-sub-tab {
+body.stormy-mode .tournament-sub-tab ,
+body.stormy-mode .br-sub-tab {
     border-color: #3a4054;
     background: rgba(42, 48, 64, 0.8);
     color: #9098a8;
@@ -11131,7 +11195,9 @@ body.stormy-mode .history-sub-tab:focus-visible,
 body.stormy-mode .reel-sub-tab:hover:not(.active),
 body.stormy-mode .reel-sub-tab:focus-visible,
 body.stormy-mode .tournament-sub-tab:hover:not(.active),
-body.stormy-mode .tournament-sub-tab:focus-visible {
+body.stormy-mode .br-sub-tab:hover:not(.active),
+body.stormy-mode .tournament-sub-tab:focus-visible ,
+body.stormy-mode .br-sub-tab:focus-visible {
     background: rgba(74, 144, 226, 0.2);
     border-color: #5a6278;
     color: #d5dae4;
@@ -11139,7 +11205,8 @@ body.stormy-mode .tournament-sub-tab:focus-visible {
 
 body.stormy-mode .history-sub-tab.active,
 body.stormy-mode .reel-sub-tab.active,
-body.stormy-mode .tournament-sub-tab.active {
+body.stormy-mode .tournament-sub-tab.active ,
+body.stormy-mode .br-sub-tab.active {
     background: linear-gradient(135deg, #2c4a7a, #3a6fb0);
     color: #fff;
     border-color: #4a90e2;
@@ -11197,7 +11264,8 @@ body.stormy-mode .tournament-mode-name {
 /* ----- MONO ----- */
 body.mono-mode .history-sub-tab,
 body.mono-mode .reel-sub-tab,
-body.mono-mode .tournament-sub-tab {
+body.mono-mode .tournament-sub-tab ,
+body.mono-mode .br-sub-tab {
     background: #111111;
     border-color: #2a2a2a;
     color: #bdbdbd;
@@ -11208,7 +11276,9 @@ body.mono-mode .history-sub-tab:focus-visible,
 body.mono-mode .reel-sub-tab:hover:not(.active),
 body.mono-mode .reel-sub-tab:focus-visible,
 body.mono-mode .tournament-sub-tab:hover:not(.active),
-body.mono-mode .tournament-sub-tab:focus-visible {
+body.mono-mode .br-sub-tab:hover:not(.active),
+body.mono-mode .tournament-sub-tab:focus-visible ,
+body.mono-mode .br-sub-tab:focus-visible {
     background: #1a1a1a;
     border-color: #4a4a4a;
     color: #ffffff;
@@ -11216,7 +11286,8 @@ body.mono-mode .tournament-sub-tab:focus-visible {
 
 body.mono-mode .history-sub-tab.active,
 body.mono-mode .reel-sub-tab.active,
-body.mono-mode .tournament-sub-tab.active {
+body.mono-mode .tournament-sub-tab.active ,
+body.mono-mode .br-sub-tab.active {
     background: #ffffff;
     color: #000000;
     border-color: #ffffff;
@@ -11469,7 +11540,8 @@ body.love-mode  {
 body.love-mode .mode-tabs,
 body.love-mode .sub-tabs,
 body.love-mode .history-sub-tabs,
-body.love-mode .tournament-sub-tabs  {
+body.love-mode .tournament-sub-tabs  ,
+body.love-mode .br-sub-tabs  {
     background: rgba(255, 246, 230, 0.85);
     border-bottom-color: #ffc1d2;
     box-shadow: 0 6px 14px -8px rgba(140, 90, 40, 0.18);
@@ -11800,7 +11872,8 @@ body.love-mode .setting-dropdown-arrow  {
 }
 body.love-mode .history-sub-tab,
 body.love-mode .reel-sub-tab,
-body.love-mode .tournament-sub-tab  {
+body.love-mode .tournament-sub-tab  ,
+body.love-mode .br-sub-tab  {
     border-color: #ffc1d2;
     background: #ffffff;
     color: #9c4a5e;
@@ -11810,14 +11883,17 @@ body.love-mode .history-sub-tab:focus-visible,
 body.love-mode .reel-sub-tab:hover:not(.active),
 body.love-mode .reel-sub-tab:focus-visible,
 body.love-mode .tournament-sub-tab:hover:not(.active),
-body.love-mode .tournament-sub-tab:focus-visible  {
+body.love-mode .br-sub-tab:hover:not(.active),
+body.love-mode .tournament-sub-tab:focus-visible  ,
+body.love-mode .br-sub-tab:focus-visible  {
     background: #ffe1ea;
     border-color: #f0a0bc;
     color: #4a1d2a;
 }
 body.love-mode .history-sub-tab.active,
 body.love-mode .reel-sub-tab.active,
-body.love-mode .tournament-sub-tab.active  {
+body.love-mode .tournament-sub-tab.active  ,
+body.love-mode .br-sub-tab.active  {
     background: linear-gradient(135deg, #e63978, #c0245f);
     color: #fff;
     border-color: #e63978;
@@ -11948,7 +12024,8 @@ body.forest-mode  {
 body.forest-mode .mode-tabs,
 body.forest-mode .sub-tabs,
 body.forest-mode .history-sub-tabs,
-body.forest-mode .tournament-sub-tabs  {
+body.forest-mode .tournament-sub-tabs  ,
+body.forest-mode .br-sub-tabs  {
     background: rgba(255, 246, 230, 0.85);
     border-bottom-color: #b5c89a;
     box-shadow: 0 6px 14px -8px rgba(140, 90, 40, 0.18);
@@ -12285,7 +12362,8 @@ body.forest-mode .deck-name-input  {
 body.forest-mode .deck-name-input:focus  { border-color: #386641; }
 body.forest-mode .history-sub-tab,
 body.forest-mode .reel-sub-tab,
-body.forest-mode .tournament-sub-tab  {
+body.forest-mode .tournament-sub-tab  ,
+body.forest-mode .br-sub-tab  {
     border-color: #b5c89a;
     background: #ffffff;
     color: #5a6a4b;
@@ -12295,14 +12373,17 @@ body.forest-mode .history-sub-tab:focus-visible,
 body.forest-mode .reel-sub-tab:hover:not(.active),
 body.forest-mode .reel-sub-tab:focus-visible,
 body.forest-mode .tournament-sub-tab:hover:not(.active),
-body.forest-mode .tournament-sub-tab:focus-visible  {
+body.forest-mode .br-sub-tab:hover:not(.active),
+body.forest-mode .tournament-sub-tab:focus-visible  ,
+body.forest-mode .br-sub-tab:focus-visible  {
     background: #e9efdc;
     border-color: #d4a673;
     color: #2d3e1f;
 }
 body.forest-mode .history-sub-tab.active,
 body.forest-mode .reel-sub-tab.active,
-body.forest-mode .tournament-sub-tab.active  {
+body.forest-mode .tournament-sub-tab.active  ,
+body.forest-mode .br-sub-tab.active  {
     background: linear-gradient(135deg, #386641, #2d4f33);
     color: #fff;
     border-color: #386641;
@@ -13563,7 +13644,8 @@ body.gold-mode {
 body.gold-mode .mode-tabs,
 body.gold-mode .sub-tabs,
 body.gold-mode .history-sub-tabs,
-body.gold-mode .tournament-sub-tabs {
+body.gold-mode .tournament-sub-tabs ,
+body.gold-mode .br-sub-tabs {
     background: rgba(26, 20, 8, 0.85);
     border-bottom-color: #4a3c18;
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.55);
@@ -13885,7 +13967,8 @@ body.gold-mode .btn-small:hover {
 
 body.gold-mode .history-sub-tab,
 body.gold-mode .reel-sub-tab,
-body.gold-mode .tournament-sub-tab {
+body.gold-mode .tournament-sub-tab ,
+body.gold-mode .br-sub-tab {
     border-color: #4a3c18;
     background: rgba(54, 44, 18, 0.8);
     color: #b8a878;
@@ -13896,7 +13979,9 @@ body.gold-mode .history-sub-tab:focus-visible,
 body.gold-mode .reel-sub-tab:hover:not(.active),
 body.gold-mode .reel-sub-tab:focus-visible,
 body.gold-mode .tournament-sub-tab:hover:not(.active),
-body.gold-mode .tournament-sub-tab:focus-visible {
+body.gold-mode .br-sub-tab:hover:not(.active),
+body.gold-mode .tournament-sub-tab:focus-visible ,
+body.gold-mode .br-sub-tab:focus-visible {
     background: rgba(227, 179, 65, 0.2);
     border-color: #6e5a28;
     color: #f0e6cf;
@@ -13904,7 +13989,8 @@ body.gold-mode .tournament-sub-tab:focus-visible {
 
 body.gold-mode .history-sub-tab.active,
 body.gold-mode .reel-sub-tab.active,
-body.gold-mode .tournament-sub-tab.active {
+body.gold-mode .tournament-sub-tab.active ,
+body.gold-mode .br-sub-tab.active {
     background: linear-gradient(135deg, #a87f1e, #c89a2e);
     color: #fff;
     border-color: #e3b341;
@@ -14112,7 +14198,8 @@ body.silver-mode {
 body.silver-mode .mode-tabs,
 body.silver-mode .sub-tabs,
 body.silver-mode .history-sub-tabs,
-body.silver-mode .tournament-sub-tabs {
+body.silver-mode .tournament-sub-tabs ,
+body.silver-mode .br-sub-tabs {
     background: rgba(20, 23, 26, 0.85);
     border-bottom-color: #383f47;
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.55);
@@ -14419,7 +14506,8 @@ body.silver-mode .btn-small:hover {
 
 body.silver-mode .history-sub-tab,
 body.silver-mode .reel-sub-tab,
-body.silver-mode .tournament-sub-tab {
+body.silver-mode .tournament-sub-tab ,
+body.silver-mode .br-sub-tab {
     border-color: #383f47;
     background: rgba(46, 52, 60, 0.8);
     color: #9aa3ad;
@@ -14430,7 +14518,9 @@ body.silver-mode .history-sub-tab:focus-visible,
 body.silver-mode .reel-sub-tab:hover:not(.active),
 body.silver-mode .reel-sub-tab:focus-visible,
 body.silver-mode .tournament-sub-tab:hover:not(.active),
-body.silver-mode .tournament-sub-tab:focus-visible {
+body.silver-mode .br-sub-tab:hover:not(.active),
+body.silver-mode .tournament-sub-tab:focus-visible ,
+body.silver-mode .br-sub-tab:focus-visible {
     background: rgba(174, 182, 191, 0.2);
     border-color: #555e67;
     color: #e8ecf0;
@@ -14438,7 +14528,8 @@ body.silver-mode .tournament-sub-tab:focus-visible {
 
 body.silver-mode .history-sub-tab.active,
 body.silver-mode .reel-sub-tab.active,
-body.silver-mode .tournament-sub-tab.active {
+body.silver-mode .tournament-sub-tab.active ,
+body.silver-mode .br-sub-tab.active {
     background: linear-gradient(135deg, #7c848d, #969ea7);
     color: #fff;
     border-color: #aeb6bf;
@@ -14646,7 +14737,8 @@ body.bronze-mode {
 body.bronze-mode .mode-tabs,
 body.bronze-mode .sub-tabs,
 body.bronze-mode .history-sub-tabs,
-body.bronze-mode .tournament-sub-tabs {
+body.bronze-mode .tournament-sub-tabs ,
+body.bronze-mode .br-sub-tabs {
     background: rgba(26, 17, 9, 0.85);
     border-bottom-color: #4a3320;
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.55);
@@ -14953,7 +15045,8 @@ body.bronze-mode .btn-small:hover {
 
 body.bronze-mode .history-sub-tab,
 body.bronze-mode .reel-sub-tab,
-body.bronze-mode .tournament-sub-tab {
+body.bronze-mode .tournament-sub-tab ,
+body.bronze-mode .br-sub-tab {
     border-color: #4a3320;
     background: rgba(58, 40, 24, 0.8);
     color: #b89878;
@@ -14964,7 +15057,9 @@ body.bronze-mode .history-sub-tab:focus-visible,
 body.bronze-mode .reel-sub-tab:hover:not(.active),
 body.bronze-mode .reel-sub-tab:focus-visible,
 body.bronze-mode .tournament-sub-tab:hover:not(.active),
-body.bronze-mode .tournament-sub-tab:focus-visible {
+body.bronze-mode .br-sub-tab:hover:not(.active),
+body.bronze-mode .tournament-sub-tab:focus-visible ,
+body.bronze-mode .br-sub-tab:focus-visible {
     background: rgba(198, 128, 68, 0.2);
     border-color: #6e4e30;
     color: #f0e2d2;
@@ -14972,7 +15067,8 @@ body.bronze-mode .tournament-sub-tab:focus-visible {
 
 body.bronze-mode .history-sub-tab.active,
 body.bronze-mode .reel-sub-tab.active,
-body.bronze-mode .tournament-sub-tab.active {
+body.bronze-mode .tournament-sub-tab.active ,
+body.bronze-mode .br-sub-tab.active {
     background: linear-gradient(135deg, #8a5424, #a96a34);
     color: #fff;
     border-color: #c68044;
@@ -15124,7 +15220,8 @@ body.dragontamer-mode {
 body.dragontamer-mode .mode-tabs,
 body.dragontamer-mode .sub-tabs,
 body.dragontamer-mode .history-sub-tabs,
-body.dragontamer-mode .tournament-sub-tabs {
+body.dragontamer-mode .tournament-sub-tabs ,
+body.dragontamer-mode .br-sub-tabs {
     background: rgba(40, 18, 14, 0.85);
     border-bottom-color: #4d2218;
 }
@@ -15161,7 +15258,8 @@ body.dragonslayer-mode {
 body.dragonslayer-mode .mode-tabs,
 body.dragonslayer-mode .sub-tabs,
 body.dragonslayer-mode .history-sub-tabs,
-body.dragonslayer-mode .tournament-sub-tabs {
+body.dragonslayer-mode .tournament-sub-tabs ,
+body.dragonslayer-mode .br-sub-tabs {
     background: rgba(16, 22, 38, 0.85);
     border-bottom-color: #2a3a55;
 }
@@ -15198,7 +15296,8 @@ body.lonewolf-mode {
 body.lonewolf-mode .mode-tabs,
 body.lonewolf-mode .sub-tabs,
 body.lonewolf-mode .history-sub-tabs,
-body.lonewolf-mode .tournament-sub-tabs {
+body.lonewolf-mode .tournament-sub-tabs ,
+body.lonewolf-mode .br-sub-tabs {
     background: rgba(16, 20, 26, 0.85);
     border-bottom-color: #28323a;
 }
@@ -15236,7 +15335,8 @@ body.rushhour-mode {
 body.rushhour-mode .mode-tabs,
 body.rushhour-mode .sub-tabs,
 body.rushhour-mode .history-sub-tabs,
-body.rushhour-mode .tournament-sub-tabs {
+body.rushhour-mode .tournament-sub-tabs ,
+body.rushhour-mode .br-sub-tabs {
     background: rgba(34, 24, 12, 0.85);
     border-bottom-color: #5c3a14;
 }
@@ -15274,7 +15374,8 @@ body.kingofjungle-mode {
 body.kingofjungle-mode .mode-tabs,
 body.kingofjungle-mode .sub-tabs,
 body.kingofjungle-mode .history-sub-tabs,
-body.kingofjungle-mode .tournament-sub-tabs {
+body.kingofjungle-mode .tournament-sub-tabs ,
+body.kingofjungle-mode .br-sub-tabs {
     background: rgba(32, 24, 8, 0.85);
     border-bottom-color: #5a4418;
 }
@@ -15312,7 +15413,8 @@ body.sharknado-mode {
 body.sharknado-mode .mode-tabs,
 body.sharknado-mode .sub-tabs,
 body.sharknado-mode .history-sub-tabs,
-body.sharknado-mode .tournament-sub-tabs {
+body.sharknado-mode .tournament-sub-tabs ,
+body.sharknado-mode .br-sub-tabs {
     background: rgba(10, 22, 36, 0.85);
     border-bottom-color: #1f3a5a;
 }
@@ -15351,7 +15453,8 @@ body.sorcerersupreme-mode {
 body.sorcerersupreme-mode .mode-tabs,
 body.sorcerersupreme-mode .sub-tabs,
 body.sorcerersupreme-mode .history-sub-tabs,
-body.sorcerersupreme-mode .tournament-sub-tabs {
+body.sorcerersupreme-mode .tournament-sub-tabs ,
+body.sorcerersupreme-mode .br-sub-tabs {
     background: rgba(26, 12, 40, 0.85);
     border-bottom-color: #3a205a;
 }
@@ -15390,7 +15493,8 @@ body.paleonerd-mode {
 body.paleonerd-mode .mode-tabs,
 body.paleonerd-mode .sub-tabs,
 body.paleonerd-mode .history-sub-tabs,
-body.paleonerd-mode .tournament-sub-tabs {
+body.paleonerd-mode .tournament-sub-tabs ,
+body.paleonerd-mode .br-sub-tabs {
     background: rgba(28, 20, 10, 0.85);
     border-bottom-color: #5a3f1a;
 }
@@ -15429,7 +15533,8 @@ body.kingofalltypes-mode {
 body.kingofalltypes-mode .mode-tabs,
 body.kingofalltypes-mode .sub-tabs,
 body.kingofalltypes-mode .history-sub-tabs,
-body.kingofalltypes-mode .tournament-sub-tabs {
+body.kingofalltypes-mode .tournament-sub-tabs ,
+body.kingofalltypes-mode .br-sub-tabs {
     background: rgba(16, 22, 38, 0.85);
     border-bottom-color: #2e3a4f;
 }

@@ -328,7 +328,9 @@ function advanceToNext(sel) {
 // --- Searchable dropdown ---
 // `prependChoices`: optional [{ value: string, label: string }] rendered before
 // the real items (e.g. a "No Ratchet" synthetic choice with a sentinel value).
-function makeSearchable(sel, items, labelFn, prependChoices = []) {
+// `folder`: optional assets subfolder used to show a part thumbnail next to each
+// real item (e.g. "blades"). Items may override it with their own `_folder`.
+function makeSearchable(sel, items, labelFn, prependChoices = [], folder = null) {
   sel.innerHTML = '<option value="">-- Select --</option>';
   prependChoices.forEach(ch => {
     const opt = document.createElement("option");
@@ -373,6 +375,9 @@ function makeSearchable(sel, items, labelFn, prependChoices = []) {
     const query = filter.toLowerCase();
     let count = 0;
     prependChoices.forEach(ch => {
+      // Some contexts suppress synthetic choices entirely (e.g. Clock Mirage
+      // must use a real "...5" ratchet, so "No Ratchet" is not offered).
+      if (wrapper._hidePrepend) return;
       if (query && !ch.label.toLowerCase().includes(query)) return;
       const div = document.createElement("div");
       div.className = "dd-item dd-item-synthetic";
@@ -390,7 +395,23 @@ function makeSearchable(sel, items, labelFn, prependChoices = []) {
       if (query && !label.toLowerCase().includes(query)) return;
       const div = document.createElement("div");
       div.className = "dd-item";
-      div.textContent = label;
+      const itemFolder = item._folder || folder;
+      if (itemFolder) {
+        const img = document.createElement("img");
+        img.className = "dd-item-img";
+        // Multi-mode parts store images with a mode-index suffix (name0.webp),
+        // so there's no plain name.webp — use mode 0 for the thumbnail.
+        const thumbMode = item.modes && item.modes.length ? 0 : null;
+        img.src = partImgPath(itemFolder, item.name, thumbMode);
+        img.alt = "";
+        img.loading = "lazy";
+        img.onerror = function () { this.style.display = "none"; };
+        div.appendChild(img);
+      }
+      const text = document.createElement("span");
+      text.className = "dd-item-label";
+      text.textContent = label;
+      div.appendChild(text);
       div.addEventListener("mousedown", e => {
         e.preventDefault();
         select(i, label);
@@ -462,7 +483,8 @@ function makeSearchable(sel, items, labelFn, prependChoices = []) {
   });
 
   // Allow clearing
-  wrapper._clear = () => { sel.value = ""; input.value = ""; clearBtn.classList.add("hidden"); wrapper._filterFn = null; };
+  wrapper._hidePrepend = false;
+  wrapper._clear = () => { sel.value = ""; input.value = ""; clearBtn.classList.add("hidden"); wrapper._filterFn = null; wrapper._hidePrepend = false; };
 
   // Allow programmatic selection (numeric idx into items, or a prepend-choice value string)
   wrapper._select = (idx) => {
@@ -499,26 +521,26 @@ function initDropdowns() {
 
   // Standard
   const stdForm = document.getElementById("form-standard");
-  makeSearchable(stdForm.querySelector('[name="blade"]'), DATA.blades, b => b.name);
-  makeSearchable(stdForm.querySelector('[name="ratchet"]'), DATA.ratchets, r => r.name, noRatchetChoice);
-  makeSearchable(stdForm.querySelector('[name="bit"]'), DATA.bits, b => b.name);
+  makeSearchable(stdForm.querySelector('[name="blade"]'), DATA.blades, b => b.name, [], "blades");
+  makeSearchable(stdForm.querySelector('[name="ratchet"]'), DATA.ratchets, r => r.name, noRatchetChoice, "ratchets");
+  makeSearchable(stdForm.querySelector('[name="bit"]'), DATA.bits, b => b.name, [], "bits");
 
   // CX
   const cxForm = document.getElementById("form-cx");
-  makeSearchable(cxForm.querySelector('[name="lockChip"]'), DATA.lockChips, lc => lc.name);
-  makeSearchable(cxForm.querySelector('[name="mainBlade"]'), DATA.mainBlades, mb => mb.name);
-  makeSearchable(cxForm.querySelector('[name="assistBlade"]'), DATA.assistBlades, ab => ab.name);
-  makeSearchable(cxForm.querySelector('[name="ratchet"]'), DATA.ratchets, r => r.name, noRatchetChoice);
-  makeSearchable(cxForm.querySelector('[name="bit"]'), DATA.bits, b => b.name);
+  makeSearchable(cxForm.querySelector('[name="lockChip"]'), DATA.lockChips, lc => lc.name, [], "lockChips");
+  makeSearchable(cxForm.querySelector('[name="mainBlade"]'), DATA.mainBlades, mb => mb.name, [], "mainBlades");
+  makeSearchable(cxForm.querySelector('[name="assistBlade"]'), DATA.assistBlades, ab => ab.name, [], "assistBlades");
+  makeSearchable(cxForm.querySelector('[name="ratchet"]'), DATA.ratchets, r => r.name, noRatchetChoice, "ratchets");
+  makeSearchable(cxForm.querySelector('[name="bit"]'), DATA.bits, b => b.name, [], "bits");
 
   // CX Expand
   const cxeForm = document.getElementById("form-cxExpand");
-  makeSearchable(cxeForm.querySelector('[name="lockChip"]'), DATA.lockChips, lc => lc.name);
-  makeSearchable(cxeForm.querySelector('[name="metalBlade"]'), DATA.metalBlades, mb => mb.name);
-  makeSearchable(cxeForm.querySelector('[name="overBlade"]'), DATA.overBlades, ob => ob.name);
-  makeSearchable(cxeForm.querySelector('[name="assistBlade"]'), DATA.assistBlades, ab => ab.name);
-  makeSearchable(cxeForm.querySelector('[name="ratchet"]'), DATA.ratchets, r => r.name, noRatchetChoice);
-  makeSearchable(cxeForm.querySelector('[name="bit"]'), DATA.bits, b => b.name);
+  makeSearchable(cxeForm.querySelector('[name="lockChip"]'), DATA.lockChips, lc => lc.name, [], "lockChips");
+  makeSearchable(cxeForm.querySelector('[name="metalBlade"]'), DATA.metalBlades, mb => mb.name, [], "metalBlades");
+  makeSearchable(cxeForm.querySelector('[name="overBlade"]'), DATA.overBlades, ob => ob.name, [], "overBlades");
+  makeSearchable(cxeForm.querySelector('[name="assistBlade"]'), DATA.assistBlades, ab => ab.name, [], "assistBlades");
+  makeSearchable(cxeForm.querySelector('[name="ratchet"]'), DATA.ratchets, r => r.name, noRatchetChoice, "ratchets");
+  makeSearchable(cxeForm.querySelector('[name="bit"]'), DATA.bits, b => b.name, [], "bits");
 }
 
 // --- Helper: switch to a calculator sub-mode ---

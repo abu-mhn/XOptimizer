@@ -314,6 +314,12 @@
     },
 
     "battleRoyale": {
+      "meta": {
+        ".read": true,
+        ".write": "auth != null && root.child('users').child(auth.uid).child('tags').child('Judge').val() === true",
+        "lastRolloverMonth": { ".validate": "newData.isString() && newData.val().length <= 7" },
+        "$other": { ".validate": false }
+      },
       "players": {
         ".read": true,
         "$uid": {

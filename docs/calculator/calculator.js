@@ -1216,7 +1216,9 @@ initDropdowns();
     const codename = blade ? blade.codename : "";
 
     if (codename === "CLOCKMIRAGE") {
-      // Clock Mirage: filter ratchet to *5; bit list restricted to regular bits
+      // Clock Mirage: filter ratchet to *5; bit list restricted to regular bits.
+      // It must use a real "...5" ratchet, so don't offer the "No Ratchet" choice.
+      ratchetWrapper._hidePrepend = true;
       ratchetWrapper._setFilter(r => r.name.endsWith("5"));
       ratchetInput.disabled = false;
       ratchetInput.placeholder = "-- Select --";
@@ -1226,6 +1228,7 @@ initDropdowns();
     } else if (isExpandCxBlade(blade)) {
       // expandCx blade (e.g. Bullet Griffon, Glory Valkyrie): no ratchet slot —
       // force "No Ratchet" and restrict the bit list to regular (non-ratchet) bits.
+      ratchetWrapper._hidePrepend = false;
       ratchetWrapper._filterFn = null;
       ratchetWrapper._select(NO_RATCHET);
       ratchetInput.disabled = true;
@@ -1234,6 +1237,7 @@ initDropdowns();
       bitInput.placeholder = "-- Select --";
     } else {
       // Default: clear ratchet filter; bit filter driven by ratchet selection.
+      ratchetWrapper._hidePrepend = false;
       ratchetWrapper._filterFn = null;
       ratchetInput.disabled = false;
       ratchetInput.placeholder = "-- Select --";

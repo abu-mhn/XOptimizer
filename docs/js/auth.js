@@ -666,6 +666,16 @@
     });
   }
 
+  // The Battle Royale tab is for signed-in accounts only — guests have no
+  // points balance and can't be challenged or register, so the tab is hidden
+  // for them. Same "current page's own tab is never hidden" rule applies.
+  function paintBattleRoyaleTab() {
+    const show = !!currentProfile;
+    document.querySelectorAll('.tab[data-mode="battleroyale"]').forEach(tab => {
+      tab.classList.toggle("hidden", !show && !tab.classList.contains("active"));
+    });
+  }
+
   // Achievement themes — Dragon Tamer / Dragon Slayer / Lonewolf. Each is
   // gated on the matching achievement tag (awarded at 100 wins, see
   // tournament.js + js/achievements.js). The theme-menu entry is shown
@@ -1138,7 +1148,10 @@
     "achievements",
     "judges",
     "revoxAccounts",
-    "swissViewCodes"
+    "swissViewCodes",
+    "battleRoyale/players",
+    "battleRoyale/challenges",
+    "battleRoyale/meta"
   ];
 
   const DB_COLUMN_PRESETS = {
@@ -1156,7 +1169,13 @@
     achievements:    ["dragonTamer", "dragonSlayer", "lonewolf", "rushHour", "kingOfJungle", "sharknado", "sorcererSupreme"],
     judges:          [],  // value is a plain string
     revoxAccounts:   [],
-    swissViewCodes:  []
+    swissViewCodes:  [],
+    // Battle Royale: keys are UIDs (players) / challenge IDs (challenges).
+    "battleRoyale/players":    ["username", "points", "isJudge", "updatedAt"],
+    "battleRoyale/challenges": ["challengerName", "opponentName", "judgeName", "wager", "status", "winnerUid", "createdAt"],
+    // Single key: lastRolloverMonth ("YYYY-MM"). Delete/edit it to re-run the
+    // monthly ranking→BR settlement (the rollover claims/advances this marker).
+    "battleRoyale/meta":       []
   };
 
   function buildDeveloperDatabasePanel() {
@@ -1612,6 +1631,7 @@
     paintDeveloperTab();
     paintRevoxTab();
     paintAchievementTab();
+    paintBattleRoyaleTab();
     ensureActiveTabVisible();
     applyRevoxThemeGate();
     applyMedalThemeGate();
@@ -1622,6 +1642,7 @@
     paintDeveloperTab();
     paintRevoxTab();
     paintAchievementTab();
+    paintBattleRoyaleTab();
     ensureActiveTabVisible();
     applyAchievementThemeGate();
     renderDeveloperPage();
@@ -1631,6 +1652,7 @@
       paintDeveloperTab();
       paintRevoxTab();
       paintAchievementTab();
+      paintBattleRoyaleTab();
       ensureActiveTabVisible();
       applyAchievementThemeGate();
       initDeveloperPageControls();
@@ -1639,6 +1661,7 @@
     paintDeveloperTab();
     paintRevoxTab();
     paintAchievementTab();
+    paintBattleRoyaleTab();
     ensureActiveTabVisible();
     applyAchievementThemeGate();
     initDeveloperPageControls();

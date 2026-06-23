@@ -18,7 +18,7 @@
 (function () {
   "use strict";
 
-  const BR_DEFAULT_POINTS = 0; // everyone starts at 0 — points are earned only from tournaments
+  const BR_DEFAULT_POINTS = 0; // everyone starts at 0 — points are credited at the monthly ranking rollover
   const PLAYERS_REF = "battleRoyale/players";
   const CHALLENGES_REF = "battleRoyale/challenges";
 
@@ -225,7 +225,7 @@
       .sort((a, b) => num(b.points) - num(a.points) || (a.username || "").localeCompare(b.username || ""));
 
     let html = `<div class="br-points">Your points: <strong>${myPoints}</strong>${amJudge() ? ` <span class="br-judge-tag">Judge</span>` : ""}</div>`;
-    html += `<p class="br-hint">Points are earned only by placing in tournaments. Challenge a player with the same points or fewer — both stake an equal wager and the Judge declares the winner.</p>`;
+    html += `<p class="br-hint">Points come from your tournament ranking: at the end of each month your ranking total is converted into Battle Royale points and the ranking resets. Challenge a player with the same points or fewer — both stake an equal wager and the Judge declares the winner.</p>`;
 
     if (judging.length) {
       html += `<div class="br-section"><h3 class="br-h">To judge (${judging.length})</h3>` +
@@ -265,7 +265,7 @@
 
     html += `<div class="br-section"><h3 class="br-h">Challenge a player <span class="br-sub">(your points or fewer)</span></h3>`;
     if (myPoints < 1) {
-      html += `<p class="br-empty">You have no points yet. Earn Battle Royale points by placing in tournaments, then you can challenge other players.</p>`;
+      html += `<p class="br-empty">You have no points yet. Battle Royale points are awarded at the end of each month from your tournament ranking total — place in tournaments this month, then you can challenge other players.</p>`;
     } else if (!targets.length) {
       html += `<p class="br-empty">No one to challenge right now — you can challenge players with ${myPoints} points or fewer (and at least 1). Check back as others play.</p>`;
     } else {
@@ -341,6 +341,23 @@
     render();
   };
 
+  // ---- Battle / Shop sub-tabs ----
+  // Clicking a sub-tab activates it and shows the matching panel; the other
+  // panels get hidden. Mirrors the reel / history sub-tab pattern.
+  function setupBrSubTabs() {
+    const tabs = document.querySelectorAll(".br-sub-tab");
+    if (!tabs.length) return;
+    tabs.forEach(tab => {
+      tab.addEventListener("click", () => {
+        const view = tab.dataset.brView;
+        tabs.forEach(t => t.classList.toggle("active", t === tab));
+        document.querySelectorAll(".br-panel").forEach(panel => {
+          panel.classList.toggle("hidden", panel.id !== "br-panel-" + view);
+        });
+      });
+    });
+  }
+
   // Bind notification listeners on every page once signed in (so a Judge /
   // opponent is alerted even while on another tab).
   function boot() { if (myUid()) bindListeners(); }
@@ -349,5 +366,5 @@
     boot();
     if (brTabVisible()) window.renderBattleRoyale();
   });
-  window.addEventListener("load", boot);
+  window.addEventListener("load", () => { boot(); setupBrSubTabs(); });
 })();

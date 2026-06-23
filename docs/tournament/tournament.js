@@ -7745,6 +7745,10 @@ document.addEventListener("webkitfullscreenchange", scheduleSwissScrollRestore);
 // Gold / Silver / Bronze Player tags even before the Ranking tab is opened.
 subscribeRankingMedals();
 
+// The monthly BR rollover needs the Judge tag, which loads after auth resolves;
+// retry the check whenever the profile (and its tags) lands.
+window.addEventListener("userprofilechange", maybeRunBattleRoyaleMonthlyRollover);
+
 (function initTournamentSubTabs() {
   const tabs = document.querySelectorAll(".tournament-sub-tab");
   if (!tabs.length) return;
@@ -7912,6 +7916,10 @@ subscribeRankingMedals();
     onAuthChange(user => {
       refreshMyTournaments();
       paintCreateTournamentBtn();
+      // Settle last month's ranking into Battle Royale if the month has turned.
+      // Runs only for Judges; harmless no-op otherwise. Also retried on
+      // userprofilechange below, since the Judge tag loads after auth resolves.
+      maybeRunBattleRoyaleMonthlyRollover();
       // Hosting / co-hosting requires a signed-in account. On sign-out, drop
       // the local room state unconditionally — even when this page's runtime
       // didn't have an active swissRoomRef (sign-out can come from another
@@ -9333,27 +9341,94 @@ function bumpGlobalRanking(name, points) {
   }));
 }
 
-// Battle Royale points are earned ONLY from tournaments. When a signed-in
-// player is awarded ranking points, mirror them into their BR balance (keyed
-// by uid). The host runs this — hosts hold the Judge tag, which the DB rules
-// require to write another player's BR points.
-function registrantUidByName(name) {
-  const s = (typeof loadSwiss === "function") ? loadSwiss() : null;
-  const regs = (s && s.registrants) || {};
-  const target = String(name || "").trim().toLowerCase();
-  if (!target) return null;
-  const found = Object.values(regs).find(r =>
-    r && typeof r.name === "string" && r.name.trim().toLowerCase() === target &&
-    typeof r.createdBy === "string" && r.createdBy);
-  return found ? found.createdBy : null;
+// ===================== BATTLE ROYALE MONTHLY ROLLOVER =====================
+// BR points are no longer minted per-tournament. Instead, at the turn of each
+// month the global /ranking leaderboard is "settled": every player's accumulated
+// ranking total is converted into Battle Royale points (credited to the matching
+// account's BR balance), then /ranking is wiped so the new month starts at zero.
+//
+// There's no server cron, so this runs lazily on the client — the first eligible
+// visitor after the month changes performs the settlement. Eligible = a Judge,
+// because the DB rules require the Judge tag to write another player's BR points;
+// a non-Judge would clear the ranking without crediting anyone. A claimed month
+// marker at battleRoyale/meta/lastRolloverMonth makes it run at most once a month.
+
+// Current accrual month as "YYYY-MM" (local time).
+function currentRolloverMonth() {
+  const d = new Date();
+  const m = d.getMonth() + 1;
+  return d.getFullYear() + "-" + (m < 10 ? "0" + m : "" + m);
 }
-function bumpBattleRoyalePoints(uid, name, points) {
-  if (!uid || !points) return;
+
+let brRolloverChecked = false;
+function maybeRunBattleRoyaleMonthlyRollover() {
+  if (brRolloverChecked) return;
+  if (!firebaseReady()) return;
+  // Only a Judge can write other players' BR points, so only a Judge runs the
+  // settlement. Bail WITHOUT latching the flag until the Judge tag is known —
+  // tags load after auth, so an early call must be allowed to retry.
+  if (typeof window.isJudge !== "function" || !window.isJudge()) return;
   const db = initFirebase();
   if (!db) return;
-  const ref = db.ref("battleRoyale/players/" + uid);
-  ref.child("points").transaction(p => ((Number(p) || 0) + Number(points))).catch(() => {});
-  if (name) ref.child("username").set(String(name).slice(0, 30)).catch(() => {});
+  brRolloverChecked = true; // Judge confirmed — run the check at most once per load.
+
+  const month = currentRolloverMonth();
+  const markerRef = db.ref("battleRoyale/meta/lastRolloverMonth");
+  markerRef.once("value").then(snap => {
+    const prev = snap.val();
+    if (prev === month) return; // already settled for the current month
+    // Claim the new month atomically so two clients can't both settle it.
+    markerRef.transaction(
+      cur => (cur === month ? undefined : month),
+      (err, committed) => {
+        if (err || !committed) return; // another client claimed it first
+        // First run ever (no prior marker): just establish the baseline month.
+        // The existing ranking pre-dates this system, so don't credit/reset it.
+        if (prev == null) return;
+        settleRankingIntoBattleRoyale(db);
+      }
+    );
+  }).catch(() => {});
+}
+
+// Read the leaderboard + username index once, credit each matched account's BR
+// balance with its ranking total, then wipe /ranking. Names with no matching
+// account (guests / unregistered) are dropped — they can't hold BR points.
+function settleRankingIntoBattleRoyale(db) {
+  Promise.all([
+    db.ref("ranking").once("value"),
+    db.ref("usernames").once("value")
+  ]).then(([rankSnap, userSnap]) => {
+    const ranking = rankSnap.val() || {};
+    const usernames = userSnap.val() || {};
+    const credit = {}; // uid -> { points, name }
+    Object.entries(ranking).forEach(([key, v]) => {
+      const pts = (v && Number(v.points)) || 0;
+      const name = (v && v.name) || key;
+      if (pts <= 0 || isTestRegistrant(name)) return;
+      const uid = usernames[key] && usernames[key].uid;
+      if (!uid) return; // guest / unregistered -> dropped on reset
+      if (!credit[uid]) credit[uid] = { points: 0, name };
+      credit[uid].points += pts;
+    });
+    const writes = Object.entries(credit).map(([uid, info]) =>
+      new Promise(resolve => {
+        const ref = db.ref("battleRoyale/players/" + uid);
+        ref.child("points").transaction(
+          p => (Number(p) || 0) + info.points,
+          () => {
+            if (info.name) ref.child("username").set(String(info.name).slice(0, 30)).catch(() => {});
+            resolve();
+          }
+        );
+      })
+    );
+    // Wipe the leaderboard only once every credit has landed, so a mid-way
+    // failure never clears ranking without writing the matching BR points.
+    Promise.all(writes).then(() => {
+      db.ref("ranking").set(null).catch(() => {});
+    }).catch(() => {});
+  }).catch(() => {});
 }
 
 // Claim the per-room per-player slot via transaction so concurrent hosts
@@ -9372,9 +9447,9 @@ function awardPlayerIfNew(name, points) {
     (err, committed) => {
       if (err || !committed) return;
       bumpGlobalRanking(cleanName, points);
-      // Mirror the same points into Battle Royale for signed-in players.
-      const brUid = registrantUidByName(cleanName);
-      if (brUid) bumpBattleRoyalePoints(brUid, cleanName, points);
+      // Battle Royale points are NOT minted per-tournament anymore. The global
+      // ranking accumulates through the month and is converted into BR points
+      // at the monthly rollover (see maybeRunBattleRoyaleMonthlyRollover).
     }
   );
 }
