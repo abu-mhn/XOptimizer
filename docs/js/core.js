@@ -215,6 +215,29 @@ function spinLogo(dir) {
 // Sentinel selected in the Ratchet dropdown to signal "use a ratchet-bit bit".
 const NO_RATCHET = "__NO_RATCHET__";
 
+// Sentinel offered at the top of the Standard Blade dropdown. Picking it splits
+// the single blade into a CX build (Lock Chip + Main Blade + Assist Blade) by
+// switching to the CX line.
+const SPLIT_BLADE = "__SPLIT_BLADE__";
+
+// Sentinel offered in the Standard Blade and Ratchet dropdowns. Picking it
+// enters "combine" mode: the blade has its ratchet baked in (an expandCx blade),
+// so the Ratchet slot is hidden and the Blade list is filtered to expandCx
+// ("UX Expand") blades only.
+const COMBINE_BLADE_RATCHET = "__COMBINE_BR__";
+
+// Line-switch sentinels offered at the top of each line's first dropdown so the
+// user can move between the three calculator lines without a sub-tab bar:
+//   LINE_BX     -> BX / UX (single blade)        [form-standard]
+//   SPLIT_BLADE -> CX (lock chip + main + assist)[form-cx]
+//   LINE_CXE    -> CX Expand                     [form-cxExpand]
+const LINE_BX = "__LINE_BX__";
+const LINE_CXE = "__LINE_CXE__";
+
+// Sentinel offered in the Bit dropdown only while in "Combine (Ratchet + Bit)"
+// mode — picking it reverts the combine (brings the Ratchet row back).
+const SPLIT_RATCHET_BIT = "__SPLIT_RB__";
+
 // A blade flagged `expandCx` has no ratchet slot — it's built blade + bit only
 // (a regular bit, never a ratchet-bit), the same way Bullet Griffon works
 // (which carries this flag too). Shared so the calculator, deck editor,
@@ -286,6 +309,13 @@ const NEXT_DROPDOWN = {
 function advanceToNext(sel) {
   const form = sel.closest("form");
   if (!form) return;
+
+  // Line-switch / combine choices aren't real parts — they re-render the form,
+  // so don't auto-advance to the next field; the user starts from the top again.
+  if ([SPLIT_BLADE, LINE_BX, LINE_CXE, COMBINE_BLADE_RATCHET].includes(sel.value)) {
+    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+    return;
+  }
 
   // Skip auto-advance / popup once a result is displayed (i.e. after calculate or random).
   // User is tweaking existing selections, not walking the initial flow.
@@ -378,6 +408,9 @@ function makeSearchable(sel, items, labelFn, prependChoices = [], folder = null)
       // Some contexts suppress synthetic choices entirely (e.g. Clock Mirage
       // must use a real "...5" ratchet, so "No Ratchet" is not offered).
       if (wrapper._hidePrepend) return;
+      // A single choice can be hidden on its own (e.g. the CX split is dropped
+      // from the Blade list while in combine mode).
+      if (ch.hidden) return;
       if (query && !ch.label.toLowerCase().includes(query)) return;
       const div = document.createElement("div");
       div.className = "dd-item dd-item-synthetic";
@@ -473,17 +506,21 @@ function makeSearchable(sel, items, labelFn, prependChoices = [], folder = null)
     }
   });
 
-  // Clear button click
+  // Clear button click — clear the selection and reopen the list so the user
+  // can immediately pick a new value.
   clearBtn.addEventListener("mousedown", (e) => {
     e.preventDefault();
     sel.value = "";
     input.value = "";
     clearBtn.classList.add("hidden");
     sel.dispatchEvent(new Event("change"));
+    input.focus();
+    open();
   });
 
   // Allow clearing
   wrapper._hidePrepend = false;
+  wrapper._open = open; // open the list programmatically (focus alone is a no-op if already focused)
   wrapper._clear = () => { sel.value = ""; input.value = ""; clearBtn.classList.add("hidden"); wrapper._filterFn = null; wrapper._hidePrepend = false; };
 
   // Allow programmatic selection (numeric idx into items, or a prepend-choice value string)
@@ -517,30 +554,69 @@ function makeSearchable(sel, items, labelFn, prependChoices = [], folder = null)
 }
 
 function initDropdowns() {
-  const noRatchetChoice = [{ value: NO_RATCHET, label: "No Ratchet" }];
+  // "Combine (Ratchet + Bit)" = the bit carries the ratchet (a ratchet-bit), so
+  // there's no separate ratchet. Selecting it hides the Ratchet row (handled in
+  // the ratchet→bit coupling) and switches the Bit list to ratchet-bits.
+  const noRatchetChoice = [{ value: NO_RATCHET, label: "Combine (Ratchet + Bit)" }];
 
-  // Standard
+  // Line-switch choices shown at the top of each line's first dropdown (the
+  // sub-tab bar is hidden). Each line offers the OTHER two lines.
+  const lineBX = { value: LINE_BX, label: "Revert" };
+  // CX / CX Expand split labels gain "+ Ratchet" only once the blade+ratchet are
+  // combined (the combined blade then contains the ratchet). The calculator
+  // flips all three labels as it enters/exits combine mode.
+  const lineCX = { value: SPLIT_BLADE, label: "Split (Lock Chip + Main Blade + Assist Blade)" };
+  const lineCXE = { value: LINE_CXE, label: "Split (Lock Chip + Over Blade + Metal Blade + Assist Blade)" };
+  const combineChoice = { value: COMBINE_BLADE_RATCHET, label: "Combine (Blade + Ratchet)" };
+  window.__combineChoice = combineChoice;
+  window.__lineCXChoice = lineCX;
+  window.__lineCXEChoice = lineCXE;
+
+  // Bit "Revert" — shown only while combine-ratchet-bit mode is active (toggled
+  // by the ratchet→bit coupling). One per form so each toggles independently.
+  const mkBitRevert = () => ({ value: SPLIT_RATCHET_BIT, label: "Revert", hidden: true });
+  const stdBitRevert = mkBitRevert(), cxBitRevert = mkBitRevert(), cxeBitRevert = mkBitRevert();
+  window.__bitRevertChoices = {
+    "form-standard": stdBitRevert, "form-cx": cxBitRevert, "form-cxExpand": cxeBitRevert
+  };
+
+  // Standard. The Ratchet dropdown only offers "Combine (Ratchet + Bit)" —
+  // "Combine (Blade + Ratchet)" lives in the Blade dropdown.
+  const bladePrepend = [lineCX, combineChoice];
   const stdForm = document.getElementById("form-standard");
-  makeSearchable(stdForm.querySelector('[name="blade"]'), DATA.blades, b => b.name, [], "blades");
+  makeSearchable(stdForm.querySelector('[name="blade"]'), DATA.blades, b => b.name, bladePrepend, "blades");
   makeSearchable(stdForm.querySelector('[name="ratchet"]'), DATA.ratchets, r => r.name, noRatchetChoice, "ratchets");
-  makeSearchable(stdForm.querySelector('[name="bit"]'), DATA.bits, b => b.name, [], "bits");
+  makeSearchable(stdForm.querySelector('[name="bit"]'), DATA.bits, b => b.name, [stdBitRevert], "bits");
 
   // CX
   const cxForm = document.getElementById("form-cx");
-  makeSearchable(cxForm.querySelector('[name="lockChip"]'), DATA.lockChips, lc => lc.name, [], "lockChips");
-  makeSearchable(cxForm.querySelector('[name="mainBlade"]'), DATA.mainBlades, mb => mb.name, [], "mainBlades");
+  makeSearchable(cxForm.querySelector('[name="lockChip"]'), DATA.lockChips, lc => lc.name, [lineBX], "lockChips");
+  // CX Main Blade offers a switch to CX Expand — splitting the single main
+  // blade into Over Blade + Metal Blade.
+  const mainBladeSplit = { value: LINE_CXE, label: "Split (Over Blade + Metal Blade)" };
+  makeSearchable(cxForm.querySelector('[name="mainBlade"]'), DATA.mainBlades, mb => mb.name, [mainBladeSplit], "mainBlades");
   makeSearchable(cxForm.querySelector('[name="assistBlade"]'), DATA.assistBlades, ab => ab.name, [], "assistBlades");
   makeSearchable(cxForm.querySelector('[name="ratchet"]'), DATA.ratchets, r => r.name, noRatchetChoice, "ratchets");
-  makeSearchable(cxForm.querySelector('[name="bit"]'), DATA.bits, b => b.name, [], "bits");
+  makeSearchable(cxForm.querySelector('[name="bit"]'), DATA.bits, b => b.name, [cxBitRevert], "bits");
 
   // CX Expand
   const cxeForm = document.getElementById("form-cxExpand");
   makeSearchable(cxeForm.querySelector('[name="lockChip"]'), DATA.lockChips, lc => lc.name, [], "lockChips");
-  makeSearchable(cxeForm.querySelector('[name="metalBlade"]'), DATA.metalBlades, mb => mb.name, [], "metalBlades");
+  // CX Expand Metal Blade "Revert" goes back to CX (re-merging Over + Metal
+  // into a single Main Blade). Value SPLIT_BLADE routes to the CX line.
+  const metalBladeRevert = { value: SPLIT_BLADE, label: "Revert" };
+  makeSearchable(cxeForm.querySelector('[name="metalBlade"]'), DATA.metalBlades, mb => mb.name, [metalBladeRevert], "metalBlades");
   makeSearchable(cxeForm.querySelector('[name="overBlade"]'), DATA.overBlades, ob => ob.name, [], "overBlades");
   makeSearchable(cxeForm.querySelector('[name="assistBlade"]'), DATA.assistBlades, ab => ab.name, [], "assistBlades");
   makeSearchable(cxeForm.querySelector('[name="ratchet"]'), DATA.ratchets, r => r.name, noRatchetChoice, "ratchets");
-  makeSearchable(cxeForm.querySelector('[name="bit"]'), DATA.bits, b => b.name, [], "bits");
+  makeSearchable(cxeForm.querySelector('[name="bit"]'), DATA.bits, b => b.name, [cxeBitRevert], "bits");
+}
+
+// Reset all bit "Revert" choices to hidden (combine-ratchet-bit is off).
+function hideBitReverts() {
+  if (window.__bitRevertChoices) {
+    Object.values(window.__bitRevertChoices).forEach(c => { c.hidden = true; });
+  }
 }
 
 // --- Helper: switch to a calculator sub-mode ---
@@ -576,6 +652,15 @@ function switchToCalcMode(mode) {
       rInput.disabled = false;
       rInput.placeholder = "-- Select --";
     }
+
+    // Restore the Ratchet row + the Combine/Split toggle label in case combine
+    // mode left them changed, and re-hide expandCx blades from the Blade list.
+    form.querySelector('[name="ratchet"]')?.closest("label")?.classList.remove("hidden");
+    if (typeof window.__resetCombineLabel === "function") window.__resetCombineLabel();
+    if (mode === "standard" && typeof window.__applyDefaultBladeFilter === "function") {
+      window.__applyDefaultBladeFilter();
+    }
+    hideBitReverts();
 
     const bInput = form.querySelector('[name="bit"]')?.nextElementSibling?.querySelector("input");
     if (bInput) {

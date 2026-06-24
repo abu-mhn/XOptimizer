@@ -1201,17 +1201,184 @@ document.getElementById("form-cxExpand").addEventListener("submit", e => { e.pre
 sortData();
 initDropdowns();
 
+// Line-switch sentinels -> calculator sub-mode. The sub-tab bar is hidden, so
+// the user moves between lines via these synthetic choices at the top of each
+// line's first dropdown. Returns true (and switches) if `value` is a switch.
+const LINE_SWITCH_MODE = {
+  [LINE_BX]: "standard",
+  [SPLIT_BLADE]: "cx",
+  [LINE_CXE]: "cxExpand",
+};
+// Focus (and thereby open) a form's first EMPTY dropdown — so after a switch the
+// user lands on the next thing to pick (a carried-over Lock Chip isn't reopened).
+function openFirstDropdown(form) {
+  if (!form) return;
+  const selects = [...form.querySelectorAll("select[name]")];
+  const target = selects.find(s => s.value === "") || selects[0];
+  const wrapper = target?.nextElementSibling;
+  if (!wrapper) return;
+  const input = wrapper.querySelector("input");
+  requestAnimationFrame(() => {
+    if (input) input.focus();   // needed on line switch (focus moves to the new form)
+    if (wrapper._open) wrapper._open(); // open even when already focused (combine toggle)
+  });
+}
+
+// Fields that mean the same part in both source and destination lines, so they
+// carry across a switch (the switch resets the destination form first).
+function carrySharedSelections(srcForm, destForm, skipSel) {
+  if (!srcForm || !destForm) return;
+  srcForm.querySelectorAll("select[name]").forEach(s => {
+    if (s === skipSel || s.value === "") return; // skip the trigger / empties
+    const name = s.getAttribute("name");
+    const destWrapper = destForm.querySelector(`[name="${name}"]`)?.nextElementSibling;
+    if (!destWrapper || !destWrapper._select) return; // field not in destination
+    const num = Number(s.value);
+    destWrapper._select(Number.isInteger(num) && String(num) === s.value ? num : s.value);
+  });
+}
+
+function switchCalcLine(value, sourceSel) {
+  const mode = LINE_SWITCH_MODE[value];
+  if (!mode) return false;
+  const srcForm = sourceSel?.closest("form");
+  // Deferred so it runs after the dropdown's select() finishes re-stamping the
+  // input text. Reuses the (now hidden) sub-tab's click path to switch + reset,
+  // carries shared selections over, then opens the next empty dropdown.
+  setTimeout(() => {
+    document.querySelector(`.sub-tab[data-mode="${mode}"]`)?.click();
+    const destForm = document.getElementById("form-" + mode);
+    carrySharedSelections(srcForm, destForm, sourceSel);
+    openFirstDropdown(destForm);
+  }, 0);
+  return true;
+}
+
+// CX / CX Expand first dropdown (Lock Chip) also carries line-switch choices.
+["form-cx", "form-cxExpand"].forEach(id => {
+  const sel = document.getElementById(id)?.querySelector('[name="lockChip"]');
+  sel?.addEventListener("change", () => switchCalcLine(sel.value, sel));
+});
+// CX Main Blade offers "Split (Over Blade + Metal Blade)" -> CX Expand.
+const cxMainBladeSel = document.getElementById("form-cx")?.querySelector('[name="mainBlade"]');
+cxMainBladeSel?.addEventListener("change", () => switchCalcLine(cxMainBladeSel.value, cxMainBladeSel));
+// CX Expand Metal Blade offers "Revert" -> back to CX.
+const cxeMetalBladeSel = document.getElementById("form-cxExpand")?.querySelector('[name="metalBlade"]');
+cxeMetalBladeSel?.addEventListener("change", () => switchCalcLine(cxeMetalBladeSel.value, cxeMetalBladeSel));
+
 // --- Blade-specific restrictions (Standard) ---
 (function () {
   const stdForm = document.getElementById("form-standard");
   const bladeSel = stdForm.querySelector('[name="blade"]');
-  const ratchetWrapper = stdForm.querySelector('[name="ratchet"]').nextElementSibling;
+  const bladeWrapper = bladeSel.nextElementSibling;
+  const ratchetSel = stdForm.querySelector('[name="ratchet"]');
+  const ratchetWrapper = ratchetSel.nextElementSibling;
   const ratchetInput = ratchetWrapper.querySelector("input");
+  const ratchetLabel = ratchetSel.closest("label");
   const bitWrapper = stdForm.querySelector('[name="bit"]').nextElementSibling;
   const bitInput = bitWrapper.querySelector("input");
 
+  // Blade-combine mode is identified by the Blade list being filtered to
+  // expandCx blades (the Ratchet row is hidden in BOTH combine modes, so that
+  // alone can't tell them apart). The toggle reads "Combine (Blade + Ratchet)"
+  // when off and "Split (Blade + Ratchet)" once combined.
+  const inCombineMode = () => bladeWrapper._filterFn === isExpandCxBlade;
+  window.__inBladeCombineMode = inCombineMode; // so the bit coupling can tell modes apart
+  // Once blade+ratchet are combined, the CX / CX Expand "Split" choices gain
+  // "+ Ratchet" (the combined blade contains the ratchet) and the toggle reads
+  // "Split (Blade + Ratchet)". All three flip together.
+  function setCombineLabel(combined) {
+    if (window.__combineChoice) {
+      window.__combineChoice.label = combined
+        ? "Revert"
+        : "Combine (Blade + Ratchet)";
+    }
+    if (window.__lineCXChoice) {
+      // Hide the CX split from the Blade dropdown while combined.
+      window.__lineCXChoice.hidden = combined;
+      window.__lineCXChoice.label = combined
+        ? "Split (Lock Chip + Main Blade + Assist Blade + Ratchet)"
+        : "Split (Lock Chip + Main Blade + Assist Blade)";
+    }
+    if (window.__lineCXEChoice) {
+      window.__lineCXEChoice.label = combined
+        ? "Split (Lock Chip + Over Blade + Metal Blade + Assist Blade + Ratchet)"
+        : "Split (Lock Chip + Over Blade + Metal Blade + Assist Blade)";
+    }
+  }
+
+  // Normal (not combined) Blade list excludes expandCx / "UX Expand" blades —
+  // those are only offered after the user picks "Combine (Blade + Ratchet)".
+  function applyDefaultBladeFilter() {
+    bladeWrapper._filterFn = b => !isExpandCxBlade(b);
+  }
+  window.__applyDefaultBladeFilter = applyDefaultBladeFilter;
+
+  // "Combine (Blade + Ratchet)" mode: the blade has its ratchet baked in
+  // (an expandCx / "UX Expand" blade), so hide the Ratchet slot and restrict
+  // the Blade list to expandCx blades only.
+  function enterCombineMode() {
+    ratchetLabel?.classList.add("hidden");
+    // Set the Blade filter FIRST so the ratchet->bit coupling (fired by the
+    // _select below) sees blade-combine mode and keeps the Bit "Revert" hidden.
+    bladeWrapper._filterFn = isExpandCxBlade;
+    // Ratchet behaves as "No Ratchet" so the build is treated as ratchet-less.
+    ratchetWrapper._hidePrepend = false;
+    ratchetWrapper._filterFn = null;
+    ratchetWrapper._select(NO_RATCHET);
+    ratchetInput.disabled = true;
+    // Clear any non-expandCx selection in place — without re-dispatching a blade
+    // change, which would otherwise run the default branch and undo this mode.
+    const curNum = Number(bladeSel.value);
+    const curBlade = Number.isInteger(curNum) ? DATA.blades[curNum] : null;
+    if (!curBlade || !isExpandCxBlade(curBlade)) {
+      bladeSel.value = "";
+      const bInput = bladeWrapper.querySelector("input");
+      if (bInput) bInput.value = "";
+      bladeWrapper.querySelector(".dd-clear")?.classList.add("hidden");
+    }
+    // expandCx blades take a regular bit only.
+    bitWrapper._setFilter(b => !b.isRatchetBit);
+    bitInput.disabled = false;
+    bitInput.placeholder = "-- Select --";
+    setCombineLabel(true);
+  }
+
+  // "Split (Blade + Ratchet)" — undo combine mode: bring the Ratchet row back,
+  // restore the full Blade list, and clear the combined selection.
+  function exitCombineMode() {
+    ratchetLabel?.classList.remove("hidden");
+    ratchetInput.disabled = false;
+    ratchetInput.placeholder = "-- Select --";
+    ratchetWrapper._hidePrepend = false;
+    bladeWrapper._clear && bladeWrapper._clear();
+    applyDefaultBladeFilter(); // back to non-expandCx list (after _clear nulls it)
+    ratchetWrapper._clear && ratchetWrapper._clear();
+    applyBitFilter(stdForm);
+    setCombineLabel(false);
+  }
+  // Reset / line-switch reset the toggle label back to "Combine".
+  window.__resetCombineLabel = () => setCombineLabel(false);
+
+  const toggleCombine = () => {
+    if (inCombineMode()) exitCombineMode();
+    else enterCombineMode();
+    openFirstDropdown(stdForm); // reopen the Blade dropdown from the top
+  };
+
   bladeSel.addEventListener("change", () => {
     const idx = bladeSel.value;
+
+    // Line switch — "CX (Split Blade)" or "CX Expand" leave BX for that line.
+    if (switchCalcLine(idx, bladeSel)) return;
+
+    // Combine / Split toggle — enter combine mode (hide ratchet, expandCx
+    // blades only) or undo it. Deferred for the same select() re-stamp reason.
+    if (idx === COMBINE_BLADE_RATCHET) {
+      setTimeout(toggleCombine, 0);
+      return;
+    }
+
     const blade = idx !== "" ? DATA.blades[idx] : null;
     const codename = blade ? blade.codename : "";
 
@@ -1246,6 +1413,9 @@ initDropdowns();
       applyBitFilter(stdForm);
     }
   });
+
+  // Hide expandCx blades from the normal list on load.
+  applyDefaultBladeFilter();
 })();
 
 // --- Generic multi-mode item button ---
@@ -1324,19 +1494,54 @@ function setupModeButton(form, selectName, dataArray) {
 })();
 
 // --- Ratchet -> Bit filter coupling ---
-// Bit dropdown defaults to regular bits. Picking "No Ratchet" (NO_RATCHET sentinel)
-// switches the bit filter to ratchet-bit-flagged items only.
+// Bit dropdown defaults to regular bits. Picking "Combine (Ratchet + Bit)"
+// (NO_RATCHET sentinel) means the bit carries the ratchet, so the Bit list
+// switches to ratchet-bit-flagged items only AND the Ratchet row is hidden.
+// Reverts "Combine (Ratchet + Bit)": bring the Ratchet row back, clear the
+// ratchet + bit, and switch the Bit list back to regular bits.
+function revertRatchetBit(form) {
+  const ratchetSel = form.querySelector('[name="ratchet"]');
+  const ratchetWrapper = ratchetSel?.nextElementSibling;
+  const bitWrapper = form.querySelector('[name="bit"]')?.nextElementSibling;
+  ratchetSel?.closest("label")?.classList.remove("hidden");
+  const rInput = ratchetWrapper?.querySelector("input");
+  if (rInput) { rInput.disabled = false; rInput.placeholder = "-- Select --"; }
+  ratchetWrapper?._clear?.();
+  bitWrapper?._clear?.();
+  applyBitFilter(form);                 // ratchet now "" -> regular bits
+  if (window.__bitRevertChoices?.[form.id]) window.__bitRevertChoices[form.id].hidden = true;
+  // Open the now-visible Ratchet dropdown so the user can pick a ratchet.
+  requestAnimationFrame(() => {
+    if (rInput) rInput.focus();
+    if (ratchetWrapper?._open) ratchetWrapper._open();
+  });
+}
+
 document.querySelectorAll(".calc-form").forEach(form => {
   const ratchetSel = form.querySelector('[name="ratchet"]');
   const bitSel = form.querySelector('[name="bit"]');
   if (!ratchetSel || !bitSel) return;
 
-  ratchetSel.addEventListener("change", () => {
+  function syncRatchetBitMode() {
     applyBitFilter(form);
+    const combined = ratchetSel.value === NO_RATCHET;
+    // Hide the Ratchet row when its ratchet is combined into the bit.
+    ratchetSel.closest("label")?.classList.toggle("hidden", combined);
+    // Show the Bit "Revert" only in combine-ratchet-bit mode — NOT in the
+    // standard blade-combine mode (also NO_RATCHET, but reverted from the Blade
+    // dropdown and listing regular bits).
+    const bladeCombine = form.id === "form-standard" && window.__inBladeCombineMode && window.__inBladeCombineMode();
+    const rc = window.__bitRevertChoices?.[form.id];
+    if (rc) rc.hidden = !(combined && !bladeCombine);
+  }
+
+  ratchetSel.addEventListener("change", syncRatchetBitMode);
+  bitSel.addEventListener("change", () => {
+    if (bitSel.value === SPLIT_RATCHET_BIT) setTimeout(() => revertRatchetBit(form), 0);
   });
 
-  // Initial state: enforce the default (regular bits only).
-  applyBitFilter(form);
+  // Initial state.
+  syncRatchetBitMode();
 });
 
 // --- Reset handlers ---
@@ -1353,6 +1558,15 @@ document.querySelectorAll(".btn-reset").forEach(btn => {
       rInput.placeholder = "-- Select --";
     }
 
+    // Restore the Ratchet row + the Combine/Split toggle label in case combine
+    // mode left them changed, and re-hide expandCx blades from the Blade list.
+    form.querySelector('[name="ratchet"]')?.closest("label")?.classList.remove("hidden");
+    if (typeof window.__resetCombineLabel === "function") window.__resetCombineLabel();
+    if (form.id === "form-standard" && typeof window.__applyDefaultBladeFilter === "function") {
+      window.__applyDefaultBladeFilter();
+    }
+    if (typeof hideBitReverts === "function") hideBitReverts();
+
     const bInput = form.querySelector('[name="bit"]')?.nextElementSibling?.querySelector("input");
     if (bInput) {
       bInput.disabled = false;
@@ -1365,6 +1579,11 @@ document.querySelectorAll(".btn-reset").forEach(btn => {
     form.querySelectorAll(".btn-mode").forEach(b => b.classList.add("hidden"));
 
     document.getElementById("result")?.classList.add("hidden");
+
+    // Reset always returns to the BX / UX line.
+    if (form.id !== "form-standard" && typeof switchToCalcMode === "function") {
+      switchToCalcMode("standard");
+    }
 
     // 🔽 AUTO SCROLL TO TOP (追加)
     requestAnimationFrame(() => {
@@ -1870,17 +2089,14 @@ function selectRandomBottom(form) {
 
 function selectRandom(form, mode) {
   if (mode === "standard") {
-    const bladeIdx = randIdx(DATA.blades);
+    // expandCx ("UX Expand") blades are only reachable via Combine mode, so
+    // Random in the normal BX line excludes them too.
+    const bladeIdx = randIdxFromPredicate(DATA.blades, b => !isExpandCxBlade(b));
+    if (bladeIdx < 0) return;
     getWrapper(form, "blade")._select(bladeIdx);
     const codename = DATA.blades[bladeIdx].codename;
 
-    if (isExpandCxBlade(DATA.blades[bladeIdx])) {
-      const idx = randIdxFromPredicate(DATA.bits, isNormalBit);
-      if (idx >= 0) {
-        getWrapper(form, "ratchet")._select(NO_RATCHET);
-        getWrapper(form, "bit")._select(idx);
-      }
-    } else if (codename === "CLOCKMIRAGE") {
+    if (codename === "CLOCKMIRAGE") {
       const valid = DATA.ratchets.map((r, i) => ({ r, i })).filter(x => x.r.name.endsWith("5"));
       getWrapper(form, "ratchet")._select(valid[Math.floor(Math.random() * valid.length)].i);
       const regIdx = randIdxFromPredicate(DATA.bits, isNormalBit);
@@ -2046,9 +2262,13 @@ function selectComboOfDay(form, mode) {
 
 document.querySelectorAll(".btn-lucky").forEach(btn => {
   btn.addEventListener("click", () => {
-    const form = btn.closest("form");
-    form.querySelector(".btn-reset").click();
-    const mode = form.id.replace("form-", "");
+    // Random can land on any line, not just the current BX / UX one.
+    const modes = ["standard", "cx", "cxExpand"];
+    const mode = modes[Math.floor(Math.random() * modes.length)];
+    // Switch to (and reset) that line, then fill + calculate.
+    if (typeof switchToCalcMode === "function") switchToCalcMode(mode);
+    const form = document.getElementById("form-" + mode);
+    if (!form) return;
 
     if (randomModeValue === "meta") {
       selectMeta(form, mode);

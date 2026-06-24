@@ -270,6 +270,14 @@ h1 {
     display: none;
 }
 
+/* The calculator sub-tab bar is hidden, so its spacing between the main tab row
+   and the form is gone. Restore a gap above the calculator forms. */
+#form-standard,
+#form-cx,
+#form-cxExpand {
+    margin-top: 20px;
+}
+
 .sub-tab {
     padding: 8px;
     border: 1px solid #30363d;
@@ -365,6 +373,12 @@ select {
     margin-top: 4px;
 }
 
+/* While open, lift the dropdown above the fixed action bar (z-index 101) and
+   footer (100) so the bottom-most field's list isn't hidden behind them. */
+.search-dropdown.open {
+    z-index: 200;
+}
+
 .search-dropdown input {
     display: block;
     width: 100%;
@@ -431,6 +445,13 @@ select {
     grid-template-columns: repeat(3, 1fr);
     gap: 4px;
     padding: 6px;
+}
+
+/* Desktop has far more room — widen the part-thumbnail grid to 5 columns. */
+@media (min-width: 900px) {
+    .search-dropdown.open .dd-list {
+        grid-template-columns: repeat(5, 1fr);
+    }
 }
 
 .search-dropdown .dd-item {
@@ -4815,6 +4836,7 @@ body.mono-mode .btn-paste:hover {
     padding: 10px 0;
 }
 
+
 .btn-row .btn,
 .btn-row .btn-reset,
 .btn-row .btn-lucky,
@@ -9159,8 +9181,7 @@ button.swiss-reg-paid:hover {
    background, so its white icon stays. On mono it's the reverse: the
    ACTIVE tab is white-backed (inactive is #111), so only the active
    icon needs flipping there. */
-body.light-mode .tournament-sub-tab:not(.active) img, so only the active
-   icon needs flipping there. */
+body.light-mode .tournament-sub-tab:not(.active) img,
 body.light-mode .br-sub-tab:not(.active) img,
 body.light-mode .history-sub-tab:not(.active) img,
 body.tropical-mode .tournament-sub-tab:not(.active) img,
