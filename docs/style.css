@@ -2554,6 +2554,102 @@ body.mono-mode .bey-check-slot-action-btn img {
     margin-top: 16px;
 }
 
+/* "Your Matches" recap panel — a participant's win/lose record with the deck
+   they fought each opponent with. */
+.my-recap {
+    margin-top: 16px;
+}
+.my-recap-mydeck {
+    margin-bottom: 10px;
+}
+.my-recap-deck-label {
+    display: block;
+    font-size: 0.78rem;
+    color: #8b949e;
+    margin: 2px 0 4px;
+}
+.my-recap-combos {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.my-recap-combo {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+.my-recap-combo-img {
+    flex: 0 0 auto;
+    width: 26px;
+    height: 26px;
+    object-fit: contain;
+    border-radius: 4px;
+}
+.my-recap-combo-name {
+    font-size: 0.82rem;
+    color: #e6edf3;
+    word-break: break-word;
+}
+.my-recap-record {
+    font-size: 0.82rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+.my-recap-record .my-recap-w { color: #3fb950; }
+.my-recap-record .my-recap-l { color: #f85149; }
+.my-recap-row {
+    border-left: 3px solid #30363d;
+    padding: 6px 0 6px 10px;
+    margin-bottom: 8px;
+}
+.my-recap-row.my-recap-win { border-left-color: #3fb950; }
+.my-recap-row.my-recap-loss { border-left-color: #f85149; }
+.my-recap-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    user-select: none;
+    padding-right: 4px;
+}
+.my-recap-line .my-recap-chevron {
+    margin-left: auto;
+    flex: 0 0 auto;
+    align-self: center;
+    font-size: 1.15em;
+    font-weight: 700;
+    line-height: 1;
+    width: 16px;
+    text-align: center;
+    color: #8b949e;
+}
+/* Each match's opponent deck is collapsed by default; the open class reveals it. */
+.my-recap-row-deck { display: none; }
+.my-recap-row-open .my-recap-row-deck { display: block; }
+.my-recap-result {
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+}
+.my-recap-win .my-recap-result { color: #3fb950; }
+.my-recap-loss .my-recap-result { color: #f85149; }
+.my-recap-vs { font-weight: 600; color: #f0f6fc; word-break: break-word; }
+.my-recap-score { color: #8b949e; }
+.my-recap-where { color: #8b949e; font-size: 0.78rem; }
+.my-recap-deck {
+    font-size: 0.8rem;
+    color: #c9d1d9;
+    margin-top: 2px;
+}
+.my-recap-nodeck { color: #6e7681; font-style: italic; }
+.my-recap-empty {
+    font-size: 0.85rem;
+    color: #8b949e;
+}
+
 .part-usage-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -8366,6 +8462,21 @@ body.light-mode .swiss-group-progress {
     color: #8b949e;
     margin-top: 2px;
 }
+/* Win/lose result toast: green for a win (inherits .match-toast-mine), red
+   for a loss. The deck line names the combos the player fought with. */
+.match-toast-win .match-toast-tag { color: #3fb950; }
+.match-toast-loss {
+    border-color: rgba(248, 81, 73, 0.6);
+    box-shadow: 0 6px 20px rgba(248, 81, 73, 0.22);
+}
+.match-toast-loss .match-toast-tag { color: #f85149; }
+.match-toast-deck {
+    margin-top: 5px;
+    padding-top: 5px;
+    font-size: 0.8rem;
+    color: #c9d1d9;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
 .match-toast-enable {
     appearance: none;
     background: rgba(63, 185, 80, 0.15);
@@ -9403,8 +9514,11 @@ body.mono-mode .history-sub-tab.active img {
 }
 /* Global tournament ranking rows carry an avatar (swissNameCellInner) — lay
    the cell out as a flex row. Scoped with :not(.revox-row) so the Revox
-   ranking rows (which stack a name button over meta lines) are untouched. */
-.tournament-ranking-row:not(.revox-row) .tournament-results-player {
+   ranking rows (which stack a name button over meta lines) are untouched.
+   The history-results placement / standings rows (not .tournament-ranking-row)
+   now carry an avatar too, so they get the same flex layout. */
+.tournament-ranking-row:not(.revox-row) .tournament-results-player,
+.tournament-results-row:not(.tournament-ranking-row) .tournament-results-player {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -9418,11 +9532,18 @@ body.mono-mode .history-sub-tab.active img {
 .tournament-ranking-row.has-rank-banner .tournament-results-place,
 .tournament-ranking-row.has-rank-banner .tournament-results-player,
 .tournament-ranking-row.has-rank-banner .swiss-name-text,
-.tournament-ranking-row.has-rank-banner .tournament-ranking-points {
+.tournament-ranking-row.has-rank-banner .tournament-ranking-points,
+.tournament-results-row.has-rank-banner,
+.tournament-results-row.has-rank-banner .tournament-results-place,
+.tournament-results-row.has-rank-banner .tournament-results-player,
+.tournament-results-row.has-rank-banner .swiss-name-text,
+.tournament-results-row.has-rank-banner .swiss-final-group,
+.tournament-results-row.has-rank-banner .swiss-final-record {
     color: #ffffff;
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
 }
-.tournament-ranking-row.has-rank-banner .swiss-name-avatar {
+.tournament-ranking-row.has-rank-banner .swiss-name-avatar,
+.tournament-results-row.has-rank-banner .swiss-name-avatar {
     border-color: rgba(255, 255, 255, 0.6);
 }
 /* Keep the podium identity on banner rows: the rank chip stays gold /

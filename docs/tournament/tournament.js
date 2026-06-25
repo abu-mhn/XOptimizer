@@ -275,6 +275,7 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit, roleHint) {
       try {
         const prevState = JSON.parse(localStorage.getItem(SWISS_KEY) || "null") || {};
         detectAndAnnounceMatchStarts(prevState, remote);
+        detectAndAnnounceMyMatchResults(prevState, remote);
         detectSelfRemovedFromRoom(prevState, remote, editCode);
       } catch (e) { /* non-fatal */ }
       swissApplyingRemote = true;
@@ -3176,6 +3177,7 @@ function renderSwiss() {
     ${groupsHtml}
     ${bracketHtml}
     ${isSwissOnly && groupStageDone ? renderCombinedSwissStandings(state) : ""}
+    ${renderMyTournamentRecap(state)}
     ${tournamentComplete ? renderPartUsageCharts(state) : ""}
   `;
 
@@ -3771,17 +3773,270 @@ function detectAndAnnounceMatchStarts(prevState, remote) {
     if (wasStarted) return; // already started — not a fresh transition
     if (swissLiveMatchId === id) return; // THIS device started it
     const isMine = myNames.has(m.a) || myNames.has(m.b);
-    // Best-effort label: "Round X · Group N" / "Quarterfinal" / "Final" etc.
-    let where = "";
-    if (typeof m.groupIndex === "number") {
-      const letter = String.fromCharCode(65 + m.groupIndex); // 0→A
-      const round = (typeof m.round === "number") ? (m.round + 1) : null;
-      where = round != null ? `Round ${round} · Group ${letter}` : `Group ${letter}`;
-    } else if (m.bracket) {
-      const labels = { qf: "Quarterfinal", sf: "Semifinal", cqf: "Consolation QF", f: "Final", "3rd": "3rd Place", "5th": "5th Place", "7th": "7th Place" };
-      where = labels[m.round] || (typeof m.round === "number" ? `Round ${m.round + 1}` : "Bracket");
+    showMatchStartToast({ a: m.a, b: m.b, where: matchWhereLabel(m), isMine });
+  });
+}
+
+// Best-effort label for where a match sits: "Round X · Group N" /
+// "Quarterfinal" / "Final" etc. Shared by the match-start and match-result
+// announcers.
+function matchWhereLabel(m) {
+  if (!m) return "";
+  if (typeof m.groupIndex === "number") {
+    const letter = String.fromCharCode(65 + m.groupIndex); // 0→A
+    const round = (typeof m.round === "number") ? (m.round + 1) : null;
+    return round != null ? `Round ${round} · Group ${letter}` : `Group ${letter}`;
+  }
+  if (m.bracket) {
+    const labels = { qf: "Quarterfinal", sf: "Semifinal", cqf: "Consolation QF", f: "Final", "3rd": "3rd Place", "5th": "5th Place", "7th": "7th Place" };
+    return labels[m.round] || (typeof m.round === "number" ? `Round ${m.round + 1}` : "Bracket");
+  }
+  return "";
+}
+
+// Persistent "Your Matches" panel for a signed-in participant: their own deck
+// plus a win/lose record where each row names the OPPONENT's deck (the deck
+// they won/lost to). Only rendered when the player themselves registered a deck
+// (no deck → no panel, matching the per-match toast rule). Stays in the
+// tournament view through to the end of the tournament.
+function renderMyTournamentRecap(state, ownerCode) {
+  if (!state || !state.matches) return "";
+
+  // My names (signed-in username + any device-owned registrant names). The
+  // device-reg lookup uses the live room code, or the passed code when this is
+  // a past tournament opened from History.
+  const myNamesList = [];
+  const myNamesLower = new Set();
+  const addMy = (n) => {
+    const name = (n || "").trim();
+    if (!name) return;
+    const lc = name.toLowerCase();
+    if (!myNamesLower.has(lc)) { myNamesLower.add(lc); myNamesList.push(name); }
+  };
+  addMy((window.getCurrentUsername && window.getCurrentUsername()) || "");
+  const regCode = ownerCode || swissEditCode;
+  if (regCode && typeof loadDeviceOwnedRegIds === "function") {
+    const ownedIds = loadDeviceOwnedRegIds(regCode);
+    const regs = state.registrants || {};
+    ownedIds.forEach(id => { const r = regs[id]; if (r) addMy(r.name); });
+  }
+  if (!myNamesList.length) return "";
+
+  // The player must have registered a deck themselves — otherwise no panel.
+  let myDeck = null, myDisplayName = "";
+  for (const name of myNamesList) {
+    const d = getRegisteredDeckForParticipant(state, name);
+    if (d) { myDeck = d; myDisplayName = name; break; }
+  }
+  if (!myDeck) return "";
+
+  const isMe = (n) => n && myNamesLower.has(String(n).trim().toLowerCase());
+
+  // My decided matches, ordered chronologically (group rounds first, then the
+  // knockout bracket — QF → SF → … → Final last).
+  const results = [];
+  Object.entries(state.matches).forEach(([id, m]) => {
+    if (!m || m.bye || !m.a || !m.b) return;
+    if (m.scoreA == null || m.scoreB == null || m.scoreA === m.scoreB) return;
+    const iAmA = isMe(m.a), iAmB = isMe(m.b);
+    if (!iAmA && !iAmB) return;
+    const myScore = iAmA ? m.scoreA : m.scoreB;
+    const oppScore = iAmA ? m.scoreB : m.scoreA;
+    results.push({
+      id,
+      sortKey: recapMatchOrder(m),
+      oppName: iAmA ? m.b : m.a,
+      won: myScore > oppScore,
+      myScore, oppScore,
+      where: matchWhereLabel(m)
+    });
+  });
+  results.sort((a, b) => a.sortKey - b.sortKey);
+
+  const wins = results.filter(r => r.won).length;
+  const losses = results.length - wins;
+
+  // Each match's opponent deck is collapsible (tap the result to expand). The
+  // set of expanded match ids persists, so the live view's frequent re-renders
+  // keep your open/closed choices. Decks start collapsed to keep the list short.
+  let openSet;
+  try { openSet = new Set(JSON.parse(localStorage.getItem("myRecapOpenMatches") || "[]")); }
+  catch (e) { openSet = new Set(); }
+
+  const rows = results.map(r => {
+    const oppDeck = getRegisteredDeckForParticipant(state, r.oppName);
+    const open = openSet.has(r.id);
+    return `
+      <div class="my-recap-row ${r.won ? "my-recap-win" : "my-recap-loss"}${open ? " my-recap-row-open" : ""}">
+        <div class="my-recap-line" role="button" tabindex="0" data-recap-match="${escapeHtml(r.id)}" aria-expanded="${open ? "true" : "false"}">
+          <span class="my-recap-result">${r.won ? "Won" : "Lost"}</span>
+          <span class="my-recap-vs">${r.won ? "vs" : "to"} ${escapeHtml(r.oppName)}</span>
+          <span class="my-recap-score">${r.myScore}–${r.oppScore}</span>
+          ${r.where ? `<span class="my-recap-where">${escapeHtml(r.where)}</span>` : ""}
+          <span class="my-recap-chevron">${open ? "−" : "+"}</span>
+        </div>
+        <div class="my-recap-deck my-recap-row-deck">
+          <span class="my-recap-deck-label">${escapeHtml(r.oppName)}'s deck${oppDeck ? "" : " — none registered"}</span>
+          ${oppDeck ? renderDeckCombos(oppDeck) : ""}
+        </div>
+      </div>`;
+  }).join("");
+
+  return `
+    <fieldset class="my-recap">
+      <legend>Your Matches</legend>
+      <div class="my-recap-deck my-recap-mydeck">
+        <span class="my-recap-deck-label">Your deck</span>
+        ${renderDeckCombos(myDeck)}
+      </div>
+      ${results.length ? `<div class="my-recap-record"><span class="my-recap-w">${wins}W</span> – <span class="my-recap-l">${losses}L</span></div>` : ""}
+      ${rows || `<p class="my-recap-empty">No results yet — your matches will appear here as they finish.</p>`}
+    </fieldset>`;
+}
+
+// Expand/collapse a single match's opponent-deck in the recap (tap the result
+// line). Persists the open set so the live view's re-renders keep your choices.
+// Works in both the live tournament view and the History results popup.
+document.addEventListener("click", (e) => {
+  const line = e.target.closest && e.target.closest(".my-recap-line[data-recap-match]");
+  if (!line) return;
+  const id = line.getAttribute("data-recap-match");
+  const row = line.closest(".my-recap-row");
+  if (!row) return;
+  const open = row.classList.toggle("my-recap-row-open");
+  line.setAttribute("aria-expanded", open ? "true" : "false");
+  const chev = line.querySelector(".my-recap-chevron");
+  if (chev) chev.textContent = open ? "−" : "+";
+  try {
+    const set = new Set(JSON.parse(localStorage.getItem("myRecapOpenMatches") || "[]"));
+    if (open) set.add(id); else set.delete(id);
+    localStorage.setItem("myRecapOpenMatches", JSON.stringify([...set]));
+  } catch (e2) { /* non-fatal */ }
+});
+
+// Full combo name for one deck slot — every part joined with " · "
+// (e.g. "Meteor Dragoon · 3-60 · Low Flat").
+function comboFullName(slot) {
+  const mode = (slot && BEY_CHECK_MODES.includes(slot.mode)) ? slot.mode : "standard";
+  const parts = (slot && slot.parts) || {};
+  return (BEY_CHECK_FIELDS[mode] || [])
+    .map(f => parts[f])
+    .filter(v => v && v !== NO_RATCHET)
+    .join(" · ");
+}
+
+// One small thumbnail for a slot — the lead blade (or lock chip) image.
+function comboLeadImg(slot) {
+  const parts = (slot && slot.parts) || {};
+  for (const f of ["blade", "mainBlade", "metalBlade", "lockChip"]) {
+    if (parts[f]) {
+      const src = beyCheckPartImg(f, parts[f]);
+      if (src) return src;
     }
-    showMatchStartToast({ a: m.a, b: m.b, where, isMine });
+  }
+  return null;
+}
+
+// Render a registered deck compactly: one line per combo — a small thumbnail
+// plus the full combo name.
+function renderDeckCombos(deck) {
+  if (!Array.isArray(deck)) return "";
+  const combos = deck
+    .map((slot) => {
+      if (isBeyCheckSlotEmpty(slot)) return "";
+      const src = comboLeadImg(slot);
+      const img = src
+        ? `<img src="${src}" class="my-recap-combo-img" alt="" onerror="this.style.visibility='hidden'">`
+        : `<span class="my-recap-combo-img"></span>`;
+      return `<div class="my-recap-combo">
+        ${img}
+        <span class="my-recap-combo-name">${escapeHtml(comboFullName(slot))}</span>
+      </div>`;
+    })
+    .filter(Boolean)
+    .join("");
+  return `<div class="my-recap-combos">${combos}</div>`;
+}
+
+// Chronological sort weight for the recap: group/swiss rounds first (by round
+// number), then the knockout bracket (QF → consolation → SF → placements →
+// Final). Lower sorts earlier; the Final ends up last.
+function recapMatchOrder(m) {
+  if (!m) return 9999;
+  if (typeof m.groupIndex === "number") {
+    return typeof m.round === "number" ? m.round : 0; // Round 1, 2, 3 …
+  }
+  if (m.bracket) {
+    const order = { qf: 0, cqf: 1, sf: 2, "7th": 3, "5th": 4, "3rd": 5, f: 6 };
+    const base = 1000;
+    if (typeof m.round === "number") return base + m.round;     // Swiss top-N numeric rounds
+    return base + (order[m.round] != null ? order[m.round] : 99);
+  }
+  return 500; // unknown — between group rounds and bracket
+}
+
+// Short, readable summary of a registered deck for a result toast — the lead
+// part of each of the 3 combos (blade / main blade / metal blade / lock chip).
+function deckSummaryText(deck) {
+  if (!Array.isArray(deck)) return "";
+  const names = [];
+  deck.forEach(slot => {
+    const p = (slot && slot.parts) || {};
+    const lead = p.blade || p.mainBlade || p.metalBlade || p.lockChip || "";
+    if (lead) names.push(lead);
+  });
+  return names.join(" · ");
+}
+
+// When a match the signed-in player (or a device-owned registrant) is in
+// transitions to a decided score, pop a win/lose toast naming the deck they
+// played. Players who fought WITHOUT a registered deck (guests / empty deck)
+// get nothing — they have no deck to report.
+function detectAndAnnounceMyMatchResults(prevState, remote) {
+  if (!remote || !remote.matches) return;
+  const prevMatches = (prevState && prevState.matches) || {};
+
+  // "My names" — same set the match-start announcer uses.
+  const myNames = new Set();
+  const uname = (window.getCurrentUsername && window.getCurrentUsername()) || "";
+  if (uname) myNames.add(uname);
+  if (swissEditCode && typeof loadDeviceOwnedRegIds === "function") {
+    const ownedIds = loadDeviceOwnedRegIds(swissEditCode);
+    const regs = (remote && remote.registrants) || {};
+    ownedIds.forEach(id => {
+      const r = regs[id];
+      if (r && typeof r.name === "string" && r.name) myNames.add(r.name);
+    });
+  }
+  if (!myNames.size) return;
+
+  const isDecided = (mm) => mm && mm.scoreA != null && mm.scoreB != null && mm.scoreA !== mm.scoreB;
+
+  Object.entries(remote.matches).forEach(([id, m]) => {
+    if (!m || m.bye || !m.a || !m.b) return;
+    if (!isDecided(m)) return;
+    const before = prevMatches[id];
+    if (!before) return;        // first time we've seen this match (fresh load) — not a live result
+    if (isDecided(before)) return; // already decided before this update — already announced
+
+    const iAmA = myNames.has(m.a);
+    const iAmB = myNames.has(m.b);
+    if (!iAmA && !iAmB) return;  // not my match
+
+    const myName = iAmA ? m.a : m.b;
+    // Only announce when the player actually registered a deck.
+    const deck = getRegisteredDeckForParticipant(remote, myName);
+    if (!deck) return;
+
+    const myScore = iAmA ? m.scoreA : m.scoreB;
+    const oppScore = iAmA ? m.scoreB : m.scoreA;
+    showMatchResultToast({
+      won: myScore > oppScore,
+      opp: iAmA ? m.b : m.a,
+      myScore, oppScore,
+      deck,
+      where: matchWhereLabel(m)
+    });
   });
 }
 
@@ -3948,6 +4203,40 @@ function showMatchStartToast({ a, b, where, isMine }) {
   // in-app toast is the foreground complement.
   const title = isMine ? "You're up!" : "Match started";
   const body = `${a} vs ${b}${where ? ` · ${where}` : ""}`;
+  maybeFireSystemNotification(title, body);
+}
+
+// Win/lose toast for the player whose match just finished, naming the deck
+// they played. Mirrors showMatchStartToast's lifecycle + OS notification.
+function showMatchResultToast({ won, opp, myScore, oppScore, deck, where }) {
+  const host = ensureToastContainer();
+  const card = document.createElement("div");
+  card.className = "match-toast match-toast-mine match-toast-result " + (won ? "match-toast-win" : "match-toast-loss");
+  const deckText = deckSummaryText(deck);
+  const verb = won ? "Beat" : "Lost to";
+  card.innerHTML = `
+    <div class="match-toast-head">
+      <span class="match-toast-tag">${won ? "You won! 🏆" : "You lost"}</span>
+      <button type="button" class="match-toast-close" aria-label="Dismiss">&times;</button>
+    </div>
+    <div class="match-toast-players">${escapeHtml(verb)} ${escapeHtml(opp)} · ${escapeHtml(String(myScore))}–${escapeHtml(String(oppScore))}</div>
+    ${where ? `<div class="match-toast-where">${escapeHtml(where)}</div>` : ""}
+    ${deckText ? `<div class="match-toast-deck">Your deck: ${escapeHtml(deckText)}</div>` : ""}
+  `;
+  host.appendChild(card);
+  const dismiss = () => {
+    if (!card.parentNode) return;
+    card.classList.add("match-toast-leaving");
+    setTimeout(() => card.remove(), 220);
+  };
+  card.querySelector(".match-toast-close").addEventListener("click", dismiss);
+  card.addEventListener("click", (e) => {
+    if (e.target.closest(".match-toast-close")) return;
+    dismiss();
+  });
+  setTimeout(dismiss, 9000);
+  const title = won ? "You won!" : "You lost";
+  const body = `${verb} ${opp} ${myScore}–${oppScore}${where ? ` · ${where}` : ""}`;
   maybeFireSystemNotification(title, body);
 }
 
@@ -5649,7 +5938,19 @@ function getPiePaletteForTheme() {
   if (cls.contains("silver-mode"))   return { type: "hue", hueStart: 200, hueRange: 50,  sat: 20, light: 65 };
   if (cls.contains("bronze-mode"))   return { type: "hue", hueStart: 10,  hueRange: 40,  sat: 60, light: 50 };
   if (cls.contains("revox-mode"))    return { type: "hue", hueStart: 350, hueRange: 60,  sat: 70, light: 55 };
-  return                                    { type: "hue", hueStart: 0,   hueRange: 360, sat: 65, light: 55 };
+  // Achievement themes — narrow hue bands tinted to each theme's accent.
+  if (cls.contains("dragontamer-mode"))    return { type: "hue", hueStart: 350, hueRange: 50,  sat: 65, light: 54 };
+  if (cls.contains("dragonslayer-mode"))   return { type: "hue", hueStart: 205, hueRange: 70,  sat: 60, light: 58 };
+  if (cls.contains("lonewolf-mode"))       return { type: "hue", hueStart: 200, hueRange: 50,  sat: 25, light: 62 };
+  if (cls.contains("rushhour-mode"))       return { type: "hue", hueStart: 25,  hueRange: 55,  sat: 72, light: 55 };
+  if (cls.contains("kingofjungle-mode"))   return { type: "hue", hueStart: 80,  hueRange: 70,  sat: 55, light: 48 };
+  if (cls.contains("sharknado-mode"))      return { type: "hue", hueStart: 180, hueRange: 60,  sat: 60, light: 55 };
+  if (cls.contains("sorcerersupreme-mode"))return { type: "hue", hueStart: 270, hueRange: 70,  sat: 62, light: 60 };
+  if (cls.contains("paleonerd-mode"))      return { type: "hue", hueStart: 35,  hueRange: 55,  sat: 55, light: 52 };
+  if (cls.contains("kingofalltypes-mode")) return { type: "hue", hueStart: 205, hueRange: 90,  sat: 60, light: 58 };
+  // Default (Dark) theme — a blue-centered band matching the dark theme's accent
+  // (cyan → blue → violet), still wide enough to tell slices apart.
+  return                                    { type: "hue", hueStart: 190, hueRange: 140, sat: 62, light: 58 };
 }
 
 function getPieStrokeForTheme() {
@@ -5667,6 +5968,16 @@ function getPieStrokeForTheme() {
   if (cls.contains("silver-mode"))   return "#2e343c";
   if (cls.contains("bronze-mode"))   return "#3a2818";
   if (cls.contains("revox-mode"))    return "#2a1010";
+  // Achievement themes — match each theme's deep card-bg tone.
+  if (cls.contains("dragontamer-mode"))    return "#1a0d0d";
+  if (cls.contains("dragonslayer-mode"))   return "#0e1320";
+  if (cls.contains("lonewolf-mode"))       return "#0c1014";
+  if (cls.contains("rushhour-mode"))       return "#1a1206";
+  if (cls.contains("kingofjungle-mode"))   return "#1a1404";
+  if (cls.contains("sharknado-mode"))      return "#081420";
+  if (cls.contains("sorcerersupreme-mode"))return "#160a24";
+  if (cls.contains("paleonerd-mode"))      return "#1a1208";
+  if (cls.contains("kingofalltypes-mode")) return "#0e1320";
   return "#0d1117";
 }
 
@@ -7610,7 +7921,7 @@ function computeTournamentPlacements(state) {
   return placements;
 }
 
-function renderTournamentResultsMarkup(state) {
+function renderTournamentResultsMarkup(state, ownerCode) {
   const name = state.tournamentName && state.tournamentName.trim()
     ? escapeHtml(state.tournamentName)
     : "(unnamed tournament)";
@@ -7621,9 +7932,10 @@ function renderTournamentResultsMarkup(state) {
       <div class="tournament-results-mode">${escapeHtml(modeLabel)}</div>
     </div>
   `;
-  // Append the parts-usage pie charts whenever any deck data exists in this
-  // tournament — useful in the history popup even before final placements.
-  const partsCharts = renderPartUsageCharts(state);
+  // The viewer's own win/lose record + decks for this tournament (empty unless
+  // they participated with a registered deck), then the parts-usage pie charts.
+  const recap = renderMyTournamentRecap(state, ownerCode);
+  const partsCharts = recap + renderPartUsageCharts(state);
 
   // Swiss-only mode never produces knockout placements — its result is the
   // combined cross-group standings instead.
@@ -7637,10 +7949,13 @@ function renderTournamentResultsMarkup(state) {
       const place = i + 1;
       const placeMod = place <= 3 ? ` tournament-results-place-${place}` : "";
       const record = `${s.wins}-${s.losses}${s.draws ? `-${s.draws}` : ""}`;
+      const nm = s.name || "";
+      const rankAttr = nm ? ` data-rank-name="${escapeHtml(nm)}" data-rank-place="${place}"` : "";
+      const profAttr = nm ? ` data-profile-username="${escapeHtml(nm)}"` : "";
       return `
-        <div class="tournament-results-row swiss-final-row${placeMod}">
+        <div class="tournament-results-row swiss-final-row${placeMod}"${rankAttr}>
           <span class="tournament-results-place">${placementLabel(place)}</span>
-          <span class="tournament-results-player">${escapeHtml(s.name || "—")}</span>
+          <span class="tournament-results-player"${profAttr}>${nm ? swissNameCellInner(nm) : "—"}</span>
           <span class="swiss-final-group">Group ${groupLetter(s.groupIndex)}</span>
           <span class="swiss-final-record">${record}</span>
         </div>
@@ -7652,13 +7967,29 @@ function renderTournamentResultsMarkup(state) {
   if (!placements.length) {
     return header + `<p class="tournament-results-empty">This tournament hasn't reached the knockout placements yet — come back when the bracket finishes.</p>` + partsCharts;
   }
-  const rows = placements.map(p => `
-    <div class="tournament-results-row tournament-results-place-${p.place}">
+  const rows = placements.map(p => {
+    const nm = p.name || "";
+    const rankAttr = nm ? ` data-rank-name="${escapeHtml(nm)}" data-rank-place="${p.place}"` : "";
+    const profAttr = nm ? ` data-profile-username="${escapeHtml(nm)}"` : "";
+    return `
+    <div class="tournament-results-row tournament-results-place-${p.place}"${rankAttr}>
       <span class="tournament-results-place">${placementLabel(p.place)}</span>
-      <span class="tournament-results-player">${escapeHtml(p.name || "—")}</span>
+      <span class="tournament-results-player"${profAttr}>${nm ? swissNameCellInner(nm) : "—"}</span>
     </div>
-  `).join("");
+  `;
+  }).join("");
   return header + `<div class="tournament-results-list">${rows}</div>` + partsCharts;
+}
+
+// Paint each history-results placement row (carrying data-rank-name +
+// data-rank-place) with that player's profile banner, same as the live views.
+function hydrateResultsBanners(container) {
+  if (!container) return;
+  container.querySelectorAll(".tournament-results-row[data-rank-name]").forEach(row => {
+    const nm = row.dataset.rankName || "";
+    if (!nm) return;
+    paintProfileBannerRow(row, nm, parseInt(row.dataset.rankPlace, 10) || 0);
+  });
 }
 
 function showTournamentResultsFromHistory(code) {
@@ -7674,21 +8005,26 @@ function showTournamentResultsFromHistory(code) {
     if (typeof setupDashboardCarousel === "function") {
       body.querySelectorAll(".part-usage-carousel").forEach(setupDashboardCarousel);
     }
+    // Profile photos, click-to-open-profile, and banner backgrounds on the
+    // placement rows — same treatment as the live ranking / results views.
+    hydrateTournamentAvatars(body);
+    bindTournamentProfileNames(body);
+    hydrateResultsBanners(body);
   };
   const cached = findCachedTournamentByCode(code);
   if (!firebaseReady()) {
-    if (cached) { body.innerHTML = renderTournamentResultsMarkup(cached); wirePartUsageCarousels(); return; }
+    if (cached) { body.innerHTML = renderTournamentResultsMarkup(cached, code); wirePartUsageCarousels(); return; }
     body.innerHTML = `<p class="tournament-results-empty">Live sync isn't configured on this build, so results can't be fetched.</p>`;
     return;
   }
   fetchTournamentState(code.toUpperCase(), state => {
     if (state) {
-      body.innerHTML = renderTournamentResultsMarkup(state);
+      body.innerHTML = renderTournamentResultsMarkup(state, code);
       wirePartUsageCarousels();
       return;
     }
     if (cached) {
-      body.innerHTML = renderTournamentResultsMarkup(cached);
+      body.innerHTML = renderTournamentResultsMarkup(cached, code);
       wirePartUsageCarousels();
       return;
     }
