@@ -162,6 +162,7 @@ Battle Royale
 Friends
 - A Friends tab (sign-in only): add other players by their username, accept or decline incoming requests, and remove friends
 - Direct messages with accepted friends — live one-on-one chat with unread badges, plus toast / system notifications for new messages and new friend requests on any tab
+- End-to-end encrypted messages: each account holds an ECDH keypair on the device (private key never leaves the browser), only the public key is published, and a per-conversation AES-GCM key is derived so the server only ever stores ciphertext. Single-device — a new device or cleared browser storage re-keys, after which older messages can't be decrypted (a lock marker shows in the chat header)
 - Add Friend from a profile: both the hover profile card and the full profile popup show an "Add Friend" button (labelled Accept Friend / Requested / Friends to match your current status, and hidden on your own profile)
 
 Buzz Bey
