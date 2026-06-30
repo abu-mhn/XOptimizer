@@ -356,11 +356,42 @@
     return Promise.all(list.map(m => ensureDecrypted(friendUid, m)));
   }
 
+  function clearThreadCaches() {
+    Object.keys(threadKeyCache).forEach(k => delete threadKeyCache[k]);
+    Object.keys(decryptedCache).forEach(k => delete decryptedCache[k]);
+  }
   function resetCryptoCaches() {
     currentKeyPair = null; keyReadyPromise = null; keySetupAttempted = false;
     Object.keys(friendPubCache).forEach(k => delete friendPubCache[k]);
-    Object.keys(threadKeyCache).forEach(k => delete threadKeyCache[k]);
-    Object.keys(decryptedCache).forEach(k => delete decryptedCache[k]);
+    clearThreadCaches();
+  }
+
+  // Snapshot of this account's encryption state for the status panel.
+  function encryptionState() {
+    const uid = myUid(), database = db();
+    if (!uid || !cryptoOk()) return Promise.resolve(null);
+    return Promise.all([
+      getLocalKeyPair(),
+      readVault(),
+      database ? database.ref("publicKeys/" + uid).once("value").then(s => s.val()).catch(() => null) : Promise.resolve(null)
+    ]).then(([local, vault, pub]) => ({
+      unlocked: !!(currentKeyPair || local),
+      hasVault: !!(vault && vault.wrapped),
+      published: !!pub
+    }));
+  }
+  // Make a brand-new key under a new password (Reset). Old messages encrypted to
+  // the previous key become unreadable everywhere.
+  function resetEncryption() {
+    if (!confirm("Reset encryption with a new password? Messages you received before will no longer be readable on any device. Continue?")) return;
+    askPassword("setup").then(np => {
+      if (!np) return;
+      generateAndWrap(np).then(kp => {
+        currentKeyPair = kp; keyReadyPromise = null; clearThreadCaches();
+        notify("Encryption reset", "A new encryption key is set up on this device.");
+        if (tabVisible()) render();
+      }).catch(() => notify("Reset failed", "Couldn't reset encryption right now."));
+    });
   }
 
   function notify(title, body) {
@@ -584,6 +615,7 @@
     const outgoing = entries.filter(f => f.status === "requested");
 
     let html = `
+      <div id="fr-enc-panel"></div>
       <div class="fr-add">
         <input type="text" id="fr-add-input" class="fr-add-input" placeholder="Add friend by username" autocomplete="off" maxlength="30">
         <button type="button" id="fr-add-btn" class="fr-btn fr-btn-add">Add Friend</button>
@@ -641,6 +673,53 @@
       if (e.target.closest("[data-remove]")) return;
       openChat(el.dataset.chat);
     }));
+    paintEncryptionPanel();
+  }
+
+  // Fill the encryption status panel (set up / published / unlocked) and wire its
+  // Set up / Unlock / Reset buttons. Refreshed on every list render.
+  function paintEncryptionPanel() {
+    const panel = document.getElementById("fr-enc-panel");
+    if (!panel) return;
+    if (!myUid() || !cryptoOk()) { panel.innerHTML = ""; return; }
+    encryptionState().then(st => {
+      if (!st) { panel.innerHTML = ""; return; }
+      let statusLine, btns;
+      if (st.unlocked) {
+        statusLine = st.published
+          ? "Ready — your messages are end-to-end encrypted on this device."
+          : "Key ready, publishing… reopen if friends still can't message you.";
+        btns = `<button type="button" class="fr-enc-btn" data-enc="reset">Reset</button>`;
+      } else if (st.hasVault) {
+        statusLine = "Set up on another device. Enter your password to read & send here.";
+        btns = `<button type="button" class="fr-enc-btn fr-enc-primary" data-enc="unlock">Unlock</button>
+                <button type="button" class="fr-enc-btn" data-enc="reset">Reset</button>`;
+      } else {
+        statusLine = "Not set up. Choose an encryption password so friends can message you.";
+        btns = `<button type="button" class="fr-enc-btn fr-enc-primary" data-enc="setup">Set up</button>`;
+      }
+      const dot = st.unlocked ? "ok" : (st.hasVault ? "warn" : "off");
+      const chip = (on, yes, no) => `<span class="fr-enc-chip ${on ? "on" : "off"}">${on ? yes : no}</span>`;
+      panel.innerHTML = `
+        <div class="fr-enc">
+          <div class="fr-enc-head">
+            <span class="fr-enc-dot fr-enc-dot-${dot}"></span>
+            <span class="fr-enc-title">Message encryption</span>
+          </div>
+          <div class="fr-enc-chips">
+            ${chip(st.unlocked, "Key set up ✓", "Key not set up")}
+            ${chip(st.published, "Published ✓", "Not published")}
+            ${chip(st.unlocked, "Unlocked here ✓", "Locked here")}
+          </div>
+          <p class="fr-enc-status">${esc(statusLine)}</p>
+          <div class="fr-enc-actions">${btns}</div>
+        </div>`;
+      panel.querySelectorAll("[data-enc]").forEach(b => b.addEventListener("click", () => {
+        const action = b.dataset.enc;
+        if (action === "reset") { resetEncryption(); return; }
+        ensureKeyReady().then(() => { if (tabVisible()) render(); }); // setup or unlock
+      }));
+    }).catch(() => { panel.innerHTML = ""; });
   }
 
   function renderChat(root, friendUid) {

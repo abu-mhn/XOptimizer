@@ -16007,6 +16007,55 @@ body.forest-mode .br-card {
     cursor: pointer;
 }
 .fr-key-reset:hover { color: #f85149; }
+
+/* Encryption status panel (top of Friends tab) */
+.fr-enc {
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+    background: rgba(110, 118, 129, 0.06);
+}
+.fr-enc-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.fr-enc-title { font-size: 0.9rem; font-weight: 700; color: #f0f6fc; }
+.fr-enc-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+.fr-enc-dot-ok   { background: #3fb950; box-shadow: 0 0 0 3px rgba(63, 185, 80, 0.18); }
+.fr-enc-dot-warn { background: #d29922; box-shadow: 0 0 0 3px rgba(210, 153, 34, 0.18); }
+.fr-enc-dot-off  { background: #f85149; box-shadow: 0 0 0 3px rgba(248, 81, 73, 0.18); }
+.fr-enc-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.fr-enc-chip {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+}
+.fr-enc-chip.on  { background: rgba(63, 185, 80, 0.14);  color: #56d364; border-color: rgba(63, 185, 80, 0.4); }
+.fr-enc-chip.off { background: rgba(139, 148, 158, 0.12); color: #8b949e; border-color: rgba(139, 148, 158, 0.35); }
+.fr-enc-status { font-size: 0.82rem; color: #8b949e; margin: 0 0 10px; line-height: 1.4; }
+.fr-enc-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.fr-enc-btn {
+    padding: 5px 14px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border: 1px solid #30363d;
+    background: transparent;
+    color: #c9d1d9;
+    cursor: pointer;
+}
+.fr-enc-btn:hover { background: rgba(110, 118, 129, 0.16); }
+.fr-enc-primary { background: #1f6feb; color: #fff; border-color: transparent; }
+.fr-enc-primary:hover { background: #388bfd; }
+
+body.light-mode .fr-enc,
+body.tropical-mode .fr-enc,
+body.love-mode .fr-enc,
+body.forest-mode .fr-enc { background: #f6f8fa; border-color: #d1d9e0; }
+body.light-mode .fr-enc-title,
+body.tropical-mode .fr-enc-title,
+body.love-mode .fr-enc-title,
+body.forest-mode .fr-enc-title { color: #1f2328; }
 .fr-btn-back {
     background: transparent;
     color: #c9d1d9;
