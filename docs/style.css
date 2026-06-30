@@ -15992,6 +15992,21 @@ body.forest-mode .br-card {
 }
 .fr-chat-name { font-weight: 700; color: #f0f6fc; font-size: 0.95rem; }
 .fr-chat-e2ee { margin-left: auto; font-size: 0.85rem; opacity: 0.65; cursor: help; flex: 0 0 auto; }
+
+/* Encryption passphrase modal */
+.fr-key-card .tournament-name-input { width: 100%; margin-top: 10px; box-sizing: border-box; }
+.fr-key-status { min-height: 18px; margin-top: 8px; color: #f85149; font-size: 0.82rem; }
+.fr-key-reset {
+    display: block;
+    margin: 10px auto 0;
+    background: none;
+    border: none;
+    color: #8b949e;
+    font-size: 0.8rem;
+    text-decoration: underline;
+    cursor: pointer;
+}
+.fr-key-reset:hover { color: #f85149; }
 .fr-btn-back {
     background: transparent;
     color: #c9d1d9;

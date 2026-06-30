@@ -8,20 +8,25 @@
 //   friends/{uid}/{friendUid}: { name, status, ts }
 //     status: "requested" (I sent) | "incoming" (they sent me) | "friends"
 //   publicKeys/{uid}: "<ECDH P-256 public key as a JWK string>"
+//   keyVault/{uid}:   { salt, iv, wrapped, pubJwk, v } — the account's private
+//     key, AES-GCM-wrapped under a PBKDF2(passphrase) key (owner-read only)
 //   messages/{threadId}/{pushId}: { from, ct, iv, v, ts }
 //     from = sender uid (opaque; required by the rules to stop forgery)
 //     ct/iv = AES-GCM ciphertext + nonce. NO sender name and NO plaintext are
 //     ever stored, so a database snapshot reveals neither the message nor who
 //     (by name) sent it. threadId = the two uids sorted and joined with "_".
 //
-// End-to-end encryption: each account keeps an ECDH keypair on THIS device
-// (IndexedDB); only the public half is published. A per-conversation AES-GCM
-// key is derived from (my private key + friend's public key) — the identical
-// secret both sides compute — so the server only ever stores ciphertext.
-// Encryption is mandatory: if the friend has no published key we refuse to send
-// rather than fall back to plaintext. Single-device: a new device / cleared
-// storage re-keys, after which older messages can no longer be decrypted.
-// (Legacy messages that still carry a plaintext `text` field are read as-is.)
+// End-to-end encryption (passphrase-synced, multi-device): each account has ONE
+// ECDH keypair. The private key is wrapped under a passphrase the user chooses
+// and stored in keyVault/{uid}; the public half goes to publicKeys/{uid}. On a
+// new device the user enters the passphrase to unwrap the same private key, so
+// every device decrypts every message. A per-conversation AES-GCM key is derived
+// from (my private key + friend's public key) — the identical secret both sides
+// compute — so the server only ever stores ciphertext. Encryption is mandatory:
+// if the friend has no published key we refuse to send rather than leak
+// plaintext. Forget the passphrase → messages are unrecoverable (a reset makes a
+// new key; older messages then can't be read). Legacy plaintext `text` is read
+// as-is for backward compatibility.
 (function () {
   "use strict";
 
@@ -67,9 +72,18 @@
     catch (e) { return ""; }
   }
 
-  // ---- end-to-end encryption (ECDH P-256 → AES-GCM) ----
+  // ---- end-to-end encryption (ECDH P-256 → AES-GCM, passphrase-synced) ----
+  // Each account has ONE ECDH keypair, shared across devices: the private key is
+  // wrapped (AES-GCM) under a passphrase-derived key (PBKDF2) and stored in
+  // keyVault/{uid}; only the public half is published to publicKeys/{uid}. On a
+  // new device the user enters the passphrase to unwrap the same private key, so
+  // every device decrypts every message. The server only ever sees ciphertext.
   const EC_ALGO = { name: "ECDH", namedCurve: "P-256" };
-  let myKeyPairPromise = null;   // Promise<{priv: CryptoKey, pubJwk: string}>
+  const PBKDF2_ROUNDS = 250000;
+  const RESET_SENTINEL = "__RESET__";
+  let currentKeyPair = null;     // { priv: CryptoKey, pubJwk: string } once ready
+  let keyReadyPromise = null;    // in-flight ensureKeyReady()
+  let keySetupAttempted = false; // auto-prompted on the Friends tab this session?
   const friendPubCache = {};     // friendUid -> imported public CryptoKey
   const threadKeyCache = {};     // friendUid -> derived AES-GCM CryptoKey
   const decryptedCache = {};     // msgId -> plaintext (avoid re-decrypting on re-render)
@@ -108,36 +122,174 @@
     });
   }
 
-  // This account's keypair on THIS device — loaded from IndexedDB or generated
-  // and persisted the first time. The private key is non-extractable; CryptoKey
-  // objects are structured-cloneable so they store directly.
-  function getOrCreateKeyPair() {
-    if (myKeyPairPromise) return myKeyPairPromise;
+  // Per-device cache of the unwrapped keypair (so the passphrase is only needed
+  // once per device). Keyed kp2_* to sit alongside any legacy kp_* entries.
+  function getLocalKeyPair() {
     const uid = myUid();
     if (!uid || !cryptoOk()) return Promise.resolve(null);
-    myKeyPairPromise = idb("readonly", store => store.get("kp_" + uid)).then(saved => {
-      if (saved && saved.priv && saved.pubJwk) return saved;
-      return crypto.subtle.generateKey(EC_ALGO, false, ["deriveKey", "deriveBits"]).then(pair =>
-        crypto.subtle.exportKey("jwk", pair.publicKey).then(pubJwk => {
-          const rec = { priv: pair.privateKey, pubJwk: JSON.stringify(pubJwk) };
-          return idb("readwrite", store => store.put(rec, "kp_" + uid)).then(() => rec).catch(() => rec);
-        })
-      );
-    }).catch(() => null);
-    return myKeyPairPromise;
+    return idb("readonly", store => store.get("kp2_" + uid))
+      .then(saved => (saved && saved.priv && saved.pubJwk) ? saved : null).catch(() => null);
+  }
+  function saveLocalKeyPair(rec) {
+    const uid = myUid();
+    return idb("readwrite", store => store.put(rec, "kp2_" + uid)).catch(() => {});
   }
 
-  // Publish my public key so friends can encrypt to me. Only writes when the
-  // stored value differs, making the most-recently-booted device canonical.
-  function publishMyPublicKey() {
+  function readVault() {
     const uid = myUid(), database = db();
-    if (!uid || !database || !cryptoOk()) return;
-    getOrCreateKeyPair().then(kp => {
-      if (!kp) return;
-      database.ref("publicKeys/" + uid).once("value").then(snap => {
-        if (snap.val() !== kp.pubJwk) database.ref("publicKeys/" + uid).set(kp.pubJwk).catch(() => {});
-      }).catch(() => {});
+    if (!uid || !database) return Promise.resolve(null);
+    return database.ref("keyVault/" + uid).once("value").then(s => s.val()).catch(() => null);
+  }
+
+  // Derive the AES-GCM wrapping key from a passphrase + salt (PBKDF2).
+  function deriveWrapKey(passphrase, saltBuf) {
+    return crypto.subtle.importKey("raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"])
+      .then(base => crypto.subtle.deriveKey(
+        { name: "PBKDF2", salt: saltBuf, iterations: PBKDF2_ROUNDS, hash: "SHA-256" },
+        base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
+      ));
+  }
+
+  // Create a fresh keypair, wrap the private half under the passphrase, and
+  // upload keyVault/{uid} + publicKeys/{uid}. Used on first setup and on reset.
+  function generateAndWrap(passphrase) {
+    const uid = myUid(), database = db();
+    if (!uid || !database) return Promise.resolve(null);
+    return crypto.subtle.generateKey(EC_ALGO, true, ["deriveKey", "deriveBits"]).then(pair =>
+      Promise.all([
+        crypto.subtle.exportKey("jwk", pair.publicKey),
+        crypto.subtle.exportKey("jwk", pair.privateKey)
+      ]).then(([pubJwk, privJwk]) => {
+        const salt = crypto.getRandomValues(new Uint8Array(16));
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        return deriveWrapKey(passphrase, salt).then(wrapKey =>
+          crypto.subtle.encrypt({ name: "AES-GCM", iv }, wrapKey, new TextEncoder().encode(JSON.stringify(privJwk)))
+            .then(wrappedBuf => {
+              const pubStr = JSON.stringify(pubJwk);
+              const updates = {};
+              updates["keyVault/" + uid] = { salt: b64(salt), iv: b64(iv), wrapped: b64(wrappedBuf), pubJwk: pubStr, v: 1 };
+              updates["publicKeys/" + uid] = pubStr;
+              return database.ref().update(updates).then(() => {
+                const rec = { priv: pair.privateKey, pubJwk: pubStr };
+                return saveLocalKeyPair(rec).then(() => rec);
+              });
+            })
+        );
+      })
+    );
+  }
+
+  // Unwrap the vault's private key with the passphrase. Rejects on wrong
+  // passphrase (AES-GCM auth-tag failure).
+  function unlockVault(vault, passphrase) {
+    return deriveWrapKey(passphrase, new Uint8Array(unb64(vault.salt))).then(wrapKey =>
+      crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(unb64(vault.iv)) }, wrapKey, unb64(vault.wrapped))
+        .then(buf => {
+          const privJwk = JSON.parse(new TextDecoder().decode(buf));
+          return crypto.subtle.importKey("jwk", privJwk, EC_ALGO, true, ["deriveKey", "deriveBits"]).then(priv => {
+            const rec = { priv, pubJwk: vault.pubJwk };
+            return saveLocalKeyPair(rec).then(() => rec);
+          });
+        })
+    );
+  }
+
+  // Ensure publicKeys/{uid} matches my keypair (re-publish if missing/stale).
+  function ensurePublished(pubStr) {
+    const uid = myUid(), database = db();
+    if (!uid || !database || !pubStr) return;
+    database.ref("publicKeys/" + uid).once("value").then(s => {
+      if (s.val() !== pubStr) database.ref("publicKeys/" + uid).set(pubStr).catch(() => {});
+    }).catch(() => {});
+  }
+  // Boot-time publish: only if this device already holds the key (never
+  // generates — that would overwrite the synced key and orphan other devices).
+  function publishMyPublicKey() {
+    if (!cryptoOk()) return;
+    getLocalKeyPair().then(kp => { if (kp) { currentKeyPair = currentKeyPair || kp; ensurePublished(kp.pubJwk); } });
+  }
+
+  // A styled passphrase modal. mode "setup" asks for a new password (twice);
+  // "unlock" asks for the existing one and offers a reset link. Resolves the
+  // entered string, RESET_SENTINEL, or null (cancelled).
+  function askPassword(mode) {
+    return new Promise(resolve => {
+      const setup = mode === "setup";
+      const overlay = document.createElement("div");
+      overlay.className = "popup-overlay fr-key-popup";
+      overlay.innerHTML = `
+        <div class="popup-card fr-key-card">
+          <h2 class="popup-title">${setup ? "Set up message encryption" : "Unlock your messages"}</h2>
+          <p class="popup-text">${setup
+            ? "Choose an encryption password. It keeps your messages readable across your devices and is separate from your login. If you forget it, your messages can't be recovered."
+            : "Enter your encryption password to read and send messages on this device."}</p>
+          <input type="password" class="tournament-name-input fr-key-pass" placeholder="Encryption password" autocomplete="off">
+          ${setup ? `<input type="password" class="tournament-name-input fr-key-pass2" placeholder="Confirm password" autocomplete="off">` : ""}
+          <div class="fr-key-status"></div>
+          <div class="popup-actions">
+            <button type="button" class="btn fr-key-ok">${setup ? "Set up" : "Unlock"}</button>
+            <button type="button" class="btn popup-cancel fr-key-cancel">Cancel</button>
+          </div>
+          ${setup ? "" : `<button type="button" class="fr-key-reset">Forgot password? Reset encryption</button>`}
+        </div>`;
+      document.body.appendChild(overlay);
+      const pass = overlay.querySelector(".fr-key-pass");
+      const pass2 = overlay.querySelector(".fr-key-pass2");
+      const status = overlay.querySelector(".fr-key-status");
+      const done = (val) => { overlay.remove(); resolve(val); };
+      overlay.querySelector(".fr-key-cancel").addEventListener("click", () => done(null));
+      overlay.addEventListener("click", e => { if (e.target === overlay) done(null); });
+      const submit = () => {
+        const v = pass.value;
+        if (!v || v.length < 6) { status.textContent = "Use at least 6 characters."; return; }
+        if (setup && v !== (pass2 ? pass2.value : "")) { status.textContent = "Passwords don't match."; return; }
+        done(v);
+      };
+      overlay.querySelector(".fr-key-ok").addEventListener("click", submit);
+      (pass2 || pass).addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
+      const resetBtn = overlay.querySelector(".fr-key-reset");
+      if (resetBtn) resetBtn.addEventListener("click", () => {
+        if (confirm("Reset encryption with a new password? Messages you received before will no longer be readable on any device. Continue?")) done(RESET_SENTINEL);
+      });
+      setTimeout(() => pass.focus(), 0);
     });
+  }
+
+  // Make a usable keypair available, prompting for the passphrase when needed:
+  //   • local copy on this device → use it
+  //   • vault exists → ask passphrase and unwrap (or reset)
+  //   • nothing yet → first-time setup (choose a passphrase, generate, upload)
+  // Resolves the keypair, or null if the user cancels. Memoised while in-flight;
+  // a cancel clears the memo so a later action can retry.
+  function ensureKeyReady() {
+    if (currentKeyPair) return Promise.resolve(currentKeyPair);
+    if (keyReadyPromise) return keyReadyPromise;
+    if (!cryptoOk() || !myUid()) return Promise.resolve(null);
+    keyReadyPromise = (async () => {
+      const local = await getLocalKeyPair();
+      if (local) { currentKeyPair = local; ensurePublished(local.pubJwk); return local; }
+      const vault = await readVault();
+      if (vault && vault.wrapped) {
+        const pass = await askPassword("unlock");
+        if (!pass) return null;
+        if (pass === RESET_SENTINEL) {
+          const np = await askPassword("setup");
+          if (!np) return null;
+          const kp = await generateAndWrap(np);
+          currentKeyPair = kp; return kp;
+        }
+        let kp = null;
+        try { kp = await unlockVault(vault, pass); }
+        catch (e) { notify("Wrong password", "That encryption password didn't work — try again."); return null; }
+        currentKeyPair = kp; ensurePublished(kp.pubJwk); return kp;
+      }
+      const np = await askPassword("setup");
+      if (!np) return null;
+      const kp = await generateAndWrap(np);
+      currentKeyPair = kp; return kp;
+    })().then(kp => { if (!kp) keyReadyPromise = null; return kp; },
+             () => { keyReadyPromise = null; return null; });
+    return keyReadyPromise;
   }
 
   function getFriendPublicKey(friendUid) {
@@ -154,12 +306,15 @@
     }).catch(() => null);
   }
 
-  // Derive + cache the shared AES-GCM key for a conversation. Resolves null when
-  // the friend hasn't published a key yet (caller falls back to plaintext).
+  // Derive + cache the shared AES-GCM key for a conversation. Non-interactive:
+  // uses whatever keypair is already unlocked (null if the key isn't ready yet
+  // or the friend hasn't published a key).
   function deriveThreadKey(friendUid) {
     if (threadKeyCache[friendUid]) return Promise.resolve(threadKeyCache[friendUid]);
     if (!cryptoOk()) return Promise.resolve(null);
-    return Promise.all([getOrCreateKeyPair(), getFriendPublicKey(friendUid)]).then(([kp, pub]) => {
+    const kpReady = currentKeyPair ? Promise.resolve(currentKeyPair) : getLocalKeyPair();
+    return Promise.all([kpReady, getFriendPublicKey(friendUid)]).then(([kp, pub]) => {
+      if (kp && !currentKeyPair) currentKeyPair = kp;
       if (!kp || !pub) return null;
       return crypto.subtle.deriveKey(
         { name: "ECDH", public: pub }, kp.priv,
@@ -178,17 +333,23 @@
       .then(buf => new TextDecoder().decode(buf));
   }
 
-  // Resolve a message's display text — plaintext as-is, ciphertext via the
-  // thread key (cached per id). Mutates m.text and returns a Promise<string>.
+  // What to render for a message right now (no decryption side effects).
+  function displayText(m) {
+    if (m.text != null) return m.text;                              // legacy plaintext
+    if (m.id && decryptedCache[m.id] != null) return decryptedCache[m.id];
+    return currentKeyPair ? "🔒…" : "🔒 Unlock to read";
+  }
+  // Attempt to decrypt a ciphertext message, caching the plaintext by id. Leaves
+  // it uncached when the key isn't ready yet, so it retries after an unlock.
   function ensureDecrypted(friendUid, m) {
     if (m.text != null) return Promise.resolve(m.text);
-    if (m.id && decryptedCache[m.id] != null) { m.text = decryptedCache[m.id]; return Promise.resolve(m.text); }
-    if (!m.ct || !m.iv) { m.text = ""; return Promise.resolve(""); }
+    if (m.id && decryptedCache[m.id] != null) return Promise.resolve(decryptedCache[m.id]);
+    if (!m.ct || !m.iv) return Promise.resolve("");
     return deriveThreadKey(friendUid).then(key => {
-      if (!key) { m.text = "🔒 Encrypted — unreadable on this device"; return m.text; }
+      if (!key) return null;  // not unlocked / no friend key — retry later
       return decryptText(key, m.ct, m.iv).then(txt => {
-        m.text = txt; if (m.id) decryptedCache[m.id] = txt; return txt;
-      }).catch(() => { m.text = "🔒 Unable to decrypt"; return m.text; });
+        if (m.id) decryptedCache[m.id] = txt; return txt;
+      }).catch(() => { if (m.id) decryptedCache[m.id] = "🔒 Unable to decrypt"; return decryptedCache[m.id]; });
     });
   }
   function decryptAll(friendUid, list) {
@@ -196,7 +357,7 @@
   }
 
   function resetCryptoCaches() {
-    myKeyPairPromise = null;
+    currentKeyPair = null; keyReadyPromise = null; keySetupAttempted = false;
     Object.keys(friendPubCache).forEach(k => delete friendPubCache[k]);
     Object.keys(threadKeyCache).forEach(k => delete threadKeyCache[k]);
     Object.keys(decryptedCache).forEach(k => delete decryptedCache[k]);
@@ -262,9 +423,9 @@
   }
 
   // ---- messaging ----
-  // Encryption is mandatory: we only ever write ciphertext, and never the
-  // sender's name. If the friend hasn't published a key yet we refuse to send
-  // (rather than leak plaintext) and prompt them to open the app once.
+  // Encryption is mandatory: we only ever write ciphertext, never the sender's
+  // name. Sending first unlocks/sets up my own key (prompting for the passphrase
+  // if needed), then requires the friend's published key.
   function sendMessage(text) {
     const uid = myUid(), database = db();
     const msg = (text || "").trim();
@@ -272,16 +433,22 @@
     const friendUid = activeChat;
     const tid = threadIdFor(uid, friendUid);
     const body = msg.slice(0, 1000);
-    deriveThreadKey(friendUid).then(key => {
-      if (!key) {
-        notify("Can't send yet", `${friendsCache[friendUid]?.name || "Your friend"} needs to open X Optimizer once so messages can be encrypted.`);
-        return;
-      }
-      return encryptText(key, body).then(({ ct, iv }) =>
-        database.ref(`${MESSAGES_REF}/${tid}`).push({ from: uid, ct, iv, v: 1, ts: nowIso() })
-          .catch(e => alert("Couldn't send: " + ((e && e.message) || e)))
-      ).catch(() => alert("Couldn't encrypt that message."));
-    });
+    ensureKeyReady().then(myKp => {
+      if (!myKp) { notify("Encryption needed", "Set up your encryption password to send messages."); return; }
+      return getFriendPublicKey(friendUid).then(pub => {
+        if (!pub) {
+          notify("Can't send yet", `${friendsCache[friendUid]?.name || "Your friend"} needs to open X Optimizer once so messages can be encrypted.`);
+          return;
+        }
+        return deriveThreadKey(friendUid).then(key => {
+          if (!key) { notify("Can't send yet", "Couldn't set up encryption for this chat."); return; }
+          return encryptText(key, body).then(({ ct, iv }) =>
+            database.ref(`${MESSAGES_REF}/${tid}`).push({ from: uid, ct, iv, v: 1, ts: nowIso() })
+              .catch(e => alert("Couldn't send: " + ((e && e.message) || e)))
+          );
+        });
+      });
+    }).catch(() => alert("Couldn't encrypt that message."));
   }
 
   function openChat(friendUid) {
@@ -298,12 +465,19 @@
       // Mark this thread's messages as seen so the unread listener won't re-flag.
       threadSeen[tid] = threadSeen[tid] || new Set();
       list.forEach(m => threadSeen[tid].add(m.id));
-      // Decrypt before rendering (async); ignore if the chat changed meanwhile.
+      activeMessages = list;
+      if (tabVisible()) render();
+      // Decrypt (async); re-render as plaintext lands. Ignore stale chats.
       decryptAll(friendUid, list).then(() => {
-        if (activeChat !== friendUid) return;
-        activeMessages = list;
-        if (tabVisible()) render();
+        if (activeChat === friendUid && tabVisible()) render();
       });
+    });
+    // Unlock my key (prompts for the passphrase on a fresh device), then
+    // re-decrypt this conversation once it's available.
+    ensureKeyReady().then(kp => {
+      if (kp && activeChat === friendUid) {
+        decryptAll(friendUid, activeMessages).then(() => { if (activeChat === friendUid && tabVisible()) render(); });
+      }
     });
     render();
   }
@@ -476,7 +650,7 @@
       const mine = m.from === uid;
       return `
         <div class="fr-msg ${mine ? "fr-msg-mine" : "fr-msg-theirs"}">
-          <div class="fr-msg-bubble">${esc(m.text || "")}</div>
+          <div class="fr-msg-bubble">${esc(displayText(m))}</div>
           <div class="fr-msg-meta">${fmtTime(m.ts)}</div>
         </div>`;
     }).join("");
@@ -485,7 +659,7 @@
         <div class="fr-chat-head">
           <button type="button" class="fr-btn fr-btn-back" id="fr-back">&larr;</button>
           <span class="fr-chat-name">${esc(f.name || "(unknown)")}</span>
-          <span class="fr-chat-e2ee" title="Messages are end-to-end encrypted and readable only on this device">🔒</span>
+          <span class="fr-chat-e2ee" title="End-to-end encrypted — unlocked with your encryption password on each device">🔒</span>
         </div>
         <div class="fr-chat-messages" id="fr-chat-messages">${rows || `<p class="fr-empty">No messages yet — say hi!</p>`}</div>
         <div class="fr-chat-input">
@@ -506,6 +680,12 @@
   window.renderFriends = function renderFriends() {
     bindListeners();
     render();
+    // First time the tab is opened this session, set up / unlock the encryption
+    // key (so your public key gets published and friends can message you).
+    if (myUid() && cryptoOk() && !currentKeyPair && !keySetupAttempted) {
+      keySetupAttempted = true;
+      ensureKeyReady().then(() => { if (tabVisible()) render(); });
+    }
   };
 
   // Add a friend by username from anywhere (e.g. the profile popup's
