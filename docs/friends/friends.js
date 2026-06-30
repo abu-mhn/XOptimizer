@@ -8,17 +8,20 @@
 //   friends/{uid}/{friendUid}: { name, status, ts }
 //     status: "requested" (I sent) | "incoming" (they sent me) | "friends"
 //   publicKeys/{uid}: "<ECDH P-256 public key as a JWK string>"
-//   messages/{threadId}/{pushId}: { from, fromName, ts, + EITHER:
-//       ct, iv, v   — AES-GCM ciphertext + nonce (end-to-end encrypted), OR
-//       text        — plaintext fallback when the friend has no published key }
-//     threadId = the two uids sorted and joined with "_"
+//   messages/{threadId}/{pushId}: { from, ct, iv, v, ts }
+//     from = sender uid (opaque; required by the rules to stop forgery)
+//     ct/iv = AES-GCM ciphertext + nonce. NO sender name and NO plaintext are
+//     ever stored, so a database snapshot reveals neither the message nor who
+//     (by name) sent it. threadId = the two uids sorted and joined with "_".
 //
 // End-to-end encryption: each account keeps an ECDH keypair on THIS device
 // (IndexedDB); only the public half is published. A per-conversation AES-GCM
 // key is derived from (my private key + friend's public key) — the identical
-// secret both sides compute — so the server only ever stores ciphertext. This
-// is single-device: a new device / cleared storage re-keys, after which older
-// messages can no longer be decrypted.
+// secret both sides compute — so the server only ever stores ciphertext.
+// Encryption is mandatory: if the friend has no published key we refuse to send
+// rather than fall back to plaintext. Single-device: a new device / cleared
+// storage re-keys, after which older messages can no longer be decrypted.
+// (Legacy messages that still carry a plaintext `text` field are read as-is.)
 (function () {
   "use strict";
 
@@ -259,6 +262,9 @@
   }
 
   // ---- messaging ----
+  // Encryption is mandatory: we only ever write ciphertext, and never the
+  // sender's name. If the friend hasn't published a key yet we refuse to send
+  // (rather than leak plaintext) and prompt them to open the app once.
   function sendMessage(text) {
     const uid = myUid(), database = db();
     const msg = (text || "").trim();
@@ -266,17 +272,15 @@
     const friendUid = activeChat;
     const tid = threadIdFor(uid, friendUid);
     const body = msg.slice(0, 1000);
-    const base = { from: uid, fromName: myName(), ts: nowIso() };
-    const push = payload => database.ref(`${MESSAGES_REF}/${tid}`).push(payload)
-      .catch(e => alert("Couldn't send: " + ((e && e.message) || e)));
-    // Encrypt when the friend has a published key; otherwise fall back to
-    // plaintext so messaging still works (e.g. they haven't opened the app
-    // since E2EE shipped).
     deriveThreadKey(friendUid).then(key => {
-      if (!key) return push(Object.assign({ text: body }, base));
-      return encryptText(key, body)
-        .then(({ ct, iv }) => push(Object.assign({ ct, iv, v: 1 }, base)))
-        .catch(() => push(Object.assign({ text: body }, base)));
+      if (!key) {
+        notify("Can't send yet", `${friendsCache[friendUid]?.name || "Your friend"} needs to open X Optimizer once so messages can be encrypted.`);
+        return;
+      }
+      return encryptText(key, body).then(({ ct, iv }) =>
+        database.ref(`${MESSAGES_REF}/${tid}`).push({ from: uid, ct, iv, v: 1, ts: nowIso() })
+          .catch(e => alert("Couldn't send: " + ((e && e.message) || e)))
+      ).catch(() => alert("Couldn't encrypt that message."));
     });
   }
 
@@ -377,7 +381,7 @@
           if (m.from === uid) return;                 // my own message
           if (activeChat === fuid && tabVisible()) return; // already reading it
           unread[fuid] = (unread[fuid] || 0) + 1;
-          const who = m.fromName || friendsCache[fuid]?.name || "a friend";
+          const who = friendsCache[fuid]?.name || "a friend";
           ensureDecrypted(fuid, m).then(txt => notify(`Message from ${who}`, txt || "New message"));
           if (tabVisible()) render();
         });

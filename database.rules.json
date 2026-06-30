@@ -394,9 +394,8 @@
         ".read": "auth != null && $threadId.contains(auth.uid)",
         "$msgId": {
           ".write": "auth != null && !data.exists() && $threadId.contains(auth.uid) && newData.child('from').val() === auth.uid",
+          ".validate": "newData.hasChildren(['from', 'ct', 'iv'])",
           "from":     { ".validate": "newData.isString() && newData.val() === auth.uid" },
-          "fromName": { ".validate": "newData.isString() && newData.val().length <= 30" },
-          "text":     { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 1000" },
           "ct":       { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 4000" },
           "iv":       { ".validate": "newData.isString() && newData.val().length <= 32" },
           "v":        { ".validate": "newData.isNumber()" },
