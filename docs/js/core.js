@@ -812,6 +812,10 @@ document.addEventListener("DOMContentLoaded", function initActiveTabRender() {
   if (mode === "battleroyale") {
     if (typeof renderBattleRoyale === "function") renderBattleRoyale();
   }
+
+  if (mode === "friends") {
+    if (typeof renderFriends === "function") renderFriends();
+  }
 });
 
 function escapeHtml(s) {

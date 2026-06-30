@@ -676,6 +676,14 @@
     });
   }
 
+  // The Friends tab (add friends + DM) is signed-in only, same as Battle Royale.
+  function paintFriendsTab() {
+    const show = !!currentProfile;
+    document.querySelectorAll('.tab[data-mode="friends"]').forEach(tab => {
+      tab.classList.toggle("hidden", !show && !tab.classList.contains("active"));
+    });
+  }
+
   // Achievement themes — Dragon Tamer / Dragon Slayer / Lonewolf. Each is
   // gated on the matching achievement tag (awarded at 100 wins, see
   // tournament.js + js/achievements.js). The theme-menu entry is shown
@@ -1632,6 +1640,7 @@
     paintRevoxTab();
     paintAchievementTab();
     paintBattleRoyaleTab();
+    paintFriendsTab();
     ensureActiveTabVisible();
     applyRevoxThemeGate();
     applyMedalThemeGate();
@@ -1643,6 +1652,7 @@
     paintRevoxTab();
     paintAchievementTab();
     paintBattleRoyaleTab();
+    paintFriendsTab();
     ensureActiveTabVisible();
     applyAchievementThemeGate();
     renderDeveloperPage();
@@ -1653,6 +1663,7 @@
       paintRevoxTab();
       paintAchievementTab();
       paintBattleRoyaleTab();
+      paintFriendsTab();
       ensureActiveTabVisible();
       applyAchievementThemeGate();
       initDeveloperPageControls();
@@ -1662,6 +1673,7 @@
     paintRevoxTab();
     paintAchievementTab();
     paintBattleRoyaleTab();
+    paintFriendsTab();
     ensureActiveTabVisible();
     applyAchievementThemeGate();
     initDeveloperPageControls();

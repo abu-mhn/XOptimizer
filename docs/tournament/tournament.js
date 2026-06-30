@@ -2808,6 +2808,43 @@ let profileDropdownHideTimer = null;
 // discarded instead of popping a stale dropdown.
 let profileDropdownRequestId = 0;
 
+// True when `name` is (loosely) the signed-in account's own username. Compares
+// with ALL non-alphanumerics stripped so "RvX-Ashwolf", "RvX Ashwolf" and
+// "rvxashwolf" all match — the ranking entry and the profile username don't
+// always agree on punctuation/spacing.
+function isOwnUsername(name) {
+  const myUname = (window.getCurrentUsername && window.getCurrentUsername()) || "";
+  if (!name || !myUname) return false;
+  const strip = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
+  return strip(myUname) === strip(name);
+}
+
+// Show/label the "Add Friend" button inside the hover profile dropdown for the
+// account being viewed. Hidden when not signed in or viewing your own profile.
+function refreshProfileViewAddFriendBtn(username, anchorEl) {
+  const btn = document.getElementById("profile-view-add-friend");
+  if (!btn) return;
+  btn.dataset.member = username || "";
+  btn.classList.add("hidden");
+  btn.disabled = false;
+  btn.textContent = "Add Friend";
+  if (!username || typeof window.friendStatusWithUsername !== "function") return;
+  // Never offer to befriend yourself.
+  if (isOwnUsername(username)) return;
+  window.friendStatusWithUsername(username).then(status => {
+    if ((btn.dataset.member || "") !== (username || "")) return; // dropdown moved on
+    if (status === null || status === "self") return;            // not signed in / own profile
+    btn.classList.remove("hidden");
+    if (status === "friends")        { btn.textContent = "Friends";       btn.disabled = true; }
+    else if (status === "requested") { btn.textContent = "Requested";     btn.disabled = true; }
+    else if (status === "incoming")  { btn.textContent = "Accept Friend"; }
+    else                             { btn.textContent = "Add Friend"; }
+    // The card just grew by one button — re-anchor it under the name.
+    const panel = document.getElementById("profile-view-popup");
+    if (panel && anchorEl) positionProfileDropdown(panel, anchorEl);
+  });
+}
+
 function hideProfileDropdown() {
   clearTimeout(profileDropdownHideTimer);
   profileDropdownHideTimer = null;
@@ -2946,6 +2983,7 @@ function showProfileByUsername(username, anchorEl) {
     cancelProfileDropdownHide();
     panel.onmouseenter = cancelProfileDropdownHide;
     panel.onmouseleave = scheduleProfileDropdownHide;
+    refreshProfileViewAddFriendBtn(username, anchorEl);
     if (profileDropdownOutsideHandler) {
       document.removeEventListener("click", profileDropdownOutsideHandler, true);
     }
@@ -10359,6 +10397,30 @@ function loadRevoxHeaderProfile(name) {
   }).catch(() => {});
 }
 
+// Show/label the "Add Friend" button in the profile popup for the member being
+// viewed. Hidden when not signed in, viewing your own profile, or the Friends
+// feature isn't loaded. Labelled by current friendship status.
+function refreshHistoryAddFriendBtn(name) {
+  const btn = document.getElementById("revox-history-add-friend");
+  if (!btn) return;
+  btn.dataset.member = name || "";
+  btn.classList.add("hidden");
+  btn.disabled = false;
+  btn.textContent = "Add Friend";
+  if (!name || typeof window.friendStatusWithUsername !== "function") return;
+  // Never offer to befriend yourself.
+  if (isOwnUsername(name)) return;
+  window.friendStatusWithUsername(name).then(status => {
+    if ((btn.dataset.member || "") !== (name || "")) return; // popup moved on
+    if (status === null || status === "self") return;        // not signed in / own profile
+    btn.classList.remove("hidden");
+    if (status === "friends")       { btn.textContent = "Friends";   btn.disabled = true; }
+    else if (status === "requested"){ btn.textContent = "Requested"; btn.disabled = true; }
+    else if (status === "incoming") { btn.textContent = "Accept Friend"; }
+    else                            { btn.textContent = "Add Friend"; }
+  });
+}
+
 function showRevoxHistory(key, name) {
   const popup = document.getElementById("revox-history-popup");
   const titleEl = document.getElementById("revox-history-title");
@@ -10368,6 +10430,7 @@ function showRevoxHistory(key, name) {
   // so it doesn't float over the history popup.
   hideProfileDropdown();
   if (titleEl) titleEl.textContent = name || "Member";
+  refreshHistoryAddFriendBtn(name);
   // Reset the header, then load this member's profile photo + tags above the
   // joined-events list.
   const photoEl = document.getElementById("revox-history-photo");
@@ -10641,4 +10704,29 @@ function showRevoxHistory(key, name) {
   const closeHistory = () => historyPopup?.classList.add("hidden");
   document.getElementById("revox-history-close")?.addEventListener("click", closeHistory);
   historyPopup?.addEventListener("click", e => { if (e.target === historyPopup) closeHistory(); });
+
+  // "Add Friend" in the profile popup — send (or accept) a friend request to the
+  // member being viewed, then re-label the button.
+  document.getElementById("revox-history-add-friend")?.addEventListener("click", () => {
+    const btn = document.getElementById("revox-history-add-friend");
+    const member = btn?.dataset.member || "";
+    if (!member || typeof window.friendActionByUsername !== "function") return;
+    btn.disabled = true;
+    window.friendActionByUsername(member).then(() => {
+      setTimeout(() => refreshHistoryAddFriendBtn(member), 500);
+    });
+  });
+
+  // "Add Friend" inside the hover profile dropdown.
+  document.getElementById("profile-view-add-friend")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const btn = document.getElementById("profile-view-add-friend");
+    const member = btn?.dataset.member || "";
+    if (!member || typeof window.friendActionByUsername !== "function") return;
+    btn.disabled = true;
+    cancelProfileDropdownHide();
+    window.friendActionByUsername(member).then(() => {
+      setTimeout(() => refreshProfileViewAddFriendBtn(member), 500);
+    });
+  });
 })();

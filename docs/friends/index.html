@@ -40,7 +40,7 @@
   <!-- Optional theme color -->
   <meta name="theme-color" content="#0a4797">
 
-  <title>Developer — X Optimizer</title>
+  <title>Friends — X Optimizer</title>
   <link rel="stylesheet" href="style.css">
 </head>
 
@@ -116,7 +116,7 @@
         <span class="tab-icon-mask" role="img" aria-label="Battle Royale" style="--tab-icon: url('assets/icons/battle-royal.png')"></span>
         <span class="tab-label">Battle Royale</span>
       </a>
-      <a class="tab hidden" href="friends/" data-mode="friends" aria-label="Friends">
+      <a class="tab active" href="friends/" data-mode="friends" aria-label="Friends">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false" style="width:18px;height:18px;">
           <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
         </svg>
@@ -136,7 +136,7 @@
         <span class="tab-label">Revox</span>
       </a>
 
-      <a class="tab active" href="developer/" data-mode="developer" aria-label="Developer">
+      <a class="tab hidden" href="developer/" data-mode="developer" aria-label="Developer">
         <span class="tab-icon-mask" role="img" aria-label="Developer" style="--tab-icon: url('assets/icons/coding.png')"></span>
         <span class="tab-label">Developer</span>
       </a>
@@ -444,22 +444,32 @@
           <button type="button" id="deck-shuffle" class="btn btn-shuffle" aria-label="Shuffle Deck" title="Shuffle Deck">
             <img src="assets/icons/shuffle.png" alt="Shuffle"
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x1F3B2;');">
+            <span class="btn-label">Shuffle</span>
           </button>
           <button type="button" id="deck-download" class="btn btn-download" aria-label="Download Deck as PNG" title="Download Deck as PNG">
             <img src="assets/icons/download.png" alt="Download"
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x2B07;');">
+            <span class="btn-label">Download</span>
           </button>
           <button type="button" id="deck-share" class="btn btn-share" aria-label="Share Deck" title="Share Deck">
             <img src="assets/icons/share.png" alt="Share"
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x1F517;');">
+            <span class="btn-label">Share</span>
           </button>
           <button type="button" id="deck-copy" class="btn btn-copy" aria-label="Copy Deck for Tournament Registration" title="Copy this deck — paste into a tournament registration form">
             <img src="assets/icons/copy.png" alt="Copy"
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x1F4CB;');">
+            <span class="btn-label">Copy</span>
           </button>
           <button type="button" id="deck-paste" class="btn btn-paste" aria-label="Paste a copied deck" title="Paste a copied deck">
             <img src="assets/icons/paste.png" alt="Paste"
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x1F4CB;');">
+            <span class="btn-label">Paste</span>
+          </button>
+          <button type="button" id="deck-autobuild" class="btn btn-autobuild" aria-label="Generate a deck for an achievement" title="Generate a deck that satisfies an achievement's win condition">
+            <img src="assets/icons/dice.png" alt="Auto"
+                 onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x1F3B2;');">
+            <span class="btn-label">Auto</span>
           </button>
         </div>
         <div id="deck-list"></div>
@@ -491,7 +501,7 @@
     </section>
 
     <!-- ================= FRIENDS ================= -->
-    <section id="form-friends" class="calc-form hidden">
+    <section id="form-friends" class="calc-form">
       <fieldset>
         <legend>Friends</legend>
         <div id="friends-content"></div>
@@ -608,102 +618,6 @@
       </fieldset>
     </section>
 
-    <!-- ================= DEVELOPER ================= -->
-    <section id="form-developer" class="calc-form">
-      <fieldset>
-        <legend>Developer</legend>
-        <div id="developer-locked" class="developer-pane">
-          <p class="account-hint">This area is for accounts with the Developer tag.</p>
-        </div>
-        <div id="developer-main" class="developer-pane hidden">
-          <div class="developer-sub-tabs" role="tablist">
-            <button type="button" class="developer-sub-tab active" data-developer-view="users" role="tab" aria-selected="true">Users</button>
-            <button type="button" class="developer-sub-tab" data-developer-view="database" role="tab" aria-selected="false">Database</button>
-            <button type="button" class="developer-sub-tab" data-developer-view="tags" role="tab" aria-selected="false">Tags</button>
-          </div>
-          <div class="developer-sub-panel" id="developer-panel-users">
-            <p class="developer-count" id="developer-count">Registered users: …</p>
-            <div class="developer-search-row">
-              <input type="text" id="developer-search" class="developer-search" placeholder="Search username or email…" autocomplete="off" />
-              <button type="button" id="developer-search-btn" class="btn btn-sm">Search</button>
-            </div>
-            <div id="developer-status" class="swiss-join-status"></div>
-            <div id="developer-user-list" class="developer-user-list"></div>
-          </div>
-          <div class="developer-sub-panel hidden" id="developer-panel-database">
-            <p class="account-hint">Database tools coming soon.</p>
-          </div>
-          <div class="developer-sub-panel hidden" id="developer-panel-tags">
-            <p class="account-hint">Every tag the app recognises. Grouped by how it's assigned. Free-form tags can still be typed in the Users tab — only the ones listed here drive in-app behavior (tabs, themes, badges, gated buttons).</p>
-
-            <h3 class="developer-tag-group-title">Admin / Role</h3>
-            <p class="account-hint developer-tag-group-hint">Added manually by a Developer on the Users tab.</p>
-            <ul class="developer-tag-list">
-              <li>
-                <span class="account-tag account-tag-developer">Developer</span>
-                <span class="developer-tag-desc">Sees the Developer tab; can preview every locked theme regardless of which tags they hold.</span>
-              </li>
-              <li>
-                <span class="account-tag account-tag-tester">Tester</span>
-                <span class="developer-tag-desc">Unlocks tournament QA tools — the Test button, Auto-build in the Register popup, and Copy Names.</span>
-              </li>
-              <li>
-                <span class="account-tag account-tag-judge">Judge</span>
-                <span class="developer-tag-desc">Required to Create Tournament; listed in the Sub-hosts typeahead.</span>
-              </li>
-              <li>
-                <span class="account-tag account-tag-guest-judge">Guest Judge</span>
-                <span class="developer-tag-desc">Can be invited to co-host — appears in the Sub-hosts typeahead and joins as co-host once added. Cannot create a tournament of their own.</span>
-              </li>
-              <li>
-                <span class="account-tag account-tag-keeper">Keeper</span>
-                <span class="developer-tag-desc">Handles participation fees. Appears in the Sub-hosts typeahead; once invited to a tournament as a co-host, the Keeper (and the host) can mark which registrants have paid.</span>
-              </li>
-              <li>
-                <span class="account-tag account-tag-revox account-tag-revox-admin">Revox Admin</span>
-                <span class="developer-tag-desc">Full edit on the Revox tab (Add Result, edit/delete rows). Auto-unlocks the Revox theme.</span>
-              </li>
-              <li>
-                <span class="account-tag account-tag-revox">Revox Member</span>
-                <span class="developer-tag-desc">View-only on the Revox tab; auto-entered into the Revox ranking on Top-8 finishes. Auto-unlocks the Revox theme.</span>
-              </li>
-            </ul>
-
-            <h3 class="developer-tag-group-title">Medal</h3>
-            <p class="account-hint developer-tag-group-hint">Auto-derived from the live tournament ranking — not stored on the account. Shifts automatically as standings change.</p>
-            <ul class="developer-tag-list">
-              <li>
-                <span class="account-tag account-tag-gold">Gold Player</span>
-                <span class="developer-tag-desc">Rank #1 of the tournament ranking. Unlocks the Gold theme.</span>
-              </li>
-              <li>
-                <span class="account-tag account-tag-silver">Silver Player</span>
-                <span class="developer-tag-desc">Rank #2. Unlocks the Silver theme.</span>
-              </li>
-              <li>
-                <span class="account-tag account-tag-bronze">Bronze Player</span>
-                <span class="developer-tag-desc">Rank #3. Unlocks the Bronze theme.</span>
-              </li>
-            </ul>
-
-            <h3 class="developer-tag-group-title">Achievement</h3>
-            <p class="account-hint developer-tag-group-hint">Self-claimed when the matching 100-win achievement unlocks (see the Achievement tab). Each one also unlocks the matching theme in Settings.</p>
-            <ul class="developer-tag-list">
-              <li><span class="account-tag account-tag-dragontamer">Dragon Tamer</span><span class="developer-tag-desc">100 wins with a Dran / Drake / Dragoon / Wyvern / Bahamut / Ragna part in any slot.</span></li>
-              <li><span class="account-tag account-tag-dragonslayer">Dragon Slayer</span><span class="developer-tag-desc">Defeat 100 opponents who had a dragon-named part, while your deck contains a Knight-named part.</span></li>
-              <li><span class="account-tag account-tag-lonewolf">Lone Wolf</span><span class="developer-tag-desc">100 wins with exactly one Wolf-named part, in a slot whose combo type is unique in your deck.</span></li>
-              <li><span class="account-tag account-tag-rushhour">Rush Hour</span><span class="developer-tag-desc">100 wins where at least one slot pairs a Clock Mirage blade with a Rush-named bit.</span></li>
-              <li><span class="account-tag account-tag-kingofjungle">King of The Jungle</span><span class="developer-tag-desc">100 wins with exactly one Leon-named slot and the other two slots carrying jungle parts (Rhino / Fox / Wolf / Viper / Tiger / Bear / Goat).</span></li>
-              <li><span class="account-tag account-tag-sharknado">Sharknado</span><span class="developer-tag-desc">100 wins where a slot carries a Shark-named part AND that slot is a Balance combo.</span></li>
-              <li><span class="account-tag account-tag-sorcerersupreme">Sorcerer Supreme</span><span class="developer-tag-desc">100 wins where every one of your 3 slots contains a Wizard-named part.</span></li>
-              <li><span class="account-tag account-tag-paleonerd">Paleonerd</span><span class="developer-tag-desc">100 wins where every slot carries a Tyranno / Tricera / Ptera / Mammoth / Brachio part.</span></li>
-              <li><span class="account-tag account-tag-kingofalltypes">King of All Types</span><span class="developer-tag-desc">100 wins with a Bullet Griffon slot tuned into a non-Balance combo (BG's built-in ratchet leaves the slot at BG + bit — picking a bit that pushes a stat ≥ 100 flips the slot into Attack / Defense / Stamina).</span></li>
-            </ul>
-          </div>
-        </div>
-      </fieldset>
-    </section>
-
     <!-- ================= RESULT ================= -->
     <div id="result" class="result hidden"></div>
   </div>
@@ -785,6 +699,18 @@
       <div class="popup-actions">
         <button type="button" id="tournament-cohost-code-submit" class="btn">Join</button>
         <button type="button" id="tournament-cohost-code-cancel" class="btn popup-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= ACHIEVEMENT AUTO-BUILD POPUP ================= -->
+  <div id="deck-autobuild-popup" class="popup-overlay hidden">
+    <div class="popup-card">
+      <h2 class="popup-title">Generate Deck for Achievement</h2>
+      <p class="popup-text">Pick an achievement and we'll fill the active deck with a 3-slot combo that satisfies its win condition. Useful for chasing a specific badge.</p>
+      <div id="deck-autobuild-list" class="deck-autobuild-list"></div>
+      <div class="popup-actions">
+        <button type="button" id="deck-autobuild-cancel" class="btn popup-cancel"><img src="assets/icons/exit-button.png" alt="" onerror="this.style.display='none'"><span class="btn-label">Cancel</span></button>
       </div>
     </div>
   </div>

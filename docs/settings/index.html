@@ -116,6 +116,13 @@
         <span class="tab-icon-mask" role="img" aria-label="Battle Royale" style="--tab-icon: url('assets/icons/battle-royal.png')"></span>
         <span class="tab-label">Battle Royale</span>
       </a>
+      <a class="tab hidden" href="friends/" data-mode="friends" aria-label="Friends">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false" style="width:18px;height:18px;">
+          <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+        </svg>
+        <span class="tab-label">Friends</span>
+      </a>
+
 
       <a class="tab hidden" href="achievement/" data-mode="achievement" aria-label="Achievement">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false" style="width: 18px; height: 18px;">
@@ -474,12 +481,20 @@
           </button>
         </div>
         <div id="br-panel-battle" class="br-panel">
-          <p class="br-intro">Earn points by placing in tournaments, then challenge a player with the <strong>same points or fewer</strong> — both stake an equal wager and a Judge declares the winner, who takes the pot.</p>
+          <p class="br-intro">Your tier is set by your tournament win rate <strong>and</strong> how many battles you’ve played. You can only challenge players in your own tier — both stake an equal points wager and a Judge declares the winner, who takes the pot.</p>
           <div id="br-content"></div>
         </div>
         <div id="br-panel-shop" class="br-panel hidden">
           <p class="br-empty">The Shop is coming soon — spend your Battle Royale points here.</p>
         </div>
+      </fieldset>
+    </section>
+
+    <!-- ================= FRIENDS ================= -->
+    <section id="form-friends" class="calc-form hidden">
+      <fieldset>
+        <legend>Friends</legend>
+        <div id="friends-content"></div>
       </fieldset>
     </section>
 
@@ -1029,6 +1044,7 @@
       </div>
       <div id="revox-history-list"></div>
       <div class="popup-actions">
+        <button type="button" id="revox-history-add-friend" class="btn hidden">Add Friend</button>
         <button type="button" id="revox-history-close" class="btn popup-cancel">Close</button>
       </div>
     </div>
@@ -1063,6 +1079,7 @@
     <p id="profile-view-bio" class="profile-view-bio"></p>
     <p id="profile-view-winrate" class="profile-view-winrate hidden"></p>
     <div id="profile-view-status" class="tournament-password-status"></div>
+    <button type="button" id="profile-view-add-friend" class="btn profile-view-add-friend hidden">Add Friend</button>
   </div>
 
   <!-- ================= SWISS ROUNDS POPUP ================= -->
@@ -1159,6 +1176,7 @@
   <script src="settings/settings.js?v=20260605c"></script>
   <script src="dashboard/dashboard.js"></script>
   <script src="battleroyale/battleroyale.js"></script>
+  <script src="friends/friends.js"></script>
   <script src="app.js"></script>
 </body>
 

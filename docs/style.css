@@ -15725,6 +15725,10 @@ body.kingofalltypes-mode .btn-lucky img {
     font-size: 0.9rem;
     margin: 0 0 12px;
     line-height: 1.45;
+    text-align: justify;
+}
+.br-hint {
+    text-align: justify;
 }
 .br-points {
     font-size: 1.05rem;
@@ -15732,6 +15736,28 @@ body.kingofalltypes-mode .btn-lucky img {
     color: #e6edf3;
 }
 .br-points strong { color: #58a6ff; }
+.br-points-sub {
+    font-size: 0.85rem;
+    color: #8b949e;
+    margin-top: -8px;
+}
+.br-points-sub strong { color: #c9d1d9; }
+.br-tier-name { color: #8b949e; font-size: 0.85em; margin-left: 4px; }
+/* Tier badge — escalating rank colours C → B → A → S. */
+.br-tier {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 0.72em;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    vertical-align: middle;
+    border: 1px solid transparent;
+}
+.br-tier-C { background: rgba(139, 148, 158, 0.18); color: #adbac7; border-color: rgba(139, 148, 158, 0.5); }
+.br-tier-B { background: rgba(63, 185, 80, 0.16);  color: #56d364; border-color: rgba(63, 185, 80, 0.5); }
+.br-tier-A { background: rgba(88, 166, 255, 0.16); color: #79c0ff; border-color: rgba(88, 166, 255, 0.5); }
+.br-tier-S { background: rgba(241, 207, 110, 0.18); color: #f1cf6e; border-color: rgba(241, 207, 110, 0.6); }
 .br-judge-tag {
     display: inline-block;
     margin-left: 4px;
@@ -15758,6 +15784,7 @@ body.kingofalltypes-mode .btn-lucky img {
     font-style: italic;
     font-size: 0.9rem;
     margin: 4px 0;
+    text-align: justify;
 }
 .br-card {
     background: #161b22;
@@ -15802,6 +15829,48 @@ body.kingofalltypes-mode .btn-lucky img {
 .br-btn-accept:hover, .br-btn-win:hover { background: #2ea043; }
 .br-btn-decline { background: transparent; color: #f85149; border-color: rgba(248, 81, 73, 0.5); }
 .br-btn-decline:hover { background: rgba(248, 81, 73, 0.12); }
+.br-btn-buy { background: #238636; color: #fff; }
+.br-btn-buy:hover:not(:disabled) { background: #2ea043; }
+.br-btn-buy:disabled { background: #21262d; color: #6e7681; cursor: not-allowed; border-color: #30363d; }
+.br-btn-play { background: #8957e5; color: #fff; }
+.br-btn-play:hover { background: #a371f7; }
+
+/* Cards played in a battle (judge + active-battle views). */
+.br-card-cards {
+    margin: 4px 0 2px;
+    font-size: 0.82rem;
+    color: #d2a8ff;
+}
+
+/* Shop ability cards */
+.br-shop-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 8px;
+}
+.br-shop-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 12px 14px;
+}
+.br-shop-card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+.br-shop-card-name { font-size: 1rem; font-weight: 700; color: #f0f6fc; }
+.br-shop-card-price { font-size: 0.85rem; font-weight: 700; color: #f1cf6e; white-space: nowrap; }
+.br-shop-card-desc { margin: 6px 0 10px; font-size: 0.86rem; color: #c9d1d9; line-height: 1.4; }
+.br-shop-card-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.br-shop-card-owned { font-size: 0.8rem; color: #8b949e; }
 
 body.light-mode .br-card,
 body.tropical-mode .br-card,
@@ -15809,4 +15878,245 @@ body.love-mode .br-card,
 body.forest-mode .br-card {
     background: #ffffff;
     border-color: #d1d9e0;
+}
+
+/* ===================== Friends tab ===================== */
+.fr-empty {
+    color: #8b949e;
+    font-style: italic;
+    font-size: 0.9rem;
+    margin: 6px 0;
+    text-align: justify;
+}
+.fr-add {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 18px;
+}
+.fr-add-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #30363d;
+    background: #0d1117;
+    color: #e6edf3;
+    font-size: 0.9rem;
+}
+.fr-add-input:focus { outline: none; border-color: #58a6ff; }
+.fr-section { margin-bottom: 18px; }
+.fr-h {
+    font-size: 0.95rem;
+    margin: 0 0 8px;
+    color: #f0f6fc;
+}
+.fr-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 9px 12px;
+    background: rgba(110, 118, 129, 0.08);
+    border: 1px solid #21262d;
+    border-radius: 10px;
+    margin-bottom: 8px;
+}
+.fr-friend { cursor: pointer; }
+.fr-friend:hover { background: rgba(110, 118, 129, 0.16); }
+.fr-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    color: #f0f6fc;
+    font-size: 0.92rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.fr-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
+.fr-pending { color: #8b949e; font-size: 0.78rem; font-style: italic; }
+.fr-unread {
+    display: inline-block;
+    min-width: 18px;
+    padding: 0 6px;
+    margin-left: 4px;
+    border-radius: 999px;
+    background: #1f6feb;
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-align: center;
+    vertical-align: middle;
+}
+.fr-btn {
+    flex: 0 0 auto;
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.fr-btn-add { background: #1f6feb; color: #fff; }
+.fr-btn-add:hover { background: #388bfd; }
+.fr-btn-accept { background: #238636; color: #fff; }
+.fr-btn-accept:hover { background: #2ea043; }
+.fr-btn-msg { background: #1f6feb; color: #fff; }
+.fr-btn-msg:hover { background: #388bfd; }
+.fr-btn-decline {
+    background: transparent;
+    color: #f85149;
+    border-color: rgba(248, 81, 73, 0.5);
+    padding: 5px 10px;
+}
+.fr-btn-decline:hover { background: rgba(248, 81, 73, 0.12); }
+
+/* Chat view */
+.fr-chat {
+    display: flex;
+    flex-direction: column;
+    height: min(60vh, 520px);
+    border: 1px solid #21262d;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #0d1117;
+}
+.fr-chat-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #21262d;
+    background: #161b22;
+    flex: 0 0 auto;
+}
+.fr-chat-name { font-weight: 700; color: #f0f6fc; font-size: 0.95rem; }
+.fr-btn-back {
+    background: transparent;
+    color: #c9d1d9;
+    border-color: #30363d;
+    padding: 4px 11px;
+    font-size: 1rem;
+    line-height: 1;
+}
+.fr-btn-back:hover { background: rgba(110, 118, 129, 0.16); }
+.fr-chat-messages {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.fr-msg { max-width: 78%; display: flex; flex-direction: column; }
+.fr-msg-mine { align-self: flex-end; align-items: flex-end; }
+.fr-msg-theirs { align-self: flex-start; align-items: flex-start; }
+.fr-msg-bubble {
+    padding: 7px 12px;
+    border-radius: 14px;
+    font-size: 0.9rem;
+    line-height: 1.35;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+}
+.fr-msg-mine .fr-msg-bubble { background: #1f6feb; color: #fff; border-bottom-right-radius: 4px; }
+.fr-msg-theirs .fr-msg-bubble { background: #21262d; color: #e6edf3; border-bottom-left-radius: 4px; }
+.fr-msg-meta { font-size: 0.68rem; color: #6e7681; margin-top: 2px; padding: 0 4px; }
+.fr-chat-input {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    border-top: 1px solid #21262d;
+    background: #161b22;
+    flex: 0 0 auto;
+}
+.fr-msg-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid #30363d;
+    background: #0d1117;
+    color: #e6edf3;
+    font-size: 0.9rem;
+}
+.fr-msg-input:focus { outline: none; border-color: #58a6ff; }
+.fr-btn-send { background: #238636; color: #fff; padding: 7px 16px; }
+.fr-btn-send:hover { background: #2ea043; }
+
+/* Light / themed surfaces */
+body.light-mode .fr-row,
+body.tropical-mode .fr-row,
+body.love-mode .fr-row,
+body.forest-mode .fr-row {
+    background: #ffffff;
+    border-color: #d1d9e0;
+}
+body.light-mode .fr-add-input,
+body.tropical-mode .fr-add-input,
+body.love-mode .fr-add-input,
+body.forest-mode .fr-add-input,
+body.light-mode .fr-msg-input,
+body.tropical-mode .fr-msg-input,
+body.love-mode .fr-msg-input,
+body.forest-mode .fr-msg-input,
+body.light-mode .fr-chat,
+body.tropical-mode .fr-chat,
+body.love-mode .fr-chat,
+body.forest-mode .fr-chat {
+    background: #ffffff;
+    border-color: #d1d9e0;
+    color: #1f2328;
+}
+body.light-mode .fr-name,
+body.tropical-mode .fr-name,
+body.love-mode .fr-name,
+body.forest-mode .fr-name,
+body.light-mode .fr-h,
+body.tropical-mode .fr-h,
+body.love-mode .fr-h,
+body.forest-mode .fr-h,
+body.light-mode .fr-chat-name,
+body.tropical-mode .fr-chat-name,
+body.love-mode .fr-chat-name,
+body.forest-mode .fr-chat-name { color: #1f2328; }
+body.light-mode .fr-chat-head,
+body.tropical-mode .fr-chat-head,
+body.love-mode .fr-chat-head,
+body.forest-mode .fr-chat-head,
+body.light-mode .fr-chat-input,
+body.tropical-mode .fr-chat-input,
+body.love-mode .fr-chat-input,
+body.forest-mode .fr-chat-input {
+    background: #f6f8fa;
+    border-color: #d1d9e0;
+}
+body.light-mode .fr-msg-theirs .fr-msg-bubble,
+body.tropical-mode .fr-msg-theirs .fr-msg-bubble,
+body.love-mode .fr-msg-theirs .fr-msg-bubble,
+body.forest-mode .fr-msg-theirs .fr-msg-bubble {
+    background: #eaeef2;
+    color: #1f2328;
+}
+
+/* "Add Friend" button inside the hover profile dropdown */
+.profile-view-add-friend {
+    display: block;
+    width: calc(100% - 28px);
+    margin: 4px 14px 14px;
+    padding: 8px 12px;
+    background: #1f6feb;
+    color: #fff;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.profile-view-add-friend:hover:not(:disabled) { background: #388bfd; }
+.profile-view-add-friend:disabled {
+    background: #21262d;
+    color: #8b949e;
+    cursor: default;
+    border-color: #30363d;
 }

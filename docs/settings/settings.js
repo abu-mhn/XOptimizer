@@ -159,6 +159,11 @@ Battle Royale
 - Notifications: the opponent is alerted when challenged, the Judge when the challenge is accepted, and both players when it's resolved (in-app toast + optional system notification, on any tab)
 - The Judge writes the point transfer — enforced by the DB rules, which only let a Judge-tagged account move another player's Battle Royale points
 
+Friends
+- A Friends tab (sign-in only): add other players by their username, accept or decline incoming requests, and remove friends
+- Direct messages with accepted friends — live one-on-one chat with unread badges, plus toast / system notifications for new messages and new friend requests on any tab
+- Add Friend from a profile: both the hover profile card and the full profile popup show an "Add Friend" button (labelled Accept Friend / Requested / Friends to match your current status, and hidden on your own profile)
+
 Buzz Bey
 - Local, International, and Japan video embeds
 - Region sub-tabs show a recognisable icon: KLCC (Local), globe (International), Mt. Fuji (Japan)
