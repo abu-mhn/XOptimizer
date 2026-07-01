@@ -1608,7 +1608,13 @@ function renderSwissGroupStandings(state, gi, canEdit) {
     </li>
   `;
   }).join("");
-  return `<ol class="swiss-members">${rows}</ol>`;
+  return `<ol class="swiss-members">${rows}</ol>
+    <p class="swiss-tiebreak-legend">
+      <span class="swiss-record">W-L-D</span> Wins-Losses-Draws ·
+      <strong>PS</strong> Points Scored ·
+      <strong>PD</strong> Points Difference ·
+      <strong>MB</strong> Median-Buchholz (tiebreaker)
+    </p>`;
 }
 
 // Rename a participant everywhere their name appears — groups, the
@@ -2829,14 +2835,18 @@ function refreshProfileViewAddFriendBtn(username, anchorEl) {
   btn.disabled = false;
   btn.textContent = "Add Friend";
   if (!username || typeof window.friendStatusWithUsername !== "function") return;
+  // Inside the Friends tab these are already your friends / pending — the card
+  // is just for viewing, so never show the button there.
+  const frTab = document.getElementById("form-friends");
+  if (frTab && !frTab.classList.contains("hidden")) return;
   // Never offer to befriend yourself.
   if (isOwnUsername(username)) return;
   window.friendStatusWithUsername(username).then(status => {
     if ((btn.dataset.member || "") !== (username || "")) return; // dropdown moved on
     if (status === null || status === "self") return;            // not signed in / own profile
+    if (status === "friends") return;                            // already friends — no button
     btn.classList.remove("hidden");
-    if (status === "friends")        { btn.textContent = "Friends";       btn.disabled = true; }
-    else if (status === "requested") { btn.textContent = "Requested";     btn.disabled = true; }
+    if (status === "requested")      { btn.textContent = "Requested";     btn.disabled = true; }
     else if (status === "incoming")  { btn.textContent = "Accept Friend"; }
     else                             { btn.textContent = "Add Friend"; }
     // The card just grew by one button — re-anchor it under the name.
@@ -3204,6 +3214,8 @@ function renderSwiss() {
           ${swissIsHost && !tournamentComplete ? renderCoHostsButton() : ""}
           ${canEdit && !tournamentComplete && canAddParticipant(state) ? `<button type="button" id="swiss-edit-participants" class="btn btn-icon-sm btn-icon-plus" aria-label="Add participant" title="Add participant"><span class="swiss-toolbar-btn-plus-icon">+</span><span class="swiss-toolbar-btn-label">Add</span></button>` : ""}
           ${canEdit && !tournamentComplete && canAddParticipant(state) ? `<button type="button" id="swiss-remove-participants" class="btn btn-icon-sm btn-icon-minus" aria-label="Remove participant" title="Remove participant"><span class="swiss-toolbar-btn-plus-icon">&minus;</span><span class="swiss-toolbar-btn-label">Remove</span></button>` : ""}
+          ${canEdit && !tournamentComplete && canReshuffleTournament(state) ? `<button type="button" id="swiss-reshuffle" class="btn btn-icon-sm" aria-label="Reshuffle draw" title="Reshuffle the Round 1 draw"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="width:15px;height:15px;flex:0 0 auto;"><path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.66 6.83-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-2.8-2.71z"/></svg><span class="swiss-toolbar-btn-label">Reshuffle</span></button>` : ""}
+          ${canEdit && !tournamentComplete && canReshuffleTournament(state) && state.groups && state.groups.length > 1 ? `<button type="button" id="swiss-move-participant" class="btn btn-icon-sm" aria-label="Move participant" title="Move a player to another group"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="width:15px;height:15px;flex:0 0 auto;"><path d="M6.99 11 3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg><span class="swiss-toolbar-btn-label">Move</span></button>` : ""}
           <button type="button" id="swiss-clear" class="btn btn-reset btn-icon-sm" title="${resetTitle}">
             <img src="assets/icons/exit-button.png" alt=""
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
@@ -3253,6 +3265,8 @@ function renderSwiss() {
   view.querySelector("#swiss-start-bracket")?.addEventListener("click", startSwissBracket);
   view.querySelector("#swiss-edit-participants")?.addEventListener("click", showBulkAddParticipantsPopup);
   view.querySelector("#swiss-remove-participants")?.addEventListener("click", showRemoveParticipantsPopup);
+  view.querySelector("#swiss-reshuffle")?.addEventListener("click", reshuffleTournament);
+  view.querySelector("#swiss-move-participant")?.addEventListener("click", showMoveParticipantsPopup);
   view.querySelector("#swiss-cohosts")?.addEventListener("click", showCoHostsPopup);
   view.querySelector("#swiss-edit-name")?.addEventListener("click", showEditTournamentNamePopup);
   bindSwissShareButton(view);
@@ -6892,6 +6906,114 @@ function showRemoveParticipantsPopup() {
   });
 }
 
+// A→B, C→… group labels, matching what the group headers render.
+function swissGroupLetter(gi) { return String.fromCharCode(65 + gi); }
+
+// Move one player from their current group into another, then re-draw the
+// round-1 pairings of BOTH affected groups (membership everywhere else is
+// untouched). Same gate as reshuffle: group formats, round 1, no scores yet.
+function moveParticipantBetweenGroups(name, fromGi, toGi) {
+  const s = loadSwiss();
+  if (!s || !canReshuffleTournament(s)) return false;
+  const groups = s.groups || [];
+  if (fromGi === toGi || !groups[fromGi] || !groups[toGi]) return false;
+  const idx = groups[fromGi].findIndex(n => (n || "").toLowerCase() === (name || "").toLowerCase());
+  if (idx === -1) return false;
+  if (groups[fromGi].length <= 1) {
+    alert("Can't move the last player out of a group — it would leave an empty group.");
+    return false;
+  }
+  groups[fromGi].splice(idx, 1);
+  groups[toGi].push(name);
+  // Rebuild round 1 for just the two touched groups.
+  [fromGi, toGi].forEach(gi => {
+    Object.keys(s.matches || {}).forEach(id => {
+      if (s.matches[id] && s.matches[id].groupIndex === gi) delete s.matches[id];
+    });
+    s.groupRounds[gi] = 0;
+    appendGroupRound(s, gi);
+  });
+  persistSwiss(s);
+  if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
+    const payload = { ...s };
+    if (swissViewCode) payload.viewCode = swissViewCode;
+    swissRoomRef.set(payload).catch(e => console.warn("Move participant push failed:", e));
+  }
+  return true;
+}
+
+// Host popup: pick a player and tap a target group letter to move them.
+function showMoveParticipantsPopup() {
+  if (!swissCanEdit) return;
+  let state = loadSwiss();
+  if (!canReshuffleTournament(state) || !(state.groups && state.groups.length > 1)) {
+    alert("Players can only be moved between groups during round 1, before any scores are entered.");
+    return;
+  }
+
+  document.getElementById("move-participants-popup")?.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "move-participants-popup";
+  overlay.className = "popup-overlay";
+  overlay.innerHTML = `
+    <div class="popup-card">
+      <h2 class="popup-title">Move Participant</h2>
+      <p class="popup-text" style="text-align: justify;">Tap a group letter next to a player to move them there. The round-1 pairings of both affected groups are re-drawn. Only available before any scores are entered.</p>
+      <div id="move-participants-body" class="move-body"></div>
+      <div id="move-participants-status" class="swiss-join-status"></div>
+      <div class="popup-actions">
+        <button type="button" id="move-participants-close" class="btn popup-cancel">Close</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const body = overlay.querySelector("#move-participants-body");
+  const status = overlay.querySelector("#move-participants-status");
+  const setStatus = (msg, kind) => {
+    if (!status) return;
+    status.textContent = msg || "";
+    status.classList.remove("is-ok", "is-err");
+    if (kind) status.classList.add(`is-${kind}`);
+  };
+  const close = () => { overlay.remove(); document.removeEventListener("keydown", onKey); };
+  const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); close(); } };
+  document.addEventListener("keydown", onKey);
+  overlay.querySelector("#move-participants-close").onclick = close;
+
+  const paint = () => {
+    state = loadSwiss();
+    if (!canReshuffleTournament(state)) {
+      body.innerHTML = `<p class="popup-text">Moving is no longer available — the tournament has advanced.</p>`;
+      return;
+    }
+    const groups = state.groups || [];
+    body.innerHTML = groups.map((members, gi) => `
+      <div class="move-group">
+        <div class="move-group-title">Group ${swissGroupLetter(gi)}</div>
+        ${(members || []).map(name => `
+          <div class="move-row">
+            <span class="move-name">${escapeHtml(name)}</span>
+            <span class="move-targets">
+              ${groups.map((_, tgi) => tgi === gi ? "" :
+                `<button type="button" class="move-to-btn" data-name="${escapeHtml(name)}" data-from="${gi}" data-to="${tgi}" title="Move ${escapeHtml(name)} to Group ${swissGroupLetter(tgi)}">${swissGroupLetter(tgi)}</button>`).join("")}
+            </span>
+          </div>`).join("")}
+      </div>`).join("");
+    body.querySelectorAll(".move-to-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const name = btn.dataset.name;
+        const from = Number(btn.dataset.from);
+        const to = Number(btn.dataset.to);
+        if (!moveParticipantBetweenGroups(name, from, to)) { setStatus(`Couldn't move ${name}.`, "err"); return; }
+        setStatus(`Moved ${name} to Group ${swissGroupLetter(to)} ✓`, "ok");
+        renderSwiss();
+        paint();
+      });
+    });
+  };
+  paint();
+}
+
 // Drop `name` from a running tournament and regenerate the format from the
 // remaining participants. Carries registrants forward (minus the removed
 // entries — matched by name). Returns true on success.
@@ -6932,6 +7054,51 @@ function removeRunningParticipantByRegen(name) {
     swissRoomRef.set(payload).catch(e => console.warn("Remove participant push failed:", e));
   }
   return true;
+}
+
+// True while a group-stage tournament can still be re-drawn: it's a group
+// format (not single-elim / not into the knockout bracket), every group is
+// only on round 1, and no scores have been entered yet.
+function canReshuffleTournament(state) {
+  if (!state || state.mode === "single-elim") return false;
+  if (state.bracket) return false; // knockout already started
+  const gr = state.groupRounds || [];
+  const onRound1 = gr.length > 0 && gr.every(r => (r || 0) <= 1);
+  if (!onRound1) return false;
+  const scored = Object.values(state.matches || {}).some(
+    m => m && !m.bracket && !m.bye && (m.scoreA != null || m.scoreB != null));
+  return !scored;
+}
+
+// Re-draw the round-1 groups and pairings from the same participants so the
+// host can get a different random arrangement. Preserves every bit of
+// tournament metadata (registrants, mode, ranked, codes, banned parts, event
+// details, co-hosts) — only the draw changes.
+function reshuffleTournament() {
+  const state = loadSwiss();
+  if (!state || !canReshuffleTournament(state)) return;
+  const participants = getParticipants(state);
+  if (participants.length < 2) return;
+  if (!confirm("Reshuffle the draw? The groups and Round 1 pairings are re-randomised from the same players — the current pairings are replaced.")) return;
+  const regenerated = generateSwissFromText(
+    participants.join("\n"), state.tournamentName,
+    getRoundCount(state), getGroupCount(state), state.pairing);
+  if (!regenerated) return; // generator alerts on its own if it can't
+  const next = {
+    ...state,
+    groups: regenerated.groups,
+    groupRounds: regenerated.groupRounds,
+    matches: regenerated.matches,
+    participants: regenerated.participants,
+    mode: state.mode // regen forces "swiss"; keep swiss-only / round-robin intact
+  };
+  persistSwiss(next);
+  if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
+    const payload = { ...next };
+    if (swissViewCode) payload.viewCode = swissViewCode;
+    swissRoomRef.set(payload).catch(e => console.warn("Reshuffle push failed:", e));
+  }
+  renderSwiss();
 }
 
 // Bulk-add participants to a running tournament — names only, one per line.
@@ -9170,9 +9337,24 @@ function showRegistrationPopup(room, options = {}) {
     submitBtn.innerHTML = `<img src="${submitIcon}" alt="" onerror="this.style.display='none'"><span class="btn-label">${submitLabel}</span>`;
   }
   setStatus("");
-  let deck = options.initialDeck && Array.isArray(options.initialDeck)
-    ? normalizeBeyCheckDeck(options.initialDeck)
-    : emptyBeyCheckDeck();
+  // Deck source, in priority order:
+  //   1. an explicit initialDeck (editing an existing registrant)
+  //   2. the user's pinned "default" deck from the Deck tab — but only when
+  //      registering THEMSELVES (lockName / selfRegister), so a host adding a
+  //      guest or another player still starts from an empty deck
+  //   3. an empty deck
+  let usedPinnedDeck = false;
+  let deck;
+  if (options.initialDeck && Array.isArray(options.initialDeck)) {
+    deck = normalizeBeyCheckDeck(options.initialDeck);
+  } else {
+    let pinned = null;
+    if ((options.selfRegister || options.lockName) && typeof window.getDefaultRegistrationDeck === "function") {
+      try { pinned = window.getDefaultRegistrationDeck(); } catch (e) { pinned = null; }
+    }
+    if (pinned) { deck = normalizeBeyCheckDeck(pinned); usedPinnedDeck = true; }
+    else deck = emptyBeyCheckDeck();
+  }
 
   const renderSlots = () => {
     if (!slotsHost) return;
@@ -9188,6 +9370,7 @@ function showRegistrationPopup(room, options = {}) {
     });
   };
   renderSlots();
+  if (usedPinnedDeck) setStatus("Loaded your pinned deck — review it before registering.", "ok");
 
   popup.classList.remove("hidden");
   // No auto-focus when the name field is locked — nothing to type there.
@@ -10413,9 +10596,9 @@ function refreshHistoryAddFriendBtn(name) {
   window.friendStatusWithUsername(name).then(status => {
     if ((btn.dataset.member || "") !== (name || "")) return; // popup moved on
     if (status === null || status === "self") return;        // not signed in / own profile
+    if (status === "friends") return;                        // already friends — no button
     btn.classList.remove("hidden");
-    if (status === "friends")       { btn.textContent = "Friends";   btn.disabled = true; }
-    else if (status === "requested"){ btn.textContent = "Requested"; btn.disabled = true; }
+    if (status === "requested")     { btn.textContent = "Requested"; btn.disabled = true; }
     else if (status === "incoming") { btn.textContent = "Accept Friend"; }
     else                            { btn.textContent = "Add Friend"; }
   });

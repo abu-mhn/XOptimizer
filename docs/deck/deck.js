@@ -31,6 +31,9 @@ function loadDecksState() {
     if (!state.decks.some(d => d.id === state.activeId)) {
       state.activeId = state.decks[0].id;
     }
+    if (state.defaultId && !state.decks.some(d => d.id === state.defaultId)) {
+      state.defaultId = null;
+    }
     return state;
   }
   // Migrate legacy single-deck storage.
@@ -279,7 +282,12 @@ function renderDeckSelector() {
   const pills = state.decks.map(d => {
     const label = (d.name && d.name.trim()) || "(unnamed)";
     const isActive = d.id === state.activeId;
-    return `<button type="button" class="deck-pill ${isActive ? "active" : ""}" data-deck-id="${escapeHtml(d.id)}" title="Switch to this deck">
+    const isDefault = d.id === state.defaultId;
+    const starTitle = isDefault
+      ? "Default deck — auto-loaded when you join a tournament. Tap to unpin."
+      : "Pin as your default tournament deck";
+    return `<button type="button" class="deck-pill ${isActive ? "active" : ""} ${isDefault ? "is-default" : ""}" data-deck-id="${escapeHtml(d.id)}" title="Switch to this deck">
+      <span class="deck-pill-star ${isDefault ? "on" : ""}" data-star role="img" aria-label="${starTitle}" title="${starTitle}">${isDefault ? "★" : "☆"}</span>
       <span class="deck-pill-label">${escapeHtml(label)}</span>
     </button>`;
   }).join("");
@@ -289,10 +297,39 @@ function renderDeckSelector() {
       <span class="deck-pill-label">New</span>
     </button>`;
   container.querySelectorAll(".deck-pill[data-deck-id]").forEach(btn => {
-    btn.addEventListener("click", () => setActiveDeck(btn.dataset.deckId));
+    btn.addEventListener("click", (e) => {
+      if (e.target.closest("[data-star]")) { toggleDefaultDeck(btn.dataset.deckId); return; }
+      setActiveDeck(btn.dataset.deckId);
+    });
   });
   container.querySelector("#deck-new")?.addEventListener("click", createNewDeck);
 }
+
+// Pin/unpin a deck as the default. The default deck is auto-loaded into the
+// registration form when the user joins a tournament. Only one default at a
+// time; tapping the pinned deck's star clears it.
+function toggleDefaultDeck(id) {
+  const state = loadDecksState();
+  if (!state.decks.some(d => d.id === id)) return;
+  state.defaultId = state.defaultId === id ? null : id;
+  saveDecksState(state);
+  renderDeckSelector();
+}
+
+// The default deck as a tournament-registration deck array ([{mode, parts}]),
+// or null when nothing is pinned / the pinned deck has no built slots. Read by
+// the tournament registration popup to pre-fill the user's own deck.
+window.getDefaultRegistrationDeck = function getDefaultRegistrationDeck() {
+  const state = loadDecksState();
+  if (!state || !state.defaultId) return null;
+  const deck = state.decks.find(d => d.id === state.defaultId);
+  if (!deck) return null;
+  const slots = Array.isArray(deck.slots) ? deck.slots.slice(0, DECK_SIZE) : [];
+  while (slots.length < DECK_SIZE) slots.push(null);
+  const beyDeck = slots.map(deckSlotToBeyCheckShape);
+  const hasAny = beyDeck.some(s => s && s.parts && Object.keys(s.parts).length);
+  return hasAny ? beyDeck : null;
+};
 
 const PART_FOLDER = {
   blade: "blades", lockChip: "lockChips",

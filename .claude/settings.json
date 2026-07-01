@@ -6,7 +6,10 @@
       "Bash(node --check docs/sw.js)",
       "Bash(powershell -Command \"\\(Get-Content c:\\\\Users\\\\admin\\\\Downloads\\\\demo\\\\docs\\\\style.css | Measure-Object -Line\\).Lines\")",
       "Bash(powershell -Command \"Get-Content c:\\\\Users\\\\admin\\\\Downloads\\\\demo\\\\docs\\\\style.css -Tail 5\")",
-      "Bash(powershell -Command \"\\(Get-Content c:\\\\Users\\\\admin\\\\Downloads\\\\demo\\\\docs\\\\style.css\\).Count\")"
+      "Bash(powershell -Command \"\\(Get-Content c:\\\\Users\\\\admin\\\\Downloads\\\\demo\\\\docs\\\\style.css\\).Count\")",
+      "Bash(node -e \"const fs=require\\('fs'\\);const p='docs/friends/friends.js';let c=fs.readFileSync\\(p,'utf8'\\);c=c.split\\('    hydrateFriendAvatars\\(root\\);'\\).join\\('    hydrateFriendAvatars\\(root\\);\\\\n    wireProfileTriggers\\(root\\);'\\);fs.writeFileSync\\(p,c\\);console.log\\('done'\\);\")",
+      "Bash(node --check docs/battleroyale/battleroyale.js)",
+      "Bash(grep -n \"^Friends$\\\\|^Battle Royale$\\\\|Direct messages with accepted\\\\|A points-duel tab\" docs/settings/settings.js)"
     ]
   }
 }

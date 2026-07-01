@@ -4247,6 +4247,20 @@ body.forest-mode .image-popup-dot.active {
     min-width: 0;
 }
 
+/* Star to pin a deck as the tournament default. */
+.deck-pill-star {
+    flex: 0 0 auto;
+    font-size: 0.95rem;
+    line-height: 1;
+    color: #6e7681;
+    cursor: pointer;
+    transition: color 0.15s, transform 0.1s;
+}
+.deck-pill-star:hover { color: #f1cf6e; transform: scale(1.15); }
+.deck-pill-star.on { color: #f1cf6e; }
+.deck-pill.active .deck-pill-star { color: rgba(255, 255, 255, 0.6); }
+.deck-pill.active .deck-pill-star.on { color: #ffd964; }
+
 .deck-pill-new {
     color: #8b949e;
     border-style: dashed;
@@ -8101,6 +8115,64 @@ body.mono-mode .popup-ok:hover {
     flex: 0 0 auto;
 }
 
+/* Move-participant popup */
+.move-body {
+    margin-top: 8px;
+    max-height: 340px;
+    overflow-y: auto;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 4px;
+}
+.move-group { margin-bottom: 6px; }
+.move-group-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #8b949e;
+    padding: 6px 8px 4px;
+}
+.move-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 8px;
+    border-radius: 6px;
+}
+.move-row:hover { background: rgba(110, 118, 129, 0.1); }
+.move-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+}
+.move-targets { flex: 0 0 auto; display: flex; gap: 5px; }
+.move-to-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid #30363d;
+    background: #21262d;
+    color: #c9d1d9;
+    font-weight: 700;
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+.move-to-btn:hover { background: #1f6feb; color: #fff; border-color: transparent; }
+
+body.light-mode .move-body,
+body.tropical-mode .move-body,
+body.love-mode .move-body,
+body.forest-mode .move-body { border-color: #d1d9e0; }
+body.light-mode .move-to-btn,
+body.tropical-mode .move-to-btn,
+body.love-mode .move-to-btn,
+body.forest-mode .move-to-btn { background: #eaeef2; color: #1f2328; border-color: #d1d9e0; }
+
 /* Text label sitting next to each toolbar button's icon. Kept compact so a
    row of four buttons (Share / Sub-hosts / Add / Leave) still fits on a
    narrow phone — `font-size` slightly smaller than body copy, no wrap. */
@@ -9097,6 +9169,18 @@ button.swiss-reg-paid:hover {
     font-size: 0.72rem;
     opacity: 0.8;
     margin-top: -2px;
+}
+/* Key explaining the standings abbreviations (W-L-D / PS / PD / MB). */
+.swiss-tiebreak-legend {
+    margin: 6px 2px 0;
+    font-size: 0.7rem;
+    line-height: 1.5;
+    color: #6e7681;
+}
+.swiss-tiebreak-legend strong { color: #8b949e; font-weight: 700; }
+.swiss-tiebreak-legend .swiss-record {
+    color: #8b949e;
+    font-weight: 700;
 }
 
 /* ----- match columns / cards ----- */
@@ -15803,6 +15887,8 @@ body.kingofalltypes-mode .btn-lucky img {
 .br-card-label { color: #8b949e; font-size: 0.82rem; }
 .br-players { list-style: none; margin: 0; padding: 0; }
 .br-player {
+    position: relative;
+    overflow: hidden;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -15811,6 +15897,11 @@ body.kingofalltypes-mode .btn-lucky img {
     border-radius: 8px;
     margin-bottom: 6px;
 }
+.br-player.has-banner .fr-row-banner { opacity: 0.16; }
+.br-player .fr-avatar,
+.br-player .br-player-name,
+.br-player .br-player-points,
+.br-player .br-btn { position: relative; z-index: 1; }
 .br-player-name { flex: 1 1 auto; min-width: 0; color: #f0f6fc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .br-player-points { flex: 0 0 auto; color: #8b949e; font-size: 0.85rem; }
 .br-btn {
@@ -15898,9 +15989,9 @@ body.forest-mode .br-card {
     min-width: 0;
     padding: 8px 12px;
     border-radius: 8px;
-    border: 1px solid #30363d;
-    background: #0d1117;
-    color: #e6edf3;
+    border: 1px solid rgba(140, 149, 159, 0.35);
+    background: rgba(140, 149, 159, 0.1);
+    color: inherit;
     font-size: 0.9rem;
 }
 .fr-add-input:focus { outline: none; border-color: #58a6ff; }
@@ -15908,30 +15999,64 @@ body.forest-mode .br-card {
 .fr-h {
     font-size: 0.95rem;
     margin: 0 0 8px;
-    color: #f0f6fc;
+    color: inherit;
 }
 .fr-row {
+    position: relative;
+    overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
     padding: 9px 12px;
-    background: rgba(110, 118, 129, 0.08);
-    border: 1px solid #21262d;
+    background: rgba(140, 149, 159, 0.1);
+    border: 1px solid rgba(140, 149, 159, 0.28);
     border-radius: 10px;
     margin-bottom: 8px;
 }
 .fr-friend { cursor: pointer; }
 .fr-friend:hover { background: rgba(110, 118, 129, 0.16); }
+/* Faint banner behind the row; avatar + name + actions sit on top. */
+.fr-row-banner {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+}
+.fr-row.has-banner .fr-row-banner { opacity: 0.16; }
+.fr-avatar {
+    position: relative;
+    z-index: 1;
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: rgba(140, 149, 159, 0.25);
+    border: 1px solid rgba(140, 149, 159, 0.4);
+}
+.fr-profile-trigger { cursor: pointer; }
+img.fr-profile-trigger { transition: transform 0.1s, border-color 0.15s; }
+img.fr-profile-trigger:hover { transform: scale(1.08); border-color: #58a6ff; }
+.fr-name.fr-profile-trigger:hover,
+.fr-chat-name.fr-profile-trigger:hover { text-decoration: underline; }
 .fr-name {
+    position: relative;
+    z-index: 1;
     flex: 1 1 auto;
     min-width: 0;
-    color: #f0f6fc;
+    color: inherit;
     font-size: 0.92rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+.fr-row .fr-actions { position: relative; z-index: 1; }
 .fr-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
 .fr-pending { color: #8b949e; font-size: 0.78rem; font-style: italic; }
 .fr-unread {
@@ -15976,21 +16101,30 @@ body.forest-mode .br-card {
     display: flex;
     flex-direction: column;
     height: min(60vh, 520px);
-    border: 1px solid #21262d;
+    border: 1px solid rgba(140, 149, 159, 0.28);
     border-radius: 12px;
     overflow: hidden;
-    background: #0d1117;
+    background: rgba(140, 149, 159, 0.06);
+    color: inherit;
 }
 .fr-chat-head {
+    position: relative;
+    overflow: hidden;
     display: flex;
     align-items: center;
     gap: 10px;
     padding: 10px 12px;
-    border-bottom: 1px solid #21262d;
-    background: #161b22;
+    border-bottom: 1px solid rgba(140, 149, 159, 0.22);
+    background: rgba(140, 149, 159, 0.14);
     flex: 0 0 auto;
 }
-.fr-chat-name { font-weight: 700; color: #f0f6fc; font-size: 0.95rem; }
+.fr-chat-head .fr-row-banner { z-index: 0; }
+.fr-chat-head.has-banner .fr-row-banner { opacity: 0.22; }
+.fr-chat-head .fr-btn-back,
+.fr-chat-head .fr-avatar,
+.fr-chat-head .fr-chat-name,
+.fr-chat-head .fr-chat-e2ee { position: relative; z-index: 1; }
+.fr-chat-name { font-weight: 700; color: inherit; font-size: 0.95rem; }
 .fr-chat-e2ee { margin-left: auto; font-size: 0.85rem; opacity: 0.65; cursor: help; flex: 0 0 auto; }
 
 /* Encryption passphrase modal */
@@ -16010,14 +16144,14 @@ body.forest-mode .br-card {
 
 /* Encryption status panel (top of Friends tab) */
 .fr-enc {
-    border: 1px solid #30363d;
+    border: 1px solid rgba(140, 149, 159, 0.3);
     border-radius: 10px;
     padding: 10px 12px;
     margin-bottom: 14px;
-    background: rgba(110, 118, 129, 0.06);
+    background: rgba(140, 149, 159, 0.08);
 }
 .fr-enc-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.fr-enc-title { font-size: 0.9rem; font-weight: 700; color: #f0f6fc; }
+.fr-enc-title { font-size: 0.9rem; font-weight: 700; color: inherit; }
 .fr-enc-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
 .fr-enc-dot-ok   { background: #3fb950; box-shadow: 0 0 0 3px rgba(63, 185, 80, 0.18); }
 .fr-enc-dot-warn { background: #d29922; box-shadow: 0 0 0 3px rgba(210, 153, 34, 0.18); }
@@ -16039,12 +16173,12 @@ body.forest-mode .br-card {
     border-radius: 999px;
     font-size: 0.8rem;
     font-weight: 600;
-    border: 1px solid #30363d;
+    border: 1px solid rgba(140, 149, 159, 0.4);
     background: transparent;
-    color: #c9d1d9;
+    color: inherit;
     cursor: pointer;
 }
-.fr-enc-btn:hover { background: rgba(110, 118, 129, 0.16); }
+.fr-enc-btn:hover { background: rgba(140, 149, 159, 0.16); }
 .fr-enc-primary { background: #1f6feb; color: #fff; border-color: transparent; }
 .fr-enc-primary:hover { background: #388bfd; }
 
@@ -16058,8 +16192,8 @@ body.love-mode .fr-enc-title,
 body.forest-mode .fr-enc-title { color: #1f2328; }
 .fr-btn-back {
     background: transparent;
-    color: #c9d1d9;
-    border-color: #30363d;
+    color: inherit;
+    border-color: rgba(140, 149, 159, 0.4);
     padding: 4px 11px;
     font-size: 1rem;
     line-height: 1;
@@ -16085,14 +16219,14 @@ body.forest-mode .fr-enc-title { color: #1f2328; }
     overflow-wrap: anywhere;
 }
 .fr-msg-mine .fr-msg-bubble { background: #1f6feb; color: #fff; border-bottom-right-radius: 4px; }
-.fr-msg-theirs .fr-msg-bubble { background: #21262d; color: #e6edf3; border-bottom-left-radius: 4px; }
-.fr-msg-meta { font-size: 0.68rem; color: #6e7681; margin-top: 2px; padding: 0 4px; }
+.fr-msg-theirs .fr-msg-bubble { background: rgba(140, 149, 159, 0.22); color: inherit; border-bottom-left-radius: 4px; }
+.fr-msg-meta { font-size: 0.68rem; color: #8b949e; margin-top: 2px; padding: 0 4px; }
 .fr-chat-input {
     display: flex;
     gap: 8px;
     padding: 10px 12px;
-    border-top: 1px solid #21262d;
-    background: #161b22;
+    border-top: 1px solid rgba(140, 149, 159, 0.22);
+    background: rgba(140, 149, 159, 0.14);
     flex: 0 0 auto;
 }
 .fr-msg-input {
@@ -16100,9 +16234,9 @@ body.forest-mode .fr-enc-title { color: #1f2328; }
     min-width: 0;
     padding: 8px 12px;
     border-radius: 999px;
-    border: 1px solid #30363d;
-    background: #0d1117;
-    color: #e6edf3;
+    border: 1px solid rgba(140, 149, 159, 0.35);
+    background: rgba(140, 149, 159, 0.12);
+    color: inherit;
     font-size: 0.9rem;
 }
 .fr-msg-input:focus { outline: none; border-color: #58a6ff; }
@@ -16178,6 +16312,8 @@ body.forest-mode .fr-msg-theirs .fr-msg-bubble {
     font-weight: 600;
     cursor: pointer;
 }
+/* Beat the equal-specificity `display:block` above so `.hidden` actually hides. */
+.profile-view-add-friend.hidden { display: none; }
 .profile-view-add-friend:hover:not(:disabled) { background: #388bfd; }
 .profile-view-add-friend:disabled {
     background: #21262d;

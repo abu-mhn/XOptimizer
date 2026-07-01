@@ -91,6 +91,40 @@
   }
   function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
 
+  // ---- profile pictures / banners (shared with the Friends tab look) ----
+  const BR_AVATAR_PH = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='24' r='12' fill='%23484f58'/%3E%3Cpath d='M11 57c0-12 10-20 21-20s21 8 21 20z' fill='%23484f58'/%3E%3C/svg%3E";
+  const brProfileCache = {}; // profileKey -> {photo, banner, smallBanner, ...} | null
+  function fetchBrProfile(key) {
+    if (key in brProfileCache) return Promise.resolve(brProfileCache[key]);
+    const database = db();
+    if (!database || !key) return Promise.resolve(null);
+    return database.ref("profiles/" + key).once("value")
+      .then(s => (brProfileCache[key] = s.val() || null))
+      .catch(() => (brProfileCache[key] = null));
+  }
+  // Avatar + banner + name that open the profile card on hover/click.
+  function brAvatarHtml(username) {
+    return `<span class="fr-row-banner" data-banner></span><img class="fr-avatar fr-profile-trigger" data-avatar data-profile-username="${esc(username || "")}" title="View profile" alt="" src="${BR_AVATAR_PH}">`;
+  }
+  function hydrateBrAvatars(root) {
+    root.querySelectorAll("[data-pkey]").forEach(rowEl => {
+      const key = rowEl.dataset.pkey;
+      if (!key) return;
+      fetchBrProfile(key).then(p => {
+        if (!p) return;
+        const img = rowEl.querySelector("[data-avatar]");
+        if (img && p.photo) { img.src = p.photo; if (p.photoPos) img.style.objectPosition = p.photoPos; }
+        const banner = rowEl.querySelector("[data-banner]");
+        const bsrc = p.smallBanner || p.banner;
+        if (banner && bsrc) {
+          banner.style.backgroundImage = `url("${bsrc}")`;
+          if (p.bannerPos) banner.style.backgroundPosition = p.bannerPos;
+          rowEl.classList.add("has-banner");
+        }
+      });
+    });
+  }
+
   // Active challenges this player can't be double-booked into.
   function isActive(c) { return c && (c.status === "pending" || c.status === "accepted"); }
 
@@ -434,8 +468,9 @@
       html += `<ul class="br-players">` + targets.map(p => {
         const t = tierForPlayer(p);
         return `
-        <li class="br-player">
-          <span class="br-player-name">${esc(p.username || "(unnamed)")} <span class="br-tier br-tier-${t.key}">${t.short}</span>${p.isJudge ? ` <span class="br-judge-tag">Judge</span>` : ""}</span>
+        <li class="br-player" data-pkey="${esc(winKeyFor(p.username) || "")}">
+          ${brAvatarHtml(p.username)}
+          <span class="br-player-name fr-profile-trigger" data-profile-username="${esc(p.username || "")}" title="View profile">${esc(p.username || "(unnamed)")} <span class="br-tier br-tier-${t.key}">${t.short}</span>${p.isJudge ? ` <span class="br-judge-tag">Judge</span>` : ""}</span>
           <span class="br-player-points">${winRatePctForPlayer(p)}% WR · ${num(p.points)} pts</span>
           <button type="button" class="br-btn br-btn-challenge" data-challenge="${esc(p.uid)}">Challenge</button>
         </li>`;
@@ -444,6 +479,8 @@
     html += `</div>`;
 
     root.innerHTML = html;
+    hydrateBrAvatars(root);
+    if (typeof window.bindTournamentProfileNames === "function") window.bindTournamentProfileNames(root);
 
     root.querySelectorAll("[data-challenge]").forEach(b => b.addEventListener("click", () => showChallengePopup(b.dataset.challenge)));
     root.querySelectorAll("[data-accept]").forEach(b => b.addEventListener("click", () => acceptChallenge(b.dataset.accept)));

@@ -42,6 +42,7 @@ Deck (3 Slots)
 - Download the deck as a PNG (background follows your theme)
 - Share the deck as an image — Web Share on mobile, download fallback on desktop
 - Copy a deck to paste into a tournament registration
+- Pin a default deck — tap the star on a deck to make it your default; it's auto-loaded into the registration form when you join a tournament (you still review before submitting). The pin syncs across your devices
 - Paste a copied deck straight into the active deck with the Paste button
 - Edit any slot's combo in place — tap the pencil to rebuild it: swap parts or switch its mode (BX / CX / CX Expand)
 - Each slot is its own card with a collapsible Stat Graph (tap + / − to open) that draws a bar or radar chart, following your Settings → Stat display choice
@@ -100,6 +101,9 @@ Tournament
 - Pre-Start deck check — tapping Start Tournament sweeps every registrant and surfaces deck problems in one combined prompt: account registrants with no deck, anyone with incomplete slots (and which slots), and anyone whose deck contains banned parts (and which parts). Guests with no deck are intentionally skipped (deck is optional for guests). The host can fix the listed issues or override and start anyway
 - Add participants in bulk during round 1 — paste a list of names (one per line) into the + Add popup and every entry is created as a deckless guest. Swiss / Round Robin slots them in as round-1 free wins (or pairs them against existing byes), no reset; Single Elim confirms once and regenerates the bracket with every new name included
 - Remove participants before round 2 — the − Remove button opens a list of every player with × buttons. Confirming removes the chosen player and regenerates the format from the remaining names (same gate as Add — round 1 only). Round-1 matches that have been scored are lost in the regen and the host is warned before that happens
+- Reshuffle the draw — a Reshuffle button (group formats, round 1, no scores yet) re-randomises the groups and round-1 pairings from the same players, for a fresh draw without a full reset
+- Move a player between groups — a Move button opens a popup where the host taps a group letter next to any player to move them there; only the round-1 pairings of the two affected groups re-draw. Same gate as Reshuffle (round 1, before scores)
+- Group standings show a plain-language key for the abbreviations: W-L-D (Wins-Losses-Draws), PS (Points Scored), PD (Points Difference) and MB (Median-Buchholz tiebreaker)
 - Toolbar buttons show icon + text labels (Share / Sub-hosts / + Add / − Remove / Reset or Leave) and sit on a horizontal row with an invisible scroller, so the row scrolls sideways on narrow phone screens instead of clipping or wrapping
 - Rename any participant after the tournament starts — tap their name in a group's Standings
 - Adjust the total round count mid-tournament — tap "Round X / Y" in a group header; already-played rounds are kept
@@ -158,10 +162,12 @@ Battle Royale
 - Challenging requires picking a Judge — any user with the "Judge" tag who has opened Battle Royale. The opponent must Accept before the Judge is brought in; the Judge then declares the winner and points transfer
 - Notifications: the opponent is alerted when challenged, the Judge when the challenge is accepted, and both players when it's resolved (in-app toast + optional system notification, on any tab)
 - The Judge writes the point transfer — enforced by the DB rules, which only let a Judge-tagged account move another player's Battle Royale points
+- Each player in the challenge list shows their profile photo and banner; tap a name or avatar to open their profile card (hover on desktop)
 
 Friends
 - A Friends tab (sign-in only): add other players by their username, accept or decline incoming requests, and remove friends
-- Direct messages with accepted friends — live one-on-one chat with unread badges, plus toast / system notifications for new messages and new friend requests on any tab
+- Friend, request and pending rows show each person's profile photo and banner; tap a name or avatar to open their profile card. The chat header shows the friend's photo + banner too. Encryption status and the whole tab follow your active theme
+- Direct messages with accepted friends — live one-on-one chat with unread badges (read state persists across page navigations), plus toast / system notifications for new messages and new friend requests on any tab
 - End-to-end encrypted messages: each account has one ECDH keypair; a per-conversation AES-GCM key is derived from your private key + the friend's public key, so the server only ever stores ciphertext — no readable text and no sender name. Strictly enforced (the DB rejects any plaintext message), so you can only message a friend once they've set up their key
 - Cross-device encryption: your private key is wrapped under an encryption password you choose (PBKDF2 + AES-GCM) and synced via the database, so entering that password on a new device unlocks the same messages everywhere. The password is separate from your login; forget it and messages are unrecoverable (a reset makes a new key, after which older messages can't be read)
 - Add Friend from a profile: both the hover profile card and the full profile popup show an "Add Friend" button (labelled Accept Friend / Requested / Friends to match your current status, and hidden on your own profile)

@@ -40,9 +40,24 @@
   let activeThreadRef = null;    // live ref for the open conversation
   let activeMessages = [];       // messages of the open conversation
   const unread = {};             // friendUid -> count
-  const threadSeen = {};         // threadId -> Set of seen message ids
+  const threadSeen = {};         // threadId -> Set of message ids seen this session
   const threadRefs = {};         // threadId -> ref (per-friend unread listener)
   let friendsSeen = null;        // friendUid -> status, for request-notification diffing
+
+  // Persistent per-thread read marker (localStorage) so that reading a
+  // conversation sticks across page navigations — each tab is a full page load,
+  // so an in-memory unread count alone would reappear every time. The value is
+  // the newest message push-key that's been read; push-keys are chronological,
+  // so a lexicographic compare separates read from unread.
+  const LAST_READ_KEY = "frLastRead";
+  let lastReadMap = (function () {
+    try { return JSON.parse(localStorage.getItem(LAST_READ_KEY) || "{}") || {}; } catch (e) { return {}; }
+  })();
+  function saveLastRead() { try { localStorage.setItem(LAST_READ_KEY, JSON.stringify(lastReadMap)); } catch (e) {} }
+  function markThreadRead(tid, latestKey) {
+    if (!tid || !latestKey) return;
+    if (!lastReadMap[tid] || latestKey > lastReadMap[tid]) { lastReadMap[tid] = latestKey; saveLastRead(); }
+  }
 
   // ---- helpers ----
   function db() {
@@ -407,6 +422,55 @@
     if (typeof maybeFireSystemNotification === "function") { try { maybeFireSystemNotification(title, body); } catch (e) {} }
   }
 
+  // ---- profile pictures / banners ----
+  // Placeholder avatar (matches the profile popup's silhouette).
+  const FR_AVATAR_PH = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='24' r='12' fill='%23484f58'/%3E%3Cpath d='M11 57c0-12 10-20 21-20s21 8 21 20z' fill='%23484f58'/%3E%3C/svg%3E";
+  const profileInfoCache = {}; // profileKey -> {photo, banner, smallBanner, ...} | null
+
+  function fetchProfileInfo(key) {
+    if (key in profileInfoCache) return Promise.resolve(profileInfoCache[key]);
+    const database = db();
+    if (!database || !key) return Promise.resolve(null);
+    return database.ref("profiles/" + key).once("value")
+      .then(s => (profileInfoCache[key] = s.val() || null))
+      .catch(() => (profileInfoCache[key] = null));
+  }
+  // Avatar + banner markup for a friend/request row, keyed by profile so the
+  // photo and banner can be hydrated in after render.
+  function rowAvatarHtml(name) {
+    return `<span class="fr-row-banner" data-banner></span><img class="fr-avatar fr-profile-trigger" data-avatar data-profile-username="${esc(name || "")}" title="View profile" alt="" src="${FR_AVATAR_PH}">`;
+  }
+  // Name span that opens the profile card on hover/click.
+  function profileNameHtml(name, extraInner) {
+    return `<span class="fr-name fr-profile-trigger" data-profile-username="${esc(name || "")}" title="View profile">${esc(name || "(unknown)")}${extraInner || ""}</span>`;
+  }
+
+  // Reuse the tournament tab's proven profile-card wiring: click AND hover on
+  // any [data-profile-username] opens the hover-profile dropdown.
+  function wireProfileTriggers(root) {
+    if (typeof window.bindTournamentProfileNames === "function") window.bindTournamentProfileNames(root);
+  }
+  // Fill each row's avatar photo + banner background from the public profile
+  // mirror (one read per unique key, cached).
+  function hydrateFriendAvatars(root) {
+    root.querySelectorAll("[data-pkey]").forEach(rowEl => {
+      const key = rowEl.dataset.pkey;
+      if (!key) return;
+      fetchProfileInfo(key).then(p => {
+        if (!p) return;
+        const img = rowEl.querySelector("[data-avatar]");
+        if (img && p.photo) { img.src = p.photo; if (p.photoPos) img.style.objectPosition = p.photoPos; }
+        const banner = rowEl.querySelector("[data-banner]");
+        const bsrc = p.smallBanner || p.banner;
+        if (banner && bsrc) {
+          banner.style.backgroundImage = `url("${bsrc}")`;
+          if (p.bannerPos) banner.style.backgroundPosition = p.bannerPos;
+          rowEl.classList.add("has-banner");
+        }
+      });
+    });
+  }
+
   // ---- friend actions ----
   function addFriendByUsername(rawName) {
     const uid = myUid();
@@ -493,10 +557,15 @@
     activeThreadRef.on("value", snap => {
       const list = [];
       snap.forEach(c => { list.push(Object.assign({ id: c.key }, c.val())); });
-      // Mark this thread's messages as seen so the unread listener won't re-flag.
       threadSeen[tid] = threadSeen[tid] || new Set();
       list.forEach(m => threadSeen[tid].add(m.id));
       activeMessages = list;
+      // Reading this conversation → clear its unread and persist the read marker
+      // (newest message key) so it stays read after navigating away.
+      if (activeChat === friendUid) {
+        unread[friendUid] = 0;
+        if (list.length) markThreadRead(tid, list[list.length - 1].id);
+      }
       if (tabVisible()) render();
       // Decrypt (async); re-render as plaintext lands. Ignore stale chats.
       decryptAll(friendUid, list).then(() => {
@@ -570,7 +639,9 @@
     Object.keys(threadRefs).forEach(tid => {
       if (!wantThreads[tid]) { try { threadRefs[tid].off(); } catch (e) {} delete threadRefs[tid]; }
     });
-    // Attach new ones (record existing message ids first so we only react to genuinely new ones).
+    // Attach new ones. Seed the unread count from the persistent read marker
+    // (messages newer than lastReadMap[tid] and not sent by me), then keep it
+    // live via child_added.
     Object.keys(wantThreads).forEach(tid => {
       if (threadRefs[tid]) return;
       const fuid = wantThreads[tid];
@@ -578,13 +649,21 @@
       threadRefs[tid] = ref;
       ref.once("value").then(snap => {
         const seen = threadSeen[tid] = threadSeen[tid] || new Set();
-        snap.forEach(c => seen.add(c.key));
+        let count = 0;
+        snap.forEach(c => {
+          seen.add(c.key);
+          const m = c.val() || {};
+          if (m.from !== uid && (!lastReadMap[tid] || c.key > lastReadMap[tid])) count++;
+        });
+        unread[fuid] = count;
+        if (tabVisible()) render();
         ref.on("child_added", child => {
-          if (seen.has(child.key)) return;
+          if (seen.has(child.key)) return;            // already counted in the snapshot
           seen.add(child.key);
           const m = Object.assign({ id: child.key }, child.val() || {});
           if (m.from === uid) return;                 // my own message
-          if (activeChat === fuid && tabVisible()) return; // already reading it
+          if (lastReadMap[tid] && child.key <= lastReadMap[tid]) return; // already read elsewhere
+          if (activeChat === fuid && tabVisible()) { markThreadRead(tid, child.key); return; } // reading it now
           unread[fuid] = (unread[fuid] || 0) + 1;
           const who = friendsCache[fuid]?.name || "a friend";
           ensureDecrypted(fuid, m).then(txt => notify(`Message from ${who}`, txt || "New message"));
@@ -624,8 +703,9 @@
     if (incoming.length) {
       html += `<div class="fr-section"><h3 class="fr-h">Friend requests (${incoming.length})</h3>` +
         incoming.map(f => `
-          <div class="fr-row">
-            <span class="fr-name">${esc(f.name || "(unknown)")}</span>
+          <div class="fr-row" data-pkey="${esc(usernameKeyFor(f.name || ""))}">
+            ${rowAvatarHtml(f.name)}
+            ${profileNameHtml(f.name)}
             <span class="fr-actions">
               <button type="button" class="fr-btn fr-btn-accept" data-accept="${esc(f.uid)}">Accept</button>
               <button type="button" class="fr-btn fr-btn-decline" data-remove="${esc(f.uid)}">Decline</button>
@@ -640,8 +720,9 @@
       html += friends.map(f => {
         const u = unread[f.uid] || 0;
         return `
-          <div class="fr-row fr-friend" data-chat="${esc(f.uid)}">
-            <span class="fr-name">${esc(f.name || "(unknown)")}${u ? ` <span class="fr-unread">${u}</span>` : ""}</span>
+          <div class="fr-row fr-friend" data-pkey="${esc(usernameKeyFor(f.name || ""))}">
+            ${rowAvatarHtml(f.name)}
+            ${profileNameHtml(f.name, u ? ` <span class="fr-unread">${u}</span>` : "")}
             <span class="fr-actions">
               <button type="button" class="fr-btn fr-btn-msg" data-chat="${esc(f.uid)}">Message</button>
               <button type="button" class="fr-btn fr-btn-decline" data-remove="${esc(f.uid)}" title="Remove friend">&times;</button>
@@ -654,8 +735,9 @@
     if (outgoing.length) {
       html += `<div class="fr-section"><h3 class="fr-h">Pending</h3>` +
         outgoing.map(f => `
-          <div class="fr-row">
-            <span class="fr-name">${esc(f.name || "(unknown)")} <span class="fr-pending">requested</span></span>
+          <div class="fr-row" data-pkey="${esc(usernameKeyFor(f.name || ""))}">
+            ${rowAvatarHtml(f.name)}
+            ${profileNameHtml(f.name, ` <span class="fr-pending">requested</span>`)}
             <span class="fr-actions"><button type="button" class="fr-btn fr-btn-decline" data-remove="${esc(f.uid)}">Cancel</button></span>
           </div>`).join("") + `</div>`;
     }
@@ -674,6 +756,8 @@
       openChat(el.dataset.chat);
     }));
     paintEncryptionPanel();
+    hydrateFriendAvatars(root);
+    wireProfileTriggers(root);
   }
 
   // Fill the encryption status panel (set up / published / unlocked) and wire its
@@ -735,9 +819,11 @@
     }).join("");
     root.innerHTML = `
       <div class="fr-chat">
-        <div class="fr-chat-head">
+        <div class="fr-chat-head" data-pkey="${esc(usernameKeyFor(f.name || ""))}">
+          <span class="fr-row-banner" data-banner></span>
           <button type="button" class="fr-btn fr-btn-back" id="fr-back">&larr;</button>
-          <span class="fr-chat-name">${esc(f.name || "(unknown)")}</span>
+          <img class="fr-avatar fr-profile-trigger" data-avatar data-profile-username="${esc(f.name || "")}" title="View profile" alt="" src="${FR_AVATAR_PH}">
+          <span class="fr-chat-name fr-profile-trigger" data-profile-username="${esc(f.name || "")}" title="View profile">${esc(f.name || "(unknown)")}</span>
           <span class="fr-chat-e2ee" title="End-to-end encrypted — unlocked with your encryption password on each device">🔒</span>
         </div>
         <div class="fr-chat-messages" id="fr-chat-messages">${rows || `<p class="fr-empty">No messages yet — say hi!</p>`}</div>
@@ -753,6 +839,8 @@
     root.querySelector("#fr-send")?.addEventListener("click", doSend);
     input?.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); doSend(); } });
     root.querySelector("#fr-back")?.addEventListener("click", closeChat);
+    hydrateFriendAvatars(root);
+    wireProfileTriggers(root);
   }
 
   // ---- entry point (called by core.js when the tab is active) ----
