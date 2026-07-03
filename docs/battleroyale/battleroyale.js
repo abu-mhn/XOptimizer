@@ -81,6 +81,8 @@
   function myUid() { const u = window.getCurrentUser && window.getCurrentUser(); return u ? u.uid : null; }
   function myName() { return (window.getCurrentUsername && window.getCurrentUsername()) || ""; }
   function amJudge() { return !!(window.isJudge && window.isJudge()); }
+  // Developer-tagged accounts can challenge anyone, regardless of tier.
+  function amDeveloper() { return !!(window.isDeveloper && window.isDeveloper()); }
   function brTabVisible() {
     const f = document.getElementById("form-battleroyale");
     return !!(f && !f.classList.contains("hidden"));
@@ -204,7 +206,8 @@
     const me = playersCache[uid], opp = playersCache[opponentUid], judge = playersCache[judgeUid];
     if (!me || !opp) { alert("That player is no longer available."); return; }
     if (!judge || !judge.isJudge) { alert("Pick a Judge to oversee the battle."); return; }
-    if (tierForPlayer(me).key !== tierForPlayer(opp).key) {
+    // Developers can challenge anyone; everyone else is confined to their tier.
+    if (!amDeveloper() && tierForPlayer(me).key !== tierForPlayer(opp).key) {
       alert(`You can only challenge a player in your own tier (${tierForPlayer(me).short}).`);
       return;
     }
@@ -391,10 +394,12 @@
     // not me, not already in an active challenge.
     const busyUids = new Set();
     all.filter(isActive).forEach(c => { busyUids.add(c.challengerUid); busyUids.add(c.opponentUid); });
+    // Developers can challenge across every tier; everyone else sees only theirs.
+    const anyTier = amDeveloper();
     const targets = Object.keys(playersCache)
       .filter(pid => pid !== uid && !busyUids.has(pid) &&
         num(playersCache[pid].points) >= 1 &&
-        tierForPlayer(playersCache[pid]).key === myTier.key)
+        (anyTier || tierForPlayer(playersCache[pid]).key === myTier.key))
       .map(pid => Object.assign({ uid: pid }, playersCache[pid]))
       .sort((a, b) => num(b.points) - num(a.points) || (a.username || "").localeCompare(b.username || ""));
 
@@ -459,11 +464,12 @@
           </div>`).join("") + `</div>`;
     }
 
-    html += `<div class="br-section"><h3 class="br-h">Challenge a player <span class="br-sub">(${myTier.short} only)</span></h3>`;
+    const anyTierScope = amDeveloper();
+    html += `<div class="br-section"><h3 class="br-h">Challenge a player <span class="br-sub">(${anyTierScope ? "any tier" : myTier.short + " only"})</span></h3>`;
     if (myPoints < 1) {
-      html += `<p class="br-empty">You have no points to wager yet. Battle Royale points are awarded at the end of each month from your tournament ranking total — place in tournaments this month, then you can challenge players in your tier (${myTier.short}).</p>`;
+      html += `<p class="br-empty">You have no points to wager yet. Battle Royale points are awarded at the end of each month from your tournament ranking total — place in tournaments this month, then you can challenge ${anyTierScope ? "any player" : `players in your tier (${myTier.short})`}.</p>`;
     } else if (!targets.length) {
-      html += `<p class="br-empty">No one to challenge right now — you can only challenge players in your tier (${myTier.short}) who have at least 1 point to stake. Check back as others play.</p>`;
+      html += `<p class="br-empty">No one to challenge right now — ${anyTierScope ? "no players" : `you can only challenge players in your tier (${myTier.short})`} who have at least 1 point to stake. Check back as others play.</p>`;
     } else {
       html += `<ul class="br-players">` + targets.map(p => {
         const t = tierForPlayer(p);

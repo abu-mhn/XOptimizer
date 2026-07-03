@@ -618,6 +618,9 @@
   function isDeveloper() {
     return hasTag("Developer");
   }
+  // Exposed so other tabs (e.g. Battle Royale) can grant Developer-tagged
+  // accounts elevated abilities, the same way isJudge() gates the Judge tag.
+  window.isDeveloper = isDeveloper;
 
   // Show / hide the Developer tab on every page based on the current account.
   // The current page's own tab (`.active`) is never hidden — hiding it would

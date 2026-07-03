@@ -2440,6 +2440,14 @@ body.bronze-mode   .bey-check-part-name { color: #f0e2d2; }
 
 .bey-check-slot-card {
     max-width: min(520px, 100%);
+    /* Let the calculator-style dropdown grids overlay the card instead of being
+       clipped by its scroll (same fix as the Deck editor popup). */
+    overflow: visible;
+    max-height: none;
+}
+
+#bey-check-slot-popup {
+    align-items: flex-start;
 }
 
 .bey-check-slot-subtitle {
@@ -4469,11 +4477,18 @@ body.forest-mode   .btn-deck-edit:hover img { filter: brightness(0) invert(1); }
     margin: 10px 0 4px;
 }
 
-.deck-edit-modes {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 4px;
-    margin: 10px 0 2px;
+/* The part pickers use the calculator's searchable dropdowns, which show an
+   image grid (.dd-list) as an absolutely-positioned overlay. The base
+   .popup-card clips that overlay with `overflow-y: auto`, so let the edit card
+   overflow instead and align the modal to the top — the overlay itself scrolls
+   when a tall grid opens. This makes the picker look like the calculator's. */
+#deck-edit-popup {
+    align-items: flex-start;
+}
+
+.deck-edit-card {
+    overflow: visible;
+    max-height: none;
 }
 
 /* Save / Cancel show an icon next to their text label. */
@@ -4502,6 +4517,12 @@ body.forest-mode   .btn-deck-edit:hover img { filter: brightness(0) invert(1); }
     display: flex;
     flex-direction: column;
     gap: 4px;
+}
+
+/* The Ratchet row is hidden while its ratchet is combined into the blade or bit
+   (the flex rule above would otherwise beat the UA [hidden] style). */
+.deck-edit-field-group[hidden] {
+    display: none;
 }
 
 .deck-edit-field {
@@ -4603,10 +4624,21 @@ body.forest-mode .deck-edit-field-label {
 
 .deck-slot-stats {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 6px;
     margin-top: 10px;
     font-size: 12px;
+    /* Keep the stat chips on one line; scroll sideways when they overflow, with
+       no visible scrollbar. */
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;          /* Firefox */
+    -ms-overflow-style: none;       /* old Edge/IE */
+}
+
+/* Hide the scrollbar (WebKit/Blink) while staying scrollable. */
+.deck-slot-stats::-webkit-scrollbar {
+    display: none;
 }
 
 /* Stat readouts as compact chips. */
@@ -7724,16 +7756,54 @@ body.mono-mode .popup-ok:hover {
    buttons stay pushed to the right. */
 .swiss-toolbar-idgroup {
     display: flex;
-    align-items: center;
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: flex-start;
     gap: 6px;
     min-width: 0;
     margin-right: auto;
+    max-width: 100%;
+}
+
+/* Registration / Closed / Join-code chips on one line, scrolling sideways when
+   they overflow, with no visible scrollbar. align-items:stretch makes every
+   chip the same height regardless of its own padding / font metrics. */
+.swiss-toolbar-pills {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;          /* Firefox */
+    -ms-overflow-style: none;       /* old Edge/IE */
+}
+
+.swiss-toolbar-pills::-webkit-scrollbar {
+    display: none;
+}
+
+/* Don't let the chips squeeze (they scroll instead). Shared box-sizing +
+   line-height gives them one height, without turning each chip into a flex
+   container (which would break the join-code button's inner spacing). */
+.swiss-toolbar-pills > * {
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    font-family: inherit;
+    line-height: 1.5;
+}
+
+/* Zero the chips' own left margins (both .swiss-reg-pill and .swiss-reg-joincode
+   set margin-left: 8px for inline use elsewhere) so spacing comes only from the
+   flex gap — needs two classes to outweigh those single-class rules. */
+.swiss-toolbar-pills > .swiss-reg-pill,
+.swiss-toolbar-pills > .swiss-reg-joincode {
+    margin: 0;
 }
 
 .swiss-toolbar-idgroup .swiss-room-badges {
     margin-right: 0;
-    flex-basis: 100%;
 }
 
 /* The pill carries a left margin for inline use elsewhere; inside the

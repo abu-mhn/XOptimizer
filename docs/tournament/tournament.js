@@ -3556,11 +3556,13 @@ function renderSwissRegisteringMarkup(state) {
       </div>
       <div class="swiss-toolbar-row swiss-toolbar-info-row">
         <div class="swiss-toolbar-idgroup">
-          <span class="swiss-reg-pill">Registration open</span>
-          ${state.visibility === "closed" ? `<span class="swiss-reg-pill swiss-reg-pill-closed" title="Private — not listed in the lobby; players join with the code">Closed</span>` : ""}
-          ${(state.visibility === "closed" && canEdit && (swissViewCode || state.viewCode))
-            ? `<button type="button" class="swiss-reg-joincode" id="swiss-share-joincode" data-code="${escapeHtml(swissViewCode || state.viewCode)}" title="Tap to copy — share this code so players can join">Join code: <strong>${escapeHtml(swissViewCode || state.viewCode)}</strong></button>`
-            : ""}
+          <div class="swiss-toolbar-pills">
+            <span class="swiss-reg-pill">Registration open</span>
+            ${state.visibility === "closed" ? `<span class="swiss-reg-pill swiss-reg-pill-closed" title="Private — not listed in the lobby; players join with the code">Closed</span>` : ""}
+            ${(state.visibility === "closed" && canEdit && (swissViewCode || state.viewCode))
+              ? `<button type="button" class="swiss-reg-joincode" id="swiss-share-joincode" data-code="${escapeHtml(swissViewCode || state.viewCode)}" title="Tap to copy — share this code so players can join">Join code: <strong>${escapeHtml(swissViewCode || state.viewCode)}</strong></button>`
+              : ""}
+          </div>
           ${renderSwissRoomBadge()}
         </div>
       </div>
@@ -6241,207 +6243,223 @@ function renderBeyCheckSlot(slotIdx, slot) {
   `;
 }
 
-// Wire the calculator-style searchable dropdowns (makeSearchable + the
-// ratchet→bit filter coupling) onto the popup's three mode forms once. Run
-// at module load — the popup elements live in index.html so they exist as
-// soon as this script executes.
-(function initBeyCheckSlotForms() {
-  if (typeof makeSearchable !== "function") return;
-  const noRatchetChoice = [{ value: NO_RATCHET, label: "No Ratchet" }];
-
-  const stdForm = document.getElementById("bey-check-form-standard");
-  if (stdForm) {
-    makeSearchable(stdForm.querySelector('[name="blade"]'), DATA.blades, b => b.name);
-    makeSearchable(stdForm.querySelector('[name="ratchet"]'), DATA.ratchets, r => r.name, noRatchetChoice);
-    makeSearchable(stdForm.querySelector('[name="bit"]'), DATA.bits, b => b.name);
-  }
-
-  const cxForm = document.getElementById("bey-check-form-cx");
-  if (cxForm) {
-    makeSearchable(cxForm.querySelector('[name="lockChip"]'), DATA.lockChips, lc => lc.name);
-    makeSearchable(cxForm.querySelector('[name="mainBlade"]'), DATA.mainBlades, mb => mb.name);
-    makeSearchable(cxForm.querySelector('[name="assistBlade"]'), DATA.assistBlades, ab => ab.name);
-    makeSearchable(cxForm.querySelector('[name="ratchet"]'), DATA.ratchets, r => r.name, noRatchetChoice);
-    makeSearchable(cxForm.querySelector('[name="bit"]'), DATA.bits, b => b.name);
-  }
-
-  const cxeForm = document.getElementById("bey-check-form-cxExpand");
-  if (cxeForm) {
-    makeSearchable(cxeForm.querySelector('[name="lockChip"]'), DATA.lockChips, lc => lc.name);
-    makeSearchable(cxeForm.querySelector('[name="metalBlade"]'), DATA.metalBlades, mb => mb.name);
-    makeSearchable(cxeForm.querySelector('[name="overBlade"]'), DATA.overBlades, ob => ob.name);
-    makeSearchable(cxeForm.querySelector('[name="assistBlade"]'), DATA.assistBlades, ab => ab.name);
-    makeSearchable(cxeForm.querySelector('[name="ratchet"]'), DATA.ratchets, r => r.name, noRatchetChoice);
-    makeSearchable(cxeForm.querySelector('[name="bit"]'), DATA.bits, b => b.name);
-  }
-
-  // Picking "No Ratchet" flips the bit list to ratchet-bits, mirroring the
-  // calculator. Standard form additionally honors Bullet Griffon (forced no
-  // ratchet, normal-bit only) so it matches the calculator's blade rules.
-  ["bey-check-form-standard", "bey-check-form-cx", "bey-check-form-cxExpand"].forEach(id => {
-    const form = document.getElementById(id);
-    if (!form) return;
-    const ratchetSel = form.querySelector('[name="ratchet"]');
-    if (ratchetSel) {
-      ratchetSel.addEventListener("change", () => applyBitFilter(form));
-      applyBitFilter(form);
-    }
-    // Auto-advance to the next field after a real selection. Skipped during
-    // restoreBeyCheckForm and skipped when the value clears (filter rejection
-    // or user wiping a field).
-    form.querySelectorAll("select").forEach(sel => {
-      sel.addEventListener("change", () => {
-        if (beyCheckSuppressAdvance) return;
-        if (!sel.value) return;
-        advanceBeyCheckField(sel);
-      });
-    });
-  });
-
-  if (stdForm) {
-    const bladeSel = stdForm.querySelector('[name="blade"]');
-    const ratchetWrapper = stdForm.querySelector('[name="ratchet"]').nextElementSibling;
-    const ratchetInput = ratchetWrapper && ratchetWrapper.querySelector("input");
-    const bitWrapper = stdForm.querySelector('[name="bit"]').nextElementSibling;
-    const bitInput = bitWrapper && bitWrapper.querySelector("input");
-    bladeSel?.addEventListener("change", () => {
-      const idx = bladeSel.value;
-      const blade = idx !== "" && DATA.blades[idx] ? DATA.blades[idx] : null;
-      const codename = blade ? blade.codename : "";
-      if (isExpandCxBlade(blade)) {
-        if (ratchetWrapper) {
-          ratchetWrapper._filterFn = null;
-          ratchetWrapper._select(NO_RATCHET);
-          if (ratchetInput) ratchetInput.disabled = true;
-        }
-        if (bitWrapper) bitWrapper._setFilter(b => !b.isRatchetBit);
-        if (bitInput) bitInput.disabled = false;
-      } else if (codename === "CLOCKMIRAGE") {
-        if (ratchetWrapper) {
-          ratchetWrapper._setFilter(r => r.name.endsWith("5"));
-          if (ratchetInput) { ratchetInput.disabled = false; ratchetInput.placeholder = "-- Select --"; }
-        }
-        if (bitWrapper) bitWrapper._setFilter(b => !b.isRatchetBit);
-        if (bitInput) { bitInput.disabled = false; bitInput.placeholder = "-- Select --"; }
-      } else {
-        if (ratchetWrapper) {
-          ratchetWrapper._filterFn = null;
-          if (ratchetInput) { ratchetInput.disabled = false; ratchetInput.placeholder = "-- Select --"; }
-        }
-        if (bitInput) { bitInput.disabled = false; bitInput.placeholder = "-- Select --"; }
-        applyBitFilter(stdForm);
-      }
-    });
-  }
-})();
-
-// Per-form field order for auto-advance in the bey check slot popup.
-// Mirrors the calculator's NEXT_DROPDOWN, but jumps directly to the next
-// field (no __BOTTOM__ scrolling intermediate — the slot popup is short).
-const BEY_CHECK_NEXT_FIELD = {
-  "bey-check-form-standard": { blade: "ratchet", ratchet: "bit", bit: null },
-  "bey-check-form-cx": {
-    lockChip: "mainBlade", mainBlade: "assistBlade", assistBlade: "ratchet",
-    ratchet: "bit", bit: null
-  },
-  "bey-check-form-cxExpand": {
-    lockChip: "metalBlade", metalBlade: "overBlade", overBlade: "assistBlade",
-    assistBlade: "ratchet", ratchet: "bit", bit: null
-  }
+// Calculator-style combo builder for the bey check slot popup — no mode tabs.
+// The user moves between lines (BX / CX / CX Expand) and toggles the two
+// Combine modes through the dropdowns themselves, exactly like the Deck editor.
+// A single host (#bey-check-slot-fields) is rebuilt on every state change.
+const BEY_SLOT_FIELD_LABELS = {
+  blade: "Blade", lockChip: "Lock Chip", mainBlade: "Main Blade",
+  metalBlade: "Metal Blade", overBlade: "Over Blade", assistBlade: "Assist Blade",
+  ratchet: "Ratchet", bit: "Bit"
 };
 
-// Suppresses auto-advance during restoreBeyCheckForm so pre-loaded values
-// don't fight each other for focus. User-initiated changes still advance.
-let beyCheckSuppressAdvance = false;
+// Line-switch sentinels (shared with the calculator) → destination bey-check mode.
+const BEY_SLOT_LINE_SWITCH = {
+  [SPLIT_BLADE]: "cx",        // Blade "Split …" and Metal Blade "Revert"
+  [LINE_BX]: "standard",      // Lock Chip "Revert"
+  [LINE_CXE]: "cxExpand",     // Main Blade "Split (Over + Metal)"
+};
 
-function advanceBeyCheckField(sel) {
-  const form = sel.closest("form");
-  if (!form) return;
-  const map = BEY_CHECK_NEXT_FIELD[form.id];
-  if (!map) return;
-  const nextName = map[sel.getAttribute("name")];
-  if (!nextName) return;
-  const wrapper = form.querySelector(`[name="${nextName}"]`)?.nextElementSibling;
-  const input = wrapper && wrapper.querySelector("input");
-  if (!input || input.disabled) return;
-  // rAF: let the dropdown's own close() and DOM updates settle before
-  // scrolling/focusing. block: "center" works against the popup card's
-  // own overflow-y: auto, so the popup scrolls — not the page.
-  requestAnimationFrame(() => {
-    wrapper.scrollIntoView({ behavior: "smooth", block: "center" });
-    input.focus();
+// Working state for the open slot (index strings / NO_RATCHET per field).
+let beySlotMode = "standard";
+let beySlotValues = {};
+let beySlotBladeCombine = false;   // Combine (Blade + Ratchet): an expandCx blade
+
+function beySlotLineSwitchChoice(key) {
+  if (beySlotMode === "standard" && key === "blade")
+    return { value: SPLIT_BLADE, label: "Split (Lock Chip + Main Blade + Assist Blade)" };
+  if (beySlotMode === "cx" && key === "lockChip")
+    return { value: LINE_BX, label: "Revert" };
+  if (beySlotMode === "cx" && key === "mainBlade")
+    return { value: LINE_CXE, label: "Split (Over Blade + Metal Blade)" };
+  if (beySlotMode === "cxExpand" && key === "metalBlade")
+    return { value: SPLIT_BLADE, label: "Revert" };
+  return null;
+}
+
+function beySlotBitIsRatchetBit() {
+  const v = beySlotValues.bit;
+  if (v == null || v === "") return false;
+  const bit = (DATA.bits || [])[Number(v)];
+  return !!(bit && bit.isRatchetBit);
+}
+
+// Codename of the blade chosen in Standard mode (drives the Clock Mirage rule).
+function beySlotStdBladeCodename() {
+  if (beySlotMode !== "standard") return "";
+  const v = beySlotValues.blade;
+  const blade = (v != null && v !== "" && v !== NO_RATCHET) ? (DATA.blades || [])[Number(v)] : null;
+  return blade ? (blade.codename || "") : "";
+}
+
+function beySlotPrepend(key, bladeCombine, ratchetCombine) {
+  const list = [];
+  const lineChoice = beySlotLineSwitchChoice(key);
+  if (lineChoice && !(bladeCombine && key === "blade")) list.push(lineChoice);
+  if (beySlotMode === "standard" && key === "blade")
+    list.push({ value: COMBINE_BLADE_RATCHET, label: bladeCombine ? "Revert" : "Combine (Blade + Ratchet)" });
+  if (key === "ratchet")
+    list.push({ value: NO_RATCHET, label: "Combine (Ratchet + Bit)" });
+  if (key === "bit" && ratchetCombine)
+    list.push({ value: SPLIT_RATCHET_BIT, label: "Revert" });
+  return list;
+}
+
+function openBeySlotDropdown(key) {
+  const host = document.getElementById("bey-check-slot-fields");
+  const wrapper = host && host.querySelector(`select[data-field="${key}"]`)?.nextElementSibling;
+  if (!wrapper || !wrapper._open) return;
+  requestAnimationFrame(() => { wrapper.querySelector("input")?.focus(); wrapper._open(); });
+}
+
+function captureBeySlotValues() {
+  document.querySelectorAll("#bey-check-slot-fields select[data-field]").forEach(sel => {
+    beySlotValues[sel.dataset.field] = sel.value;
   });
 }
 
-function clearBeyCheckForm(form) {
-  if (!form) return;
-  form.querySelectorAll(".search-dropdown").forEach(w => { if (w._clear) w._clear(); });
-  // Re-enable any dropdown that the BG/CM rules may have disabled.
-  form.querySelectorAll(".search-dropdown input").forEach(input => {
-    input.disabled = false;
-    input.placeholder = "-- Select --";
-  });
-  applyBitFilter(form);
-}
+function renderBeySlotFields() {
+  const host = document.getElementById("bey-check-slot-fields");
+  if (!host) return;
+  const fields = BEY_CHECK_FIELDS[beySlotMode] || BEY_CHECK_FIELDS.standard;
+  host.innerHTML = fields.map(key =>
+    `<div class="deck-edit-field-group" data-field-group="${key}">
+      <label class="deck-edit-field">
+        <span class="deck-edit-field-label">${BEY_SLOT_FIELD_LABELS[key] || key}</span>
+        <select data-field="${key}"></select>
+      </label>
+    </div>`
+  ).join("");
 
-function restoreBeyCheckForm(form, slot) {
-  if (!form) return;
-  clearBeyCheckForm(form);
-  const fields = BEY_CHECK_FIELDS[slot.mode] || [];
-  // Order matters: write blade/lockChip first so any change-driven rules
-  // (Bullet Griffon, ratchet→bit filter) settle before we set ratchet/bit.
-  const order = ["blade", "lockChip", "mainBlade", "metalBlade", "overBlade", "assistBlade", "ratchet", "bit"]
-    .filter(f => fields.includes(f));
-  beyCheckSuppressAdvance = true;
-  try {
-    order.forEach(name => {
-      const sel = form.querySelector(`[name="${name}"]`);
-      if (!sel) return;
-      const wrapper = sel.nextElementSibling;
-      if (!wrapper || typeof wrapper._select !== "function") return;
-      const value = slot.parts && slot.parts[name];
-      if (!value) return;
-      if (value === NO_RATCHET) { wrapper._select(NO_RATCHET); return; }
-      const arr = getBeyCheckPartList(name);
-      const idx = arr.findIndex(it => it.name === value);
-      if (idx >= 0) wrapper._select(idx);
+  // Combine state (mirrors the calculator): the blade may carry its ratchet
+  // (expandCx), or the ratchet may fold into a ratchet-bit. Both hide the
+  // Ratchet row and drive different Blade / Bit list filters.
+  const bladeCombine = beySlotMode === "standard" && beySlotBladeCombine;
+  const ratchetCombine = beySlotValues.ratchet === NO_RATCHET && !bladeCombine;
+
+  fields.forEach(key => {
+    const sel = host.querySelector(`select[data-field="${key}"]`);
+    if (!sel) return;
+    const list = getBeyCheckPartList(key);
+    const prepend = beySlotPrepend(key, bladeCombine, ratchetCombine);
+    const folder = BEY_CHECK_DATA_BY_FIELD[key] || null;
+    makeSearchable(sel, list, p => p.name, prepend, folder);
+    const wrapper = sel.nextElementSibling;
+
+    // List filters that mirror the calculator: expandCx blades only in
+    // blade-combine (else hidden), Clock Mirage forces "…5" ratchets, and
+    // ratchet-bits only while ratchet-combine is on (else regular bits).
+    if (wrapper) {
+      if (key === "blade") wrapper._filterFn = bladeCombine ? isExpandCxBlade : (b => !isExpandCxBlade(b));
+      else if (key === "ratchet") wrapper._filterFn = beySlotStdBladeCodename() === "CLOCKMIRAGE" ? (r => r.name.endsWith("5")) : null;
+      else if (key === "bit") wrapper._filterFn = ratchetCombine ? (b => !!b.isRatchetBit) : (b => !b.isRatchetBit);
+    }
+
+    const cur = beySlotValues[key];
+    if (wrapper && wrapper._select) {
+      if (cur === NO_RATCHET) wrapper._select(NO_RATCHET);
+      else if (cur != null && cur !== "" && list[Number(cur)]) wrapper._select(Number(cur));
+    }
+
+    if (key === "ratchet") {
+      const group = host.querySelector('[data-field-group="ratchet"]');
+      if (group) group.hidden = beySlotValues.ratchet === NO_RATCHET;
+    }
+
+    sel.addEventListener("change", () => {
+      const v = sel.value;
+
+      // Line switch → another line, carrying the still-relevant selections.
+      const nextMode = BEY_SLOT_LINE_SWITCH[v];
+      if (nextMode) {
+        captureBeySlotValues();
+        delete beySlotValues[key];
+        beySlotBladeCombine = false;   // blade-combine is Standard-only
+        beySlotMode = nextMode;
+        renderBeySlotFields();
+        return;
+      }
+
+      // Combine (Blade + Ratchet): toggle expandCx mode.
+      if (v === COMBINE_BLADE_RATCHET) {
+        captureBeySlotValues();
+        beySlotBladeCombine = !beySlotBladeCombine;
+        delete beySlotValues.blade;
+        if (beySlotBladeCombine) {
+          beySlotValues.ratchet = NO_RATCHET;
+          if (beySlotBitIsRatchetBit()) delete beySlotValues.bit;
+        } else {
+          delete beySlotValues.ratchet;
+        }
+        renderBeySlotFields();
+        openBeySlotDropdown("blade");
+        return;
+      }
+
+      // Combine (Ratchet + Bit): fold the ratchet into a ratchet-bit.
+      if (key === "ratchet" && v === NO_RATCHET) {
+        captureBeySlotValues();
+        beySlotValues.ratchet = NO_RATCHET;
+        if (!beySlotBitIsRatchetBit()) delete beySlotValues.bit;
+        renderBeySlotFields();
+        openBeySlotDropdown("bit");
+        return;
+      }
+
+      // "Revert" in the Bit dropdown undoes ratchet-bit combine.
+      if (key === "bit" && v === SPLIT_RATCHET_BIT) {
+        captureBeySlotValues();
+        delete beySlotValues.bit;
+        delete beySlotValues.ratchet;
+        renderBeySlotFields();
+        openBeySlotDropdown("ratchet");
+        return;
+      }
+
+      beySlotValues[key] = v;
+      // A new Standard blade changes the expandCx / Clock Mirage rules, so
+      // re-render to refresh the ratchet/bit filters and flow into the ratchet.
+      if (beySlotMode === "standard" && key === "blade") {
+        renderBeySlotFields();
+        openBeySlotDropdown("ratchet");
+      }
     });
-  } finally {
-    beyCheckSuppressAdvance = false;
+  });
+}
+
+// Seed the working state from a saved slot ({ mode, parts:{ field: name } }).
+function loadBeySlotFromSlot(slot) {
+  beySlotMode = BEY_CHECK_MODES.includes(slot && slot.mode) ? slot.mode : "standard";
+  const parts = (slot && slot.parts) || {};
+  beySlotValues = {};
+  Object.keys(BEY_CHECK_DATA_BY_FIELD).forEach(key => {
+    const name = parts[key];
+    if (!name || name === NO_RATCHET) return;
+    const list = getBeyCheckPartList(key);
+    const i = list.findIndex(p => p.name === name);
+    if (i >= 0) beySlotValues[key] = String(i);
+  });
+  if (!parts.ratchet || parts.ratchet === NO_RATCHET) beySlotValues.ratchet = NO_RATCHET;
+  beySlotBladeCombine = false;
+  if (beySlotMode === "standard") {
+    const v = beySlotValues.blade;
+    const blade = (v != null && v !== "" && v !== NO_RATCHET) ? (DATA.blades || [])[Number(v)] : null;
+    if (blade && isExpandCxBlade(blade)) beySlotBladeCombine = true;
   }
 }
 
-function readBeyCheckForm(form, mode) {
+// Read the working state back into a slot. Mirrors the old readBeyCheckForm
+// output (ratchet stored as NO_RATCHET when combined).
+function readBeySlot() {
   const parts = {};
-  if (!form) return { mode, parts };
-  BEY_CHECK_FIELDS[mode].forEach(name => {
-    const sel = form.querySelector(`[name="${name}"]`);
-    if (!sel) return;
-    const val = sel.value;
-
-    // Primary path: the search dropdown set sel.value = item index when the
-    // user clicked an option.
-    if (val !== "" && val != null) {
-      if (val === NO_RATCHET) { parts[name] = NO_RATCHET; return; }
-      const arr = getBeyCheckPartList(name);
-      const idx = Number(val);
-      if (Number.isInteger(idx) && arr[idx]) { parts[name] = arr[idx].name; return; }
-    }
-
-    // Fallback: the user typed a name into the searchable input but the
-    // option didn't latch on the underlying <select> (can happen on mobile
-    // if Save is tapped before the option's mousedown registers). Match the
-    // typed text against item names so the save isn't silently dropped.
-    const wrapper = sel.nextElementSibling;
-    const input = wrapper && wrapper.querySelector("input");
-    const text = input && input.value && input.value.trim();
-    if (!text) return;
-    if (text.toLowerCase() === "no ratchet") { parts[name] = NO_RATCHET; return; }
-    const arr = getBeyCheckPartList(name);
-    const match = arr.find(it => it.name.toLowerCase() === text.toLowerCase());
-    if (match) parts[name] = match.name;
+  (BEY_CHECK_FIELDS[beySlotMode] || []).forEach(key => {
+    const v = beySlotValues[key];
+    if (v == null || v === "") return;
+    if (v === NO_RATCHET) { parts[key] = NO_RATCHET; return; }
+    const item = getBeyCheckPartList(key)[Number(v)];
+    if (item) parts[key] = item.name;
   });
-  return { mode, parts };
+  return { mode: beySlotMode, parts };
 }
 
 // Combo-builder sub-popup. Opens on top of the bey check popup; on Save it
@@ -6452,8 +6470,6 @@ function showBeyCheckSlotPopup(slotIdx, slot, deck, onSave) {
   const popup = document.getElementById("bey-check-slot-popup");
   if (!popup) return;
   const subtitle = popup.querySelector("#bey-check-slot-subtitle");
-  const tabs = popup.querySelectorAll(".bey-check-mode-tab");
-  const forms = popup.querySelectorAll(".bey-check-mode-form");
   const statusEl = popup.querySelector("#bey-check-slot-status");
   const saveBtn = popup.querySelector("#bey-check-slot-save");
   const clearBtn = popup.querySelector("#bey-check-slot-clear");
@@ -6462,29 +6478,8 @@ function showBeyCheckSlotPopup(slotIdx, slot, deck, onSave) {
   if (subtitle) subtitle.textContent = `Slot ${slotIdx + 1}`;
   if (statusEl) statusEl.textContent = "";
 
-  let activeMode = BEY_CHECK_MODES.includes(slot.mode) ? slot.mode : "standard";
-
-  const showMode = (mode) => {
-    activeMode = mode;
-    tabs.forEach(t => t.classList.toggle("active", t.dataset.mode === mode));
-    forms.forEach(f => f.classList.toggle("hidden", f.dataset.mode !== mode));
-  };
-
-  // Reset every form so leftovers from a previous open don't bleed in,
-  // then restore the saved slot into its matching mode form.
-  forms.forEach(f => clearBeyCheckForm(f));
-  const targetForm = popup.querySelector(`.bey-check-mode-form[data-mode="${activeMode}"]`);
-  restoreBeyCheckForm(targetForm, slot);
-  showMode(activeMode);
-
-  tabs.forEach(t => {
-    t.onclick = () => {
-      // Switching modes shows the other form but keeps whatever's been
-      // filled in — flipping back to the original mode keeps that slot's
-      // original parts intact.
-      showMode(t.dataset.mode);
-    };
-  });
+  loadBeySlotFromSlot(slot);
+  renderBeySlotFields();
 
   popup.classList.remove("hidden");
 
@@ -6493,13 +6488,11 @@ function showBeyCheckSlotPopup(slotIdx, slot, deck, onSave) {
     saveBtn.onclick = null;
     clearBtn.onclick = null;
     cancelBtn.onclick = null;
-    tabs.forEach(t => { t.onclick = null; });
   };
 
   cancelBtn.onclick = close;
   saveBtn.onclick = () => {
-    const form = popup.querySelector(`.bey-check-mode-form[data-mode="${activeMode}"]`);
-    const next = readBeyCheckForm(form, activeMode);
+    const next = readBeySlot();
     const conflict = findBeyCheckPartConflict(next, deck, slotIdx);
     if (conflict) {
       if (statusEl) {
@@ -6513,7 +6506,7 @@ function showBeyCheckSlotPopup(slotIdx, slot, deck, onSave) {
   clearBtn.onclick = () => {
     // Clearing can never introduce a duplicate.
     if (statusEl) statusEl.textContent = "";
-    onSave({ mode: activeMode, parts: {} });
+    onSave({ mode: beySlotMode, parts: {} });
     close();
   };
 }

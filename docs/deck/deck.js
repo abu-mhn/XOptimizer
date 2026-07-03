@@ -894,6 +894,10 @@ let deckEditValues = {};
 // `.modes` array). Seeded from the slot's saved partModes, reset to 0 when the
 // part itself changes, and applied at save time.
 let deckEditPartModes = {};
+// "Combine (Blade + Ratchet)" (BX only): the blade carries its own ratchet (an
+// expandCx / "UX Expand" blade), so the Ratchet row is hidden and the Blade
+// list is filtered to expandCx blades. Mirrors the calculator's combine mode.
+let deckEditBladeCombine = false;
 
 // The DATA part currently selected for a field (null for empty / No-Ratchet).
 function deckEditPartFor(field) {
@@ -942,19 +946,6 @@ function buildDeckEditPopup() {
     <div class="popup-card deck-edit-card">
       <h2 class="popup-title">Edit Combo</h2>
       <p class="popup-text" id="deck-edit-subtitle"></p>
-      <div class="deck-edit-modes" id="deck-edit-modes">
-        <button type="button" class="sub-tab deck-edit-mode-tab" data-mode="BX" aria-label="Basic / Unique Line" title="Basic / Unique Line">
-          <img src="assets/line/Basic_Line_Logo.webp" alt="Basic Line"> /
-          <img src="assets/line/Unique_Line_Logo.webp" alt="Unique Line">
-        </button>
-        <button type="button" class="sub-tab deck-edit-mode-tab" data-mode="CX" aria-label="Custom Line" title="Custom Line">
-          <img src="assets/line/Custom_Line_Logo.webp" alt="Custom Line">
-        </button>
-        <button type="button" class="sub-tab deck-edit-mode-tab" data-mode="CX_EXPAND" aria-label="Custom Line Expand" title="Custom Line Expand">
-          <img src="assets/line/Custom_Line_Logo.webp" alt="Custom Line">
-          <img src="assets/line/Expand_Blade_Logo.webp" alt="Expand Blade">
-        </button>
-      </div>
       <div id="deck-edit-fields" class="deck-edit-fields"></div>
       <div class="popup-actions">
         <button type="button" class="btn popup-ok" id="deck-edit-save" aria-label="Save" title="Save">
@@ -973,15 +964,6 @@ function buildDeckEditPopup() {
   overlay.addEventListener("click", e => { if (e.target === overlay) closeDeckEdit(); });
   document.getElementById("deck-edit-cancel").addEventListener("click", closeDeckEdit);
   document.getElementById("deck-edit-save").addEventListener("click", saveDeckEdit);
-  document.querySelectorAll("#deck-edit-modes .deck-edit-mode-tab").forEach(tab => {
-    tab.addEventListener("click", () => {
-      if (tab.dataset.mode === deckEditMode) return;
-      captureDeckEditValues();
-      deckEditMode = tab.dataset.mode;
-      setDeckEditModeTab();
-      renderDeckEditFields();
-    });
-  });
   // Cycle a multi-mode part's mode. Delegated on the fields host (bound once)
   // so it survives every renderDeckEditFields rebuild.
   document.getElementById("deck-edit-fields").addEventListener("click", (e) => {
@@ -996,9 +978,74 @@ function buildDeckEditPopup() {
   });
 }
 
-function setDeckEditModeTab() {
-  document.querySelectorAll("#deck-edit-modes .deck-edit-mode-tab").forEach(tab => {
-    tab.classList.toggle("active", tab.dataset.mode === deckEditMode);
+// Line-switch sentinels (shared with the calculator) that a first-dropdown
+// choice can carry — picking one moves the editor to another line instead of
+// selecting a part. Mirrors the calculator's tab-less line switching.
+const DECK_EDIT_LINE_SWITCH = {
+  [SPLIT_BLADE]: "CX",        // Blade "Split …" (BX→CX) and Metal Blade "Revert" (CX Expand→CX)
+  [LINE_BX]: "BX",            // Lock Chip "Revert" (CX→BX)
+  [LINE_CXE]: "CX_EXPAND",    // Main Blade "Split (Over + Metal)" (CX→CX Expand)
+};
+
+// The line-switch choice offered at the top of a given field's dropdown for the
+// current line, so the user moves between lines the calculator way — no tabs.
+function deckEditLineSwitchChoice(key) {
+  if (deckEditMode === "BX" && key === "blade")
+    return { value: SPLIT_BLADE, label: "Split (Lock Chip + Main Blade + Assist Blade)" };
+  if (deckEditMode === "CX" && key === "lockChip")
+    return { value: LINE_BX, label: "Revert" };
+  if (deckEditMode === "CX" && key === "mainBlade")
+    return { value: LINE_CXE, label: "Split (Over Blade + Metal Blade)" };
+  if (deckEditMode === "CX_EXPAND" && key === "metalBlade")
+    return { value: SPLIT_BLADE, label: "Revert" };
+  return null;
+}
+
+// True when the currently chosen Bit is a ratchet-bit (a bit with its ratchet
+// baked in). DATA.bits is the merged pool, so a ratchet-bit is just a bit whose
+// `isRatchetBit` flag is set.
+function deckEditBitIsRatchetBit() {
+  const v = deckEditValues.bit;
+  if (v == null || v === "") return false;
+  const bit = (DATA.bits || [])[Number(v)];
+  return !!(bit && bit.isRatchetBit);
+}
+
+// The synthetic choices at the top of a field's dropdown for the current state:
+// line-switch (Split/Revert), the two Combine toggles, "No Ratchet", and the
+// ratchet-bit "Revert" — matching the calculator's dropdowns exactly.
+function deckEditPrepend(key, bladeCombine, ratchetCombine) {
+  const list = [];
+  // Line switch (suppressed on the Blade dropdown while blade-combine is on, as
+  // the calculator hides its CX split in that state).
+  const lineChoice = deckEditLineSwitchChoice(key);
+  if (lineChoice && !(bladeCombine && key === "blade")) list.push(lineChoice);
+  // BX Blade: the Combine (Blade + Ratchet) toggle.
+  if (deckEditMode === "BX" && key === "blade") {
+    list.push({ value: COMBINE_BLADE_RATCHET, label: bladeCombine ? "Revert" : "Combine (Blade + Ratchet)" });
+  }
+  // Ratchet always carries the NO_RATCHET choice (as in the calculator) so the
+  // "combined" value stays selectable even while the row is hidden — that keeps
+  // the value NO_RATCHET rather than falling back to empty at save time.
+  if (key === "ratchet") {
+    list.push({ value: NO_RATCHET, label: "Combine (Ratchet + Bit)" });
+  }
+  // Bit: the "Revert" that undoes ratchet-bit combine.
+  if (key === "bit" && ratchetCombine) {
+    list.push({ value: SPLIT_RATCHET_BIT, label: "Revert" });
+  }
+  return list;
+}
+
+// Focus + open a field's dropdown after a re-render, so a combine/line switch
+// flows straight into the next choice (the calculator does the same).
+function openDeckEditDropdown(key) {
+  const host = document.getElementById("deck-edit-fields");
+  const wrapper = host?.querySelector(`select[data-field="${key}"]`)?.nextElementSibling;
+  if (!wrapper || !wrapper._open) return;
+  requestAnimationFrame(() => {
+    wrapper.querySelector("input")?.focus();
+    wrapper._open();
   });
 }
 
@@ -1021,7 +1068,7 @@ function renderDeckEditFields() {
   const fields = DECK_EDIT_FIELDS[deckEditMode] || DECK_EDIT_FIELDS.BX;
   const host = document.getElementById("deck-edit-fields");
   host.innerHTML = fields.map(([key, label]) =>
-    `<div class="deck-edit-field-group">
+    `<div class="deck-edit-field-group" data-field-group="${key}">
       <label class="deck-edit-field">
         <span class="deck-edit-field-label">${label}</span>
         <select data-field="${key}"></select>
@@ -1030,22 +1077,104 @@ function renderDeckEditFields() {
     </div>`
   ).join("");
 
+  // Combine state (mirrors the calculator): the blade may carry its ratchet
+  // (expandCx), or the ratchet may be baked into a ratchet-bit. Both hide the
+  // Ratchet row; each drives a different Blade / Bit list filter.
+  const bladeCombine = deckEditMode === "BX" && deckEditBladeCombine;
+  const ratchetCombine = deckEditValues.ratchet === NO_RATCHET && !bladeCombine;
+
   fields.forEach(([key]) => {
     const sel = host.querySelector(`select[data-field="${key}"]`);
     if (!sel) return;
     const list = DATA[DECK_EDIT_FIELD_ARR[key]] || [];
-    const prepend = key === "ratchet" ? [{ value: NO_RATCHET, label: "No Ratchet" }] : [];
-    if (typeof makeSearchable === "function") makeSearchable(sel, list, p => p.name, prepend);
+    const prepend = deckEditPrepend(key, bladeCombine, ratchetCombine);
+    // Pass the image folder so each option shows its part thumbnail, matching
+    // the calculator's searchable dropdowns (ratchet-bits carry their own
+    // `_folder`, so this base folder is just the fallback).
+    const folder = PART_FOLDER[key] || null;
+    if (typeof makeSearchable === "function") makeSearchable(sel, list, p => p.name, prepend, folder);
     const wrapper = sel.nextElementSibling;
+
+    // List filters that mirror the calculator: expandCx blades only in
+    // blade-combine (else hidden from the Blade list), and ratchet-bits only in
+    // ratchet-combine (else regular bits only).
+    if (wrapper) {
+      if (key === "blade") wrapper._filterFn = bladeCombine ? isExpandCxBlade : (b => !isExpandCxBlade(b));
+      else if (key === "bit") wrapper._filterFn = ratchetCombine ? (b => !!b.isRatchetBit) : (b => !b.isRatchetBit);
+    }
+
     const cur = deckEditValues[key];
     if (wrapper && wrapper._select) {
       if (cur === NO_RATCHET) wrapper._select(NO_RATCHET);
       else if (cur != null && cur !== "" && list[Number(cur)]) wrapper._select(Number(cur));
     }
+
+    // Hide the Ratchet row whenever the ratchet is combined away (either mode).
+    if (key === "ratchet") {
+      const group = host.querySelector('[data-field-group="ratchet"]');
+      if (group) group.hidden = deckEditValues.ratchet === NO_RATCHET;
+    }
+
     // Listener attaches AFTER the preselect above, so seeding a value never
     // counts as a user change — that keeps the slot's saved mode intact.
     sel.addEventListener("change", () => {
-      deckEditValues[key] = sel.value;
+      const v = sel.value;
+
+      // A line-switch choice moves to another line instead of picking a part:
+      // keep the still-relevant selections, drop the sentinel, and re-render.
+      const nextMode = DECK_EDIT_LINE_SWITCH[v];
+      if (nextMode) {
+        captureDeckEditValues();
+        delete deckEditValues[key];      // don't carry the sentinel as a "selection"
+        delete deckEditPartModes[key];
+        deckEditBladeCombine = false;    // blade-combine is BX-only
+        deckEditMode = nextMode;
+        renderDeckEditFields();
+        return;
+      }
+
+      // Combine (Blade + Ratchet): toggle expandCx mode. The blade is re-picked
+      // from the filtered list; the ratchet folds into / out of the blade.
+      if (v === COMBINE_BLADE_RATCHET) {
+        captureDeckEditValues();
+        deckEditBladeCombine = !deckEditBladeCombine;
+        delete deckEditValues.blade;
+        delete deckEditPartModes.blade;
+        if (deckEditBladeCombine) {
+          deckEditValues.ratchet = NO_RATCHET;                 // blade carries the ratchet
+          if (deckEditBitIsRatchetBit()) delete deckEditValues.bit; // expandCx takes a regular bit
+        } else {
+          delete deckEditValues.ratchet;                       // ratchet row comes back, empty
+        }
+        renderDeckEditFields();
+        openDeckEditDropdown("blade");
+        return;
+      }
+
+      // Combine (Ratchet + Bit): the ratchet folds into the bit. Hide the ratchet
+      // row and switch the Bit list to ratchet-bits.
+      if (key === "ratchet" && v === NO_RATCHET) {
+        captureDeckEditValues();
+        deckEditValues.ratchet = NO_RATCHET;
+        if (!deckEditBitIsRatchetBit()) { delete deckEditValues.bit; delete deckEditPartModes.bit; }
+        renderDeckEditFields();
+        openDeckEditDropdown("bit");
+        return;
+      }
+
+      // "Revert" in the Bit dropdown undoes ratchet-bit combine: bring the
+      // Ratchet row back (cleared) and switch the Bit list back to regular bits.
+      if (key === "bit" && v === SPLIT_RATCHET_BIT) {
+        captureDeckEditValues();
+        delete deckEditValues.bit;
+        delete deckEditValues.ratchet;
+        delete deckEditPartModes.bit;
+        renderDeckEditFields();
+        openDeckEditDropdown("ratchet");
+        return;
+      }
+
+      deckEditValues[key] = v;
       // A different part was chosen — its old mode index no longer applies.
       delete deckEditPartModes[key];
       updateDeckEditModeRow(key);
@@ -1075,6 +1204,17 @@ function openDeckEdit(slotIdx) {
   });
   if (!parts.ratchet) deckEditValues.ratchet = NO_RATCHET;
 
+  // An expandCx blade carries its own ratchet, so open straight into
+  // "Combine (Blade + Ratchet)" mode (the ratchet row stays hidden). A ratchet-
+  // bit combo instead leaves the ratchet as NO_RATCHET with a ratchet-bit bit —
+  // that reads as ratchet-combine and needs no flag.
+  deckEditBladeCombine = false;
+  if (deckEditMode === "BX") {
+    const bIdx = deckEditValues.blade;
+    const blade = (bIdx != null && bIdx !== "" && bIdx !== NO_RATCHET) ? (DATA.blades || [])[Number(bIdx)] : null;
+    if (blade && isExpandCxBlade(blade)) deckEditBladeCombine = true;
+  }
+
   // Seed each multi-mode part's chosen mode from the slot's saved partModes.
   deckEditPartModes = {};
   const savedModes = (slot.data && slot.data.partModes) || {};
@@ -1083,7 +1223,6 @@ function openDeckEdit(slotIdx) {
   });
 
   document.getElementById("deck-edit-subtitle").textContent = `Slot ${slotIdx + 1}`;
-  setDeckEditModeTab();
   renderDeckEditFields();
   document.getElementById("deck-edit-popup").classList.remove("hidden");
 }

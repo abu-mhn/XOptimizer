@@ -817,34 +817,7 @@
       <h2 class="popup-title">Build Combo</h2>
       <p class="popup-text bey-check-slot-subtitle" id="bey-check-slot-subtitle"></p>
 
-      <div class="bey-check-mode-tabs" role="tablist">
-        <button type="button" class="bey-check-mode-tab active" data-mode="standard" role="tab" aria-label="Basic / Unique Line" title="Basic / Unique Line">
-          <img src="assets/line/Basic_Line_Logo.webp" alt="Basic Line"> /
-          <img src="assets/line/Unique_Line_Logo.webp" alt="Unique Line">
-        </button>
-        <button type="button" class="bey-check-mode-tab" data-mode="cx" role="tab" aria-label="Custom Line" title="Custom Line">
-          <img src="assets/line/Custom_Line_Logo.webp" alt="Custom Line">
-        </button>
-        <button type="button" class="bey-check-mode-tab" data-mode="cxExpand" role="tab" aria-label="Custom Line Expand" title="Custom Line Expand">
-          <img src="assets/line/Custom_Line_Logo.webp" alt="Custom Line">
-          <img src="assets/line/Expand_Blade_Logo.webp" alt="Expand Blade">
-        </button>
-      </div>
-
-      <form id="bey-check-form-standard" class="bey-check-mode-form" data-mode="standard" onsubmit="return false;">
-        <fieldset>
-          <label>Blade
-            <select name="blade"></select>
-          </label>
-        
-          <label>Ratchet
-            <select name="ratchet"></select>
-          </label>
-          <label>Bit
-            <select name="bit"></select>
-          </label>
-        </fieldset>
-      </form>
+      <div id="bey-check-slot-fields" class="deck-edit-fields"></div>
 
       <form id="bey-check-form-cx" class="bey-check-mode-form hidden" data-mode="cx" onsubmit="return false;">
         <fieldset>

@@ -44,7 +44,7 @@ Deck (3 Slots)
 - Copy a deck to paste into a tournament registration
 - Pin a default deck — tap the star on a deck to make it your default; it's auto-loaded into the registration form when you join a tournament (you still review before submitting). The pin syncs across your devices
 - Paste a copied deck straight into the active deck with the Paste button
-- Edit any slot's combo in place — tap the pencil to rebuild it: swap parts or switch its mode (BX / CX / CX Expand)
+- Edit any slot's combo in place — tap the pencil to open the calculator-style builder: pick every part from an image grid, and switch lines (BX / CX / CX Expand) or combine Blade + Ratchet / Ratchet + Bit right in the dropdowns — no mode tabs
 - Each slot is its own card with a collapsible Stat Graph (tap + / − to open) that draws a bar or radar chart, following your Settings → Stat display choice
 - Switch a multi-mode part's mode straight from the slot — parts like Operate (Defense / Attack) show an inline mode chip; tap it to switch and the combo's thumbnail + stats recompute on the spot. The pencil editor has the same per-part mode control
 - Ratchet-bits (Turbo, Operate) show their thumbnail in the slot instead of a blank tile
@@ -108,6 +108,7 @@ Tournament
 - Rename any participant after the tournament starts — tap their name in a group's Standings
 - Adjust the total round count mid-tournament — tap "Round X / Y" in a group header; already-played rounds are kept
 - Registered decks pre-fill every match; judges can override per match
+- Build Combo popup (registration + Bey Check) uses the same calculator-style picker as the Deck editor — image part grid, line switching and Blade + Ratchet / Ratchet + Bit combines in the dropdowns, no mode tabs
 - CX / CX Expand decks paste from the Deck tab without losing parts (lock chip / main blade / assist blade preserved)
 - Bey Check slots show just "Slot 1 / 2 / 3" with an invisible-scrollbar part row (swipe still works)
 - Swiss + Top N auto-generates the knockout bracket from group standings the moment every group's final round completes — top finishers from each group are pooled, sorted by Swiss tiebreakers, and seeded into a standard fold bracket (1 vs N, 2 vs N-1, …). Non-power-of-2 N pads with byes that auto-advance, so Top 10 / Top 12 work the same as Top 8 / Top 16. Legacy Top 8 tournaments already in flight keep their original QF/SF/F structure
@@ -158,7 +159,8 @@ Battle Pass
 Battle Royale
 - A points-duel tab: challenge another registered player, stake an equal wager, and a Judge declares the winner who takes the pot (the loser loses the same)
 - Points start at 0 and are earned ONLY by placing in tournaments — the tournament's placement points (1st = 5 down to 1) mirror into your Battle Royale balance when you finish, then you gamble them here. Points stay separate from the tournament ranking leaderboard
-- You can only challenge a player with the SAME points or FEWER (and at least 1, so there's a stake). The wager is capped to the lower of the two balances
+- You can only challenge a player in your own tier — your tier comes from your tournament win rate AND how many battles you've played (a small record can't reach the top). The opponent must have at least 1 point to stake, and the wager is capped to the lower of the two balances
+- Developer accounts bypass the tier limit — a Developer-tagged player can challenge anyone, in any tier
 - Challenging requires picking a Judge — any user with the "Judge" tag who has opened Battle Royale. The opponent must Accept before the Judge is brought in; the Judge then declares the winner and points transfer
 - Notifications: the opponent is alerted when challenged, the Judge when the challenge is accepted, and both players when it's resolved (in-app toast + optional system notification, on any tab)
 - The Judge writes the point transfer — enforced by the DB rules, which only let a Judge-tagged account move another player's Battle Royale points
