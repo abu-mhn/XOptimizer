@@ -4485,7 +4485,14 @@ function showBannedPartsPopup() {
       combinedItems.push({
         field: f,
         partName: item.name,
-        _label: `${BANNABLE_FIELD_LABEL[f]} — ${item.name}`
+        // `name` + `_folder` let makeSearchable draw the part thumbnail; the
+        // list mixes categories, so each item carries its own folder (a
+        // ratchet-bit keeps its `ratchetBits` folder). `modes` makes multi-mode
+        // parts thumbnail at mode 0 (they have no plain name.webp).
+        name: item.name,
+        _folder: item._folder || dataKey,
+        modes: item.modes,
+        _label: item.name
       });
     });
   });
@@ -6439,12 +6446,20 @@ function loadBeySlotFromSlot(slot) {
     const i = list.findIndex(p => p.name === name);
     if (i >= 0) beySlotValues[key] = String(i);
   });
-  if (!parts.ratchet || parts.ratchet === NO_RATCHET) beySlotValues.ratchet = NO_RATCHET;
+
+  // An expandCx blade carries its own ratchet, so open in blade-combine mode.
   beySlotBladeCombine = false;
   if (beySlotMode === "standard") {
     const v = beySlotValues.blade;
-    const blade = (v != null && v !== "" && v !== NO_RATCHET) ? (DATA.blades || [])[Number(v)] : null;
+    const blade = (v != null && v !== "") ? (DATA.blades || [])[Number(v)] : null;
     if (blade && isExpandCxBlade(blade)) beySlotBladeCombine = true;
+  }
+
+  // The Ratchet folds away ONLY when the combo actually says so — an explicit
+  // NO_RATCHET, an expandCx blade, or a ratchet-bit bit. A fresh/empty slot (or
+  // any combo with a real ratchet) keeps the Ratchet field visible.
+  if (parts.ratchet === NO_RATCHET || beySlotBladeCombine || beySlotBitIsRatchetBit()) {
+    beySlotValues.ratchet = NO_RATCHET;
   }
 }
 

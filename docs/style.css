@@ -2450,6 +2450,17 @@ body.bronze-mode   .bey-check-part-name { color: #f0e2d2; }
     align-items: flex-start;
 }
 
+/* Banned-parts picker uses the same calculator-style image dropdown — let its
+   grid overlay the card instead of being clipped by the card scroll. */
+#banned-parts-popup {
+    align-items: flex-start;
+}
+
+#banned-parts-popup .popup-card {
+    overflow: visible;
+    max-height: none;
+}
+
 .bey-check-slot-subtitle {
     margin-bottom: 10px;
     font-weight: 600;
