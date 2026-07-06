@@ -12,7 +12,8 @@
       "Bash(grep -n \"^Friends$\\\\|^Battle Royale$\\\\|Direct messages with accepted\\\\|A points-duel tab\" docs/settings/settings.js)",
       "Bash(node \"C:/Users/admin/AppData/Local/Temp/claude/c--Users-admin-Downloads-demo/d92d721e-66ec-4e4d-a239-4d3b53bc3dc6/scratchpad/add_past_tab.js\")",
       "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('database.rules.json','utf8'\\)\\); console.log\\('rules JSON valid'\\)\")",
-      "Bash(node --check docs/js/scoreboard.js)"
+      "Bash(node --check docs/js/scoreboard.js)",
+      "Bash(node \"C:/Users/admin/AppData/Local/Temp/claude/c--Users-admin-Downloads-demo/d92d721e-66ec-4e4d-a239-4d3b53bc3dc6/scratchpad/cachebust.js\" 20260706)"
     ]
   }
 }
