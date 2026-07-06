@@ -9182,7 +9182,8 @@ button.swiss-reg-paid:hover {
 .swiss-room-card-meta > .swiss-room-cohost-badge,
 .swiss-room-card-meta > .swiss-room-running-badge,
 .swiss-room-card-meta > .swiss-room-full-badge,
-.swiss-room-card-meta > .swiss-room-closed-badge {
+.swiss-room-card-meta > .swiss-room-closed-badge,
+.swiss-room-card-meta > .swiss-room-complete-badge {
     margin-left: 0;
 }
 
@@ -9418,6 +9419,12 @@ button.swiss-reg-paid:hover {
     top: 71px;
     z-index: 49;
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.5);
+}
+
+/* Tournament has three sub-tabs (Hosting / Ranking / Past) — keep them on one
+   row instead of wrapping the third (br-sub-tabs stays at two columns). */
+.tournament-sub-tabs {
+    grid-template-columns: repeat(3, 1fr);
 }
 
 
@@ -10692,6 +10699,14 @@ body.forest-mode .tutorial-dot.active {
     outline: none;
     border-color: #58a6ff;
     background: #0d1117;
+}
+
+/* A native <select> using this dark field can render with a LIGHT system
+   control on iOS / macOS Safari, hiding its light option text — so the Judge
+   dropdown looks blank. Force the dark scheme so the value stays visible (same
+   fix the Share popup already uses for its dropdowns). */
+select.tournament-name-input {
+    color-scheme: dark;
 }
 
 /* Self-registration locks the name field to the user's username. */
@@ -13860,6 +13875,26 @@ body.mono-mode     .swiss-reg-format-editable { border-color: #4a4a4a; }
     border: 1px solid rgba(210, 153, 34, 0.4);
 }
 
+/* "Completed" badge on a Past-tournament card (green). */
+.swiss-room-complete-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    vertical-align: middle;
+    background: rgba(46, 160, 67, 0.16);
+    color: #2ea043;
+    border: 1px solid rgba(46, 160, 67, 0.4);
+}
+
+/* Champion line on a Past-tournament card. */
+.swiss-room-champion {
+    font-weight: 600;
+    opacity: 0.9;
+}
+
 /* "Full" badge on a lobby card — registration cap reached (red). */
 .swiss-room-full-badge {
     display: inline-block;
@@ -15951,6 +15986,41 @@ body.kingofalltypes-mode .btn-lucky img {
     margin: 4px 0;
     text-align: justify;
 }
+/* Judge picker — tappable chips (replaces a native <select> that could render
+   invisibly on some mobile Safari builds). */
+.br-judge-picker {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    margin: 4px 0 2px;
+    /* Keep judges on one line; scroll sideways when there are many, with no
+       visible scrollbar. */
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;          /* Firefox */
+    -ms-overflow-style: none;       /* old Edge/IE */
+}
+.br-judge-picker::-webkit-scrollbar {
+    display: none;
+}
+.br-judge-option {
+    flex: 0 0 auto;                 /* don't shrink — scroll instead */
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid #30363d;
+    background: #0d1117;
+    color: #e6edf3;
+    font: inherit;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.br-judge-option.selected {
+    border-color: #58a6ff;
+    background: rgba(88, 166, 255, 0.2);
+    color: #fff;
+    font-weight: 600;
+}
 .br-card {
     background: #161b22;
     border: 1px solid #21262d;
@@ -15966,6 +16036,7 @@ body.kingofalltypes-mode .btn-lucky img {
 .br-card-main { min-width: 0; font-size: 0.9rem; color: #e6edf3; }
 .br-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .br-card-label { color: #8b949e; font-size: 0.82rem; }
+.br-card-hint { margin: 6px 0 2px; color: #8b949e; font-size: 0.82rem; line-height: 1.4; }
 .br-players { list-style: none; margin: 0; padding: 0; }
 .br-player {
     position: relative;
@@ -15997,6 +16068,8 @@ body.kingofalltypes-mode .btn-lucky img {
 }
 .br-btn-challenge { background: #1f6feb; color: #fff; }
 .br-btn-challenge:hover { background: #388bfd; }
+.br-btn-score { background: #1f6feb; color: #fff; }
+.br-btn-score:hover { background: #388bfd; }
 .br-btn-accept, .br-btn-win { background: #238636; color: #fff; }
 .br-btn-accept:hover, .br-btn-win:hover { background: #2ea043; }
 .br-btn-decline { background: transparent; color: #f85149; border-color: rgba(248, 81, 73, 0.5); }

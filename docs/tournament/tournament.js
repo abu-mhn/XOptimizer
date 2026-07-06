@@ -24,6 +24,8 @@ let swissSubHosts = {};      // room's designated sub-host usernames { lowercase
 let swissHostNameCache = {};     // hostUid -> resolved username (rooms with no stored hostName)
 let swissHostNameResolving = {}; // hostUid -> in-flight resolve guard
 let swissSessionRole = null;     // this session's role: "host" | "co-host" | "participant" | "view"
+let swissArchiveView = false;    // viewing a finished tournament from the public Past archive (read-only, no live room)
+const pastTournamentArchived = new Set(); // editCodes this session already snapshotted to pastTournaments
 
 function initFirebase() {
   if (swissDb) return swissDb;
@@ -3142,7 +3144,9 @@ function renderSwiss() {
   const allPlacementsDone = bracketActive && placementIds.every(id => isMatchDecided(state.matches[id]));
   const isSwissOnly = state.mode === "swiss-only";
   const tournamentComplete = isTournamentComplete(state);
-  const canEdit = !inRoom || swissCanEdit;
+  // Archive view is always read-only. Otherwise: a local (non-room) tournament
+  // is owner-editable, and a room is editable only with edit rights.
+  const canEdit = !swissArchiveView && (!inRoom || swissCanEdit);
 
   const groupsHtml = hasGroups ? state.groups.map((members, gi) => {
     const mode = swissGroupViews[gi] || "matches";
@@ -3216,11 +3220,17 @@ function renderSwiss() {
           ${canEdit && !tournamentComplete && canAddParticipant(state) ? `<button type="button" id="swiss-remove-participants" class="btn btn-icon-sm btn-icon-minus" aria-label="Remove participant" title="Remove participant"><span class="swiss-toolbar-btn-plus-icon">&minus;</span><span class="swiss-toolbar-btn-label">Remove</span></button>` : ""}
           ${canEdit && !tournamentComplete && canReshuffleTournament(state) ? `<button type="button" id="swiss-reshuffle" class="btn btn-icon-sm" aria-label="Reshuffle draw" title="Reshuffle the Round 1 draw"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="width:15px;height:15px;flex:0 0 auto;"><path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.66 6.83-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-2.8-2.71z"/></svg><span class="swiss-toolbar-btn-label">Reshuffle</span></button>` : ""}
           ${canEdit && !tournamentComplete && canReshuffleTournament(state) && state.groups && state.groups.length > 1 ? `<button type="button" id="swiss-move-participant" class="btn btn-icon-sm" aria-label="Move participant" title="Move a player to another group"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="width:15px;height:15px;flex:0 0 auto;"><path d="M6.99 11 3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg><span class="swiss-toolbar-btn-label">Move</span></button>` : ""}
-          <button type="button" id="swiss-clear" class="btn btn-reset btn-icon-sm" title="${resetTitle}">
-            <img src="assets/icons/exit-button.png" alt=""
-                 onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
-            <span class="swiss-toolbar-btn-label">${inRoomNonHost ? "Leave" : "Reset"}</span>
-          </button>
+          ${swissArchiveView
+            ? `<button type="button" id="swiss-archive-back" class="btn btn-reset btn-icon-sm" title="Back to Past tournaments">
+                <img src="assets/icons/exit-button.png" alt=""
+                     onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
+                <span class="swiss-toolbar-btn-label">Back</span>
+              </button>`
+            : `<button type="button" id="swiss-clear" class="btn btn-reset btn-icon-sm" title="${resetTitle}">
+                <img src="assets/icons/exit-button.png" alt=""
+                     onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
+                <span class="swiss-toolbar-btn-label">${inRoomNonHost ? "Leave" : "Reset"}</span>
+              </button>`}
         </div>
       </div>
     </div>
@@ -3238,7 +3248,14 @@ function renderSwiss() {
   // tournament here, hit Reset, then open Dashboard and still see the
   // just-finished result. Mirrors aggregatePartUsage + the sort/slice
   // the Dashboard does in dashboardBuildTopParts.
-  if (tournamentComplete) snapshotBestPartsForDashboard(state);
+  if (tournamentComplete && !swissArchiveView) snapshotBestPartsForDashboard(state);
+
+  // When the host reaches the final results, archive the whole tournament to
+  // the public Past list so it stays viewable after a reset. Host-only (the DB
+  // rule enforces it); runs once per code per session.
+  if (tournamentComplete && !swissArchiveView && swissIsHost && swissEditCode) {
+    publishPastTournament(swissEditCode, state);
+  }
 
   // Auto-scroll each rounds strip after render. Group strips snap to the
   // rightmost (latest round). The Swiss top-8 bracket strip advances column
@@ -3309,6 +3326,7 @@ function renderSwiss() {
     btn.addEventListener("click", showEditRoundCountPopup);
   });
   view.querySelector("#swiss-clear")?.addEventListener("click", resetSwiss);
+  view.querySelector("#swiss-archive-back")?.addEventListener("click", exitArchiveView);
 
   // Wire up any part-usage carousels rendered into the view.
   if (typeof setupDashboardCarousel === "function") {
@@ -5289,9 +5307,10 @@ function computeStandings(members, matches, groupIndex, isRoundRobin) {
     if (m.groupIndex !== groupIndex) return;
     if (m.bye && m.a && stats[m.a]) {
       // A Swiss bye is a free win — the player wasn't paired, so they aren't
-      // penalised. A round-robin bye is just a sit-out (everyone still faces
+      // penalised. It counts as a clean 4-0: a win plus 4 points scored (0
+      // against). A round-robin bye is just a sit-out (everyone still faces
       // everyone else over the full schedule), so it scores nothing.
-      if (!isRoundRobin) stats[m.a].wins++;
+      if (!isRoundRobin) { stats[m.a].wins++; stats[m.a].pointsScored += 4; }
       return;
     }
     if (m.scoreA == null || m.scoreB == null) return;
@@ -8308,6 +8327,7 @@ window.addEventListener("userprofilechange", maybeRunBattleRoyaleMonthlyRollover
       tabs.forEach(t => t.classList.toggle("active", t === tab));
       panels.forEach(p => p.classList.toggle("hidden", p.id !== "tournament-panel-" + view));
       if (view === "ranking") renderTournamentRanking();
+      if (view === "past") refreshPastTournaments();
       // Coming back to Hosting? Refresh the open-tournaments list so it
       // doesn't sit stale while the user is poking at other tabs. Only
       // matters when the setup form is actually visible (i.e. the user
@@ -8325,6 +8345,7 @@ window.addEventListener("userprofilechange", maybeRunBattleRoyaleMonthlyRollover
     refreshOpenTournamentRooms();
     refreshMyTournaments();
   });
+  document.getElementById("past-tournaments-refresh")?.addEventListener("click", refreshPastTournaments);
   document.getElementById("swiss-rooms-qr")?.addEventListener("click", showTournamentQrPopup);
   document.getElementById("swiss-rooms-tutorial")?.addEventListener("click", showTutorialPopup);
 
@@ -8786,6 +8807,162 @@ function renderLobbyRooms(list, rooms) {
       }
     });
   });
+}
+
+// ===== Past Tournaments =====
+// A public, sign-in-free archive of finished tournaments. When a tournament
+// completes, its host snapshots the full state (groups, bracket, every match,
+// registrants) into the world-readable `pastTournaments/{editCode}` node. The
+// Past tab lists those snapshots and opens each one READ-ONLY — so all matches
+// survive even after the host resets the live room.
+
+// Champion name for a finished tournament state (bracket winner, or the top of
+// the combined standings for swiss-only).
+function pastTournamentChampion(state) {
+  const podium = computeTournamentPlacements(state).find(p => p.place === 1);
+  if (podium && podium.name) return podium.name;
+  if (state && state.mode === "swiss-only" && typeof computeCombinedSwissStandings === "function") {
+    const st = computeCombinedSwissStandings(state);
+    if (st && st[0] && st[0].name) return st[0].name;
+  }
+  return "";
+}
+
+// Host-side: archive a completed tournament to the public `pastTournaments`
+// node so it stays viewable after the room is reset. Once per session per code.
+function publishPastTournament(editCode, state) {
+  if (!editCode || !state || pastTournamentArchived.has(editCode)) return;
+  const db = initFirebase();
+  if (!db || !isTournamentComplete(state)) return;
+  pastTournamentArchived.add(editCode);
+  const uid = (typeof getCurrentUser === "function" && getCurrentUser()) ? getCurrentUser().uid : null;
+  const snap = {
+    editCode,
+    viewCode: swissViewCode || null,
+    hostUid: state.hostUid || uid || null,
+    tournamentName: state.tournamentName || "",
+    mode: state.mode || "swiss",
+    pairing: state.pairing || "",
+    topN: state.topN || null,
+    placementDepth: state.placementDepth || null,
+    groups: state.groups || null,
+    groupRounds: state.groupRounds || null,
+    bracket: state.bracket || null,
+    matches: state.matches || null,
+    registrants: state.registrants || null,
+    createdAt: state.createdAt || new Date().toISOString(),
+    archivedAt: new Date().toISOString()
+  };
+  // JSON round-trip drops undefined so Firebase accepts the payload.
+  db.ref("pastTournaments/" + editCode).set(JSON.parse(JSON.stringify(snap)))
+    .catch(e => { pastTournamentArchived.delete(editCode); console.warn("Past tournament archive failed:", e); });
+}
+
+function refreshPastTournaments() {
+  const list = document.getElementById("past-tournaments-list");
+  const status = document.getElementById("past-tournaments-status");
+  if (!list) return;
+  const setStatus = msg => { if (status) status.textContent = msg || ""; };
+  if (!firebaseReady()) {
+    list.innerHTML = "";
+    setStatus("Live sync isn't configured on this build.");
+    return;
+  }
+  setStatus("Loading…");
+  const db = initFirebase();
+  db.ref("pastTournaments").once("value")
+    .then(snap => {
+      const arr = Object.values(snap.val() || {}).filter(s => s && s.editCode);
+      const done = arr.map(s => ({
+        editCode: s.editCode,
+        name: (s.tournamentName || "").trim(),
+        mode: s.mode || "swiss",
+        pairing: s.pairing || null,
+        topN: s.topN || null,
+        players: s.registrants ? Object.keys(s.registrants).length : 0,
+        champion: pastTournamentChampion(s),
+        createdAt: s.createdAt || s.archivedAt || "",
+        snapshot: s
+      }));
+      done.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+      if (!done.length) {
+        list.innerHTML = `<p class="swiss-rooms-empty">No finished tournaments yet. A tournament shows up here once its host reaches the final results.</p>`;
+        setStatus("");
+        return;
+      }
+      renderPastTournamentsList(list, done);
+      setStatus("");
+    })
+    .catch(err => {
+      console.warn("Past tournaments fetch failed:", err);
+      setStatus("Couldn't load past tournaments. Check your connection.");
+    });
+}
+
+function renderPastTournamentsList(list, rooms) {
+  list.innerHTML = rooms.map(r => {
+    const name = (r.name || "").trim() || "(unnamed tournament)";
+    const modeLabel = tournamentFormatLabel(r.mode, r.pairing, false, r.topN);
+    return `
+      <button type="button" class="swiss-room-card" data-edit-code="${escapeHtml(r.editCode)}">
+        <div class="swiss-room-card-name">
+          <span class="swiss-room-card-title">${escapeHtml(name)}</span>
+        </div>
+        <div class="swiss-room-card-mode">${modeLabel}</div>
+        <div class="swiss-room-card-meta">
+          <span class="swiss-room-card-meta-text">${escapeHtml(r.players + " players")}</span>
+          ${r.champion ? `<span class="swiss-room-card-meta-text swiss-room-champion">🏆 ${escapeHtml(r.champion)}</span>` : ""}
+          <span class="swiss-room-complete-badge">Completed</span>
+        </div>
+      </button>`;
+  }).join("");
+  list.querySelectorAll(".swiss-room-card").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const room = rooms.find(r => r.editCode === btn.dataset.editCode);
+      if (room) openArchivedTournament(room.snapshot); // read-only, shows all matches
+    });
+  });
+}
+
+// Load an archived snapshot into a read-only render (no live room, no writes),
+// so every group / bracket / match is visible. `swissArchiveView` flips the
+// toolbar's Reset button to a Back button.
+function openArchivedTournament(snap) {
+  if (!snap) return;
+  disconnectSwissRoom();
+  swissArchiveView = true;
+  swissEditCode = null;
+  swissViewCode = null;
+  swissIsHost = false;
+  swissCanEdit = false;
+  swissSessionRole = "view";
+  const state = {
+    groups: snap.groups || null,
+    groupRounds: snap.groupRounds || [],
+    bracket: snap.bracket || null,
+    matches: snap.matches || {},
+    registrants: snap.registrants || {},
+    phase: "running",
+    mode: snap.mode || "swiss",
+    pairing: snap.pairing || "",
+    topN: snap.topN || null,
+    placementDepth: snap.placementDepth || null,
+    tournamentName: snap.tournamentName || "",
+    hostUid: snap.hostUid || null,
+    createdAt: snap.createdAt || ""
+  };
+  localStorage.setItem(SWISS_KEY, JSON.stringify(state));
+  renderSwiss();
+  document.querySelector('.tournament-sub-tab[data-tournament-view="hosting"]')?.click();
+}
+
+// Leave the read-only archive view and return to the Past list.
+function exitArchiveView() {
+  swissArchiveView = false;
+  disconnectSwissRoom();
+  localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [], phase: "running", registrants: {} }));
+  renderSwiss();
+  document.querySelector('.tournament-sub-tab[data-tournament-view="past"]')?.click();
 }
 
 // Code gate for a Closed (private) lobby room — verify the host's shared code

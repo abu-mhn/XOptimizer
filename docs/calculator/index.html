@@ -354,6 +354,10 @@
           <img src="assets/icons/ranking.png" alt="" onerror="this.style.display='none'">
           <span>Ranking</span>
         </button>
+        <button type="button" class="tournament-sub-tab" data-tournament-view="past">
+          <img src="assets/icons/history1.webp" alt="" onerror="this.style.display='none'">
+          <span>Past</span>
+        </button>
       </div>
       <div id="tournament-panel-hosting" class="tournament-panel">
         <fieldset>
@@ -405,6 +409,18 @@
         <fieldset>
           <legend>Ranking</legend>
           <div id="tournament-ranking-list"></div>
+        </fieldset>
+      </div>
+      <div id="tournament-panel-past" class="tournament-panel hidden">
+        <fieldset>
+          <legend>Past Tournaments</legend>
+          <p class="swiss-rooms-hint">Finished tournaments — anyone can watch, no sign-in needed. Tap one to see every match and the final results.</p>
+          <div class="swiss-rooms-section-header"><div class="swiss-rooms-actions"><button type="button" id="past-tournaments-refresh" class="btn btn-sm">
+            <img src="assets/icons/refresh-page-option.png" alt="" onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BB;');">
+            <span>Refresh</span>
+          </button></div></div>
+          <span id="past-tournaments-status" class="swiss-join-status"></span>
+          <div id="past-tournaments-list" class="swiss-rooms-list"></div>
         </fieldset>
       </div>
     </section>

@@ -67,7 +67,12 @@ let scoreboardSaveCallback = null;
     if (roundEl) roundEl.textContent = `${ordinal(currentRound())} Round`;
   }
 
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  // iPadOS 13+ Safari/Chrome report the UA as desktop "Macintosh" (no "iPad"),
+  // so detect an iPad by its multi-touch MacIntel platform — a real Mac reports
+  // 0 touch points, so this stays false on desktop.
+  const isIPadOS = navigator.maxTouchPoints > 1 &&
+    (navigator.platform === "MacIntel" || /Macintosh/.test(navigator.userAgent));
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || isIPadOS;
 
   if (isMobile) {
     const addSwipe = (el, onChange) => {
@@ -253,26 +258,15 @@ let scoreboardSaveCallback = null;
     closeBtn?.classList.add("hidden");
   };
 
-  // Scores are entered only via the scoreboard overlay, and the overlay is
-  // only revealed by tilting the phone to landscape. No alternative input.
-  window.openScoreboard = function (nameA, nameB, onSave, initialA, initialB) {
-    if (!isMobile) {
-      alert("Scoring uses the tilt-activated scoreboard — open this page on your phone and rotate to landscape.");
-      return;
-    }
-
+  // Load names/scores + save callback onto the board, revealing it if already
+  // in landscape (otherwise the orientation handler shows it on tilt).
+  function setupScoreboard(nameA, nameB, onSave, initialA, initialB) {
     // Safety net: if called for a view-only participant, drop the match
     // context and fall back to the default standalone scoreboard (no save
-    // callback, no pre-filled names/scores). The tilt-to-open behavior for
-    // the standalone board is unchanged.
+    // callback, no pre-filled names/scores).
     if (swissEditCode && !swissCanEdit) {
-      nameA = "";
-      nameB = "";
-      onSave = null;
-      initialA = 0;
-      initialB = 0;
+      nameA = ""; nameB = ""; onSave = null; initialA = 0; initialB = 0;
     }
-
     setScoreboardLabel(labelA, nameA || "A");
     setScoreboardLabel(labelB, nameB || "B");
     scoreA = typeof initialA === "number" ? initialA : 0;
@@ -282,9 +276,27 @@ let scoreboardSaveCallback = null;
     updateDisplay();
     scoreboardSaveCallback = typeof onSave === "function" ? onSave : null;
     closeBtn?.classList.toggle("hidden", !scoreboardSaveCallback);
-    // Only reveal if already tilted; otherwise wait for the orientation handler.
     if (isLandscape()) { overlay.classList.remove("hidden"); enterFullscreen(); }
     else { overlay.classList.add("hidden"); }
+  }
+
+  // Scores are entered only via the scoreboard overlay, and the overlay is
+  // only revealed by tilting the phone to landscape. openScoreboard is the
+  // explicit (tap-to-score) entry — it alerts on desktop.
+  window.openScoreboard = function (nameA, nameB, onSave, initialA, initialB) {
+    if (!isMobile) {
+      alert("Scoring uses the tilt-activated scoreboard — open this page on your phone and rotate to landscape.");
+      return;
+    }
+    setupScoreboard(nameA, nameB, onSave, initialA, initialB);
+  };
+
+  // armScoreboard is the silent (auto) entry — used by Battle Royale to arm the
+  // board the moment a battle is accepted, so the Judge just tilts to score.
+  // No desktop alert (nothing to do on a device that can't tilt).
+  window.armScoreboard = function (nameA, nameB, onSave, initialA, initialB) {
+    if (!isMobile) return;
+    setupScoreboard(nameA, nameB, onSave, initialA, initialB);
   };
 
   if (isMobile) {

@@ -119,6 +119,8 @@ Tournament
 - Sharing opens the OS native share sheet via navigator.share when available (mobile Chrome / Edge / Brave / Safari, recent desktop Edge) — pick WhatsApp, Discord, Messages, etc. straight from the picker. Desktop browsers without the Web Share API fall back to clipboard copy (button flashes a thumbs-up) so you can paste anywhere yourself
 - Share message keeps it short — event details, the registration link, and a pointer to the in-app Tutorial button for how to join (no participant list, no step-by-step register text)
 - Past tournaments stay viewable in history after reset (cached snapshot)
+- Past Tournaments tab: a public, sign-in-free archive of finished tournaments. When a host reaches the final results the whole tournament (groups, bracket, every match, registrants) is snapshotted to a world-readable node, so anyone can tap a past tournament and watch every match + the final placements read-only — it survives even after the host resets the room. Cards show the format, player count and champion
+- A Swiss "free win" (bye from an odd group size) counts as a clean 4-0: the win plus 4 Points Scored (0 against), so it doesn't drag the player's PS / PD tiebreakers down (Round Robin byes remain a scoreless sit-out)
 - Cleaner finish view: once a tournament reaches "Tournament Complete" the running-view toolbar drops the Share, Co-hosts and Add Participant buttons — only the Close button stays, since none of those actions apply after the final is decided
 - Parts-usage pie charts at tournament end as an auto-sliding carousel (theme-aware palette)
 
@@ -161,8 +163,10 @@ Battle Royale
 - Points start at 0 and are earned ONLY by placing in tournaments — the tournament's placement points (1st = 5 down to 1) mirror into your Battle Royale balance when you finish, then you gamble them here. Points stay separate from the tournament ranking leaderboard
 - You can only challenge a player in your own tier — your tier comes from your tournament win rate AND how many battles you've played (a small record can't reach the top). The opponent must have at least 1 point to stake, and the wager is capped to the lower of the two balances
 - Developer accounts bypass the tier limit — a Developer-tagged player can challenge anyone, in any tier
-- Challenging requires picking a Judge — any user with the "Judge" tag who has opened Battle Royale. The opponent must Accept before the Judge is brought in; the Judge then declares the winner and points transfer
+- Challenging requires picking a Judge from tappable chips — every account with the "Judge" tag is listed (resolved from the public judges index, not just those who've opened Battle Royale), except your opponent. If you hold the Judge tag you can pick yourself. The opponent must Accept before the Judge steps in
+- Scoreboard scoring: once a battle is accepted, the Judge just rotates their phone to landscape and the tilt scoreboard opens with both players' names and photos — exactly like a tournament match. Higher score wins and the pot transfers automatically (a tie is rejected); no buttons to press
 - Notifications: the opponent is alerted when challenged, the Judge when the challenge is accepted, and both players when it's resolved (in-app toast + optional system notification, on any tab)
+- Either player can Cancel an accepted battle before the Judge scores it (no points move)
 - The Judge writes the point transfer — enforced by the DB rules, which only let a Judge-tagged account move another player's Battle Royale points
 - Each player in the challenge list shows their profile photo and banner; tap a name or avatar to open their profile card (hover on desktop)
 

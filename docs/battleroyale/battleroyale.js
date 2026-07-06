@@ -177,6 +177,19 @@
     selfRegistered = true;
   }
 
+  // Keep the player record's Judge flag in sync with the live tag. The first
+  // registration can run before the profile (and its Judge tag) has loaded, so
+  // the flag lands as false; this corrects it once — without it, OTHER players
+  // couldn't pick this user as a Judge. Writes only on a real mismatch.
+  function syncJudgeFlag() {
+    const uid = myUid();
+    const database = db();
+    if (!uid || !database) return;
+    const rec = playersCache[uid];
+    if (!rec || !!rec.isJudge === amJudge()) return;
+    database.ref(PLAYERS_REF + "/" + uid + "/isJudge").set(amJudge()).catch(() => {});
+  }
+
   // ---- live data ----
   function bindListeners() {
     const database = db();
@@ -189,6 +202,9 @@
     database.ref(CHALLENGES_REF).on("value", snap => {
       challengesCache = snap.val() || {};
       runNotifications();
+      // Arm the tilt scoreboard for the Judge on ANY page, so an accepted
+      // battle can be scored by simply rotating to landscape.
+      armJudgeScoreboard();
       if (brTabVisible()) { render(); renderShop(); }
     });
     // Win rates (tournament W/L/T) drive each player's tier.
@@ -199,13 +215,18 @@
   }
 
   // ---- challenge actions ----
-  function createChallenge(opponentUid, judgeUid, wager) {
+  function createChallenge(opponentUid, judgeUid, wager, judgeName) {
     const uid = myUid();
     const database = db();
     if (!uid || !database) return;
     const me = playersCache[uid], opp = playersCache[opponentUid], judge = playersCache[judgeUid];
     if (!me || !opp) { alert("That player is no longer available."); return; }
-    if (!judge || !judge.isJudge) { alert("Pick a Judge to oversee the battle."); return; }
+    // The judge came from the verified picker (a BR record's Judge flag, the
+    // live self tag, or the public judges index confirmed by the profile tag) —
+    // and may not have opened Battle Royale, so they needn't be in playersCache.
+    // The DB rules still gate the actual point transfer on the real Judge tag.
+    if (!judgeUid) { alert("Pick a Judge to oversee the battle."); return; }
+    const resolvedJudgeName = (judge && judge.username) || judgeName || "";
     // Developers can challenge anyone; everyone else is confined to their tier.
     if (!amDeveloper() && tierForPlayer(me).key !== tierForPlayer(opp).key) {
       alert(`You can only challenge a player in your own tier (${tierForPlayer(me).short}).`);
@@ -222,7 +243,7 @@
     ref.set({
       challengerUid: uid, challengerName: myName(),
       opponentUid, opponentName: opp.username || "",
-      judgeUid, judgeName: judge.username || "",
+      judgeUid, judgeName: resolvedJudgeName,
       wager: w, status: "pending",
       createdAt: new Date().toISOString()
     }).catch(e => alert("Couldn't send the challenge: " + ((e && e.message) || e)));
@@ -293,6 +314,47 @@
     database.ref(CHALLENGES_REF + "/" + cid).update({
       status: "resolved", winnerUid, resolvedAt: new Date().toISOString()
     }).catch(e => alert("Couldn't record the result: " + ((e && e.message) || e)));
+  }
+
+  // The battle whose scoreboard is currently armed for this Judge (so we don't
+  // re-arm — and reset scores — on every data change while they're scoring).
+  let brArmedCid = null;
+
+  // Auto-arm the shared tilt scoreboard for the Judge's first accepted battle,
+  // so they just rotate to landscape to score it (names + profile pics, exactly
+  // like tournament). Higher score wins; a tie is rejected (the pot needs a
+  // winner). Side A = challenger, Side B = opponent.
+  function armJudgeScoreboard() {
+    const uid = myUid();
+    const target = uid
+      ? Object.keys(challengesCache)
+          .map(cid => Object.assign({ cid }, challengesCache[cid]))
+          .find(c => c.status === "accepted" && c.judgeUid === uid)
+      : null;
+    if (!target) {
+      if (brArmedCid) {
+        brArmedCid = null;
+        if (typeof window.resetScoreboardToDefault === "function") window.resetScoreboardToDefault();
+      }
+      return;
+    }
+    if (brArmedCid === target.cid) return;          // already armed — leave scores alone
+    if (typeof window.armScoreboard !== "function") return;
+    brArmedCid = target.cid;
+    window.armScoreboard(
+      target.challengerName || "Challenger",
+      target.opponentName || "Opponent",
+      ({ scoreA, scoreB }) => {
+        brArmedCid = null;
+        if (scoreA === scoreB) {
+          alert("It's a tie — the wager needs a winner. Tilt back and score again.");
+          armJudgeScoreboard(); // re-arm the same battle for another go
+          return;
+        }
+        resolveChallenge(target.cid, scoreA > scoreB ? target.challengerUid : target.opponentUid);
+      },
+      0, 0
+    );
   }
 
   // ---- notifications (run on every page, for any signed-in user) ----
@@ -377,6 +439,7 @@
       root.innerHTML = `<p class="br-empty">Sign in (Settings → Account) to join Battle Royale.</p>`;
       return;
     }
+    syncJudgeFlag(); // heal a stale Judge flag so others can pick this user as Judge
     const me = playersCache[uid] || { points: BR_DEFAULT_POINTS, username: myName() };
     const myPoints = num(me.points);
     const myTier = tierForPlayer(me);
@@ -415,11 +478,7 @@
           <div class="br-card">
             <div class="br-card-main"><strong>${esc(c.challengerName)}</strong> vs <strong>${esc(c.opponentName)}</strong> · ${c.wager} pts</div>
             ${cardsInPlayLine(c)}
-            <div class="br-card-actions">
-              <span class="br-card-label">Winner:</span>
-              <button type="button" class="br-btn br-btn-win" data-resolve="${c.cid}" data-winner="${esc(c.challengerUid)}">${esc(c.challengerName)}</button>
-              <button type="button" class="br-btn br-btn-win" data-resolve="${c.cid}" data-winner="${esc(c.opponentUid)}">${esc(c.opponentName)}</button>
-            </div>
+            <div class="br-card-hint">📱 Rotate your phone to landscape to open the scoreboard and score this battle. The winner takes the pot.</div>
           </div>`).join("") + `</div>`;
     }
 
@@ -436,7 +495,10 @@
           <div class="br-card">
             <div class="br-card-main">vs <strong>${esc(oppName)}</strong> · ${c.wager} pts · awaiting Judge ${esc(c.judgeName)}</div>
             ${cardsInPlayLine(c)}
-            ${playBtns ? `<div class="br-card-actions">${playBtns}</div>` : ""}
+            <div class="br-card-actions">
+              ${playBtns}
+              <button type="button" class="br-btn br-btn-decline" data-cancel="${c.cid}">Cancel</button>
+            </div>
           </div>`;
         }).join("") + `</div>`;
     }
@@ -492,10 +554,6 @@
     root.querySelectorAll("[data-accept]").forEach(b => b.addEventListener("click", () => acceptChallenge(b.dataset.accept)));
     root.querySelectorAll("[data-decline]").forEach(b => b.addEventListener("click", () => declineChallenge(b.dataset.decline)));
     root.querySelectorAll("[data-cancel]").forEach(b => b.addEventListener("click", () => { if (confirm("Cancel this challenge?")) cancelChallenge(b.dataset.cancel); }));
-    root.querySelectorAll("[data-resolve]").forEach(b => b.addEventListener("click", () => {
-      const name = b.textContent.trim();
-      if (confirm(`Declare ${name} the winner? Points will transfer immediately.`)) resolveChallenge(b.dataset.resolve, b.dataset.winner);
-    }));
     root.querySelectorAll("[data-play-card]").forEach(b => b.addEventListener("click", () => {
       const card = BR_CARDS[b.dataset.playCard];
       if (card && confirm(`Play ${card.name} in this battle? It will be used up.`)) playCard(b.dataset.playCid, b.dataset.playCard);
@@ -537,6 +595,35 @@
     }));
   }
 
+  // Every account with the "Judge" tag, resolved to { uid, username } — not just
+  // those who've opened Battle Royale. Starts from the BR players cache (reliable
+  // uid + tag), then adds anyone in the public `judges` index (keyed by username)
+  // whose profile actually carries the Judge tag (the index also holds Guest
+  // Judge / Keeper, so we verify). The opponent is always excluded.
+  function fetchAllJudges(opponentUid) {
+    const database = db();
+    const meUid = myUid();
+    const out = {};
+    Object.keys(playersCache).forEach(pid => {
+      const p = playersCache[pid];
+      if (p && pid !== opponentUid && (p.isJudge || (pid === meUid && amJudge()))) {
+        out[pid] = { uid: pid, username: p.username || "" };
+      }
+    });
+    if (!database) return Promise.resolve(Object.values(out));
+    return database.ref("judges").once("value").then(snap => {
+      const idx = snap.val() || {};
+      return Promise.all(Object.keys(idx).map(key => Promise.all([
+        database.ref("usernames/" + key + "/uid").once("value").then(s => s.val()).catch(() => null),
+        database.ref("profiles/" + key + "/tags/Judge").once("value").then(s => s.val()).catch(() => null)
+      ]).then(([juid, hasJudge]) => {
+        if (juid && hasJudge === true && juid !== opponentUid && !out[juid]) {
+          out[juid] = { uid: juid, username: idx[key] || "" };
+        }
+      })));
+    }).then(() => Object.values(out)).catch(() => Object.values(out));
+  }
+
   // ---- challenge popup (pick wager + judge) ----
   function showChallengePopup(opponentUid) {
     const uid = myUid();
@@ -545,10 +632,6 @@
     document.getElementById("br-challenge-popup")?.remove();
     // Equal wager → bounded by the lower (opponent's) balance.
     const maxW = Math.min(num(me.points), num(opp.points));
-    const judges = Object.keys(playersCache)
-      .filter(pid => pid !== uid && pid !== opponentUid && playersCache[pid].isJudge)
-      .map(pid => Object.assign({ uid: pid }, playersCache[pid]))
-      .sort((a, b) => (a.username || "").localeCompare(b.username || ""));
     const overlay = document.createElement("div");
     overlay.id = "br-challenge-popup";
     overlay.className = "popup-overlay";
@@ -558,13 +641,11 @@
         <p class="popup-subtitle">Both stake the same wager. The Judge declares the winner, who takes the pot.</p>
         <label class="tournament-name-label" for="br-wager">Wager (1–${maxW})</label>
         <input type="number" id="br-wager" class="tournament-name-input" min="1" max="${maxW}" step="1" value="${Math.min(10, maxW)}">
-        <label class="tournament-name-label" for="br-judge">Judge</label>
-        ${judges.length
-          ? `<select id="br-judge" class="tournament-name-input">${judges.map(j => `<option value="${esc(j.uid)}">${esc(j.username || "(unnamed)")}</option>`).join("")}</select>`
-          : `<p class="br-empty">No Judges are available yet. A user with the "Judge" tag must open Battle Royale at least once to be selectable.</p>`}
+        <label class="tournament-name-label">Judge</label>
+        <div id="br-judge-section"></div>
         <div id="br-challenge-status" class="swiss-join-status"></div>
         <div class="popup-actions">
-          <button type="button" id="br-challenge-send" class="btn"${judges.length ? "" : " disabled"}>Send challenge</button>
+          <button type="button" id="br-challenge-send" class="btn">Send challenge</button>
           <button type="button" id="br-challenge-cancel" class="btn popup-cancel">Cancel</button>
         </div>
       </div>`;
@@ -572,11 +653,49 @@
     const close = () => overlay.remove();
     overlay.querySelector("#br-challenge-cancel").onclick = close;
     overlay.addEventListener("click", e => { if (e.target === overlay) close(); });
-    overlay.querySelector("#br-challenge-send").onclick = () => {
+
+    // Selected judge persists across repaints (the list fills in async).
+    let selectedJudge = null; // { uid, username }
+    const sendBtn = overlay.querySelector("#br-challenge-send");
+    function paintJudges(list) {
+      const section = overlay.querySelector("#br-judge-section");
+      if (!section) return;
+      list = list.slice().sort((a, b) => (a.username || "").localeCompare(b.username || ""));
+      if (!list.length) {
+        section.innerHTML = `<p class="br-empty">No Judges are available yet. Ask a user with the "Judge" tag to sign in.</p>`;
+        selectedJudge = null;
+        if (sendBtn) sendBtn.disabled = true;
+        return;
+      }
+      if (!selectedJudge || !list.some(j => j.uid === selectedJudge.uid)) selectedJudge = list[0];
+      section.innerHTML = `<div class="br-judge-picker" role="listbox" aria-label="Judge">${list.map(j => {
+        const on = j.uid === selectedJudge.uid;
+        return `<button type="button" class="br-judge-option${on ? " selected" : ""}" data-judge="${esc(j.uid)}" data-name="${esc(j.username || "")}" role="option" aria-selected="${on ? "true" : "false"}">${esc(j.username || "(unnamed)")}${j.uid === uid ? " (you)" : ""}</button>`;
+      }).join("")}</div>`;
+      if (sendBtn) sendBtn.disabled = false;
+      section.querySelectorAll(".br-judge-option").forEach(btn => {
+        btn.addEventListener("click", () => {
+          selectedJudge = { uid: btn.dataset.judge, username: btn.dataset.name || "" };
+          section.querySelectorAll(".br-judge-option").forEach(b => {
+            const sel = b === btn;
+            b.classList.toggle("selected", sel);
+            b.setAttribute("aria-selected", sel ? "true" : "false");
+          });
+        });
+      });
+    }
+
+    // Show the judges we already know instantly, then fill in the rest.
+    const known = Object.keys(playersCache)
+      .filter(pid => { const p = playersCache[pid]; return p && pid !== opponentUid && (p.isJudge || (pid === uid && amJudge())); })
+      .map(pid => ({ uid: pid, username: (playersCache[pid] || {}).username || "" }));
+    paintJudges(known);
+    fetchAllJudges(opponentUid).then(paintJudges);
+
+    sendBtn.onclick = () => {
       const w = parseInt(overlay.querySelector("#br-wager").value, 10);
-      const judgeUid = overlay.querySelector("#br-judge")?.value;
-      if (!judgeUid) return;
-      createChallenge(opponentUid, judgeUid, w);
+      if (!selectedJudge) { alert("Pick a Judge to oversee the battle."); return; }
+      createChallenge(opponentUid, selectedJudge.uid, w, selectedJudge.username);
       close();
     };
   }

@@ -1150,6 +1150,7 @@
   const DB_NODES = [
     "swissRooms",
     "openTournaments",
+    "pastTournaments",
     "users",
     "usernames",
     "profiles",
@@ -1168,6 +1169,7 @@
   const DB_COLUMN_PRESETS = {
     swissRooms:      ["tournamentName", "mode", "phase", "hostName", "hostUid", "topN", "createdAt"],
     openTournaments: ["name", "mode", "phase", "registrantCount", "groupCount", "roundCount", "hostUid", "createdAt"],
+    pastTournaments: ["tournamentName", "mode", "pairing", "topN", "hostUid", "createdAt", "archivedAt"],
     users:           ["username", "tag", "tags", "bio", "photo", "banner"],
     usernames:       ["uid", "username", "email"],
     profiles:        ["username", "bio", "tags", "photo", "banner"],

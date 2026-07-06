@@ -198,6 +198,14 @@
       }
     },
 
+    "pastTournaments": {
+      ".read": true,
+      "$code": {
+        ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || (data.exists() && data.child('hostUid').val() === auth.uid))",
+        "hostUid": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 128" }
+      }
+    },
+
     "userDecks": {
       ".read":  "auth != null && (root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')",
       "$uid": {
