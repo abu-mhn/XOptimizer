@@ -13,7 +13,16 @@
       "Bash(node \"C:/Users/admin/AppData/Local/Temp/claude/c--Users-admin-Downloads-demo/d92d721e-66ec-4e4d-a239-4d3b53bc3dc6/scratchpad/add_past_tab.js\")",
       "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('database.rules.json','utf8'\\)\\); console.log\\('rules JSON valid'\\)\")",
       "Bash(node --check docs/js/scoreboard.js)",
-      "Bash(node \"C:/Users/admin/AppData/Local/Temp/claude/c--Users-admin-Downloads-demo/d92d721e-66ec-4e4d-a239-4d3b53bc3dc6/scratchpad/cachebust.js\" 20260706)"
+      "Bash(node \"C:/Users/admin/AppData/Local/Temp/claude/c--Users-admin-Downloads-demo/d92d721e-66ec-4e4d-a239-4d3b53bc3dc6/scratchpad/cachebust.js\" 20260706)",
+      "Bash(node \"C:/Users/admin/AppData/Local/Temp/claude/c--Users-admin-Downloads-demo/d92d721e-66ec-4e4d-a239-4d3b53bc3dc6/scratchpad/nest_rooms.js\")",
+      "Bash(node \"C:/Users/admin/AppData/Local/Temp/claude/c--Users-admin-Downloads-demo/d92d721e-66ec-4e4d-a239-4d3b53bc3dc6/scratchpad/revert_rooms.js\")",
+      "Bash(perl -0777 -i -pe 's/if \\\\\\(brTabVisible\\\\\\(\\\\\\)\\\\\\) \\\\{ render\\\\\\(\\\\\\); renderShop\\\\\\(\\\\\\); \\\\}/if \\(brTabVisible\\(\\)\\) { render\\(\\); renderShop\\(\\); renderBrDeck\\(\\); }/g' docs/battleroyale/battleroyale.js)",
+      "Bash(node --check /c/Users/admin/Downloads/demo/docs/battleroyale/battleroyale.js)",
+      "Bash(node \"C:/Users/admin/AppData/Local/Temp/claude/c--Users-admin-Downloads-demo/d92d721e-66ec-4e4d-a239-4d3b53bc3dc6/scratchpad/add_deck_tab.js\")",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('/c/Users/admin/Downloads/demo/database.rules.json','utf8'\\)\\); console.log\\('rules JSON valid'\\)\")",
+      "Bash(perl -0777 -i -pe 's/brPrepPicked = \\\\{\\\\};/brPrepEquip = {}; brPrepStadium = null;/g' docs/battleroyale/battleroyale.js)",
+      "Bash(perl -0777 -i -pe 's/\\(brPrepEquip = \\\\{\\\\}; brPrepStadium = null;\\)/$1 brPrepRedrawn = false;/g' docs/battleroyale/battleroyale.js)",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('database.rules.json','utf8'\\)\\);console.log\\('valid'\\)\")"
     ]
   }
 }

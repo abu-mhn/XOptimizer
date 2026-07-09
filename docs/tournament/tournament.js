@@ -8324,6 +8324,8 @@ window.addEventListener("userprofilechange", maybeRunBattleRoyaleMonthlyRollover
   tabs.forEach(tab => {
     tab.addEventListener("click", () => {
       const view = tab.dataset.tournamentView;
+      // Leaving an open archive: move #swiss-view back to Hosting first.
+      if (typeof teardownArchiveView === "function") teardownArchiveView();
       tabs.forEach(t => t.classList.toggle("active", t === tab));
       panels.forEach(p => p.classList.toggle("hidden", p.id !== "tournament-panel-" + view));
       if (view === "ranking") renderTournamentRanking();
@@ -8952,17 +8954,38 @@ function openArchivedTournament(snap) {
     createdAt: snap.createdAt || ""
   };
   localStorage.setItem(SWISS_KEY, JSON.stringify(state));
+  // Render the archive read-only WITHIN the Past panel (move the shared
+  // #swiss-view there and hide the list) so it stays under the Past tab instead
+  // of jumping to Hosting. `renderSwiss` still targets #swiss-view by id.
+  const view = document.getElementById("swiss-view");
+  const pastPanel = document.getElementById("tournament-panel-past");
+  if (view && pastPanel) {
+    pastPanel.appendChild(view);
+    pastPanel.classList.add("past-archive-open");
+  }
   renderSwiss();
-  document.querySelector('.tournament-sub-tab[data-tournament-view="hosting"]')?.click();
 }
 
-// Leave the read-only archive view and return to the Past list.
-function exitArchiveView() {
+// Move #swiss-view back to the Hosting panel and clear the archive state.
+// Shared by the Back button and by any top-level tab switch (so Hosting isn't
+// left without its view).
+function teardownArchiveView() {
+  if (!swissArchiveView) return;
   swissArchiveView = false;
   disconnectSwissRoom();
+  const view = document.getElementById("swiss-view");
+  const hostingFieldset = document.querySelector("#tournament-panel-hosting fieldset");
+  if (view && hostingFieldset) hostingFieldset.appendChild(view);
+  document.getElementById("tournament-panel-past")?.classList.remove("past-archive-open");
   localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [], phase: "running", registrants: {} }));
   renderSwiss();
-  document.querySelector('.tournament-sub-tab[data-tournament-view="past"]')?.click();
+}
+
+// Leave the read-only archive view and go back to the Past list (stays on the
+// Past tab, which is already active).
+function exitArchiveView() {
+  teardownArchiveView();
+  refreshPastTournaments();
 }
 
 // Code gate for a Closed (private) lobby room — verify the host's shared code

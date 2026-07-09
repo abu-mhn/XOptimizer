@@ -9421,9 +9421,10 @@ button.swiss-reg-paid:hover {
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.5);
 }
 
-/* Tournament has three sub-tabs (Hosting / Ranking / Past) — keep them on one
-   row instead of wrapping the third (br-sub-tabs stays at two columns). */
-.tournament-sub-tabs {
+/* Tournament (Hosting / Ranking / Past) and Battle Royale (Battle / Deck /
+   Shop) each have three sub-tabs — keep them on one row instead of wrapping. */
+.tournament-sub-tabs,
+.br-sub-tabs {
     grid-template-columns: repeat(3, 1fr);
 }
 
@@ -10408,6 +10409,7 @@ body.bronze-mode .revox-row-btn:hover { background: rgba(198, 128, 68, 0.3); bor
 /* Tournament header + Create Tournament buttons: icon next to text. */
 #swiss-rooms-qr,
 #swiss-rooms-refresh,
+#past-tournaments-refresh,
 #swiss-rooms-tutorial,
 #register-paste,
 #register-autobuild,
@@ -10625,7 +10627,8 @@ body.forest-mode .tutorial-dot.active {
 }
 
 #swiss-rooms-qr img,
-#swiss-rooms-refresh img {
+#swiss-rooms-refresh img,
+#past-tournaments-refresh img {
     width: 14px;
     height: 14px;
     object-fit: contain;
@@ -13889,6 +13892,12 @@ body.mono-mode     .swiss-reg-format-editable { border-color: #4a4a4a; }
     border: 1px solid rgba(46, 160, 67, 0.4);
 }
 
+/* While viewing an archived tournament, hide the Past list (its fieldset) and
+   show the relocated #swiss-view (a sibling appended into the Past panel). */
+.tournament-panel.past-archive-open > fieldset {
+    display: none;
+}
+
 /* Champion line on a Past-tournament card. */
 .swiss-room-champion {
     font-weight: 600;
@@ -16116,6 +16125,187 @@ body.kingofalltypes-mode .btn-lucky img {
     gap: 8px;
 }
 .br-shop-card-owned { font-size: 0.8rem; color: #8b949e; }
+
+/* Deck tab — the player's starter ability cards. */
+.br-deck-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-top: 8px;
+}
+@media (max-width: 460px) {
+    .br-deck-list { grid-template-columns: 1fr; }
+}
+.br-deck-card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 10px 12px;
+}
+.br-deck-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.br-deck-card-name { font-size: 0.95rem; font-weight: 700; color: #f0f6fc; min-width: 0; }
+/* Card-type chip (Ability / Stadium) next to the card name. */
+.br-type-chip {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+.br-type-ability { background: rgba(137, 87, 229, 0.18); color: #d2a8ff; border: 1px solid rgba(137, 87, 229, 0.45); }
+.br-type-stadium { background: rgba(31, 111, 235, 0.18); color: #79c0ff; border: 1px solid rgba(31, 111, 235, 0.45); }
+
+/* Battle prep overlay — tilt to draw a hand + equip cards on your combos. */
+.br-battle-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    background: rgba(5, 8, 14, 0.97);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    overflow-y: auto;
+}
+.br-battle-overlay.hidden { display: none; }
+.brp-card-wrap {
+    width: 100%;
+    max-width: 760px;
+    max-height: 100%;
+    overflow-y: auto;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 16px 18px;
+}
+.brp-head { margin-bottom: 12px; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.brp-close {
+    flex: 0 0 auto;
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    border: 1px solid #30363d;
+    background: transparent;
+    color: #8b949e;
+    font-size: 1.3rem;
+    line-height: 1;
+    cursor: pointer;
+}
+.brp-close:hover { color: #f0f6fc; border-color: #484f58; }
+.brp-title { font-size: 1.1rem; font-weight: 800; color: #58a6ff; }
+.brp-sub { font-size: 0.85rem; color: #8b949e; margin-top: 2px; }
+.brp-section { margin-bottom: 14px; }
+.brp-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: #8b949e; margin-bottom: 6px; }
+.brp-combos { display: flex; flex-direction: column; gap: 6px; }
+.brp-combo { display: flex; gap: 8px; align-items: center; font-size: 0.85rem; color: #c9d1d9; }
+.brp-combo-n {
+    flex: 0 0 auto;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: #21262d;
+    color: #e6edf3;
+    font-size: 0.7rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.brp-combo-parts { min-width: 0; }
+.brp-note { font-size: 0.85rem; color: #8b949e; font-style: italic; margin: 4px 0; }
+.brp-combo-cards { display: block; margin-top: 3px; font-size: 0.78rem; color: #d2a8ff; }
+.brp-hand { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.brp-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid #30363d;
+    background: #161b22;
+    color: #f0f6fc;
+    transition: border-color 0.12s, background 0.12s;
+}
+.brp-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.brp-card-name { font-weight: 700; font-size: 0.9rem; }
+.brp-card-on { border-color: #2ea043; background: rgba(46, 160, 67, 0.14); }
+.brp-card-stadium.brp-card-on { border-color: #1f6feb; background: rgba(31, 111, 235, 0.14); }
+.brp-card-equip { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.brp-equip-label { font-size: 0.75rem; color: #8b949e; }
+.brp-combo-btn {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    border: 1px solid #30363d;
+    background: #0d1117;
+    color: #e6edf3;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+.brp-combo-btn:hover:not(:disabled) { border-color: #58a6ff; }
+.brp-combo-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.brp-combo-btn.on { border-color: #2ea043; background: rgba(46, 160, 67, 0.22); color: #fff; }
+.brp-equip-toggle {
+    align-self: flex-start;
+    padding: 5px 12px;
+    border-radius: 999px;
+    border: 1px solid #1f6feb;
+    background: transparent;
+    color: #79c0ff;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.brp-card-stadium.brp-card-on .brp-equip-toggle { background: rgba(31, 111, 235, 0.2); color: #fff; }
+.brp-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.br-deck-stepper { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.br-deck-step {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    border: 1px solid #30363d;
+    background: #0d1117;
+    color: #e6edf3;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.br-deck-step:hover:not(:disabled) { border-color: #58a6ff; }
+.br-deck-step:disabled { opacity: 0.4; cursor: not-allowed; }
+.br-deck-card-count { min-width: 1.2em; text-align: center; font-size: 0.95rem; font-weight: 700; color: #d2a8ff; }
+.br-deck-card-desc { margin: 6px 0 0; font-size: 0.82rem; color: #c9d1d9; line-height: 1.4; }
+.br-deck-full {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    background: rgba(210, 153, 34, 0.18);
+    color: #d29922;
+    border: 1px solid rgba(210, 153, 34, 0.4);
+    vertical-align: middle;
+}
+
+body.light-mode .br-deck-card,
+body.tropical-mode .br-deck-card,
+body.love-mode .br-deck-card,
+body.forest-mode .br-deck-card {
+    background: #ffffff;
+    border-color: #d1d9e0;
+}
 
 body.light-mode .br-card,
 body.tropical-mode .br-card,

@@ -360,7 +360,7 @@
           "createdAt":      { ".validate": "newData.isString() && newData.val().length <= 32" },
           "resolvedAt":     { ".validate": "newData.isString() && newData.val().length <= 32" },
           "cards": {
-            "$puid": { "$cardId": { ".validate": "newData.isBoolean()" } }
+            "$puid": { "$cardId": { ".validate": "newData.isBoolean() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 3)" } }
           },
           "$other":         { ".validate": false }
         }

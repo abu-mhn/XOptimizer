@@ -130,7 +130,10 @@
   // Active challenges this player can't be double-booked into.
   function isActive(c) { return c && (c.status === "pending" || c.status === "accepted"); }
 
-  // ---- Shop: ability cards bought with Battle Royale points (BP) ----
+  // ---- Ability cards ----
+  // Shop cards are bought with Battle Royale points (BP). Starter cards are
+  // granted free to every player (see STARTER_DECK / registerSelf) and shown in
+  // the Deck tab. The Judge applies a card's effect when it's played in a battle.
   const BR_CARDS = {
     attackRulez: {
       id: "attackRulez",
@@ -138,7 +141,22 @@
       price: 50,
       desc: "Your Attack-type combo auto-wins 1 point against a Stamina-type opponent. Can only be used once per battle.",
     },
+    jankenpon:   { id: "jankenpon",   name: "Jankenpon",    starter: true, type: "ability", desc: "Settle a tied battle with rock-paper-scissors (Jankenpon)." },
+    attackRule:  { id: "attackRule",  name: "Attack Rule",  starter: true, type: "ability", desc: "Play before a battle — favours Attack-type combos this match." },
+    staminaRule: { id: "staminaRule", name: "Stamina Rule", starter: true, type: "ability", desc: "Play before a battle — favours Stamina-type combos this match." },
+    defenseRule: { id: "defenseRule", name: "Defense Rule", starter: true, type: "ability", desc: "Play before a battle — favours Defense-type combos this match." },
+    balanceRule: { id: "balanceRule", name: "Balance Rule", starter: true, type: "ability", desc: "Play before a battle — favours Balance-type combos this match." },
+    negate:      { id: "negate",      name: "Negate",       starter: true, type: "ability", desc: "Cancel the opponent's played card." },
+    exchange:    { id: "exchange",    name: "Exchange",     starter: true, type: "ability", desc: "Swap one of your cards with the opponent's." },
+    revival:     { id: "revival",     name: "Revival",      starter: true, type: "ability", desc: "Return a used card to your deck." },
+    stage:       { id: "stage",       name: "Stage",        starter: true, type: "stadium", desc: "Set the stage for this battle." },
+    colosseum:   { id: "colosseum",   name: "Colosseum",    starter: true, type: "stadium", desc: "Set the colosseum for this battle." },
   };
+
+  // Every player starts with one of each of these (in listed order).
+  const STARTER_DECK = ["jankenpon", "attackRule", "staminaRule", "defenseRule", "balanceRule", "negate", "exchange", "revival", "stage", "colosseum"];
+  // A deck holds at most this many cards in total (across all card types).
+  const DECK_MAX = 10;
   function ownedCount(uid, cardId) {
     const p = playersCache[uid];
     return num(p && p.cards && p.cards[cardId]);
@@ -151,7 +169,11 @@
       const puid = c[uidKey];
       const played = (puid && cardsObj[puid]) || {};
       Object.keys(played).forEach(cardId => {
-        if (played[cardId] && BR_CARDS[cardId]) parts.push(`${esc(c[nameKey] || "Player")}: ${esc(BR_CARDS[cardId].name)}`);
+        const val = played[cardId], card = BR_CARDS[cardId];
+        if (!val || !card) return;
+        // Ability cards store the combo index (1..3); a stadium stores `true`.
+        const where = card.type === "stadium" ? " (Stadium)" : (typeof val === "number" && val >= 1 ? ` (Combo ${val})` : "");
+        parts.push(`${esc(c[nameKey] || "Player")}: ${esc(card.name)}${where}`);
       });
     });
     return parts.length ? `<div class="br-card-cards">🃏 ${parts.join(" · ")}</div>` : "";
@@ -163,15 +185,25 @@
     const database = db();
     if (!uid || !database) return;
     const ref = database.ref(PLAYERS_REF + "/" + uid);
+    // Starter deck: one of each starter card.
+    const starterCards = STARTER_DECK.reduce((o, id) => { o[id] = 1; return o; }, {});
     ref.once("value").then(snap => {
       const cur = snap.val();
       if (!cur) {
-        ref.set({ username: myName(), points: BR_DEFAULT_POINTS, isJudge: amJudge(), updatedAt: new Date().toISOString() })
+        ref.set({ username: myName(), points: BR_DEFAULT_POINTS, isJudge: amJudge(), cards: starterCards, updatedAt: new Date().toISOString() })
           .catch(e => console.warn("BR register failed:", e));
       } else {
         // Keep username / judge status fresh; never self-edit points.
         ref.update({ username: myName(), isJudge: amJudge(), updatedAt: new Date().toISOString() })
           .catch(() => {});
+        // Grant the starter deck once to existing players who don't have it yet
+        // (detected by none of the starter cards being present on the record).
+        const hasStarter = cur.cards && STARTER_DECK.some(id => cur.cards[id] != null);
+        if (!hasStarter) {
+          const updates = {};
+          STARTER_DECK.forEach(id => { updates["cards/" + id] = 1; });
+          ref.update(updates).catch(() => {});
+        }
       }
     }).catch(() => {});
     selfRegistered = true;
@@ -195,22 +227,26 @@
     const database = db();
     if (!database || listenersBound) return;
     listenersBound = true;
+    bindBrOrientation();
     database.ref(PLAYERS_REF).on("value", snap => {
       playersCache = snap.val() || {};
-      if (brTabVisible()) { render(); renderShop(); }
+      if (brTabVisible()) { render(); renderShop(); renderBrDeck(); }
     });
     database.ref(CHALLENGES_REF).on("value", snap => {
       challengesCache = snap.val() || {};
       runNotifications();
-      // Arm the tilt scoreboard for the Judge on ANY page, so an accepted
-      // battle can be scored by simply rotating to landscape.
+      // Players prep their loadout by tilting; the Judge scores an accepted
+      // battle by tilting. Refresh both on any page so a rotate does the right
+      // thing (and the prep overlay closes once you've equipped). Tilt auto-open
+      // is mobile-only — desktop uses the on-screen "Draw cards" button.
+      if (brIsMobile) handleBrPrepOrientation();
       armJudgeScoreboard();
-      if (brTabVisible()) { render(); renderShop(); }
+      if (brTabVisible()) { render(); renderShop(); renderBrDeck(); }
     });
     // Win rates (tournament W/L/T) drive each player's tier.
     database.ref(WINRATES_REF).on("value", snap => {
       winRatesCache = snap.val() || {};
-      if (brTabVisible()) { render(); renderShop(); }
+      if (brTabVisible()) { render(); renderShop(); renderBrDeck(); }
     });
   }
 
@@ -325,6 +361,12 @@
   // like tournament). Higher score wins; a tie is rejected (the pot needs a
   // winner). Side A = challenger, Side B = opponent.
   function armJudgeScoreboard() {
+    // If I still owe a loadout on a battle I'm playing in (e.g. a self-judge),
+    // let me equip via the prep overlay first — don't arm the scoreboard yet.
+    if (brPrepPending()) {
+      if (brArmedCid) { brArmedCid = null; if (typeof window.resetScoreboardToDefault === "function") window.resetScoreboardToDefault(); }
+      return;
+    }
     const uid = myUid();
     const target = uid
       ? Object.keys(challengesCache)
@@ -486,17 +528,14 @@
       html += `<div class="br-section"><h3 class="br-h">Your active battles (${myActive.length})</h3>` +
         myActive.map(c => {
           const oppName = c.challengerUid === uid ? c.opponentName : c.challengerName;
-          const myPlayed = (c.cards && c.cards[uid]) || {};
-          const playBtns = Object.values(BR_CARDS)
-            .filter(card => ownedCount(uid, card.id) > 0 && !myPlayed[card.id])
-            .map(card => `<button type="button" class="br-btn br-btn-play" data-play-cid="${c.cid}" data-play-card="${esc(card.id)}">Play ${esc(card.name)}</button>`)
-            .join("");
+          const unequipped = iAmUnequipped(c);
           return `
           <div class="br-card">
             <div class="br-card-main">vs <strong>${esc(oppName)}</strong> · ${c.wager} pts · awaiting Judge ${esc(c.judgeName)}</div>
             ${cardsInPlayLine(c)}
+            ${unequipped ? `<div class="br-card-hint">📱 Rotate your phone to landscape (or tap Draw cards) to draw your hand and equip cards for this battle.</div>` : ""}
             <div class="br-card-actions">
-              ${playBtns}
+              ${unequipped ? `<button type="button" class="br-btn br-btn-score" data-prep="${c.cid}">Draw cards</button>` : ""}
               <button type="button" class="br-btn br-btn-decline" data-cancel="${c.cid}">Cancel</button>
             </div>
           </div>`;
@@ -517,13 +556,19 @@
 
     if (outgoing.length) {
       html += `<div class="br-section"><h3 class="br-h">Your challenges</h3>` +
-        outgoing.map(c => `
+        outgoing.map(c => {
+          const unequipped = iAmUnequipped(c);
+          return `
           <div class="br-card">
             <div class="br-card-main">vs <strong>${esc(c.opponentName)}</strong> · ${c.wager} pts · ${c.status === "accepted" ? "accepted — awaiting Judge" : "waiting for opponent"}</div>
+            ${cardsInPlayLine(c)}
+            ${unequipped ? `<div class="br-card-hint">📱 Rotate to landscape (or tap Draw cards) to set your loadout.</div>` : ""}
             <div class="br-card-actions">
+              ${unequipped ? `<button type="button" class="br-btn br-btn-score" data-prep="${c.cid}">Draw cards</button>` : ""}
               ${c.status === "pending" ? `<button type="button" class="br-btn br-btn-decline" data-cancel="${c.cid}">Cancel</button>` : `<span class="br-card-label">Judge: ${esc(c.judgeName)}</span>`}
             </div>
-          </div>`).join("") + `</div>`;
+          </div>`;
+        }).join("") + `</div>`;
     }
 
     const anyTierScope = amDeveloper();
@@ -554,10 +599,7 @@
     root.querySelectorAll("[data-accept]").forEach(b => b.addEventListener("click", () => acceptChallenge(b.dataset.accept)));
     root.querySelectorAll("[data-decline]").forEach(b => b.addEventListener("click", () => declineChallenge(b.dataset.decline)));
     root.querySelectorAll("[data-cancel]").forEach(b => b.addEventListener("click", () => { if (confirm("Cancel this challenge?")) cancelChallenge(b.dataset.cancel); }));
-    root.querySelectorAll("[data-play-card]").forEach(b => b.addEventListener("click", () => {
-      const card = BR_CARDS[b.dataset.playCard];
-      if (card && confirm(`Play ${card.name} in this battle? It will be used up.`)) playCard(b.dataset.playCid, b.dataset.playCard);
-    }));
+    root.querySelectorAll("[data-prep]").forEach(b => b.addEventListener("click", () => openBattlePrep(b.dataset.prep)));
   }
 
   // ---- Shop tab ----
@@ -572,6 +614,7 @@
     html += `<p class="br-hint">Spend Battle Royale points (BP) on ability cards. Play a card during one of your active battles — the Judge applies its effect.</p>`;
     html += `<div class="br-shop-list">`;
     Object.values(BR_CARDS).forEach(card => {
+      if (card.starter || card.price == null) return; // starter cards live in the Deck tab
       const owned = ownedCount(uid, card.id);
       const afford = myPoints >= card.price;
       html += `
@@ -593,6 +636,61 @@
       const card = BR_CARDS[b.dataset.buy];
       if (card && confirm(`Buy ${card.name} for ${card.price} BP?`)) buyCard(b.dataset.buy);
     }));
+  }
+
+  // Total cards currently in the player's deck (sum across the card types).
+  function deckTotal(cards) {
+    return STARTER_DECK.reduce((s, id) => s + num(cards && cards[id]), 0);
+  }
+
+  // Add / remove one copy of a card, keeping the deck total within DECK_MAX.
+  function adjustDeckCard(cardId, delta) {
+    const uid = myUid();
+    const database = db();
+    if (!uid || !database || !BR_CARDS[cardId]) return;
+    const cards = (playersCache[uid] || {}).cards || {};
+    const cur = num(cards[cardId]);
+    if (delta > 0 && deckTotal(cards) >= DECK_MAX) return; // deck full
+    const next = Math.max(0, cur + delta);
+    if (next === cur) return;
+    database.ref(PLAYERS_REF + "/" + uid + "/cards/" + cardId).set(next).catch(() => {});
+  }
+
+  // ---- Deck tab: build your deck of ability cards (max DECK_MAX) ----
+  function renderBrDeck() {
+    const panel = document.getElementById("br-panel-deck");
+    if (!panel) return;
+    const uid = myUid();
+    if (!uid) { panel.innerHTML = `<p class="br-empty">Sign in (Settings → Account) to build your deck.</p>`; return; }
+    const cards = (playersCache[uid] || {}).cards || {};
+    const total = deckTotal(cards);
+    const full = total >= DECK_MAX;
+    // One card row: name + a type chip (Ability / Stadium), a stepper, and desc.
+    const cardRow = (id) => {
+      const card = BR_CARDS[id];
+      if (!card) return "";
+      const n = num(cards[id]);
+      const type = card.type === "stadium" ? "stadium" : "ability";
+      const typeLabel = type === "stadium" ? "Stadium" : "Ability";
+      return `
+        <div class="br-deck-card">
+          <div class="br-deck-card-head">
+            <span class="br-deck-card-name">${esc(card.name)} <span class="br-type-chip br-type-${type}">${typeLabel}</span></span>
+            <span class="br-deck-stepper">
+              <button type="button" class="br-deck-step" data-deck-dec="${esc(id)}" aria-label="Remove one ${esc(card.name)}"${n ? "" : " disabled"}>&minus;</button>
+              <span class="br-deck-card-count">${n}</span>
+              <button type="button" class="br-deck-step" data-deck-inc="${esc(id)}" aria-label="Add one ${esc(card.name)}"${full ? " disabled" : ""}>+</button>
+            </span>
+          </div>
+          ${card.desc ? `<p class="br-deck-card-desc">${esc(card.desc)}</p>` : ""}
+        </div>`;
+    };
+    let html = `<div class="br-points">Your deck: <strong>${total} / ${DECK_MAX}</strong> cards${full ? ` <span class="br-deck-full">Full</span>` : ""}</div>`;
+    html += `<p class="br-hint">Adjust how many of each card you bring (up to ${DECK_MAX} total). Play a card during one of your active battles — the Judge applies its effect.</p>`;
+    html += `<div class="br-deck-list">${STARTER_DECK.map(cardRow).join("")}</div>`;
+    panel.innerHTML = html;
+    panel.querySelectorAll("[data-deck-inc]").forEach(b => b.addEventListener("click", () => adjustDeckCard(b.dataset.deckInc, 1)));
+    panel.querySelectorAll("[data-deck-dec]").forEach(b => b.addEventListener("click", () => adjustDeckCard(b.dataset.deckDec, -1)));
   }
 
   // Every account with the "Judge" tag, resolved to { uid, username } — not just
@@ -700,12 +798,237 @@
     };
   }
 
+  // ========================= Battle prep (tilt to draw + equip) =========================
+  // When you're in an active battle (as challenger once created, or opponent
+  // once you've accepted) and haven't set your loadout, tilt to landscape: draw
+  // 5 cards from your deck, then equip 3–4 ability cards (a shared pool) plus up
+  // to one Stadium card (which applies to both sides). Your starred Beyblade
+  // combo deck auto-fills for reference. Equipped cards are saved on the
+  // challenge so the opponent and the Judge can see them.
+  const BR_HAND_SIZE = 5;
+  const BR_EQUIP_MIN_ABILITY = 3, BR_EQUIP_MAX_ABILITY = 4, BR_EQUIP_MAX_STADIUM = 1;
+
+  // Mobile / landscape detection (mirrors scoreboard.js, incl. the iPadOS case).
+  const brIsIPadOS = navigator.maxTouchPoints > 1 && (navigator.platform === "MacIntel" || /Macintosh/.test(navigator.userAgent));
+  const brIsMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || brIsIPadOS;
+  function brIsLandscape() {
+    return (screen.orientation && screen.orientation.type) ? screen.orientation.type.indexOf("landscape") === 0 : window.innerWidth > window.innerHeight;
+  }
+
+  // Weighted random draw of `size` cards from a deck (cards map).
+  function drawHand(cardsMap, size) {
+    const pool = [];
+    STARTER_DECK.forEach(id => { const n = num(cardsMap && cardsMap[id]); for (let i = 0; i < n; i++) pool.push(id); });
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = pool[i]; pool[i] = pool[j]; pool[j] = t; }
+    return pool.slice(0, size || BR_HAND_SIZE);
+  }
+
+  // My battle that still needs my equipped cards: I'm the challenger of a
+  // pending/accepted battle, or the opponent of one I've already accepted.
+  function myBattleNeedingEquip() {
+    const uid = myUid();
+    if (!uid) return null;
+    return Object.keys(challengesCache)
+      .map(cid => Object.assign({ cid }, challengesCache[cid]))
+      .find(c => (
+        (c.challengerUid === uid && (c.status === "pending" || c.status === "accepted")) ||
+        (c.opponentUid === uid && c.status === "accepted")
+      ) && !(c.cards && c.cards[uid] && Object.keys(c.cards[uid]).some(k => c.cards[uid][k])));
+  }
+  function brPrepPending() { return !!myBattleNeedingEquip(); }
+
+  let brPrepCid = null, brPrepHand = [];
+  let brPrepEquip = {};      // cardId -> combo index (1..3) for equipped ability cards
+  let brPrepStadium = null;  // chosen stadium cardId (applies to both sides)
+  let brPrepRedrawn = false; // Redraw is allowed once, and only before any card is selected
+
+  function ensureBattleOverlay() {
+    let overlay = document.getElementById("br-battle-overlay");
+    if (overlay) return overlay;
+    overlay = document.createElement("div");
+    overlay.id = "br-battle-overlay";
+    overlay.className = "br-battle-overlay hidden";
+    document.body.appendChild(overlay);
+    return overlay;
+  }
+  function abilityCount() { return Object.keys(brPrepEquip).length; }
+  // Combo numbers (1-based) that hold a Beyblade in the starred deck.
+  function brFilledCombos() {
+    const beyDeck = (window.getDefaultRegistrationDeck && window.getDefaultRegistrationDeck()) || null;
+    const out = [];
+    if (beyDeck) beyDeck.forEach((slot, i) => { if (slot && slot.parts && Object.values(slot.parts).some(Boolean)) out.push(i + 1); });
+    return out;
+  }
+
+  // Assign / unassign an ability card onto a Beyblade combo (1..3). One ability
+  // per combo — assigning to an occupied combo replaces whatever was there.
+  function assignCombo(cardId, combo) {
+    if ((BR_CARDS[cardId] || {}).type === "stadium") return;
+    if (brPrepEquip[cardId] === combo) { delete brPrepEquip[cardId]; renderBattlePrep(); return; }
+    Object.keys(brPrepEquip).forEach(id => { if (brPrepEquip[id] === combo) delete brPrepEquip[id]; });
+    brPrepEquip[cardId] = combo;
+    renderBattlePrep();
+  }
+  // The shared Stadium (one at most; applies to both sides).
+  function toggleStadium(cardId) {
+    brPrepStadium = (brPrepStadium === cardId) ? null : cardId;
+    renderBattlePrep();
+  }
+
+  function equipBattleCards() {
+    const uid = myUid();
+    const database = db();
+    if (!uid || !database || !brPrepCid) return;
+    const filled = brFilledCombos();
+    if (!filled.length) { alert("Star a deck with Beyblade combos first (Deck tab)."); return; }
+    if (abilityCount() < 1) { alert("Equip at least one ability card on a combo."); return; }
+    const updates = {};
+    Object.keys(brPrepEquip).forEach(id => { updates[id] = brPrepEquip[id]; }); // ability -> combo index (1..3)
+    if (brPrepStadium) updates[brPrepStadium] = true;                            // stadium -> true
+    database.ref(`${CHALLENGES_REF}/${brPrepCid}/cards/${uid}`).update(updates)
+      .then(() => { document.getElementById("br-battle-overlay")?.classList.add("hidden"); })
+      .catch(e => alert("Couldn't equip cards: " + ((e && e.message) || e)));
+  }
+
+  function renderBattlePrep() {
+    const overlay = ensureBattleOverlay();
+    const uid = myUid();
+    const c = challengesCache[brPrepCid];
+    if (!uid || !c) { overlay.classList.add("hidden"); return; }
+    const oppName = c.challengerUid === uid ? (c.opponentName || "Opponent") : (c.challengerName || "Challenger");
+    const beyDeck = (window.getDefaultRegistrationDeck && window.getDefaultRegistrationDeck()) || null;
+    const comboParts = (i) => {
+      const slot = beyDeck && beyDeck[i];
+      return (slot && slot.parts) ? Object.values(slot.parts).filter(Boolean) : [];
+    };
+    const comboCount = beyDeck ? beyDeck.length : 0;
+    // Beyblade deck — each combo lists the ability cards equipped on it.
+    const combosHtml = beyDeck
+      ? `<div class="brp-combos">` + beyDeck.map((slot, i) => {
+          const parts = comboParts(i);
+          const equipped = Object.keys(brPrepEquip).filter(id => brPrepEquip[id] === i + 1).map(id => esc(BR_CARDS[id].name));
+          return `<div class="brp-combo">
+            <span class="brp-combo-n">${i + 1}</span>
+            <span class="brp-combo-parts">${parts.length ? esc(parts.join(" · ")) : "—"}${equipped.length ? `<span class="brp-combo-cards">🃏 ${equipped.join(", ")}</span>` : ""}</span>
+          </div>`;
+        }).join("") + `</div>`
+      : `<p class="brp-note">Star a deck in the Deck tab first — ability cards equip onto your Beyblade combos.</p>`;
+    // Hand: ability cards get combo buttons (1..N); stadium cards get a toggle.
+    const handHtml = brPrepHand.map(id => {
+      const card = BR_CARDS[id]; if (!card) return "";
+      if (card.type === "stadium") {
+        const on = brPrepStadium === id;
+        return `<div class="brp-card brp-card-stadium${on ? " brp-card-on" : ""}">
+          <div class="brp-card-top"><span class="brp-card-name">${esc(card.name)}</span><span class="br-type-chip br-type-stadium">Stadium</span></div>
+          <button type="button" class="brp-equip-toggle" data-stadium="${esc(id)}">${on ? "Equipped ✓" : "Set stadium"}</button>
+        </div>`;
+      }
+      const assigned = brPrepEquip[id];
+      const comboBtns = Array.from({ length: comboCount }, (_, k) => {
+        const combo = k + 1;
+        const filled = comboParts(k).length > 0;
+        return `<button type="button" class="brp-combo-btn${assigned === combo ? " on" : ""}" data-assign="${esc(id)}" data-combo="${combo}"${filled ? "" : " disabled"}>${combo}</button>`;
+      }).join("");
+      return `<div class="brp-card brp-card-ability${assigned ? " brp-card-on" : ""}">
+        <div class="brp-card-top"><span class="brp-card-name">${esc(card.name)}</span><span class="br-type-chip br-type-ability">Ability</span></div>
+        <div class="brp-card-equip"><span class="brp-equip-label">Equip on combo:</span>${comboBtns || `<span class="brp-note">star a deck</span>`}</div>
+      </div>`;
+    }).join("");
+    const filled = brFilledCombos();
+    const ab = abilityCount(), st = brPrepStadium ? 1 : 0;
+    // Combos may be left empty — just require at least one ability equipped.
+    const canEquip = ab >= 1;
+    // Redraw: allowed once, and only before you've selected any card.
+    const hasSelection = ab > 0 || !!brPrepStadium;
+    const canRedraw = !brPrepRedrawn && !hasSelection;
+    overlay.innerHTML = `
+      <div class="brp-card-wrap">
+        <div class="brp-head">
+          <div>
+            <div class="brp-title">Battle prep — vs ${esc(oppName)}</div>
+            <div class="brp-sub">${c.wager} pts · Judge ${esc(c.judgeName || "")}</div>
+          </div>
+          <button type="button" id="brp-close" class="brp-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="brp-section"><div class="brp-label">Your Beyblade deck — one ability card per combo</div>${combosHtml}</div>
+        <div class="brp-section">
+          <div class="brp-label">Your hand (${ab}/${filled.length || comboCount} ability · ${st}/${BR_EQUIP_MAX_STADIUM} stadium)</div>
+          <div class="brp-hand">${handHtml || `<p class="brp-note">Your deck is empty — add cards in the Deck tab.</p>`}</div>
+        </div>
+        <div class="brp-actions">
+          <button type="button" id="brp-redraw" class="btn br-btn-decline"${canRedraw ? "" : " disabled"} title="${canRedraw ? "Redraw once — you'll get one fewer card" : (brPrepRedrawn ? "You've already redrawn" : "Can't redraw after selecting a card")}">Redraw</button>
+          <button type="button" id="brp-equip" class="btn"${canEquip ? "" : " disabled"}>Equip &amp; Ready</button>
+        </div>
+      </div>`;
+    overlay.querySelectorAll("[data-assign]").forEach(b => b.addEventListener("click", () => assignCombo(b.dataset.assign, Number(b.dataset.combo))));
+    overlay.querySelectorAll("[data-stadium]").forEach(b => b.addEventListener("click", () => toggleStadium(b.dataset.stadium)));
+    overlay.querySelector("#brp-equip")?.addEventListener("click", equipBattleCards);
+    overlay.querySelector("#brp-close")?.addEventListener("click", () => overlay.classList.add("hidden"));
+    overlay.querySelector("#brp-redraw")?.addEventListener("click", () => {
+      if (brPrepRedrawn) return;
+      if (hasSelection) { alert("You can't redraw after selecting a card."); return; }
+      // Redraw is a one-time reroll for one fewer card.
+      brPrepHand = drawHand((playersCache[uid] || {}).cards || {}, BR_HAND_SIZE - 1);
+      brPrepRedrawn = true;
+      renderBattlePrep();
+    });
+  }
+
+  // Open the prep overlay for a specific battle (used by the on-screen button;
+  // on mobile the tilt handler does the same). Draws a fresh hand only when
+  // switching to a different battle.
+  function openBattlePrep(cid) {
+    const c = challengesCache[cid];
+    if (!c) return;
+    if (brPrepCid !== cid) {
+      brPrepCid = cid;
+      brPrepHand = drawHand((playersCache[myUid()] || {}).cards || {});
+      brPrepEquip = {}; brPrepStadium = null; brPrepRedrawn = false;
+    }
+    renderBattlePrep();
+    ensureBattleOverlay().classList.remove("hidden");
+  }
+
+  // True when I'm a player in this battle and haven't set my loadout yet.
+  function iAmUnequipped(c) {
+    const uid = myUid();
+    return !!(uid && (c.challengerUid === uid || c.opponentUid === uid)
+      && !(c.cards && c.cards[uid] && Object.keys(c.cards[uid]).some(k => c.cards[uid][k])));
+  }
+
+  // Show the prep overlay when a battle needs a loadout and the phone is tilted
+  // to landscape; hide it otherwise. Draws a fresh hand only on a new battle.
+  function handleBrPrepOrientation() {
+    const overlay = document.getElementById("br-battle-overlay");
+    const target = myBattleNeedingEquip();
+    if (brIsLandscape() && target) {
+      if (brPrepCid !== target.cid) {
+        brPrepCid = target.cid;
+        brPrepHand = drawHand((playersCache[myUid()] || {}).cards || {});
+        brPrepEquip = {}; brPrepStadium = null; brPrepRedrawn = false;
+      }
+      renderBattlePrep();
+      ensureBattleOverlay().classList.remove("hidden");
+    } else if (overlay) {
+      overlay.classList.add("hidden");
+    }
+  }
+
+  let brOrientationBound = false;
+  function bindBrOrientation() {
+    if (brOrientationBound || !brIsMobile) return;
+    brOrientationBound = true;
+    if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener("change", handleBrPrepOrientation);
+    else window.addEventListener("orientationchange", handleBrPrepOrientation);
+  }
+
   // ---- entry point (called by core.js when the tab is active) ----
   window.renderBattleRoyale = function renderBattleRoyale() {
     if (!selfRegistered) registerSelf();
     bindListeners();
     render();
     renderShop();
+    renderBrDeck();
   };
 
   // ---- Battle / Shop sub-tabs ----
