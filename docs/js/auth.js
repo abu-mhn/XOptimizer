@@ -563,6 +563,27 @@
       currentProfile.tags.indexOf(name) >= 0);
   }
 
+  // Badge class for a tag name, colouring it by family (Revox tags in the
+  // Revox colour, Developer black-and-blue, medals in gold/silver/bronze).
+  // Lives here rather than in settings.js because settings.js only loads on
+  // the Account and Settings pages, while the profile card in the sidebar
+  // renders on every page and needs the same colours.
+  window.profileTagBadgeClass = function profileTagBadgeClass(tag) {
+    const lower = String(tag || "").toLowerCase();
+    if (lower.indexOf("revox") >= 0) {
+      return " account-tag-revox" + (lower === "revox admin" ? " account-tag-revox-admin" : "");
+    }
+    if (lower === "developer") return " account-tag-developer";
+    if (lower === "tester") return " account-tag-tester";
+    if (lower === "guest judge") return " account-tag-guest-judge";
+    if (lower === "keeper") return " account-tag-keeper";
+    if (lower === "judge") return " account-tag-judge";
+    if (lower === "gold player") return " account-tag-gold";
+    if (lower === "silver player") return " account-tag-silver";
+    if (lower === "bronze player") return " account-tag-bronze";
+    return "";
+  };
+
   // Exposed so other scripts (e.g. the Revox ranking) can gate writes on the
   // "Revox Admin" tag instead of a separate password login.
   window.isRevoxAdmin = function isRevoxAdmin() { return hasTag("Revox Admin"); };
@@ -685,6 +706,124 @@
     document.querySelectorAll('.tab[data-mode="friends"]').forEach(tab => {
       tab.classList.toggle("hidden", !show && !tab.classList.contains("active"));
     });
+  }
+
+  // ===== Sidebar profile card =====
+  // The summary card parked in the empty gutter left of the page column on
+  // wide desktop. Read-only by design — editing still happens on the Account
+  // page. CSS keeps it out of the layout entirely below its breakpoint, so
+  // narrow screens never pay for it.
+  const SIDE_BANNER_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 110'%3E%3Crect width='400' height='110' fill='%2321262d'/%3E%3C/svg%3E";
+
+  // Mirrors loadAccountWinRate in settings.js: /winRates/{usernameKey} keyed
+  // by sanitised lowercase username, hidden entirely when there's no record.
+  function paintSideProfileWinRate(username) {
+    const el = document.getElementById("side-profile-winrate");
+    if (!el) return;
+    el.textContent = "";
+    el.classList.add("hidden");
+    if (!username) return;
+    const fb = (typeof firebase !== "undefined" && firebase.database) ? firebase.database() : null;
+    if (!fb) return;
+    const key = String(username).trim().toLowerCase().replace(/[.#$/\[\]]/g, "_");
+    if (!key) return;
+    fb.ref("winRates/" + key).once("value").then(snap => {
+      const v = snap.val();
+      const wins = (v && v.wins) || 0;
+      const losses = (v && v.losses) || 0;
+      const ties = (v && v.ties) || 0;
+      const total = wins + losses + ties;
+      if (total === 0) return;                    // never scored → stay hidden
+      const pct = Math.round((wins / total) * 100);
+      const tieBit = ties > 0 ? ` · ${ties}T` : "";
+      el.textContent = `Win rate ${pct}% — ${wins}W / ${losses}L${tieBit}`;
+      el.classList.remove("hidden");
+    }).catch(() => { /* read failed → stay hidden */ });
+  }
+
+  function paintSideProfile() {
+    const card = document.getElementById("side-profile");
+    if (!card) return;
+    // Only trust the cached profile while actually signed in, matching
+    // paintAccountTabAvatar — a stale profile must not survive a sign-out.
+    const signedIn = !!(window.getCurrentUser() && currentProfile);
+    const p = signedIn ? currentProfile : null;
+
+    card.classList.toggle("side-profile-guest", !signedIn);
+    const identity = document.getElementById("side-profile-identity");
+    const guest = document.getElementById("side-profile-signedout");
+    if (identity) identity.classList.toggle("hidden", !signedIn);
+    if (guest) guest.classList.toggle("hidden", signedIn);
+
+    const photo = document.getElementById("side-profile-photo");
+    if (photo) {
+      photo.src = (p && p.photo) || ACCOUNT_TAB_PLACEHOLDER;
+      photo.style.objectPosition = (p && p.photoPos) || "50% 50%";
+    }
+    const banner = document.getElementById("side-profile-banner");
+    if (banner) {
+      banner.src = (p && p.banner) || SIDE_BANNER_PLACEHOLDER;
+      banner.style.objectPosition = (p && p.bannerPos) || "50% 50%";
+    }
+
+    const name = document.getElementById("side-profile-name");
+    if (name) name.textContent = (p && p.username) || "";
+
+    const bio = document.getElementById("side-profile-bio");
+    if (bio) {
+      const text = (p && p.bio) || "";
+      bio.textContent = text;
+      bio.classList.toggle("hidden", !text);
+    }
+
+    const tagsEl = document.getElementById("side-profile-tags");
+    if (tagsEl) {
+      const tags = ((p && p.tags) || []).slice();
+      // Lead with the live medal tag when this account is in the ranking's
+      // top 3, same order the Account page uses.
+      const medal = (typeof window.medalTagForName === "function")
+        ? window.medalTagForName((p && p.username) || "")
+        : "";
+      const all = medal ? [medal].concat(tags) : tags;
+      tagsEl.textContent = "";
+      all.forEach(t => {
+        const s = document.createElement("span");
+        s.className = "account-tag" + (window.profileTagBadgeClass ? window.profileTagBadgeClass(t) : "");
+        s.textContent = t;
+        tagsEl.appendChild(s);
+      });
+      tagsEl.classList.toggle("hidden", !all.length);
+    }
+
+    paintSideProfileWinRate(p && p.username);
+  }
+
+  function initSideProfile() {
+    const btn = document.getElementById("side-profile-signin");
+    if (btn) {
+      btn.addEventListener("click", () => {
+        // Every page carries the sign-in modal except Achievement — fall back
+        // to the Account page there rather than failing silently. `base href`
+        // is "../", so this resolves from any page.
+        if (document.getElementById("signin-popup") && typeof window.showSignInPopup === "function") {
+          window.showSignInPopup({}).catch(() => {});
+        } else {
+          window.location.href = "account/";
+        }
+      });
+    }
+    paintSideProfile();
+  }
+
+  window.addEventListener("userprofilechange", paintSideProfile);
+  window.onAuthChange(() => paintSideProfile());
+  // The medal cache resolves separately from the profile, so refresh once it
+  // lands or a top-3 account's medal badge would never appear.
+  window.addEventListener("rankingmedalschange", paintSideProfile);
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initSideProfile);
+  } else {
+    initSideProfile();
   }
 
   // Achievement themes — Dragon Tamer / Dragon Slayer / Lonewolf. Each is

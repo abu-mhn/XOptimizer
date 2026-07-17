@@ -211,6 +211,7 @@ Profile
 - Tag chips render on a single horizontal line with an invisible scroller — same treatment in the profile page, the profile hover card, the Revox history popup and the Developer page rows
 - Profile syncs to your account — same photo, name and bio on every device
 - Anyone's profile opens as a card when you hover or click their username — in a tournament room, the final placement list, the tournament ranking, the Revox member list, or the Developer page
+- Sidebar profile card — on wide desktop (1200px and up) your profile shows as a card in the empty space left of the page column: banner, avatar, username, bio, tag badges and win rate. Read-only (editing stays on the Profile tab), sticks just below the tab bar as you scroll, and shows a "Sign in" prompt when signed out. Hidden on narrower screens
 
 Developer
 - Extra tab shown only to accounts tagged "Developer"
@@ -229,6 +230,7 @@ Other
 - Per-tab URLs: /dashboard/, /calculator/, /library/, /deck/, /tournament/, /achievement/, /revox/, /battlepass/, /reel/, /history/, /settings/, /account/, /developer/
 - "What's New" landing page at the site root
 - Single-line horizontal tab bar (invisible scrollbar) — each tab shows its icon with a name label below; scroll position preserved across navigation. On desktop the bar spans the full viewport and stays centered regardless of which conditional tabs (Achievement / Revox / Developer) are visible. Every static tab icon is rendered as a CSS mask filled with the active theme's text color, so switching themes (Dark / Light / Tropical / Stormy / Mono / Love / Forest / Revox / Gold / Silver / Bronze / Dragon Tamer / Dragon Slayer / Lone Wolf / Rush Hour / King of The Jungle / Sharknado / Sorcerer Supreme / Paleonerd / King of All Types) re-colors every icon at once with no per-theme overrides. The Profile tab is the only exception — it shows the user's own avatar photo, not a mask
+- "More" menu — the sign-in-only tabs (Battle Royale, Friends, Achievement, Revox, Developer) collapse into a "More" button at the end of the tab bar, keeping the row short. The dropdown pins under the button, closes on outside-click or Escape, and shows a "sign in to unlock" hint when signed out
 - X-Optimizer wordmark in the header is also a CSS-masked silhouette filled with currentColor, so the title logo adopts the active theme's text color on every page (the per-theme img-src swap is gone — one shared PNG works for every palette)
 - Live Firebase sync across host / co-host / participant / viewer devices
 - Multi-mode part images (Eclipse, Dual, Turbo, Operate, Scorpio Spear, Lightning L-Drago) display correctly everywhere — defaults to mode 0 when no mode is recorded
@@ -441,31 +443,9 @@ if ("serviceWorker" in navigator) {
       tagsEl.textContent = "";
       allTags.forEach(t => {
         const s = document.createElement("span");
-        // Colour the badge by tag family: Revox tags use the Revox theme
-        // colour, the Developer tag uses a black-and-blue badge, the medal
-        // tags use gold / silver / bronze.
-        const lower = String(t || "").toLowerCase();
-        let variant = "";
-        if (lower.indexOf("revox") >= 0) {
-          variant = " account-tag-revox";
-          if (lower === "revox admin") variant += " account-tag-revox-admin";
-        } else if (lower === "developer") {
-          variant = " account-tag-developer";
-        } else if (lower === "tester") {
-          variant = " account-tag-tester";
-        } else if (lower === "guest judge") {
-          variant = " account-tag-guest-judge";
-        } else if (lower === "keeper") {
-          variant = " account-tag-keeper";
-        } else if (lower === "judge") {
-          variant = " account-tag-judge";
-        } else if (lower === "gold player") {
-          variant = " account-tag-gold";
-        } else if (lower === "silver player") {
-          variant = " account-tag-silver";
-        } else if (lower === "bronze player") {
-          variant = " account-tag-bronze";
-        }
+        // Colour the badge by tag family. Shared with the sidebar profile
+        // card via auth.js, so both stay the same colour as tags are added.
+        const variant = window.profileTagBadgeClass ? window.profileTagBadgeClass(t) : "";
         s.className = "account-tag" + variant;
         s.textContent = t;
         tagsEl.appendChild(s);

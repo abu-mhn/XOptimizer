@@ -27,7 +27,28 @@
       "Bash(grep -v -E '^[0-9]+:\\(function |const |let |var |//|\\\\/\\\\*|\\\\*|document\\\\.addEventListener|\\\\\\(function\\)')",
       "Bash(python -c \"import hashlib; print\\(hashlib.sha256\\(b'revox'\\).hexdigest\\(\\)\\)\")",
       "Bash(python -c \"import hashlib; print\\(hashlib.sha256\\(b'revoxadmin'\\).hexdigest\\(\\)\\)\")",
-      "Bash(node --check docs/friends/friends.js)"
+      "Bash(node --check docs/friends/friends.js)",
+      "Bash(node --check /c/Users/admin/Downloads/demo/docs/tournament/tournament.js)",
+      "Bash(cd /tmp && echo \"=== reel vs dashboard ===\" && diff nav_dashboard_index.html.txt nav_reel_index.html.txt; echo \"=== achievement vs dashboard ===\" && diff nav_dashboard_index.html.txt nav_achievement_index.html.txt; echo \"=== developer vs dashboard ===\" && diff nav_dashboard_index.html.txt nav_developer_index.html.txt)",
+      "Read(//c/tmp/**)",
+      "Bash(node \"C:/Users/admin/AppData/Local/Temp/claude/c--Users-admin-Downloads-demo/800bcbf7-7d0d-41d8-b3f0-04cb4e22d5b2/scratchpad/more-tab.js\" \"c:/Users/admin/Downloads/demo/docs\")",
+      "Bash(cd \"c:/Users/admin/Downloads/demo/docs\" && sed -n '/<div class=\"mode-tabs\">/,/<\\\\/div>/p' dashboard/index.html | tail -12 && echo \"########## MENU \\(dashboard\\) ##########\" && sed -n '/id=\"tab-more-menu\"/,/^    <\\\\/div>/p' dashboard/index.html && echo \"########## ACHIEVEMENT trigger+item ##########\" && grep -n 'tab-more-btn\\\\|tab-more-item' achievement/index.html | head)",
+      "Bash(node -e ' *)",
+      "Bash(npx --no-install playwright --version)",
+      "Bash(node -e \"require.resolve\\('puppeteer'\\); console.log\\('puppeteer ok'\\)\")",
+      "Bash(ls \"/c/Program Files \\(x86\\)/Microsoft/Edge/Application/msedge.exe\" \"/c/Program Files/Google/Chrome/Application/chrome.exe\" 2>/dev/null; echo \"--- python? ---\"; python --version 2>&1 | head -1)",
+      "Read(//c/Program Files \\\\\\(x86\\\\\\)/Microsoft/Edge/Application/**)",
+      "Bash(node -e \"console.log\\('global WebSocket:', typeof WebSocket\\)\")",
+      "Bash(node --experimental-websocket -e \"console.log\\('WebSocket:', typeof WebSocket\\)\")",
+      "Bash(node --experimental-websocket C:/Users/admin/AppData/Local/Temp/claude/c--Users-admin-Downloads-demo/800bcbf7-7d0d-41d8-b3f0-04cb4e22d5b2/scratchpad/shot.js C:/Users/admin/AppData/Local/Temp/claude/c--Users-admin-Downloads-demo/800bcbf7-7d0d-41d8-b3f0-04cb4e22d5b2/scratchpad)",
+      "Bash(node --experimental-websocket C:/Users/admin/AppData/Local/Temp/claude/c--Users-admin-Downloads-demo/800bcbf7-7d0d-41d8-b3f0-04cb4e22d5b2/scratchpad/mobile.js C:/Users/admin/AppData/Local/Temp/claude/c--Users-admin-Downloads-demo/800bcbf7-7d0d-41d8-b3f0-04cb4e22d5b2/scratchpad)",
+      "Bash(curl -s -m 5 http://localhost:9333/json/version)",
+      "Bash(curl -s -m 5 http://localhost:9333/json/list)",
+      "Bash(curl -s -m 5 -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8777/dashboard/)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\admin\\Downloads\\demo\\docs\\dashboard",
+      "C:\\Users\\admin\\Downloads\\demo\\dashboard"
     ]
   }
 }

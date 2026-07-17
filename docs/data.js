@@ -1,6 +1,6 @@
 const DATA = {
   blades: [
-    {atk: 55, def: 25, sta: 20, weight: 34.6, spindirection: "R", name: "Dran Sword", codename: "DRANSWORD",},
+    { atk: 55, def: 25, sta: 20, weight: 34.6, spindirection: "R", name: "Dran Sword", codename: "DRANSWORD", },
     { atk: 30, def: 35, sta: 35, weight: 33.0, spindirection: "R", name: "Hells Scythe", codename: "HELLSSCYTHE" },
     { atk: 15, def: 30, sta: 55, weight: 31.8, spindirection: "R", name: "Wizard Arrow", codename: "WIZARDARROW" },
     { atk: 20, def: 55, sta: 25, weight: 32.4, spindirection: "R", name: "Knight Shield", codename: "KNIGHTSHIELD" },
@@ -38,7 +38,7 @@ const DATA = {
     { atk: 25, def: 45, sta: 30, weight: 29.6, spindirection: "R", name: "Bear Scratch", codename: "BEARSCRATCH" },
     { atk: 45, def: 25, sta: 20, weight: 35.0, spindirection: "R", name: "Crimson Garuda", codename: "CRIMSONGARUDA" },
     { atk: 65, def: 20, sta: 25, weight: 36.5, spindirection: "R", name: "Samurai Saber", codename: "SAMURAISABER" },
-    { atk: 10, def: 65, sta: 35, weight: 36.5, spindirection: "R", name: "Knight Mail", codename: "KNIGHTMAIL"},
+    { atk: 10, def: 65, sta: 35, weight: 36.5, spindirection: "R", name: "Knight Mail", codename: "KNIGHTMAIL" },
     { atk: 27, def: 23, sta: 50, weight: 34.3, spindirection: "R", name: "Ptera Swing", codename: "PTERASWING" },
     { atk: 38, def: 40, sta: 37, weight: 32.0, spindirection: "R", name: "Mammoth Tusk", codename: "MAMMOTHTUSK" },
     { atk: 75, def: 25, sta: 10, weight: 39.0, spindirection: "R", name: "Impact Drake", codename: "IMPACTDRAKE" },
@@ -73,9 +73,17 @@ const DATA = {
     { atk: 60, def: 25, sta: 30, weight: 38.7, spindirection: "R", name: "Aero Pegasus", codename: "AEROPEGASUS", exclusive: true },
     { atk: 13, def: 60, sta: 27, weight: 35.1, spindirection: "R", name: "Wyvern Hover", codename: "WYVERNHOVER", exclusive: true },
     { atk: 0, def: 0, sta: 0, weight: 36.6, spindirection: "R", name: "Orochi Cluster", codename: "OROCHICLUSTER", exclusive: true },
-    { atk: 55, def: 15, sta: 30, weight: 31.0, spindirection: "R", name: "Storm Pegasis", codename: "STORMPEGASIS"},
-    { atk: 10, def: 60, sta: 30, weight: 37.4, spindirection: "R", name: "Heavens Ring", codename: "HEAVENSRING"},
-    { atk: 85, def: 35, sta: 25, weight: 0, spindirection: "R", name: "Glory Valkyrie", codename: "GLORYVALKYRIE", expandCx: true }
+    { atk: 55, def: 15, sta: 30, weight: 31.0, spindirection: "R", name: "Storm Pegasis", codename: "STORMPEGASIS" },
+    { atk: 10, def: 60, sta: 30, weight: 37.4, spindirection: "R", name: "Heavens Ring", codename: "HEAVENSRING" },
+    { atk: 85, def: 35, sta: 25, weight: 43.7, spindirection: "R", name: "Glory Valkyrie", codename: "GLORYVALKYRIE", expandCx: true },
+    {
+      atk: 50, def: 50, sta: 30, weight: 0, spindirection: "R", name: "Hells Nether", codename: "HELLSNETHER", expandCx: true, currentMode: 0, modes: [
+        { modeName: "Normal", atk: 50, def: 50, sta: 30, weight: 0, spindirection: "R" },
+        { modeName: "Low", atk: 70, def: 45, sta: 15, weight: 0, spindirection: "R" },
+      ]
+    },
+    { atk: 22, def: 60, sta: 18, weight: 29.5, spindirection: "R", name: "Thanos", codename: "THANOS" },
+    { atk: 17, def: 55, sta: 28, weight: 33.6, spindirection: "R", name: "Iron Man", codename: "IRONMAN" }
   ],
 
   lockChips: [

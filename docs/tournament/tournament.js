@@ -25,6 +25,7 @@ let swissHostNameCache = {};     // hostUid -> resolved username (rooms with no 
 let swissHostNameResolving = {}; // hostUid -> in-flight resolve guard
 let swissSessionRole = null;     // this session's role: "host" | "co-host" | "participant" | "view"
 let swissArchiveView = false;    // viewing a finished tournament from the public Past archive (read-only, no live room)
+let swissArchiveState = null;    // the archived tournament being viewed — kept in memory (NOT localStorage) so it never leaks into a real local tournament across page navigation
 const pastTournamentArchived = new Set(); // editCodes this session already snapshotted to pastTournaments
 
 function initFirebase() {
@@ -607,6 +608,11 @@ function getRegisteredDeckForParticipant(state, name) {
 }
 
 function loadSwiss() {
+  // The Past-archive view holds its (read-only) state in memory, not
+  // localStorage, so it can't survive a page navigation as a fake local room.
+  if (swissArchiveView && swissArchiveState) {
+    try { return JSON.parse(JSON.stringify(swissArchiveState)); } catch (e) {}
+  }
   try {
     const raw = JSON.parse(localStorage.getItem(SWISS_KEY) || "null");
     const hasGroups = raw && Array.isArray(raw.groups);
@@ -5839,13 +5845,16 @@ function isBeyCheckSlotComplete(slot) {
   const fields = BEY_CHECK_FIELDS[mode] || [];
   if (!fields.length) return false;
   const bladeName = (slot.parts.blade || "").trim();
-  const isBulletGriffon = bladeName === "Bullet Griffon";
+  // expandCx blades (Bullet Griffon, Glory Valkyrie, …) have a built-in ratchet,
+  // so their ratchet field is optional.
+  const bladeRec = bladeName ? (DATA.blades || []).find(b => b.name === bladeName) : null;
+  const bladeHasBuiltInRatchet = isExpandCxBlade(bladeRec);
   for (const f of fields) {
     const v = slot.parts[f];
     if (f === "ratchet") {
-      // Bullet Griffon's built-in ratchet means the ratchet field is
-      // optional for that blade — any value (including missing) is fine.
-      if (isBulletGriffon) continue;
+      // A built-in-ratchet blade makes the ratchet field optional — any value
+      // (including missing) is fine.
+      if (bladeHasBuiltInRatchet) continue;
       if (!v) return false; // missing entirely
       // empty string fails, NO_RATCHET sentinel passes, real name passes
       if (v !== NO_RATCHET && typeof v !== "string") return false;
@@ -8953,7 +8962,10 @@ function openArchivedTournament(snap) {
     hostUid: snap.hostUid || null,
     createdAt: snap.createdAt || ""
   };
-  localStorage.setItem(SWISS_KEY, JSON.stringify(state));
+  // Keep the archive in memory (loadSwiss serves it while swissArchiveView is
+  // on) — NOT in localStorage, so navigating to another page and back doesn't
+  // restore it as a live tournament on the Hosting tab.
+  swissArchiveState = state;
   // Render the archive read-only WITHIN the Past panel (move the shared
   // #swiss-view there and hide the list) so it stays under the Past tab instead
   // of jumping to Hosting. `renderSwiss` still targets #swiss-view by id.
@@ -8972,12 +8984,12 @@ function openArchivedTournament(snap) {
 function teardownArchiveView() {
   if (!swissArchiveView) return;
   swissArchiveView = false;
+  swissArchiveState = null;
   disconnectSwissRoom();
   const view = document.getElementById("swiss-view");
   const hostingFieldset = document.querySelector("#tournament-panel-hosting fieldset");
   if (view && hostingFieldset) hostingFieldset.appendChild(view);
   document.getElementById("tournament-panel-past")?.classList.remove("past-archive-open");
-  localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [], phase: "running", registrants: {} }));
   renderSwiss();
 }
 

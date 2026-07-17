@@ -154,6 +154,284 @@ h1 {
     }
 }
 
+/* =======================
+   "MORE" TAB (BURGER MENU)
+   The five sign-in-gated tabs (Battle Royale / Friends / Achievement /
+   Revox / Developer) hang off this trigger instead of stretching the tab
+   row. The panel is a sibling of .mode-tabs rather than a child: that row
+   is a horizontal overflow scroller, so a dropdown nested inside it would
+   be clipped. core.js pins the panel under the trigger instead.
+
+   Menu entries keep the plain .tab class, so every theme's .tab /
+   .tab.active / .tab:hover rules dress them with no extra work.
+======================= */
+.tab-more-btn {
+    text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Signed out, the panel holds nothing but the "sign in to unlock" hint —
+   dim the trigger to match, while leaving it open-able so the hint is
+   actually reachable. */
+.tab-more-btn.tab-more-empty {
+    opacity: .45;
+}
+
+/* Three stacked bars, sized to match the 18px icon box of a normal tab
+   (8px margin + 2px bar + 8px margin). Drawn in currentColor so the
+   trigger follows the active theme like every other tab icon does. */
+.tab-more-icon {
+    display: block;
+    position: relative;
+    width: 18px;
+    height: 2px;
+    margin: 8px 0;
+    border-radius: 1px;
+    background: currentColor;
+    transition: background .15s;
+}
+
+.tab-more-icon::before,
+.tab-more-icon::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    border-radius: 1px;
+    background: currentColor;
+    transition: transform .15s, top .15s;
+}
+
+.tab-more-icon::before { top: -6px; }
+.tab-more-icon::after  { top: 6px; }
+
+/* Open: the bars fold into an X. */
+.tab-more-btn[aria-expanded="true"] .tab-more-icon {
+    background: transparent;
+}
+
+.tab-more-btn[aria-expanded="true"] .tab-more-icon::before,
+.tab-more-btn[aria-expanded="true"] .tab-more-icon::after {
+    top: 0;
+}
+
+.tab-more-btn[aria-expanded="true"] .tab-more-icon::before {
+    transform: rotate(45deg);
+}
+
+.tab-more-btn[aria-expanded="true"] .tab-more-icon::after {
+    transform: rotate(-45deg);
+}
+
+.tab-more-menu {
+    position: fixed;
+    z-index: 60;               /* over .mode-tabs, which sits at 50 */
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 172px;
+    padding: 8px;
+    border-radius: 10px;
+    background: rgba(13, 17, 23, 0.95);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    max-height: calc(100dvh - 80px);
+    overflow-y: auto;
+    animation: popupRise .16s ease-out;
+    box-sizing: border-box;
+}
+
+/* Addressed by id on purpose: each theme hands the panel its background
+   through a `body.<theme>-mode .tab-more-menu` rule, which would otherwise
+   also flatten the elevation back to the tab row's subtle shadow. An id
+   outranks those class selectors, so the dropdown reads as floating in
+   every theme. */
+#tab-more-menu {
+    box-shadow: 0 14px 34px -10px rgba(0, 0, 0, 0.6);
+}
+
+/* Entries read as a vertical list: icon beside the label, not stacked above
+   it the way the tab row does. Doubled-up class so these land on top of the
+   plain `.tab` box rules further down the file, whose flex-direction and
+   padding would otherwise win the tie on source order. */
+.tab.tab-more-item {
+    flex: 0 0 auto;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 8px;
+    width: 100%;
+    min-height: 38px;
+    padding: 8px 10px;
+    text-decoration: none;
+    box-sizing: border-box;
+}
+
+.tab.tab-more-item .tab-label {
+    font-size: .72rem;
+}
+
+.tab-more-hint {
+    margin: 0;
+    padding: 6px 8px;
+    max-width: 172px;
+    font-size: .68rem;
+    line-height: 1.35;
+    color: #8b949e;
+    text-align: center;
+}
+
+/* =======================
+   SIDEBAR PROFILE CARD
+   A read-only profile summary parked in the gutter left of the 640px page
+   column, which is dead space on a wide screen. Editing still lives on the
+   Account page — this only mirrors it.
+
+   Hidden outright below 1200px. The column plus the card and its gutters
+   need 2 x (320 + 16 + 240 + 16) = 1184px before the card stops crowding
+   the page, so there's no width between "fits" and "hidden" where it
+   overlaps the content.
+======================= */
+.side-profile {
+    display: none;
+}
+
+@media (min-width: 1200px) {
+    /* The <aside> is a zero-height STICKY rail, not the visible card. Sticky
+       (not fixed) is what lets the card sit below the tab row in BOTH states:
+       the tab row is position:sticky/top:0, so its bottom is ~173px at rest
+       (pushed down by the logo) but ~72px once pinned. A fixed card can only
+       pick one of those; a sticky one rides its flow position at rest (just
+       under the resting bar) and then sticks once scrolled (just under the
+       pinned bar).
+
+       The rail sticks at 72px — exactly the pinned tab row's bottom — and the
+       visible card is offset 12px below the rail (see .side-profile-inner's
+       top), so the gap under the tabs is a consistent ~12px whether the card
+       is riding its rest position or stuck.
+
+       height:0 so it claims no space in the column — the visible card is the
+       absolutely-positioned child below, which overflows this box. Its sticky
+       containing block is .container, which is tall enough to stick through
+       the whole scroll. */
+    .side-profile {
+        display: block;
+        position: sticky;
+        top: 72px;
+        height: 0;
+    }
+
+    .side-profile-inner {
+        /* Positioned against the sticky rail (position:sticky is a containing
+           block), so it tracks the rail as it sticks. right:100% puts its
+           right edge at the column's left edge; margin-right opens the gutter
+           gap. 240px card sits in the dead space left of the 640px column.
+           top:12px is the breathing gap below the tab row — applied to the
+           card, not the rail, so page content (which follows the height:0
+           rail) isn't nudged down. */
+        position: absolute;
+        right: 100%;
+        top: 12px;
+        margin-right: 16px;
+        width: 240px;
+        z-index: 40;              /* above page content, below the tab row (50) */
+        border: 1px solid #30363d;
+        border-radius: 10px;
+        background: #161b22;
+        /* On a short window the card would overflow below the fold; since it
+           no longer scrolls with the page there, it scrolls internally
+           instead. 100px reserve = 72px sticky offset + 12px card gap + 16px
+           bottom breathing. x hidden keeps the banner clipped to the corners. */
+        max-height: calc(100vh - 100px);
+        overflow: hidden auto;
+    }
+
+    .side-profile-cover {
+        position: relative;
+        height: 60px;
+        margin-bottom: 34px;      /* room for the avatar hanging below */
+    }
+
+    .side-profile-banner {
+        display: block;
+        width: 100%;
+        height: 60px;
+        object-fit: cover;
+    }
+
+    .side-profile-photo {
+        position: absolute;
+        left: 50%;
+        bottom: -30px;
+        width: 60px;
+        height: 60px;
+        transform: translateX(-50%);
+        border-radius: 50%;
+        object-fit: cover;
+        /* Ring colour tracks the card's own border rather than its fill, so
+           the theme rules below (which hand both the same border-color) keep
+           the avatar separated from the banner in every theme. */
+        border: 3px solid #30363d;
+        background: #21262d;
+    }
+
+    .side-profile-body {
+        padding: 0 12px 14px;
+        text-align: center;
+    }
+
+    .side-profile-name {
+        font-size: .95rem;
+        font-weight: 600;
+        color: #e6edf3;
+        line-height: 1.3;
+        word-break: break-word;
+    }
+
+    .side-profile-bio {
+        margin-top: 4px;
+        font-size: .72rem;
+        line-height: 1.4;
+        color: #8b949e;
+        /* Bio is free text up to 300 chars — cap it so a long one can't
+           stretch the card down the page. */
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .side-profile-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        justify-content: center;
+        margin-top: 8px;
+    }
+
+    .side-profile-winrate {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid #30363d;
+        font-size: .72rem;
+        font-weight: 600;
+        color: #8b949e;
+    }
+
+    .side-profile-prompt {
+        font-size: .72rem;
+        line-height: 1.4;
+        color: #8b949e;
+        margin-bottom: 10px;
+    }
+
+    .side-profile-signedout .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
 .tab:hover:not(.active) {
     background: #21262d;
     border-color: #484f58;
@@ -5230,7 +5508,8 @@ body.light-mode .mode-tabs,
 body.light-mode .sub-tabs,
 body.light-mode .history-sub-tabs,
 body.light-mode .tournament-sub-tabs ,
-body.light-mode .br-sub-tabs {
+body.light-mode .br-sub-tabs,
+body.light-mode .tab-more-menu {
     background: rgba(246, 248, 250, 0.85);
     border-bottom-color: #d1d9e0;
     box-shadow: 0 6px 14px -8px rgba(15, 20, 30, 0.18);
@@ -5427,12 +5706,15 @@ body.light-mode .popup-overlay {
     background: rgba(0, 0, 0, 0.4);
 }
 
-body.light-mode .popup-card {
+body.light-mode .popup-card,
+body.light-mode .side-profile-inner,
+body.light-mode .side-profile-photo {
     background: #ffffff;
     border-color: #d1d9e0;
 }
 
-body.light-mode .popup-title {
+body.light-mode .popup-title,
+body.light-mode .side-profile-name {
     color: #1f2328;
 }
 
@@ -5905,7 +6187,8 @@ body.space-mode .mode-tabs,
 body.space-mode .sub-tabs,
 body.space-mode .history-sub-tabs,
 body.space-mode .tournament-sub-tabs ,
-body.space-mode .br-sub-tabs {
+body.space-mode .br-sub-tabs,
+body.space-mode .tab-more-menu {
     background: rgba(11, 13, 26, 0.85);
     border-bottom-color: #1a1f3d;
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.55);
@@ -6045,13 +6328,16 @@ body.space-mode .popup-overlay {
     background: rgba(5, 5, 15, 0.85);
 }
 
-body.space-mode .popup-card {
+body.space-mode .popup-card,
+body.space-mode .side-profile-inner,
+body.space-mode .side-profile-photo {
     background: #0f1228;
     border: 1px solid #1a1f3d;
     color: #c8d6e5;
 }
 
-body.space-mode .popup-title {
+body.space-mode .popup-title,
+body.space-mode .side-profile-name {
     color: #7c8dff;
 }
 
@@ -6208,7 +6494,8 @@ body.revox-mode .mode-tabs,
 body.revox-mode .sub-tabs,
 body.revox-mode .history-sub-tabs,
 body.revox-mode .tournament-sub-tabs ,
-body.revox-mode .br-sub-tabs {
+body.revox-mode .br-sub-tabs,
+body.revox-mode .tab-more-menu {
     background: rgba(14, 14, 18, 0.88);
     border-bottom-color: #34343f;
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.6);
@@ -6271,6 +6558,7 @@ body.revox-mode fieldset {
 body.revox-mode legend,
 body.revox-mode .combo-name,
 body.revox-mode .popup-title,
+body.revox-mode .side-profile-name,
 body.revox-mode .tournament-results-heading,
 body.revox-mode .tournament-mode-name,
 body.revox-mode .part-usage-title,
@@ -6356,6 +6644,8 @@ body.revox-mode .swiss-toolbar .swiss-share-btn img {
 body.revox-mode .search-dropdown .dd-list,
 body.revox-mode .setting-dropdown-menu,
 body.revox-mode .popup-card,
+body.revox-mode .side-profile-inner,
+body.revox-mode .side-profile-photo,
 body.revox-mode .image-popup-content,
 body.revox-mode .features-list {
     background: #1b1b22;
@@ -6552,7 +6842,8 @@ body.tropical-mode .mode-tabs,
 body.tropical-mode .sub-tabs,
 body.tropical-mode .history-sub-tabs,
 body.tropical-mode .tournament-sub-tabs ,
-body.tropical-mode .br-sub-tabs {
+body.tropical-mode .br-sub-tabs,
+body.tropical-mode .tab-more-menu {
     background: rgba(255, 246, 230, 0.85);
     border-bottom-color: #ffd8a8;
     box-shadow: 0 6px 14px -8px rgba(140, 90, 40, 0.18);
@@ -6742,13 +7033,16 @@ body.tropical-mode .popup-overlay {
     background: rgba(45, 58, 58, 0.5);
 }
 
-body.tropical-mode .popup-card {
+body.tropical-mode .popup-card,
+body.tropical-mode .side-profile-inner,
+body.tropical-mode .side-profile-photo {
     background: #ffffff;
     border-color: #ffd8a8;
     color: #2d3a3a;
 }
 
-body.tropical-mode .popup-title {
+body.tropical-mode .popup-title,
+body.tropical-mode .side-profile-name {
     color: #0d8a80;
 }
 
@@ -6986,7 +7280,8 @@ body.stormy-mode .mode-tabs,
 body.stormy-mode .sub-tabs,
 body.stormy-mode .history-sub-tabs,
 body.stormy-mode .tournament-sub-tabs ,
-body.stormy-mode .br-sub-tabs {
+body.stormy-mode .br-sub-tabs,
+body.stormy-mode .tab-more-menu {
     background: rgba(30, 35, 48, 0.85);
     border-bottom-color: #3a4054;
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.55);
@@ -7130,13 +7425,16 @@ body.stormy-mode .popup-overlay {
     background: rgba(15, 18, 25, 0.85);
 }
 
-body.stormy-mode .popup-card {
+body.stormy-mode .popup-card,
+body.stormy-mode .side-profile-inner,
+body.stormy-mode .side-profile-photo {
     background: #252a38;
     border: 1px solid #3a4054;
     color: #d5dae4;
 }
 
-body.stormy-mode .popup-title {
+body.stormy-mode .popup-title,
+body.stormy-mode .side-profile-name {
     color: #f5c518;
 }
 
@@ -7282,7 +7580,8 @@ body.mono-mode .mode-tabs,
 body.mono-mode .sub-tabs,
 body.mono-mode .history-sub-tabs,
 body.mono-mode .tournament-sub-tabs ,
-body.mono-mode .br-sub-tabs {
+body.mono-mode .br-sub-tabs,
+body.mono-mode .tab-more-menu {
     background: rgba(0, 0, 0, 0.88);
     border-bottom-color: #2a2a2a;
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.7);
@@ -7609,13 +7908,16 @@ body.mono-mode .popup-overlay {
     background: rgba(0, 0, 0, 0.85);
 }
 
-body.mono-mode .popup-card {
+body.mono-mode .popup-card,
+body.mono-mode .side-profile-inner,
+body.mono-mode .side-profile-photo {
     background: #111111;
     border: 1px solid #2a2a2a;
     color: #e6e6e6;
 }
 
-body.mono-mode .popup-title {
+body.mono-mode .popup-title,
+body.mono-mode .side-profile-name {
     color: #ffffff;
 }
 
@@ -11866,7 +12168,8 @@ body.love-mode .mode-tabs,
 body.love-mode .sub-tabs,
 body.love-mode .history-sub-tabs,
 body.love-mode .tournament-sub-tabs  ,
-body.love-mode .br-sub-tabs  {
+body.love-mode .br-sub-tabs,
+body.love-mode .tab-more-menu {
     background: rgba(255, 246, 230, 0.85);
     border-bottom-color: #ffc1d2;
     box-shadow: 0 6px 14px -8px rgba(140, 90, 40, 0.18);
@@ -12017,12 +12320,15 @@ body.love-mode .separator  {
 body.love-mode .popup-overlay  {
     background: rgba(45, 58, 58, 0.5);
 }
-body.love-mode .popup-card  {
+body.love-mode .popup-card,
+body.love-mode .side-profile-inner,
+body.love-mode .side-profile-photo  {
     background: #ffffff;
     border-color: #ffc1d2;
     color: #4a1d2a;
 }
-body.love-mode .popup-title  {
+body.love-mode .popup-title,
+body.love-mode .side-profile-name  {
     color: #c0245f;
 }
 body.love-mode .popup-list li  {
@@ -12350,7 +12656,8 @@ body.forest-mode .mode-tabs,
 body.forest-mode .sub-tabs,
 body.forest-mode .history-sub-tabs,
 body.forest-mode .tournament-sub-tabs  ,
-body.forest-mode .br-sub-tabs  {
+body.forest-mode .br-sub-tabs,
+body.forest-mode .tab-more-menu {
     background: rgba(255, 246, 230, 0.85);
     border-bottom-color: #b5c89a;
     box-shadow: 0 6px 14px -8px rgba(140, 90, 40, 0.18);
@@ -12501,12 +12808,15 @@ body.forest-mode .separator  {
 body.forest-mode .popup-overlay  {
     background: rgba(45, 58, 58, 0.5);
 }
-body.forest-mode .popup-card  {
+body.forest-mode .popup-card,
+body.forest-mode .side-profile-inner,
+body.forest-mode .side-profile-photo  {
     background: #ffffff;
     border-color: #b5c89a;
     color: #2d3e1f;
 }
-body.forest-mode .popup-title  {
+body.forest-mode .popup-title,
+body.forest-mode .side-profile-name  {
     color: #2d4f33;
 }
 body.forest-mode .popup-list li  {
@@ -13996,7 +14306,8 @@ body.gold-mode .mode-tabs,
 body.gold-mode .sub-tabs,
 body.gold-mode .history-sub-tabs,
 body.gold-mode .tournament-sub-tabs ,
-body.gold-mode .br-sub-tabs {
+body.gold-mode .br-sub-tabs,
+body.gold-mode .tab-more-menu {
     background: rgba(26, 20, 8, 0.85);
     border-bottom-color: #4a3c18;
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.55);
@@ -14155,13 +14466,16 @@ body.gold-mode .popup-overlay {
     background: rgba(12, 9, 3, 0.85);
 }
 
-body.gold-mode .popup-card {
+body.gold-mode .popup-card,
+body.gold-mode .side-profile-inner,
+body.gold-mode .side-profile-photo {
     background: #241c0c;
     border: 1px solid #4a3c18;
     color: #f0e6cf;
 }
 
-body.gold-mode .popup-title {
+body.gold-mode .popup-title,
+body.gold-mode .side-profile-name {
     color: #f1cf6e;
 }
 
@@ -14550,7 +14864,8 @@ body.silver-mode .mode-tabs,
 body.silver-mode .sub-tabs,
 body.silver-mode .history-sub-tabs,
 body.silver-mode .tournament-sub-tabs ,
-body.silver-mode .br-sub-tabs {
+body.silver-mode .br-sub-tabs,
+body.silver-mode .tab-more-menu {
     background: rgba(20, 23, 26, 0.85);
     border-bottom-color: #383f47;
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.55);
@@ -14694,13 +15009,16 @@ body.silver-mode .popup-overlay {
     background: rgba(9, 11, 13, 0.85);
 }
 
-body.silver-mode .popup-card {
+body.silver-mode .popup-card,
+body.silver-mode .side-profile-inner,
+body.silver-mode .side-profile-photo {
     background: #20242a;
     border: 1px solid #383f47;
     color: #e8ecf0;
 }
 
-body.silver-mode .popup-title {
+body.silver-mode .popup-title,
+body.silver-mode .side-profile-name {
     color: #d6dde4;
 }
 
@@ -15089,7 +15407,8 @@ body.bronze-mode .mode-tabs,
 body.bronze-mode .sub-tabs,
 body.bronze-mode .history-sub-tabs,
 body.bronze-mode .tournament-sub-tabs ,
-body.bronze-mode .br-sub-tabs {
+body.bronze-mode .br-sub-tabs,
+body.bronze-mode .tab-more-menu {
     background: rgba(26, 17, 9, 0.85);
     border-bottom-color: #4a3320;
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.55);
@@ -15233,13 +15552,16 @@ body.bronze-mode .popup-overlay {
     background: rgba(12, 8, 4, 0.85);
 }
 
-body.bronze-mode .popup-card {
+body.bronze-mode .popup-card,
+body.bronze-mode .side-profile-inner,
+body.bronze-mode .side-profile-photo {
     background: #251a10;
     border: 1px solid #4a3320;
     color: #f0e2d2;
 }
 
-body.bronze-mode .popup-title {
+body.bronze-mode .popup-title,
+body.bronze-mode .side-profile-name {
     color: #e0a06b;
 }
 
@@ -15572,7 +15894,8 @@ body.dragontamer-mode .mode-tabs,
 body.dragontamer-mode .sub-tabs,
 body.dragontamer-mode .history-sub-tabs,
 body.dragontamer-mode .tournament-sub-tabs ,
-body.dragontamer-mode .br-sub-tabs {
+body.dragontamer-mode .br-sub-tabs,
+body.dragontamer-mode .tab-more-menu {
     background: rgba(40, 18, 14, 0.85);
     border-bottom-color: #4d2218;
 }
@@ -15586,7 +15909,9 @@ body.dragontamer-mode .sub-tab.active {
     color: #fff;
 }
 body.dragontamer-mode fieldset,
-body.dragontamer-mode .popup-card {
+body.dragontamer-mode .popup-card,
+body.dragontamer-mode .side-profile-inner,
+body.dragontamer-mode .side-profile-photo {
     background: #2a1612;
     border-color: #4d2218;
 }
@@ -15610,7 +15935,8 @@ body.dragonslayer-mode .mode-tabs,
 body.dragonslayer-mode .sub-tabs,
 body.dragonslayer-mode .history-sub-tabs,
 body.dragonslayer-mode .tournament-sub-tabs ,
-body.dragonslayer-mode .br-sub-tabs {
+body.dragonslayer-mode .br-sub-tabs,
+body.dragonslayer-mode .tab-more-menu {
     background: rgba(16, 22, 38, 0.85);
     border-bottom-color: #2a3a55;
 }
@@ -15624,7 +15950,9 @@ body.dragonslayer-mode .sub-tab.active {
     color: #fff;
 }
 body.dragonslayer-mode fieldset,
-body.dragonslayer-mode .popup-card {
+body.dragonslayer-mode .popup-card,
+body.dragonslayer-mode .side-profile-inner,
+body.dragonslayer-mode .side-profile-photo {
     background: #1a2238;
     border-color: #2a3a55;
 }
@@ -15648,7 +15976,8 @@ body.lonewolf-mode .mode-tabs,
 body.lonewolf-mode .sub-tabs,
 body.lonewolf-mode .history-sub-tabs,
 body.lonewolf-mode .tournament-sub-tabs ,
-body.lonewolf-mode .br-sub-tabs {
+body.lonewolf-mode .br-sub-tabs,
+body.lonewolf-mode .tab-more-menu {
     background: rgba(16, 20, 26, 0.85);
     border-bottom-color: #28323a;
 }
@@ -15662,7 +15991,9 @@ body.lonewolf-mode .sub-tab.active {
     color: #fff;
 }
 body.lonewolf-mode fieldset,
-body.lonewolf-mode .popup-card {
+body.lonewolf-mode .popup-card,
+body.lonewolf-mode .side-profile-inner,
+body.lonewolf-mode .side-profile-photo {
     background: #18222a;
     border-color: #28323a;
 }
@@ -15687,7 +16018,8 @@ body.rushhour-mode .mode-tabs,
 body.rushhour-mode .sub-tabs,
 body.rushhour-mode .history-sub-tabs,
 body.rushhour-mode .tournament-sub-tabs ,
-body.rushhour-mode .br-sub-tabs {
+body.rushhour-mode .br-sub-tabs,
+body.rushhour-mode .tab-more-menu {
     background: rgba(34, 24, 12, 0.85);
     border-bottom-color: #5c3a14;
 }
@@ -15701,7 +16033,9 @@ body.rushhour-mode .sub-tab.active {
     color: #fff;
 }
 body.rushhour-mode fieldset,
-body.rushhour-mode .popup-card {
+body.rushhour-mode .popup-card,
+body.rushhour-mode .side-profile-inner,
+body.rushhour-mode .side-profile-photo {
     background: #2a1d0c;
     border-color: #5c3a14;
 }
@@ -15726,7 +16060,8 @@ body.kingofjungle-mode .mode-tabs,
 body.kingofjungle-mode .sub-tabs,
 body.kingofjungle-mode .history-sub-tabs,
 body.kingofjungle-mode .tournament-sub-tabs ,
-body.kingofjungle-mode .br-sub-tabs {
+body.kingofjungle-mode .br-sub-tabs,
+body.kingofjungle-mode .tab-more-menu {
     background: rgba(32, 24, 8, 0.85);
     border-bottom-color: #5a4418;
 }
@@ -15740,7 +16075,9 @@ body.kingofjungle-mode .sub-tab.active {
     color: #fff;
 }
 body.kingofjungle-mode fieldset,
-body.kingofjungle-mode .popup-card {
+body.kingofjungle-mode .popup-card,
+body.kingofjungle-mode .side-profile-inner,
+body.kingofjungle-mode .side-profile-photo {
     background: #28200c;
     border-color: #5a4418;
 }
@@ -15765,7 +16102,8 @@ body.sharknado-mode .mode-tabs,
 body.sharknado-mode .sub-tabs,
 body.sharknado-mode .history-sub-tabs,
 body.sharknado-mode .tournament-sub-tabs ,
-body.sharknado-mode .br-sub-tabs {
+body.sharknado-mode .br-sub-tabs,
+body.sharknado-mode .tab-more-menu {
     background: rgba(10, 22, 36, 0.85);
     border-bottom-color: #1f3a5a;
 }
@@ -15779,7 +16117,9 @@ body.sharknado-mode .sub-tab.active {
     color: #fff;
 }
 body.sharknado-mode fieldset,
-body.sharknado-mode .popup-card {
+body.sharknado-mode .popup-card,
+body.sharknado-mode .side-profile-inner,
+body.sharknado-mode .side-profile-photo {
     background: #122236;
     border-color: #1f3a5a;
 }
@@ -15805,7 +16145,8 @@ body.sorcerersupreme-mode .mode-tabs,
 body.sorcerersupreme-mode .sub-tabs,
 body.sorcerersupreme-mode .history-sub-tabs,
 body.sorcerersupreme-mode .tournament-sub-tabs ,
-body.sorcerersupreme-mode .br-sub-tabs {
+body.sorcerersupreme-mode .br-sub-tabs,
+body.sorcerersupreme-mode .tab-more-menu {
     background: rgba(26, 12, 40, 0.85);
     border-bottom-color: #3a205a;
 }
@@ -15819,7 +16160,9 @@ body.sorcerersupreme-mode .sub-tab.active {
     color: #fff;
 }
 body.sorcerersupreme-mode fieldset,
-body.sorcerersupreme-mode .popup-card {
+body.sorcerersupreme-mode .popup-card,
+body.sorcerersupreme-mode .side-profile-inner,
+body.sorcerersupreme-mode .side-profile-photo {
     background: #221038;
     border-color: #3a205a;
 }
@@ -15845,7 +16188,8 @@ body.paleonerd-mode .mode-tabs,
 body.paleonerd-mode .sub-tabs,
 body.paleonerd-mode .history-sub-tabs,
 body.paleonerd-mode .tournament-sub-tabs ,
-body.paleonerd-mode .br-sub-tabs {
+body.paleonerd-mode .br-sub-tabs,
+body.paleonerd-mode .tab-more-menu {
     background: rgba(28, 20, 10, 0.85);
     border-bottom-color: #5a3f1a;
 }
@@ -15859,7 +16203,9 @@ body.paleonerd-mode .sub-tab.active {
     color: #fff;
 }
 body.paleonerd-mode fieldset,
-body.paleonerd-mode .popup-card {
+body.paleonerd-mode .popup-card,
+body.paleonerd-mode .side-profile-inner,
+body.paleonerd-mode .side-profile-photo {
     background: #261a0a;
     border-color: #5a3f1a;
 }
@@ -15885,7 +16231,8 @@ body.kingofalltypes-mode .mode-tabs,
 body.kingofalltypes-mode .sub-tabs,
 body.kingofalltypes-mode .history-sub-tabs,
 body.kingofalltypes-mode .tournament-sub-tabs ,
-body.kingofalltypes-mode .br-sub-tabs {
+body.kingofalltypes-mode .br-sub-tabs,
+body.kingofalltypes-mode .tab-more-menu {
     background: rgba(16, 22, 38, 0.85);
     border-bottom-color: #2e3a4f;
 }
@@ -15899,7 +16246,9 @@ body.kingofalltypes-mode .sub-tab.active {
     color: #fff;
 }
 body.kingofalltypes-mode fieldset,
-body.kingofalltypes-mode .popup-card {
+body.kingofalltypes-mode .popup-card,
+body.kingofalltypes-mode .side-profile-inner,
+body.kingofalltypes-mode .side-profile-photo {
     background: #1a2236;
     border-color: #2e3a4f;
 }

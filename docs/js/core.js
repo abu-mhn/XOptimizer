@@ -764,12 +764,112 @@ function enableHorizontalWheelScroll(el) {
   });
 })();
 
+// --- "More" tab (burger menu) ---
+// Home for the sign-in-gated tabs, so the row doesn't grow a tab every time
+// an account unlocks something. The panel lives outside .mode-tabs — that row
+// is an overflow scroller and would clip a nested dropdown — which is why its
+// position is pinned to the trigger by hand rather than by CSS.
+//
+// The entries keep their `.tab[data-mode]` markup, so auth.js goes on showing
+// and hiding them exactly as it did when they sat in the row; this only
+// watches the result to keep the trigger in sync.
+(function setupMoreMenu() {
+  const btn = document.getElementById("tab-more-btn");
+  const menu = document.getElementById("tab-more-menu");
+  if (!btn || !menu) return;
+  const hint = document.getElementById("tab-more-hint");
+  const items = Array.from(menu.querySelectorAll(".tab-more-item"));
+  const visibleItems = () => items.filter(i => !i.classList.contains("hidden"));
+
+  const isOpen = () => !menu.classList.contains("hidden");
+
+  function position() {
+    const r = btn.getBoundingClientRect();
+    const w = menu.offsetWidth;
+    // Hangs from the trigger's right edge, but never past a viewport edge —
+    // "More" is the last tab, so on narrow screens it sits hard against the
+    // right and an un-clamped panel would overflow the page.
+    const margin = 8;
+    const left = Math.max(margin, Math.min(r.right - w, window.innerWidth - w - margin));
+    menu.style.top = (r.bottom + 6) + "px";
+    menu.style.left = left + "px";
+  }
+
+  function open() {
+    // Signed-out visitors get the panel too: it carries the "sign in to
+    // unlock" hint, which is the only reason to leave the trigger visible.
+    menu.classList.remove("hidden");
+    btn.setAttribute("aria-expanded", "true");
+    position();
+  }
+
+  function close() {
+    menu.classList.add("hidden");
+    btn.setAttribute("aria-expanded", "false");
+  }
+
+  function toggle() { isOpen() ? close() : open(); }
+
+  btn.addEventListener("click", e => {
+    e.preventDefault();
+    toggle();
+  });
+
+  // The trigger is an <a> with no href (it navigates nowhere), so Enter and
+  // Space have to be wired up by hand to match a real button.
+  btn.addEventListener("keydown", e => {
+    if (e.key !== "Enter" && e.key !== " " && e.key !== "Spacebar") return;
+    e.preventDefault();
+    toggle();
+    if (isOpen()) visibleItems()[0]?.focus();
+  });
+
+  document.addEventListener("click", e => {
+    if (isOpen() && !menu.contains(e.target) && !btn.contains(e.target)) close();
+  });
+
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && isOpen()) {
+      close();
+      btn.focus();
+    }
+  });
+
+  // A fixed panel doesn't follow the trigger, and the trigger moves whenever
+  // the tab row scrolls sideways or the page scrolls under the sticky header.
+  const reposition = () => { if (isOpen()) position(); };
+  window.addEventListener("resize", reposition);
+  window.addEventListener("scroll", reposition, { passive: true });
+  document.querySelector(".mode-tabs")?.addEventListener("scroll", reposition, { passive: true });
+
+  // auth.js unhides entries once a profile resolves, which can land well after
+  // this runs. Watching each entry's class (rather than the whole menu) keeps
+  // the hint toggle below from re-triggering the observer.
+  function paint() {
+    const any = visibleItems().length > 0;
+    btn.classList.toggle("tab-more-empty", !any);
+    hint?.classList.toggle("hidden", any);
+  }
+
+  paint();
+  items.forEach(item => {
+    new MutationObserver(paint).observe(item, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+  });
+})();
+
 // Library filter chips + sort row: vertical wheel scrolls them horizontally.
 enableHorizontalWheelScroll(document.querySelector(".library-filter"));
 enableHorizontalWheelScroll(document.querySelector(".library-sort"));
 
 document.addEventListener("DOMContentLoaded", function initActiveTabRender() {
-  const activeTab = document.querySelector(".tab.active");
+  // Skip the "More" trigger: on the pages it stands in for (Battle Royale /
+  // Friends / Achievement / Revox / Developer) it carries .active *and* sits
+  // earlier in the DOM than the real entry inside the menu — matching it here
+  // would hand us an element with no data-mode and skip the page's render.
+  const activeTab = document.querySelector(".tab.active:not(.tab-more-btn)");
   if (!activeTab) return;
   const mode = activeTab.dataset.mode;
 
