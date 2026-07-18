@@ -477,7 +477,29 @@ function initSwissRoomOnLoad() {
     const sessionRole = authLostOnThisDevice
       ? (info.sessionRole === "participant" ? "participant" : "view")
       : (info.sessionRole || null);
-    connectSwissRoom(info.editCode, info.viewCode || null, asHost, canEdit, sessionRole);
+    const reconnect = () =>
+      connectSwissRoom(info.editCode, info.viewCode || null, asHost, canEdit, sessionRole);
+
+    // A finished tournament shouldn't hijack the landing page on every load —
+    // the device pointer is meant to resume LIVE rooms, not replay completed
+    // ones. Peek at the room once; if it's already complete, drop the pointer
+    // and fall back to the setup form / Open Tournaments list (same landing the
+    // "room was deleted" branch uses). The tournament stays reachable from the
+    // Past archive and Tournament History. A read failure falls through to the
+    // normal reconnect so a transient network hiccup never strands the user
+    // out of a live room.
+    const db = initFirebase();
+    if (!db) { reconnect(); return; }
+    db.ref("swissRooms/" + info.editCode).once("value").then(snap => {
+      const remote = snap.val();
+      if (remote && typeof isTournamentComplete === "function" && isTournamentComplete(remote)) {
+        saveJoinedRoom(null);
+        localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [] }));
+        if (typeof renderSwiss === "function") renderSwiss();
+        return;
+      }
+      reconnect();
+    }).catch(reconnect);
   };
 
   if (typeof window.onAuthChange === "function") {
