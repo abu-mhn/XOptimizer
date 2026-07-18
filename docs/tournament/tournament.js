@@ -432,6 +432,20 @@ function pushSwissMatchStart(matchId, startedAt) {
 }
 
 function initSwissRoomOnLoad() {
+  // A finished tournament shouldn't reopen as the Hosting landing view. The
+  // completed board is rendered from the local SWISS_KEY snapshot, which
+  // survives reloads independently of the room pointer — so a stale "complete"
+  // state shows even when there's no reconnect pointer at all. Clear it here,
+  // up front, so the load lands on the setup form / Open Tournaments list. The
+  // tournament stays reachable from the Past archive and Tournament History.
+  const localState = loadSwiss();
+  if (localState && typeof isTournamentComplete === "function" && isTournamentComplete(localState)) {
+    saveJoinedRoom(null);
+    localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [] }));
+    if (typeof renderSwiss === "function") renderSwiss();
+    return;
+  }
+
   const info = loadJoinedRoom();
   if (!info || !info.editCode) return;
   if (!firebaseReady()) return;
