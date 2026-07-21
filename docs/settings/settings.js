@@ -388,6 +388,24 @@ if ("serviceWorker" in navigator) {
   paint();
 })();
 
+// ===== Settings → Encryption key (recovery) =====
+// Break-glass regeneration of the account's message-encryption key. The key is
+// created + synced automatically (see friends.js), so this is NOT a routine
+// control — it's here only to recover from a broken/lost key. friends.js loads
+// on every page and exposes window.regenerateEncryptionKey; on non-settings
+// pages the button is absent and this no-ops.
+(function initEncryptionKeySetting() {
+  const btn = document.getElementById("settings-regen-key");
+  if (!btn) return; // not the settings page
+  btn.addEventListener("click", () => {
+    if (typeof window.regenerateEncryptionKey === "function") {
+      window.regenerateEncryptionKey();
+    } else {
+      alert("Encryption isn't ready yet — open the Friends tab once, then try again.");
+    }
+  });
+})();
+
   // ===== Account page (sign in/out + profile: username & photo) =====
   // The Account tab is its own page (/account/); this wires it. settings.js
   // loads on every page, so on non-account pages the elements are absent and

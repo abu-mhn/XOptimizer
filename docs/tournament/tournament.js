@@ -1,12 +1,18 @@
 // docs/js/tournament.js - Swiss/single-elim tournament logic + live sync (Firebase)
 // ================= SWISS LIVE SYNC (Firebase Realtime DB) =================
 // When a host generates groups, TWO room codes are created:
-//   - co-host code: view + edit (mirrors state at `swissRooms/{coHostCode}`)
-//   - participant code: view only (mapped via `swissViewCodes/{viewCode}` -> coHostCode)
-// The room state lives at `swissRooms/{coHostCode}` with `viewCode` as metadata.
-// Anyone who enters the co-host code can score; anyone who enters the
-// participant code can only watch. The host (device that created the room)
-// additionally has authority to reset (wipes remote).
+//   - room (edit) code: mirrors state at `swissRooms/{editCode}`
+//   - participant code: view only (mapped via `swissViewCodes/{viewCode}` -> editCode)
+// The room state lives at `swissRooms/{editCode}` with `viewCode` as metadata.
+//
+// Entering a code only decides what you SEE locally. Scoring is gated by the
+// DB rules (database.rules.json): `matches` (and other state) writes are
+// accepted only from the host UID or a UID listed under `coHostUids`. That
+// map is populated by syncCoHostUidWrite for a SIGNED-IN user whose username
+// the host added to the room's `subHosts` list — so the co-host code alone
+// grants no write access; a co-host must be signed in AND on the host's
+// co-host list. The host (device that created the room) additionally has
+// authority to reset (wipes remote).
 const SWISS_ROOM_STORAGE = "beyblade_swiss_room";       // current joined room info (JSON)
 const SWISS_HOST_STORAGE = "beyblade_swiss_host_rooms"; // edit codes this device hosts
 
@@ -112,6 +118,7 @@ function disconnectSwissRoom() {
   swissSubHosts = {};
   swissLiveMatchId = null;
   swissCoHostUidWritten = false;
+  swissCoHostUidReady = Promise.resolve();
   swissSessionRole = null;
   saveJoinedRoom(null);
   // Drop any match-linked state on the scoreboard so leaving a room doesn't
@@ -150,11 +157,40 @@ function recomputeSwissCanEdit() {
   syncCoHostUidWrite();
 }
 
+// Plain-language reason a would-be co-host can't score, matched to the DB
+// rules: `matches` writes are only accepted from the host or a SIGNED-IN
+// user whose UID is in `coHostUids` — which is populated only when their
+// USERNAME is on the host's co-host list (see syncCoHostUidWrite). Entering
+// the co-host *code* is not enough. Used to turn the previously-silent
+// "tap does nothing" into an actionable message.
+function coHostEditBlockReason() {
+  const signedIn = !!((window.getCurrentUser && window.getCurrentUser()) || null);
+  if (!signedIn) {
+    return "You're not signed in on this device, so scoring is locked. Sign in with the account the host added as a co-host, then reopen the tournament.";
+  }
+  const uname = (window.getCurrentUsername && window.getCurrentUsername()) || "";
+  if (!uname) {
+    return "Your profile is still loading. Give it a moment, then tap the match again.";
+  }
+  return `“${uname}” isn't on this tournament's co-host list, so scoring is locked. Ask the host to add this exact username under “Manage co-hosts,” then reopen the tournament.`;
+}
+
+function notifyCoHostEditBlocked() {
+  alert(coHostEditBlockReason());
+}
+
 // Tracks whether THIS device has already written its UID into the room's
 // `coHostUids` map for the current session — keeps `syncCoHostUidWrite`
 // idempotent so it doesn't churn Firebase on every render. Reset on
 // disconnect.
 let swissCoHostUidWritten = false;
+
+// Resolves once this device's `coHostUids/<uid>` write has committed (or
+// immediately when no write is needed — host, viewer, or already written).
+// Match/state pushes chain off this so a co-host who scores in the first
+// moment after joining doesn't fire the match write BEFORE the permission
+// write lands (which the DB rules would reject).
+let swissCoHostUidReady = Promise.resolve();
 
 // Mirror the current user's co-host status into `swissRooms/<code>/coHostUids/<uid>`
 // so the security rules can rule-gate match / state writes on host + co-hosts
@@ -181,11 +217,13 @@ function syncCoHostUidWrite() {
   }
   const isSub = isCurrentUserSubHost();
   if (isSub && !swissCoHostUidWritten) {
-    swissRoomRef.child("coHostUids/" + uid).set(true).catch(() => {});
+    // Capture the write promise so match pushes can wait for it to land.
+    swissCoHostUidReady = swissRoomRef.child("coHostUids/" + uid).set(true).catch(() => {});
     swissCoHostUidWritten = true;
   } else if (!isSub && swissCoHostUidWritten) {
     swissRoomRef.child("coHostUids/" + uid).set(null).catch(() => {});
     swissCoHostUidWritten = false;
+    swissCoHostUidReady = Promise.resolve();
   }
 }
 
@@ -419,7 +457,11 @@ function pushSwissMatchUpdate(matchId, match, state, newMatchIds, extraUpdates) 
     }
   }
   if (extraUpdates) Object.assign(updates, extraUpdates);
-  swissRoomRef.update(updates).catch(e => console.warn("Swiss match push failed:", e));
+  // Wait for the coHostUids permission write to land first (resolved instantly
+  // for the host / already-written case) so the rules don't reject this.
+  swissCoHostUidReady
+    .then(() => swissRoomRef.update(updates))
+    .catch(e => console.warn("Swiss match push failed:", e));
 }
 
 // Small push for just the "match is being scored" flag so other refs see
@@ -427,7 +469,8 @@ function pushSwissMatchUpdate(matchId, match, state, newMatchIds, extraUpdates) 
 function pushSwissMatchStart(matchId, startedAt) {
   if (swissApplyingRemote) return;
   if (!swissRoomRef || !swissCanEdit) return;
-  swissRoomRef.child(`matches/${matchId}/startedAt`).set(startedAt)
+  swissCoHostUidReady
+    .then(() => swissRoomRef.child(`matches/${matchId}/startedAt`).set(startedAt))
     .catch(e => console.warn("Swiss start push failed:", e));
 }
 
@@ -1391,7 +1434,7 @@ function resetSwiss() {
 function startSwissMatch(matchId) {
   // Participants (joined via view-only code) can't score — never open the
   // match scoreboard for them, even if something bypasses the UI gating.
-  if (swissEditCode && !swissCanEdit) return;
+  if (swissEditCode && !swissCanEdit) { notifyCoHostEditBlocked(); return; }
   const state = loadSwiss();
   const match = state.matches[matchId];
   if (!match) return;
@@ -3339,6 +3382,20 @@ function renderSwiss() {
       el.addEventListener("click", () => showBeyCheckPopup(id));
       el.addEventListener("keydown", e => {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); showBeyCheckPopup(id); }
+      });
+    });
+  } else if (swissSessionRole === "co-host") {
+    // Joined as a co-host but edit access isn't active (not signed in, or the
+    // account's username isn't on the host's co-host list, or auth was evicted
+    // — see coHostEditBlockReason). Keep the cards tappable so the tap explains
+    // WHY nothing happens instead of silently doing nothing.
+    view.querySelectorAll(".swiss-match-card-play").forEach(el => {
+      const id = el.dataset.match;
+      if (!id) return;
+      el.setAttribute("title", "Tap for co-host access help");
+      el.addEventListener("click", notifyCoHostEditBlocked);
+      el.addEventListener("keydown", e => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); notifyCoHostEditBlocked(); }
       });
     });
   } else {
@@ -6593,7 +6650,7 @@ function showBeyCheckSlotPopup(slotIdx, slot, deck, onSave) {
 function showBeyCheckPopup(matchId) {
   const popup = document.getElementById("bey-check-popup");
   if (!popup) return;
-  if (swissEditCode && !swissCanEdit) return; // viewers don't get bey check
+  if (swissEditCode && !swissCanEdit) { notifyCoHostEditBlocked(); return; } // viewers don't get bey check
 
   const state = loadSwiss();
   const match = state.matches[matchId];
@@ -8322,6 +8379,13 @@ function showTournamentResultsFromHistory(code) {
 // Re-join a previously connected room on page load.
 window.addEventListener("load", initSwissRoomOnLoad);
 
+// Flag the Tournament tab with a "!" — live — when the signed-in user is a
+// co-host on any open tournament. Runs on every page (tournament.js is app-wide).
+// The username often resolves after load, so also (re)start on userprofilechange;
+// startSubHostInviteWatch tears down any prior listeners first.
+window.addEventListener("load", startSubHostInviteWatch);
+window.addEventListener("userprofilechange", startSubHostInviteWatch);
+
 // The room badge shows the signed-in user's profile username — re-render it
 // once the profile loads or changes.
 window.addEventListener("userprofilechange", () => {
@@ -8682,6 +8746,107 @@ function joinMyTournament(room) {
 
 // ===== Public Rooms tab: list open tournaments, click to register. =====
 
+// ===== Tournament tab "co-host invite" alert =====
+// Show a "!" on the Tournament nav tab when the signed-in user has been added
+// as a sub-host (co-host) to any open tournament — so they notice the invite
+// from ANY page, not only inside the Open Tournaments list. tournament.js loads
+// on every page, so this runs app-wide. Cheap: one openTournaments read plus a
+// single leaf read per open room (subHosts/<myKey>).
+function setSubHostTabAlert(on) {
+  const tab = document.querySelector('a.tab[data-mode="swiss"]');
+  if (!tab) return;
+  let dot = tab.querySelector(".tab-alert");
+  if (on && !dot) {
+    dot = document.createElement("span");
+    dot.className = "tab-alert";
+    dot.textContent = "!";
+    dot.title = "You're invited as co-host";
+    dot.setAttribute("aria-label", "You're invited as co-host");
+    tab.appendChild(dot);
+  } else if (!on && dot) {
+    dot.remove();
+  }
+}
+
+// Per-account record of co-host invites the user has acted on (opened that
+// tournament's join screen). Stored locally so the "!" behaves like a
+// dismissible notification: it shows for a NEW invite — on ANY tab, including
+// the Tournament tab — and clears for a tournament only once the user opens it.
+function coHostSeenKey(uid) { return "swissCoHostSeen_" + uid; }
+function loadSeenCoHostInvites(uid) {
+  if (!uid) return [];
+  try { return JSON.parse(localStorage.getItem(coHostSeenKey(uid)) || "[]") || []; }
+  catch (e) { return []; }
+}
+function storeSeenCoHostInvites(uid, codes) {
+  if (!uid) return;
+  try { localStorage.setItem(coHostSeenKey(uid), JSON.stringify(codes || [])); } catch (e) {}
+}
+
+// Show the badge whenever the user is a co-host on a tournament they haven't
+// opened yet — regardless of which tab they're currently on.
+function applyCoHostInviteState(uid, invitedCodes) {
+  const seen = loadSeenCoHostInvites(uid);
+  setSubHostTabAlert(invitedCodes.some(c => seen.indexOf(c) === -1));
+}
+
+// Acting on an invite (opening that tournament's join screen) dismisses the "!"
+// for that tournament only, then re-evaluates any remaining invites.
+function markCoHostInviteSeen(uid, editCode) {
+  if (!uid || !editCode) return;
+  const seen = loadSeenCoHostInvites(uid);
+  if (seen.indexOf(editCode) === -1) {
+    seen.push(editCode);
+    storeSeenCoHostInvites(uid, seen);
+  }
+  applyCoHostInviteState(uid, Object.keys(coHostInvited));
+}
+
+// Live watch that keeps the Tournament-tab "!" current in real time. A listener
+// on `openTournaments` tracks which tournaments exist; for each, a listener on
+// `subHosts/<myKey>` fires the instant the host adds or removes you as a
+// co-host — so the badge updates on its own, with no refresh or tab switch.
+let coHostOpenRef = null;   // listener on openTournaments (child add/remove)
+const coHostSubRefs = {};   // editCode -> ref on subHosts/<myKey>
+let coHostInvited = {};     // editCode -> true (you're currently a co-host there)
+
+function stopSubHostInviteWatch() {
+  if (coHostOpenRef) { try { coHostOpenRef.off(); } catch (e) {} coHostOpenRef = null; }
+  Object.keys(coHostSubRefs).forEach(code => { try { coHostSubRefs[code].off(); } catch (e) {} delete coHostSubRefs[code]; });
+  coHostInvited = {};
+}
+
+function startSubHostInviteWatch() {
+  stopSubHostInviteWatch();
+  if (!document.querySelector('a.tab[data-mode="swiss"]')) return;
+  if (!firebaseReady()) { setSubHostTabAlert(false); return; }
+  const user = (typeof getCurrentUser === "function" && getCurrentUser()) || null;
+  const uname = (window.getCurrentUsername && window.getCurrentUsername()) || "";
+  const myKey = uname ? subHostKey(uname) : "";
+  if (!user || !myKey) { setSubHostTabAlert(false); return; }
+  const uid = user.uid;
+  const db = initFirebase();
+  setSubHostTabAlert(false); // baseline until the listeners report in
+  const recompute = () => applyCoHostInviteState(uid, Object.keys(coHostInvited));
+  // openTournaments keys ARE the edit codes (openTournaments/<editCode>).
+  const watchRoom = (code) => {
+    if (!code || coHostSubRefs[code]) return;
+    const ref = db.ref("swissRooms/" + code + "/subHosts/" + myKey);
+    coHostSubRefs[code] = ref;
+    ref.on("value", s => {
+      if (s.val()) coHostInvited[code] = true; else delete coHostInvited[code];
+      recompute();
+    }, () => {});
+  };
+  const unwatchRoom = (code) => {
+    if (coHostSubRefs[code]) { try { coHostSubRefs[code].off(); } catch (e) {} delete coHostSubRefs[code]; }
+    if (coHostInvited[code]) { delete coHostInvited[code]; recompute(); }
+  };
+  coHostOpenRef = db.ref("openTournaments");
+  coHostOpenRef.on("child_added", s => watchRoom(s.key), () => {});
+  coHostOpenRef.on("child_removed", s => unwatchRoom(s.key), () => {});
+}
+
 function refreshOpenTournamentRooms() {
   const list = document.getElementById("swiss-rooms-list");
   const status = document.getElementById("swiss-rooms-status");
@@ -8701,6 +8866,7 @@ function refreshOpenTournamentRooms() {
       if (!rooms.length) {
         list.innerHTML = `<p class="swiss-rooms-empty">No tournaments right now. Ask your host to create one.</p>`;
         setStatus("");
+        setSubHostTabAlert(false);
         return;
       }
       // Cross-check each lobby entry against the underlying swissRoom.
@@ -8768,6 +8934,17 @@ function refreshOpenTournamentRooms() {
           }
         });
         live.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+        // Refresh the tab "!" from what we just read (reuses subHosts — no extra
+        // requests). It stays lit for any invite the user hasn't opened yet; it
+        // clears per-tournament when they open that tournament's join screen.
+        const myUnameLA = (window.getCurrentUsername && window.getCurrentUsername()) || "";
+        const myKeyLA = myUnameLA ? subHostKey(myUnameLA) : "";
+        const uidLA = (typeof getCurrentUser === "function" && getCurrentUser()) ? getCurrentUser().uid : "";
+        if (myKeyLA && uidLA) {
+          applyCoHostInviteState(uidLA, live.filter(r => r.subHosts && r.subHosts[myKeyLA]).map(r => r.editCode));
+        } else {
+          setSubHostTabAlert(false);
+        }
         if (!live.length) {
           list.innerHTML = `<p class="swiss-rooms-empty">No tournaments right now. Ask your host to create one.</p>`;
           setStatus("");
@@ -8847,6 +9024,11 @@ function renderLobbyRooms(list, rooms) {
       // Closed rooms require the room code before the join picker opens — but
       // the host (and invited sub-hosts) skip the gate since they own/run it.
       const amSubHost = !!(myKey && room.subHosts && room.subHosts[myKey]);
+      // Opening your invited tournament dismisses the tab "!" for it.
+      if (amSubHost) {
+        const uid = (typeof getCurrentUser === "function" && getCurrentUser()) ? getCurrentUser().uid : "";
+        markCoHostInviteSeen(uid, room.editCode);
+      }
       if (room.visibility === "closed" && !isCurrentUserRoomHost(room) && !amSubHost) {
         showClosedRoomCodePrompt(room);
       } else {

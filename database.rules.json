@@ -425,6 +425,7 @@
       "$uid": {
         ".read":  "auth != null && auth.uid === $uid",
         ".write": "auth != null && auth.uid === $uid",
+        "priv":    { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 4000" },
         "salt":    { ".validate": "newData.isString() && newData.val().length <= 64" },
         "iv":      { ".validate": "newData.isString() && newData.val().length <= 32" },
         "wrapped": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 4000" },

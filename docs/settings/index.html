@@ -39,6 +39,7 @@
 
   <!-- Optional theme color -->
   <meta name="theme-color" content="#0a4797">
+  <link rel="manifest" href="/manifest.webmanifest">
 
   <title>Settings — X Optimizer</title>
   <link rel="stylesheet" href="style.css?v=20260718">
@@ -669,6 +670,12 @@
           <span class="setting-label-text">Features</span>
           <button type="button" id="settings-show-features" class="setting-action-btn">Show Features</button>
         </div>
+
+        <div class="setting-item">
+          <span class="setting-label-text">Encryption key</span>
+          <button type="button" id="settings-regen-key" class="setting-action-btn">Regenerate key</button>
+        </div>
+        <p class="setting-hint">Messages use a key generated automatically for your account — you never normally touch this. Only regenerate if messages stop decrypting or you want a fresh key. Doing so makes messages you received before unreadable on all your devices.</p>
       </fieldset>
     </section>
 

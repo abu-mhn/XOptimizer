@@ -462,6 +462,44 @@ h1 {
     position: relative;
 }
 
+/* "!" alert badge on a nav tab — e.g. the Tournament tab when the signed-in
+   user has been added as a co-host to an open tournament. Pinned to the tab's
+   top-right corner; the ring separates it from the tab's own background. */
+.tab-alert {
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 3px;
+    border-radius: 999px;
+    background: #f85149;
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 800;
+    line-height: 15px;
+    text-align: center;
+    box-shadow: 0 0 0 2px #161b22;
+    pointer-events: none;
+}
+
+/* Numeric unread-count badge on the Friends row inside the More menu. The row
+   is a flex line, so margin-left:auto parks the count at the right edge. */
+.tab-count {
+    margin-left: auto;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #f85149;
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 800;
+    line-height: 18px;
+    text-align: center;
+    pointer-events: none;
+}
+
 .tab-label {
     font-size: 0.6rem;
     line-height: 1;
@@ -16874,6 +16912,19 @@ img.fr-profile-trigger:hover { transform: scale(1.08); border-color: #58a6ff; }
 .fr-enc-btn:hover { background: rgba(140, 149, 159, 0.16); }
 .fr-enc-primary { background: #1f6feb; color: #fff; border-color: transparent; }
 .fr-enc-primary:hover { background: #388bfd; }
+.fr-enc-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 14px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #56d364;
+    background: rgba(63, 185, 80, 0.12);
+    border: 1px solid rgba(63, 185, 80, 0.35);
+}
 
 body.light-mode .fr-enc,
 body.tropical-mode .fr-enc,

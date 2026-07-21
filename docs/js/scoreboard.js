@@ -230,6 +230,8 @@ let scoreboardSaveCallback = null;
       cb(out);
     }
     pendingResetOnPortrait = true;
+    // Desktop: no portrait tilt will follow, so hide + reset the modal now.
+    if (!isMobile && desktopModalOpen) closeScoreboardDesktopModal();
   });
 
   const isLandscape = () => screen.orientation ? screen.orientation.type.startsWith("landscape") : window.innerWidth > window.innerHeight;
@@ -276,20 +278,48 @@ let scoreboardSaveCallback = null;
     updateDisplay();
     scoreboardSaveCallback = typeof onSave === "function" ? onSave : null;
     closeBtn?.classList.toggle("hidden", !scoreboardSaveCallback);
-    if (isLandscape()) { overlay.classList.remove("hidden"); enterFullscreen(); }
-    else { overlay.classList.add("hidden"); }
+    // Mobile is tilt-driven: reveal now only if already landscape, otherwise
+    // the orientation handler shows it on the next tilt. Desktop has no tilt —
+    // openScoreboard reveals the board as a modal popup itself (below).
+    if (isMobile) {
+      if (isLandscape()) { overlay.classList.remove("hidden"); enterFullscreen(); }
+      else { overlay.classList.add("hidden"); }
+    }
   }
 
-  // Scores are entered only via the scoreboard overlay, and the overlay is
-  // only revealed by tilting the phone to landscape. openScoreboard is the
-  // explicit (tap-to-score) entry — it alerts on desktop.
-  window.openScoreboard = function (nameA, nameB, onSave, initialA, initialB) {
-    if (!isMobile) {
-      alert("Scoring uses the tilt-activated scoreboard — open this page on your phone and rotate to landscape.");
-      return;
+  // On desktop there's no tilt to reveal/hide the board, so we show it as a
+  // modal popup (the overlay is position:fixed inset:0, so removing `hidden`
+  // presents the same board a tilted phone shows) and hide it again on save /
+  // Escape. Tracked so the close + Escape handlers know a desktop modal is up.
+  let desktopModalOpen = false;
+  function openScoreboardDesktopModal() {
+    overlay.classList.remove("hidden");
+    desktopModalOpen = true;
+  }
+  function closeScoreboardDesktopModal() {
+    overlay.classList.add("hidden");
+    desktopModalOpen = false;
+    pendingResetOnPortrait = false;
+    if (typeof window.resetScoreboardToDefault === "function") {
+      window.resetScoreboardToDefault();
     }
+  }
+
+  // Scores are entered only via the scoreboard overlay. On mobile it's revealed
+  // by tilting to landscape; on desktop openScoreboard shows it as a modal
+  // popup directly (no tilt / fullscreen needed).
+  window.openScoreboard = function (nameA, nameB, onSave, initialA, initialB) {
     setupScoreboard(nameA, nameB, onSave, initialA, initialB);
+    if (!isMobile) openScoreboardDesktopModal();
   };
+
+  // Desktop dismiss without saving — Escape closes the modal and clears the
+  // (unsaved) match context. No-op on mobile / when no modal is open.
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !desktopModalOpen) return;
+    scoreboardSaveCallback = null;
+    closeScoreboardDesktopModal();
+  });
 
   // armScoreboard is the silent (auto) entry — used by Battle Royale to arm the
   // board the moment a battle is accepted, so the Judge just tilts to score.
