@@ -304,7 +304,7 @@ Other
 if ("serviceWorker" in navigator) {
   // Defer until after load so it doesn't fight the initial render.
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(err => {
+    navigator.serviceWorker.register("../sw.js").catch(err => {
       console.info("Service worker registration failed:", err && err.message);
     });
   });

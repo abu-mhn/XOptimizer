@@ -301,8 +301,20 @@
     if (!cryptoOk() || !myUid()) return Promise.resolve(null);
     keyReadyPromise = (async () => {
       const local = await getLocalKeyPair();
-      if (local) { currentKeyPair = local; ensurePublished(local.pubJwk); return local; }
       const vault = await readVault();
+      if (local) {
+        // Reconcile against the vault — the source of truth for the account's
+        // shared key. If it holds a DIFFERENT v2 key (regenerated on another
+        // device), adopt it so every device converges on ONE key instead of
+        // drifting apart (drift is what surfaces as "Unable to decrypt"). Drop
+        // the derived thread caches, since they came from the old local key.
+        if (vault && vault.priv && vault.pubJwk && vault.pubJwk !== local.pubJwk) {
+          const kp = await importVaultV2(vault);
+          clearThreadCaches();
+          currentKeyPair = kp; ensurePublished(kp.pubJwk); return kp;
+        }
+        currentKeyPair = local; ensurePublished(local.pubJwk); return local;
+      }
       // v2: private key stored directly — import with no password.
       if (vault && vault.priv) {
         const kp = await importVaultV2(vault);
