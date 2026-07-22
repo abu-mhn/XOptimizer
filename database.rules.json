@@ -397,6 +397,16 @@
       }
     },
 
+    "presence": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid",
+        "online":   { ".validate": "newData.isBoolean()" },
+        "lastSeen": { ".validate": "newData.isNumber()" },
+        "$other":   { ".validate": false }
+      }
+    },
+
     "messages": {
       "$threadId": {
         ".read": "auth != null && $threadId.contains(auth.uid)",

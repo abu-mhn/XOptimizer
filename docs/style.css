@@ -16787,6 +16787,37 @@ img.fr-profile-trigger:hover { transform: scale(1.08); border-color: #58a6ff; }
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+/* Name + presence stacked in one flex cell. */
+.fr-namecol {
+    position: relative;
+    z-index: 1;
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+.fr-namecol .fr-name { flex: 0 0 auto; }
+.fr-presence {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.7rem;
+    color: #8b949e;
+    white-space: nowrap;
+}
+.fr-presence-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #6e7681;
+    flex: 0 0 auto;
+}
+.fr-presence.is-online { color: #3fb950; }
+.fr-presence.is-online .fr-presence-dot {
+    background: #3fb950;
+    box-shadow: 0 0 0 2px rgba(63, 185, 80, 0.22);
+}
 .fr-row .fr-actions { position: relative; z-index: 1; }
 .fr-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
 .fr-pending { color: #8b949e; font-size: 0.78rem; font-style: italic; }

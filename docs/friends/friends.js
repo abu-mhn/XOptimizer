@@ -49,6 +49,9 @@
   const threadSeen = {};         // threadId -> Set of message ids seen this session
   const threadRefs = {};         // threadId -> ref (per-friend unread listener)
   let friendsSeen = null;        // friendUid -> status, for request-notification diffing
+  const presenceMap = {};        // friendUid -> { online, lastSeen } (live)
+  const presenceRefs = {};       // friendUid -> presence/<uid> ref (per-friend listener)
+  let presenceConnRef = null;    // .info/connected listener for MY presence writer
 
   // Persistent per-thread read marker (localStorage) so that reading a
   // conversation sticks across page navigations — each tab is a full page load,
@@ -369,8 +372,75 @@
       friendsCache = snap.val() || {};
       detectNewRequests();
       syncUnreadListeners();
+      syncPresenceListeners();
       if (tabVisible()) render();
     });
+  }
+
+  // ---- presence (online / last-seen) ----
+  // Writer: mark MY presence online while the socket is connected, and arm an
+  // onDisconnect so it flips to offline + a lastSeen timestamp the instant this
+  // tab closes or drops connection. Needs the `presence` rule deployed.
+  function initPresence() {
+    const uid = myUid(), database = db();
+    if (!uid || !database || typeof firebase === "undefined") return;
+    teardownPresenceWriter();
+    const ref = database.ref("presence/" + uid);
+    const TS = firebase.database.ServerValue.TIMESTAMP;
+    presenceConnRef = database.ref(".info/connected");
+    presenceConnRef.on("value", snap => {
+      if (snap.val() !== true) return;
+      ref.onDisconnect().set({ online: false, lastSeen: TS })
+        .then(() => ref.set({ online: true, lastSeen: TS }))
+        .catch(() => {});
+    });
+  }
+  function teardownPresenceWriter() {
+    if (presenceConnRef) { try { presenceConnRef.off(); } catch (e) {} presenceConnRef = null; }
+  }
+
+  // Reader: one live listener per accepted friend on their presence node.
+  function syncPresenceListeners() {
+    const database = db();
+    if (!database) return;
+    const want = {};
+    Object.keys(friendsCache).forEach(fuid => {
+      if (friendsCache[fuid].status === "friends") want[fuid] = true;
+    });
+    Object.keys(presenceRefs).forEach(fuid => {
+      if (!want[fuid]) { try { presenceRefs[fuid].off(); } catch (e) {} delete presenceRefs[fuid]; delete presenceMap[fuid]; }
+    });
+    Object.keys(want).forEach(fuid => {
+      if (presenceRefs[fuid]) return;
+      const ref = database.ref("presence/" + fuid);
+      presenceRefs[fuid] = ref;
+      ref.on("value", s => {
+        presenceMap[fuid] = s.val() || null;
+        if (tabVisible()) render();
+      }, () => {});
+    });
+  }
+  function teardownPresenceReaders() {
+    Object.keys(presenceRefs).forEach(fuid => { try { presenceRefs[fuid].off(); } catch (e) {} delete presenceRefs[fuid]; });
+    Object.keys(presenceMap).forEach(k => delete presenceMap[k]);
+  }
+
+  // "Online" / "Last seen 5m ago" from a friend's presence record.
+  function lastSeenLabel(ts) {
+    if (!ts) return "Offline";
+    const diff = Date.now() - ts;
+    if (diff < 60000) return "Last seen just now";
+    const m = Math.floor(diff / 60000);
+    if (m < 60) return `Last seen ${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `Last seen ${h}h ago`;
+    return `Last seen ${Math.floor(h / 24)}d ago`;
+  }
+  function presenceHtml(fuid) {
+    const p = presenceMap[fuid];
+    const online = !!(p && p.online);
+    const label = online ? "Online" : lastSeenLabel(p && p.lastSeen);
+    return `<span class="fr-presence ${online ? "is-online" : "is-offline"}"><span class="fr-presence-dot"></span>${esc(label)}</span>`;
   }
 
   // Pop a toast for any brand-new incoming friend request.
@@ -541,7 +611,10 @@
         return `
           <div class="fr-row fr-friend" data-pkey="${esc(usernameKeyFor(f.name || ""))}">
             ${rowAvatarHtml(f.name)}
-            ${profileNameHtml(f.name, u ? ` <span class="fr-unread">${u}</span>` : "")}
+            <span class="fr-namecol">
+              ${profileNameHtml(f.name, u ? ` <span class="fr-unread">${u}</span>` : "")}
+              ${presenceHtml(f.uid)}
+            </span>
             <span class="fr-actions">
               <button type="button" class="fr-btn fr-btn-msg" data-chat="${esc(f.uid)}">Message</button>
               <button type="button" class="fr-btn fr-btn-decline" data-remove="${esc(f.uid)}" title="Remove friend">&times;</button>
@@ -681,11 +754,12 @@
 
   // Bind the request/message listeners on every page once signed in, so toasts
   // fire even while the user is on another tab.
-  function boot() { if (myUid()) { bindListeners(); } updateFriendsNavBadges(); }
+  function boot() { if (myUid()) { bindListeners(); initPresence(); } updateFriendsNavBadges(); }
   window.addEventListener("userprofilechange", () => {
     // Account changed — reset everything (including the per-account crypto keys).
     listenersBound = false; friendsCache = {}; friendsSeen = null;
     Object.keys(threadRefs).forEach(t => { try { threadRefs[t].off(); } catch (e) {} delete threadRefs[t]; });
+    teardownPresenceWriter(); teardownPresenceReaders();
     Object.keys(unread).forEach(k => delete unread[k]);   // don't carry counts across accounts
     closeChatRefOnly(); activeChat = null;
     resetCryptoCaches();
