@@ -385,14 +385,20 @@
     const uid = myUid(), database = db();
     if (!uid || !database || typeof firebase === "undefined") return;
     teardownPresenceWriter();
-    const ref = database.ref("presence/" + uid);
     const TS = firebase.database.ServerValue.TIMESTAMP;
+    const connsRef = database.ref("presence/" + uid + "/connections");
+    const lastSeenRef = database.ref("presence/" + uid + "/lastSeen");
     presenceConnRef = database.ref(".info/connected");
     presenceConnRef.on("value", snap => {
       if (snap.val() !== true) return;
-      ref.onDisconnect().set({ online: false, lastSeen: TS })
-        .then(() => ref.set({ online: true, lastSeen: TS }))
-        .catch(() => {});
+      // Register THIS page/connection; onDisconnect removes only this one, so
+      // navigating between tabs (old connection leaves, new joins) never marks
+      // you offline. You're "online" while any connection exists.
+      const con = connsRef.push();
+      con.onDisconnect().remove();
+      con.set(true).catch(() => {});
+      lastSeenRef.onDisconnect().set(TS);   // stamp when the LAST connection drops
+      lastSeenRef.set(TS).catch(() => {});
     });
   }
   function teardownPresenceWriter() {
@@ -415,7 +421,9 @@
       const ref = database.ref("presence/" + fuid);
       presenceRefs[fuid] = ref;
       ref.on("value", s => {
-        presenceMap[fuid] = s.val() || null;
+        const v = s.val() || {};
+        const conns = v.connections || {};
+        presenceMap[fuid] = { online: Object.keys(conns).length > 0, lastSeen: v.lastSeen || null };
         if (tabVisible()) render();
       }, () => {});
     });

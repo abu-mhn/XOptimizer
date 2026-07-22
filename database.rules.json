@@ -401,9 +401,9 @@
       ".read": "auth != null",
       "$uid": {
         ".write": "auth != null && auth.uid === $uid",
-        "online":   { ".validate": "newData.isBoolean()" },
-        "lastSeen": { ".validate": "newData.isNumber()" },
-        "$other":   { ".validate": false }
+        "lastSeen":    { ".validate": "newData.isNumber()" },
+        "connections": { "$conn": { ".validate": "newData.isBoolean()" } },
+        "$other":      { ".validate": false }
       }
     },
 
