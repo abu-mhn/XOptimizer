@@ -72,7 +72,7 @@ const DATA = {
     { atk: 58, def: 25, sta: 17, weight: 41.4, spindirection: "R", name: "Dran Strike", codename: "DRANSTRIKE" },
     { atk: 60, def: 25, sta: 30, weight: 38.7, spindirection: "R", name: "Aero Pegasus", codename: "AEROPEGASUS", exclusive: true },
     { atk: 13, def: 60, sta: 27, weight: 35.1, spindirection: "R", name: "Wyvern Hover", codename: "WYVERNHOVER", exclusive: true },
-    { atk: 0, def: 0, sta: 0, weight: 36.6, spindirection: "R", name: "Orochi Cluster", codename: "OROCHICLUSTER", exclusive: true },
+    { atk: 65, def: 15, sta: 20, weight: 36.6, spindirection: "R", name: "Orochi Cluster", codename: "OROCHICLUSTER", exclusive: true },
     { atk: 55, def: 15, sta: 30, weight: 31.0, spindirection: "R", name: "Storm Pegasis", codename: "STORMPEGASIS" },
     { atk: 10, def: 60, sta: 30, weight: 37.4, spindirection: "R", name: "Heavens Ring", codename: "HEAVENSRING" },
     { atk: 85, def: 35, sta: 25, weight: 43.7, spindirection: "R", name: "Glory Valkyrie", codename: "GLORYVALKYRIE", expandCx: true },
@@ -83,7 +83,9 @@ const DATA = {
       ]
     },
     { atk: 22, def: 60, sta: 18, weight: 29.5, spindirection: "R", name: "Thanos", codename: "THANOS" },
-    { atk: 17, def: 55, sta: 28, weight: 33.6, spindirection: "R", name: "Iron Man", codename: "IRONMAN" }
+    { atk: 17, def: 55, sta: 28, weight: 33.6, spindirection: "R", name: "Iron Man", codename: "IRONMAN" },
+    { atk: 33, def: 17, sta: 50, weight: 33.2, spindirection: "R", name: "Spider-Man", codename: "SPIDER-MAN" },
+    { atk: 55, def: 22, sta: 23, weight: 34.3, spindirection: "R", name: "Venom", codename: "VENOM" }
   ],
 
   lockChips: [
@@ -173,6 +175,7 @@ const DATA = {
     { atk: 10, def: 25, sta: 5, weight: 5.3, height: 60, spindirection: "R", name: "Vertical", codename: "V" },
     { atk: 30, def: 5, sta: 5, weight: 4.9, height: 50, spindirection: "R", name: "Knuckle", codename: "K" },
     { atk: 17, def: 10, sta: 13, weight: 4.5, height: 70, spindirection: "R", name: "Odd", codename: "O" },
+    { atk: 37, def: 9, sta: 4, weight: 11.6, height: 90, spindirection: "R", name: "Gravity", codename: "G" },
   ],
 
   ratchets: [
