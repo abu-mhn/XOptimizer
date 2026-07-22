@@ -88,6 +88,7 @@ Tournament
 - Fee tracking: a "Keeper" (handles participation fees), once invited to a tournament as a co-host, can tap each registrant to mark them Paid / Unpaid — the host can too. Everyone in the room sees a green "Paid ✓" badge, and the registrant count shows a "· N paid" tally for the host / Keeper. Stored per registrant (registrants/$id/paid)
 - Participant limit: set a maximum number of registrants when creating a tournament (a "Set limit / No limit" step after picking the format, with − / + steppers), or change it anytime from the registration screen via the "Cap N" chip. Registration closes automatically when the cap is reached — the count shows "N / cap", a red "Full" badge appears, and the self-register / bulk-guest buttons disable. The Open Tournaments lobby shows each room's limit ("5 / 16 registered") and a "Full" badge so players see it before joining
 - Lobby cards flag a tournament you've been invited to co-host with a small "!" alert badge
+- The Tournament tab itself shows a live "!" the moment a host adds you as a co-host to any open tournament — visible from any page, and it clears once you open that tournament
 - Edit the format while waiting for players — tap the format chip to switch between Swiss, Round Robin and Single Elimination, or the groups / rounds chips to adjust them; registrants are kept, no reset needed. Switching INTO a knockout format (Swiss + Top N or Round Robin + Top N) re-opens the Top-N picker so the host picks the bracket size right there — same flow as create time
 - Test button: bulk-adds synthetic participants for QA — visible only to accounts tagged "Tester"
 - Auto-build (Test) button in the Register popup — Tester-only. Prompts for one of the nine achievements and fills the 3-slot deck with a pre-built combo guaranteed to satisfy that achievement's win condition. Lets a tester verify each achievement's creditOnWin end-to-end without hand-rolling parts
@@ -113,7 +114,7 @@ Tournament
 - Bey Check slots show just "Slot 1 / 2 / 3" with an invisible-scrollbar part row (swipe still works)
 - Swiss + Top N auto-generates the knockout bracket from group standings the moment every group's final round completes — top finishers from each group are pooled, sorted by Swiss tiebreakers, and seeded into a standard fold bracket (1 vs N, 2 vs N-1, …). Non-power-of-2 N pads with byes that auto-advance, so Top 10 / Top 12 work the same as Top 8 / Top 16. Legacy Top 8 tournaments already in flight keep their original QF/SF/F structure
 - Scoreboard round counter above VS, advancing every 3 score taps
-- Tilt-activated scoreboard on mobile (rotate to landscape)
+- Scoreboard scoring on any device — rotate to landscape on mobile, or it opens as a popup on desktop (no tilt needed; Esc or the check button closes it)
 - Match-start alerts — when a host goes LIVE on a match, every other device connected to the room (host, co-hosts, participants, viewers — everyone in the room) pops an in-app toast in the top-right naming the players + round / group, with a "You're up!" green highlight when the signed-in user's username is one of the players. Tap to dismiss or auto-dismisses after 8s. Optional system notifications via the "Turn on alerts" button in the first toast — once Notification permission is granted, every later match-start also fires an OS-level notification so users still get pinged when the phone is locked or the browser tab is in the background (mobile Chrome / Edge / Brave supported; iOS Safari needs the site installed as a PWA via Add to Home Screen). A Match Alerts row in Settings shows the current state (unsupported / blocked / off / on) and lets you turn alerts on, or mute them per device without revoking the permission
 - Share button opens a popup for date, time, stadium (Xtreme / Infinity / Double Xtreme), rule (Official / Unofficial), and remark — date renders as "14 May 2026 (Thursday)"
 - Sharing opens the OS native share sheet via navigator.share when available (mobile Chrome / Edge / Brave / Safari, recent desktop Edge) — pick WhatsApp, Discord, Messages, etc. straight from the picker. Desktop browsers without the Web Share API fall back to clipboard copy (button flashes a thumbs-up) so you can paste anywhere yourself
@@ -173,9 +174,8 @@ Battle Royale
 Friends
 - A Friends tab (sign-in only): add other players by their username, accept or decline incoming requests, and remove friends
 - Friend, request and pending rows show each person's profile photo and banner; tap a name or avatar to open their profile card. The chat header shows the friend's photo + banner too. Encryption status and the whole tab follow your active theme
-- Direct messages with accepted friends — live one-on-one chat with unread badges (read state persists across page navigations), plus toast / system notifications for new messages and new friend requests on any tab
-- End-to-end encrypted messages: each account has one ECDH keypair; a per-conversation AES-GCM key is derived from your private key + the friend's public key, so the server only ever stores ciphertext — no readable text and no sender name. Strictly enforced (the DB rejects any plaintext message), so you can only message a friend once they've set up their key
-- Cross-device encryption: your private key is wrapped under an encryption password you choose (PBKDF2 + AES-GCM) and synced via the database, so entering that password on a new device unlocks the same messages everywhere. The password is separate from your login; forget it and messages are unrecoverable (a reset makes a new key, after which older messages can't be read)
+- Direct messages with accepted friends — live one-on-one chat with unread badges (read state persists across page navigations). The More tab and the Friends menu item show your total unread message count, plus toast / system notifications for new messages and new friend requests on any tab
+- Encrypted messages: each conversation uses an AES-GCM key derived from the two participants' account IDs, so message rows only ever store ciphertext (no readable text, no sender name). The key is the same on every device automatically — no password, no setup, nothing to unlock — so your chats open everywhere you sign in, with nothing to sync or recover
 - Add Friend from a profile: both the hover profile card and the full profile popup show an "Add Friend" button (labelled Accept Friend / Requested / Friends to match your current status, and hidden on your own profile)
 
 Buzz Bey
@@ -386,24 +386,6 @@ if ("serviceWorker" in navigator) {
   });
 
   paint();
-})();
-
-// ===== Settings → Encryption key (recovery) =====
-// Break-glass regeneration of the account's message-encryption key. The key is
-// created + synced automatically (see friends.js), so this is NOT a routine
-// control — it's here only to recover from a broken/lost key. friends.js loads
-// on every page and exposes window.regenerateEncryptionKey; on non-settings
-// pages the button is absent and this no-ops.
-(function initEncryptionKeySetting() {
-  const btn = document.getElementById("settings-regen-key");
-  if (!btn) return; // not the settings page
-  btn.addEventListener("click", () => {
-    if (typeof window.regenerateEncryptionKey === "function") {
-      window.regenerateEncryptionKey();
-    } else {
-      alert("Encryption isn't ready yet — open the Friends tab once, then try again.");
-    }
-  });
 })();
 
   // ===== Account page (sign in/out + profile: username & photo) =====
