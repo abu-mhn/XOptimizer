@@ -84,7 +84,7 @@ const DATA = {
     },
     { atk: 22, def: 60, sta: 18, weight: 29.5, spindirection: "R", name: "Thanos", codename: "THANOS" },
     { atk: 17, def: 55, sta: 28, weight: 33.6, spindirection: "R", name: "Iron Man", codename: "IRONMAN" },
-    { atk: 33, def: 17, sta: 50, weight: 33.2, spindirection: "R", name: "Spider-Man", codename: "SPIDER-MAN" },
+    { atk: 33, def: 17, sta: 50, weight: 33.2, spindirection: "R", name: "Spider Man", codename: "SPIDERMAN" },
     { atk: 55, def: 22, sta: 23, weight: 34.3, spindirection: "R", name: "Venom", codename: "VENOM" }
   ],
 
