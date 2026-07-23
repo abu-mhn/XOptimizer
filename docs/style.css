@@ -8482,11 +8482,52 @@ body.mono-mode .popup-ok:hover {
     flex: 0 0 auto;
 }
 
-/* The Calling Monitor opens a second window for a projector/TV — a desktop-only
-   flow. Hide its toolbar button on touch / narrow (mobile) screens. */
-.swiss-monitor-btn { display: inline-flex; }
-@media (pointer: coarse), (max-width: 700px) {
-    .swiss-monitor-btn { display: none !important; }
+/* Calling Monitor — desktop opens a second window (projector), mobile opens a
+   full-screen overlay in-page. Shown on all devices. */
+.calling-monitor-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    background: #0d1117;
+    color: #e6edf3;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding: 18px 16px 28px;
+}
+.calling-monitor-overlay .mon-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding-right: 44px; border-bottom: 2px solid #30363d; padding-bottom: 10px; margin-bottom: 16px; }
+.calling-monitor-overlay .mon-title { font-size: 1.4rem; font-weight: 800; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calling-monitor-overlay .mon-clock { font-size: 1.05rem; font-weight: 700; color: #8b949e; font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+.calling-monitor-overlay .mon-now h2 { font-size: .8rem; letter-spacing: 2px; color: #3fb950; margin-bottom: 10px; }
+.calling-monitor-overlay .mon-upnext h2 { font-size: .8rem; letter-spacing: 2px; color: #8b949e; margin: 22px 0 10px; }
+.calling-monitor-overlay .mon-cards { display: flex; flex-direction: column; gap: 12px; }
+.calling-monitor-overlay .mon-card { background: #161b22; border: 1px solid #30363d; border-radius: 14px; padding: 18px 12px; text-align: center; }
+.calling-monitor-overlay .mon-live { border-color: #3fb950; box-shadow: 0 0 0 2px rgba(63, 185, 80, .25); }
+.calling-monitor-overlay .mon-players { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; max-width: 100%; }
+.calling-monitor-overlay .mon-p { font-size: 1.6rem; font-weight: 800; line-height: 1.15; max-width: 100%; overflow-wrap: anywhere; }
+.calling-monitor-overlay .mon-vs { font-size: 1rem; font-weight: 700; color: #8b949e; }
+.calling-monitor-overlay .mon-ctx { margin-top: 8px; font-size: .85rem; color: #8b949e; font-weight: 600; }
+.calling-monitor-overlay .mon-next { display: flex; flex-direction: column; gap: 8px; }
+.calling-monitor-overlay .mon-next-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 10px 12px; }
+.calling-monitor-overlay .mon-next-players { font-size: 1rem; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calling-monitor-overlay .mon-next-players em { color: #8b949e; font-style: normal; font-weight: 600; margin: 0 4px; }
+.calling-monitor-overlay .mon-next-ctx { font-size: .78rem; color: #8b949e; font-weight: 600; flex: 0 0 auto; }
+.calling-monitor-overlay .mon-empty { font-size: 1.1rem; color: #8b949e; padding: 16px 0; }
+.calling-monitor-overlay .mon-empty-sm { font-size: .95rem; padding: 8px 0; }
+.calling-monitor-overlay .mon-close {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 1;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(33, 38, 45, .92);
+    color: #e6edf3;
+    border: 1px solid #30363d;
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
 }
 
 .swiss-toolbar-actions {

@@ -3155,18 +3155,19 @@ function bindTournamentProfileNames(root) {
 }
 
 // ===== Calling Monitor =====
-// A big-screen "who's up" board for a projector / TV at the venue. Opens in a
-// SEPARATE window (the host keeps the control view on their laptop) and shows
-// live matches as "NOW CALLING" plus the next unplayed ones as "UP NEXT". The
-// parent window owns the data (loadSwiss) and repaints the monitor on every
-// renderSwiss, so it stays live without its own Firebase connection. Desktop
-// only — the toolbar button is hidden on touch / narrow screens via CSS.
-// Optional voice call-outs use the monitor window's built-in Web Speech API
-// (speechSynthesis / "Google voice" on Chrome) — enabled by a one-time click
-// in the monitor (browsers block audio until a user gesture).
-let callingMonitorWin = null;
+// A big "who's up" board — NOW CALLING (live matches) + UP NEXT — repainted on
+// every renderSwiss off local/synced state (no separate Firebase connection).
+// Two display modes:
+//   • Desktop → a SEPARATE window (dual-screen / projector; host keeps control).
+//   • Mobile  → a full-screen OVERLAY in this page (a backgrounded tab would
+//     suspend and stop updating, so a separate window is no good on touch).
+// Voice call-outs use the Web Speech API ("Google voice" on Chrome): the popup
+// speaks via its own window; the overlay speaks via this window.
+let callingMonitor = null;        // active target: { boardEl, speak, isOpen, voiceOn }
+let callingMonitorWin = null;     // desktop popup window (for focus / reuse)
 let announcedLiveIds = new Set(); // match ids already voiced this session
 let prevMonitorVoiceOn = false;   // detect the off→on flip to announce current calls
+let monitorVoiceObj = null;       // cached female voice for the in-page overlay
 
 const CALLING_MONITOR_SHELL = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Calling Monitor</title>
 <style>
@@ -3278,34 +3279,58 @@ function callingMonitorBoardHtml(state) {
     <section class="mon-upnext"><h2>UP NEXT</h2><div class="mon-next">${nextHtml}</div></section>`;
 }
 
-// Speak the call-out in the monitor window's own audio context. All the TTS
-// (voice selection, rate, pitch) lives in the monitor window's __speak — that's
-// where speechSynthesis and its voice list actually load, so picking a female
-// voice cross-window is reliable.
-function announceCall(state, m) {
+// ---- voice for the in-page overlay (mobile): uses THIS window's speechSynthesis.
+// (The desktop popup speaks with its own __speak, defined inside the popup.) ----
+function monitorPickVoice() {
+  let vs = [];
+  try { vs = window.speechSynthesis ? window.speechSynthesis.getVoices() : []; } catch (e) { return null; }
+  if (!vs.length) return null;
+  const by = (re) => vs.find(v => re.test(v.name));
+  return by(/female/i)
+    || by(/\b(Samantha|Victoria|Karen|Moira|Tessa|Zira|Susan|Fiona|Serena|Allison|Ava|Joanna|Salli|Kimberly|Aria|Jenny|Sonia|Michelle|Emma)\b/i)
+    || by(/Google US English/i) || by(/Google UK English Female/i)
+    || vs.find(v => /^en/i.test(v.lang) && !/\b(David|Mark|Guy|George|Daniel|Alex|Fred|Thomas|Ryan|James|Male)\b/i.test(v.name))
+    || vs.find(v => /^en/i.test(v.lang)) || vs[0] || null;
+}
+function monitorSpeak(text) {
   try {
-    if (!callingMonitorWin || callingMonitorWin.closed) return;
-    if (typeof callingMonitorWin.__speak !== "function") return;
-    const label = callingMatchLabel(state, m);
-    callingMonitorWin.__speak("Now calling. " + m.a + ". versus. " + m.b + "." + (label ? " " + label + "." : ""));
+    const SS = window.speechSynthesis;
+    if (!SS) return;
+    if (!monitorVoiceObj) monitorVoiceObj = monitorPickVoice();
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 1.1; u.pitch = 1.05;
+    if (monitorVoiceObj) { u.voice = monitorVoiceObj; u.lang = monitorVoiceObj.lang; }
+    SS.speak(u);
   } catch (e) { /* TTS unavailable — silent */ }
+}
+function monitorPrime() {
+  try { const SS = window.speechSynthesis; if (!SS) return; const u = new SpeechSynthesisUtterance(" "); u.volume = 0; SS.speak(u); } catch (e) {}
+}
+try { if (window.speechSynthesis) { window.speechSynthesis.getVoices(); window.speechSynthesis.onvoiceschanged = () => { monitorVoiceObj = monitorPickVoice(); }; } } catch (e) {}
+
+// Announce via whichever monitor is active (popup window or in-page overlay).
+function announceCall(state, m) {
+  if (!callingMonitor) return;
+  const label = callingMatchLabel(state, m);
+  callingMonitor.speak("Now calling. " + m.a + ". versus. " + m.b + "." + (label ? " " + label + "." : ""));
 }
 
 function updateCallingMonitor() {
-  if (!callingMonitorWin || callingMonitorWin.closed) {
-    callingMonitorWin = null; announcedLiveIds = new Set(); prevMonitorVoiceOn = false; return;
+  if (!callingMonitor || !callingMonitor.isOpen()) {
+    callingMonitor = null; callingMonitorWin = null;
+    announcedLiveIds = new Set(); prevMonitorVoiceOn = false;
+    return;
   }
   let state;
   try {
     state = loadSwiss();
-    const mon = callingMonitorWin.document && callingMonitorWin.document.getElementById("mon");
-    if (mon) mon.innerHTML = callingMonitorBoardHtml(state);
-  } catch (e) { callingMonitorWin = null; return; }
+    const el = callingMonitor.boardEl();
+    if (el) el.innerHTML = callingMonitorBoardHtml(state);
+  } catch (e) { callingMonitor = null; callingMonitorWin = null; return; }
   // Voice call-outs: announce each match the moment it goes LIVE (once).
   try {
-    const voiceOn = !!callingMonitorWin.__voiceOn;
-    // On the off→on flip, forget history so current calls get announced now.
-    if (voiceOn && !prevMonitorVoiceOn) announcedLiveIds = new Set();
+    const voiceOn = callingMonitor.voiceOn();
+    if (voiceOn && !prevMonitorVoiceOn) announcedLiveIds = new Set(); // announce current calls on enable/open
     prevMonitorVoiceOn = voiceOn;
     const live = computeCallingLists(state).live;
     if (voiceOn) live.forEach(m => { if (!announcedLiveIds.has(m.id)) announceCall(state, m); });
@@ -3313,28 +3338,69 @@ function updateCallingMonitor() {
   } catch (e) { /* non-fatal */ }
 }
 
-function openCallingMonitor() {
-  if (callingMonitorWin && !callingMonitorWin.closed) {
-    try { callingMonitorWin.focus(); } catch (e) {}
-    updateCallingMonitor();
-    return;
-  }
+// Desktop: a separate window (dual-screen / projector).
+function openCallingMonitorWindow() {
   const w = (window.screen && screen.availWidth) || 1280;
   const h = (window.screen && screen.availHeight) || 720;
   const win = window.open("", "xoCallingMonitor",
     "width=" + w + ",height=" + h + ",left=0,top=0,menubar=no,toolbar=no,location=no");
-  if (!win) { alert("Couldn't open the monitor — allow pop-ups for this site, then tap Monitor again."); return; }
+  if (!win) { alert("Couldn't open the monitor — allow pop-ups for this site, then tap Monitor again."); return false; }
   callingMonitorWin = win;
   win.document.open();
   win.document.write(CALLING_MONITOR_SHELL);
   win.document.close();
-  try { win.moveTo(0, 0); win.resizeTo(w, h); } catch (e) {}  // fill the screen
-  // Unlock audio + try true fullscreen while still inside the toolbar-button
-  // click gesture (browsers only allow both from a user gesture). If the
-  // browser blocks the auto-fullscreen, the ⛶ button / F11 still work.
+  try { win.moveTo(0, 0); win.resizeTo(w, h); } catch (e) {}
+  // Unlock audio + try fullscreen within the click gesture (both need a gesture).
   try { if (typeof win.__prime === "function") win.__prime(); } catch (e) {}
   try { if (typeof win.__goFullscreen === "function") win.__goFullscreen(); } catch (e) {}
-  updateCallingMonitor();
+  callingMonitor = {
+    boardEl: () => (win.document ? win.document.getElementById("mon") : null),
+    speak: (t) => { try { win.__speak && win.__speak(t); } catch (e) {} },
+    isOpen: () => !!win && !win.closed,
+    voiceOn: () => !!win.__voiceOn,
+  };
+  return true;
+}
+
+// Mobile: a full-screen overlay in THIS page (always live; voice auto-on).
+function openCallingMonitorOverlay() {
+  const overlay = document.createElement("div");
+  overlay.className = "calling-monitor-overlay";
+  overlay.innerHTML = `<div class="mon-board" id="mon"></div>
+    <button type="button" class="mon-close" aria-label="Close monitor" title="Close">&times;</button>`;
+  document.body.appendChild(overlay);
+  const close = () => {
+    clearInterval(overlay.__clockTimer);
+    overlay.remove();
+    callingMonitor = null;
+    announcedLiveIds = new Set(); prevMonitorVoiceOn = false;
+    try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) {}
+  };
+  overlay.querySelector(".mon-close").addEventListener("click", close);
+  overlay.__clockTimer = setInterval(() => {
+    const c = overlay.querySelector(".mon-clock");
+    if (c) c.textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }, 1000);
+  monitorPrime();  // unlock audio inside the toolbar-button click gesture
+  callingMonitor = {
+    boardEl: () => overlay.querySelector(".mon-board"),
+    speak: (t) => monitorSpeak(t),
+    isOpen: () => document.body.contains(overlay),
+    voiceOn: () => true,
+  };
+  return true;
+}
+
+function openCallingMonitor() {
+  // Reuse an already-open monitor.
+  if (callingMonitor && callingMonitor.isOpen()) {
+    if (callingMonitorWin && !callingMonitorWin.closed) { try { callingMonitorWin.focus(); } catch (e) {} }
+    updateCallingMonitor();
+    return;
+  }
+  const touch = window.matchMedia && window.matchMedia("(pointer: coarse), (max-width: 700px)").matches;
+  const ok = touch ? openCallingMonitorOverlay() : openCallingMonitorWindow();
+  if (ok) updateCallingMonitor();
 }
 
 function renderSwiss() {
