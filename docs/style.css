@@ -8502,6 +8502,13 @@ body.mono-mode .popup-ok:hover {
     flex: 0 0 auto;
 }
 
+/* The Calling Monitor opens a second window for a projector/TV — a desktop-only
+   flow. Hide its toolbar button on touch / narrow (mobile) screens. */
+.swiss-monitor-btn { display: inline-flex; }
+@media (pointer: coarse), (max-width: 700px) {
+    .swiss-monitor-btn { display: none !important; }
+}
+
 .swiss-toolbar-actions {
     display: flex;
     flex-wrap: nowrap;

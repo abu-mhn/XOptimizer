@@ -3154,9 +3154,108 @@ function bindTournamentProfileNames(root) {
   });
 }
 
+// ===== Calling Monitor =====
+// A big-screen "who's up" board for a projector / TV at the venue. Opens in a
+// SEPARATE window (the host keeps the control view on their laptop) and shows
+// live matches as "NOW CALLING" plus the next unplayed ones as "UP NEXT". The
+// parent window owns the data (loadSwiss) and repaints the monitor on every
+// renderSwiss, so it stays live without its own Firebase connection. Desktop
+// only — the toolbar button is hidden on touch / narrow screens via CSS.
+let callingMonitorWin = null;
+
+const CALLING_MONITOR_SHELL = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Calling Monitor</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d1117;color:#e6edf3;font-family:system-ui,"Segoe UI",Roboto,sans-serif;min-height:100vh;padding:3vh 4vw}
+.mon-head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #30363d;padding-bottom:12px;margin-bottom:3vh}
+.mon-title{font-size:3.2vw;font-weight:800;letter-spacing:.5px}
+.mon-clock{font-size:2.4vw;font-weight:700;color:#8b949e;font-variant-numeric:tabular-nums}
+.mon-now h2{font-size:1.8vw;letter-spacing:3px;color:#3fb950;margin-bottom:1.5vh}
+.mon-upnext h2{font-size:1.8vw;letter-spacing:3px;color:#8b949e;margin:4vh 0 1.5vh}
+.mon-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(38vw,1fr));gap:2vh 2vw}
+.mon-card{background:#161b22;border:1px solid #30363d;border-radius:16px;padding:3vh 2vw;text-align:center}
+.mon-live{border-color:#3fb950;box-shadow:0 0 0 2px rgba(63,185,80,.25)}
+.mon-players{display:flex;align-items:center;justify-content:center;gap:1.5vw;flex-wrap:wrap}
+.mon-p{font-size:4vw;font-weight:800;line-height:1.1}
+.mon-vs{font-size:2vw;font-weight:700;color:#8b949e}
+.mon-ctx{margin-top:1.5vh;font-size:1.6vw;color:#8b949e;font-weight:600}
+.mon-next{display:flex;flex-direction:column;gap:1vh}
+.mon-next-row{display:flex;justify-content:space-between;align-items:baseline;background:#161b22;border:1px solid #30363d;border-radius:10px;padding:1.4vh 1.6vw}
+.mon-next-players{font-size:2.2vw;font-weight:700}
+.mon-next-players em{color:#8b949e;font-style:normal;font-weight:600;font-size:1.6vw;margin:0 .6vw}
+.mon-next-ctx{font-size:1.5vw;color:#8b949e;font-weight:600}
+.mon-empty{font-size:2.4vw;color:#8b949e;padding:3vh 0}
+.mon-empty-sm{font-size:1.8vw;padding:1.5vh 0}
+</style></head><body><div id="mon"></div>
+<script>setInterval(function(){var c=document.getElementById("mon-clock");if(c)c.textContent=new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});},1000);</script>
+</body></html>`;
+
+function callingMatchLabel(state, m) {
+  if (m.bracket) {
+    const roundMs = Object.values(state.matches || {}).filter(x => x.bracket && x.round === m.round);
+    const nm = (typeof getBracketRoundName === "function") ? getBracketRoundName(roundMs) : "";
+    return nm || "Knockout";
+  }
+  const parts = [];
+  if (typeof m.groupIndex === "number") parts.push("Group " + String.fromCharCode(65 + m.groupIndex));
+  if (typeof m.round === "number") parts.push("Round " + (m.round + 1));
+  return parts.join(" · ");
+}
+
+function computeCallingLists(state) {
+  const matches = state.matches || {};
+  const list = Object.keys(matches).map(id => Object.assign({ id }, matches[id]));
+  const playable = m => m && m.a && m.b && !m.bye;
+  const unscored = m => m.scoreA == null && m.scoreB == null;
+  const live = list.filter(m => playable(m) && unscored(m) && m.startedAt != null)
+    .sort((a, b) => (a.startedAt || 0) - (b.startedAt || 0));
+  const upNext = list.filter(m => playable(m) && unscored(m) && m.startedAt == null)
+    .sort((a, b) => (a.round || 0) - (b.round || 0) || (a.groupIndex || 0) - (b.groupIndex || 0))
+    .slice(0, 8);
+  return { live, upNext };
+}
+
+function callingMonitorBoardHtml(state) {
+  const { live, upNext } = computeCallingLists(state);
+  const liveHtml = live.length
+    ? live.map(m => `<div class="mon-card mon-live"><div class="mon-players"><span class="mon-p">${escapeHtml(m.a)}</span><span class="mon-vs">VS</span><span class="mon-p">${escapeHtml(m.b)}</span></div><div class="mon-ctx">${escapeHtml(callingMatchLabel(state, m))}</div></div>`).join("")
+    : `<div class="mon-empty">No match is live right now.</div>`;
+  const nextHtml = upNext.length
+    ? upNext.map(m => `<div class="mon-next-row"><span class="mon-next-players">${escapeHtml(m.a)} <em>vs</em> ${escapeHtml(m.b)}</span><span class="mon-next-ctx">${escapeHtml(callingMatchLabel(state, m))}</span></div>`).join("")
+    : `<div class="mon-empty mon-empty-sm">Nothing queued.</div>`;
+  return `
+    <div class="mon-head"><span class="mon-title">${escapeHtml(state.tournamentName || "Tournament")}</span><span class="mon-clock" id="mon-clock"></span></div>
+    <section class="mon-now"><h2>NOW CALLING</h2><div class="mon-cards">${liveHtml}</div></section>
+    <section class="mon-upnext"><h2>UP NEXT</h2><div class="mon-next">${nextHtml}</div></section>`;
+}
+
+function updateCallingMonitor() {
+  if (!callingMonitorWin || callingMonitorWin.closed) { callingMonitorWin = null; return; }
+  try {
+    const mon = callingMonitorWin.document && callingMonitorWin.document.getElementById("mon");
+    if (mon) mon.innerHTML = callingMonitorBoardHtml(loadSwiss());
+  } catch (e) { callingMonitorWin = null; }
+}
+
+function openCallingMonitor() {
+  if (callingMonitorWin && !callingMonitorWin.closed) {
+    try { callingMonitorWin.focus(); } catch (e) {}
+    updateCallingMonitor();
+    return;
+  }
+  const win = window.open("", "xoCallingMonitor", "width=1280,height=720");
+  if (!win) { alert("Couldn't open the monitor — allow pop-ups for this site, then tap Monitor again."); return; }
+  callingMonitorWin = win;
+  win.document.open();
+  win.document.write(CALLING_MONITOR_SHELL);
+  win.document.close();
+  updateCallingMonitor();
+}
+
 function renderSwiss() {
   const view = document.getElementById("swiss-view");
   const setup = document.getElementById("swiss-setup");
+  updateCallingMonitor();  // keep any open monitor in step with every render
   if (!view || !setup) return;
 
   // Capture current horizontal scroll of each rounds strip so re-rendering
@@ -3300,6 +3399,7 @@ function renderSwiss() {
         ${showStartKnockoutBtn ? `<button type="button" id="swiss-start-bracket" class="btn">Start Knockout</button>` : ""}
         <div class="swiss-toolbar-actions">
           ${tournamentComplete ? "" : renderSwissShareButton()}
+          ${canEdit && !tournamentComplete && state.matches && Object.keys(state.matches).length ? `<button type="button" id="swiss-monitor" class="btn btn-icon-sm swiss-monitor-btn" aria-label="Open calling monitor" title="Open the calling monitor on a second screen / projector"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="width:15px;height:15px;flex:0 0 auto;"><path d="M20 3H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h6l-2 3v1h8v-1l-2-3h6c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 13H4V5h16v11z"/></svg><span class="swiss-toolbar-btn-label">Monitor</span></button>` : ""}
           ${swissIsHost && !tournamentComplete ? renderCoHostsButton() : ""}
           ${canEdit && !tournamentComplete && canAddParticipant(state) ? `<button type="button" id="swiss-edit-participants" class="btn btn-icon-sm btn-icon-plus" aria-label="Add participant" title="Add participant"><span class="swiss-toolbar-btn-plus-icon">+</span><span class="swiss-toolbar-btn-label">Add</span></button>` : ""}
           ${canEdit && !tournamentComplete && canAddParticipant(state) ? `<button type="button" id="swiss-remove-participants" class="btn btn-icon-sm btn-icon-minus" aria-label="Remove participant" title="Remove participant"><span class="swiss-toolbar-btn-plus-icon">&minus;</span><span class="swiss-toolbar-btn-label">Remove</span></button>` : ""}
@@ -3370,6 +3470,7 @@ function renderSwiss() {
   view.querySelector("#swiss-reshuffle")?.addEventListener("click", reshuffleTournament);
   view.querySelector("#swiss-move-participant")?.addEventListener("click", showMoveParticipantsPopup);
   view.querySelector("#swiss-cohosts")?.addEventListener("click", showCoHostsPopup);
+  view.querySelector("#swiss-monitor")?.addEventListener("click", openCallingMonitor);
   view.querySelector("#swiss-edit-name")?.addEventListener("click", showEditTournamentNamePopup);
   bindSwissShareButton(view);
 
