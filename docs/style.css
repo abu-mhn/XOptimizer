@@ -1874,26 +1874,6 @@ body.forest-mode   .developer-tag-desc { color: #57606a; }
 .developer-db-tabs::-webkit-scrollbar {
     display: none;                /* Chrome / Safari / new Edge */
 }
-/* Desktop (mouse) has no touch-scroll, so surface a slim draggable scrollbar
-   and let a vertical wheel scroll the row sideways (wired in auth.js). */
-@media (min-width: 700px) and (pointer: fine) {
-    .developer-db-tabs {
-        scrollbar-width: thin;                 /* Firefox */
-        -ms-overflow-style: auto;
-        scrollbar-color: #6e7681 transparent;
-    }
-    .developer-db-tabs::-webkit-scrollbar {
-        display: block;
-        height: 8px;
-    }
-    .developer-db-tabs::-webkit-scrollbar-thumb {
-        background: #6e7681;
-        border-radius: 999px;
-    }
-    .developer-db-tabs::-webkit-scrollbar-track {
-        background: transparent;
-    }
-}
 .developer-db-tab {
     appearance: none;
     background: transparent;
@@ -11477,8 +11457,14 @@ body.light-mode .swiss-top-rank-2 .swiss-top-rank-name {
 }
 
 .swiss-score-cell {
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
     min-width: 2.2em;
+    /* Reserve the same height whether the cell is empty (unscored) or holds a
+       number, so a match card is the same height before and after scoring. */
+    min-height: 1.6em;
     padding: 2px 0;
     border-radius: 3px;
     background: rgba(255, 255, 255, 0.05);

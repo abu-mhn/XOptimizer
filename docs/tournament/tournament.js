@@ -3161,7 +3161,12 @@ function bindTournamentProfileNames(root) {
 // parent window owns the data (loadSwiss) and repaints the monitor on every
 // renderSwiss, so it stays live without its own Firebase connection. Desktop
 // only — the toolbar button is hidden on touch / narrow screens via CSS.
+// Optional voice call-outs use the monitor window's built-in Web Speech API
+// (speechSynthesis / "Google voice" on Chrome) — enabled by a one-time click
+// in the monitor (browsers block audio until a user gesture).
 let callingMonitorWin = null;
+let announcedLiveIds = new Set(); // match ids already voiced this session
+let prevMonitorVoiceOn = false;   // detect the off→on flip to announce current calls
 
 const CALLING_MONITOR_SHELL = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Calling Monitor</title>
 <style>
@@ -3186,8 +3191,52 @@ body{background:#0d1117;color:#e6edf3;font-family:system-ui,"Segoe UI",Roboto,sa
 .mon-next-ctx{font-size:1.5vw;color:#8b949e;font-weight:600}
 .mon-empty{font-size:2.4vw;color:#8b949e;padding:3vh 0}
 .mon-empty-sm{font-size:1.8vw;padding:1.5vh 0}
-</style></head><body><div id="mon"></div>
-<script>setInterval(function(){var c=document.getElementById("mon-clock");if(c)c.textContent=new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});},1000);</script>
+.mon-fs{position:fixed;bottom:2vh;right:2vw;z-index:10;background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:.8vh 1.2vw;font-size:1.8vw;line-height:1;cursor:pointer;font-family:inherit;opacity:.55}
+.mon-fs:hover{opacity:1;background:#30363d}
+:fullscreen .mon-fs{opacity:.25}
+</style></head><body>
+<button id="mon-fs" class="mon-fs" title="Toggle fullscreen (or press F11)" aria-label="Toggle fullscreen">⛶</button>
+<div id="mon"></div>
+<script>
+window.__voiceOn=true;window.__voiceObj=null;
+window.__goFullscreen=function(){try{var d=document.documentElement,r=d.requestFullscreen||d.webkitRequestFullscreen;if(r){var p=r.call(d);if(p&&p.catch)p.catch(function(){});}}catch(e){}};
+(function(){
+  var SS=window.speechSynthesis;
+  window.__goFullscreen();   // best-effort: some browsers honor this on a gesture-opened window
+  function pickVoice(){
+    var vs=[];try{vs=SS?SS.getVoices():[];}catch(e){}
+    if(!vs||!vs.length)return null;
+    function by(re){return vs.find(function(v){return re.test(v.name);});}
+    return by(/female/i)
+      ||by(/\b(Samantha|Victoria|Karen|Moira|Tessa|Zira|Susan|Fiona|Serena|Allison|Ava|Joanna|Salli|Kimberly|Aria|Jenny|Sonia|Michelle|Emma)\b/i)
+      ||by(/Google US English/i)||by(/Google UK English Female/i)
+      ||vs.find(function(v){return /^en/i.test(v.lang)&&!/\b(David|Mark|Guy|George|Daniel|Alex|Fred|Thomas|Ryan|James|Male)\b/i.test(v.name);})
+      ||vs.find(function(v){return /^en/i.test(v.lang);})||vs[0]||null;
+  }
+  window.__speak=function(text){
+    try{
+      if(!SS||!window.__voiceOn)return;
+      if(!window.__voiceObj)window.__voiceObj=pickVoice();
+      var u=new SpeechSynthesisUtterance(text);
+      u.rate=1.1;u.pitch=1.05;
+      if(window.__voiceObj){u.voice=window.__voiceObj;u.lang=window.__voiceObj.lang;}
+      SS.speak(u);
+    }catch(e){}
+  };
+  // Silent, gesture-time utterance the opener fires to unlock audio autoplay.
+  window.__prime=function(){try{if(!SS)return;var u=new SpeechSynthesisUtterance(" ");u.volume=0;SS.speak(u);}catch(e){}};
+  try{if(SS){SS.getVoices();SS.onvoiceschanged=function(){window.__voiceObj=pickVoice();};}}catch(e){}
+  window.__voiceObj=pickVoice();
+  var fs=document.getElementById("mon-fs");
+  if(fs)fs.addEventListener("click",function(){
+    try{
+      if(document.fullscreenElement||document.webkitFullscreenElement){(document.exitFullscreen||document.webkitExitFullscreen||function(){}).call(document);}
+      else{var el=document.documentElement;(el.requestFullscreen||el.webkitRequestFullscreen||function(){}).call(el);}
+    }catch(e){}
+  });
+  setInterval(function(){var c=document.getElementById("mon-clock");if(c)c.textContent=new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});},1000);
+})();
+</script>
 </body></html>`;
 
 function callingMatchLabel(state, m) {
@@ -3229,12 +3278,39 @@ function callingMonitorBoardHtml(state) {
     <section class="mon-upnext"><h2>UP NEXT</h2><div class="mon-next">${nextHtml}</div></section>`;
 }
 
-function updateCallingMonitor() {
-  if (!callingMonitorWin || callingMonitorWin.closed) { callingMonitorWin = null; return; }
+// Speak the call-out in the monitor window's own audio context. All the TTS
+// (voice selection, rate, pitch) lives in the monitor window's __speak — that's
+// where speechSynthesis and its voice list actually load, so picking a female
+// voice cross-window is reliable.
+function announceCall(state, m) {
   try {
+    if (!callingMonitorWin || callingMonitorWin.closed) return;
+    if (typeof callingMonitorWin.__speak !== "function") return;
+    const label = callingMatchLabel(state, m);
+    callingMonitorWin.__speak("Now calling. " + m.a + ". versus. " + m.b + "." + (label ? " " + label + "." : ""));
+  } catch (e) { /* TTS unavailable — silent */ }
+}
+
+function updateCallingMonitor() {
+  if (!callingMonitorWin || callingMonitorWin.closed) {
+    callingMonitorWin = null; announcedLiveIds = new Set(); prevMonitorVoiceOn = false; return;
+  }
+  let state;
+  try {
+    state = loadSwiss();
     const mon = callingMonitorWin.document && callingMonitorWin.document.getElementById("mon");
-    if (mon) mon.innerHTML = callingMonitorBoardHtml(loadSwiss());
-  } catch (e) { callingMonitorWin = null; }
+    if (mon) mon.innerHTML = callingMonitorBoardHtml(state);
+  } catch (e) { callingMonitorWin = null; return; }
+  // Voice call-outs: announce each match the moment it goes LIVE (once).
+  try {
+    const voiceOn = !!callingMonitorWin.__voiceOn;
+    // On the off→on flip, forget history so current calls get announced now.
+    if (voiceOn && !prevMonitorVoiceOn) announcedLiveIds = new Set();
+    prevMonitorVoiceOn = voiceOn;
+    const live = computeCallingLists(state).live;
+    if (voiceOn) live.forEach(m => { if (!announcedLiveIds.has(m.id)) announceCall(state, m); });
+    announcedLiveIds = new Set(live.map(m => m.id));
+  } catch (e) { /* non-fatal */ }
 }
 
 function openCallingMonitor() {
@@ -3243,12 +3319,21 @@ function openCallingMonitor() {
     updateCallingMonitor();
     return;
   }
-  const win = window.open("", "xoCallingMonitor", "width=1280,height=720");
+  const w = (window.screen && screen.availWidth) || 1280;
+  const h = (window.screen && screen.availHeight) || 720;
+  const win = window.open("", "xoCallingMonitor",
+    "width=" + w + ",height=" + h + ",left=0,top=0,menubar=no,toolbar=no,location=no");
   if (!win) { alert("Couldn't open the monitor — allow pop-ups for this site, then tap Monitor again."); return; }
   callingMonitorWin = win;
   win.document.open();
   win.document.write(CALLING_MONITOR_SHELL);
   win.document.close();
+  try { win.moveTo(0, 0); win.resizeTo(w, h); } catch (e) {}  // fill the screen
+  // Unlock audio + try true fullscreen while still inside the toolbar-button
+  // click gesture (browsers only allow both from a user gesture). If the
+  // browser blocks the auto-fullscreen, the ⛶ button / F11 still work.
+  try { if (typeof win.__prime === "function") win.__prime(); } catch (e) {}
+  try { if (typeof win.__goFullscreen === "function") win.__goFullscreen(); } catch (e) {}
   updateCallingMonitor();
 }
 
@@ -3464,6 +3549,11 @@ function renderSwiss() {
   hydrateTournamentAvatars(view);
   bindTournamentProfileNames(view);
   hydrateTop8Banners(view);
+  // Let a vertical mouse wheel scroll the toolbar actions row sideways on
+  // desktop (it has no touch-scroll and its scrollbar is hidden).
+  if (typeof enableHorizontalWheelScroll === "function") {
+    view.querySelectorAll(".swiss-toolbar-actions").forEach(el => enableHorizontalWheelScroll(el));
+  }
   view.querySelector("#swiss-start-bracket")?.addEventListener("click", startSwissBracket);
   view.querySelector("#swiss-edit-participants")?.addEventListener("click", showBulkAddParticipantsPopup);
   view.querySelector("#swiss-remove-participants")?.addEventListener("click", showRemoveParticipantsPopup);
@@ -5432,13 +5522,17 @@ function startRegisteringTournament() {
   persistSwiss(generated);
 
   if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
-    const payload = { ...generated };
-    if (swissViewCode) payload.viewCode = swissViewCode;
-    // The Start push is a full overwrite — carry the sub-host list forward
-    // so designated co-hosts aren't wiped when the tournament begins.
-    if (swissSubHosts && Object.keys(swissSubHosts).length) payload.subHosts = swissSubHosts;
+    // Write the generated structure with update() (NOT a full-root set()): a
+    // set() at the room root is gated by the host-only root .write rule and
+    // would be rejected for a CO-HOST, whereas these child fields each allow
+    // host + co-hosts. update() also merges — the room's existing metadata
+    // (registrants, hostUid, hostName, subHosts, viewCode…) is preserved
+    // automatically, so nothing needs carrying forward.
+    const updates = { phase: "running" };
+    ["groups", "matches", "groupRounds", "bracket", "bracketSize", "preFinalRounds", "ranked"]
+      .forEach(k => { if (generated[k] !== undefined) updates[k] = generated[k]; });
     swissApplyingRemote = true;
-    swissRoomRef.set(payload)
+    swissRoomRef.update(updates)
       .catch(e => console.warn("Start tournament push failed:", e))
       .finally(() => { swissApplyingRemote = false; });
   }
@@ -5446,8 +5540,11 @@ function startRegisteringTournament() {
   // is closed, but co-hosts and viewers can still find and join it — the entry
   // is only removed when the host resets/closes the room.
   if (swissEditCode) publishOpenRoomIndex(swissEditCode, generated);
-  // Refresh the host's account-scoped index so the phase flips to running.
-  if (swissEditCode && generated.hostUid) {
+  // Refresh the host's account-scoped index so the phase flips to running. Only
+  // the host may write their own userTournaments node (rule: auth.uid === uid),
+  // so skip this for a co-host — a co-host write there is rejected anyway, and
+  // the host's own device refreshes the index when it receives the update.
+  if (swissEditCode && generated.hostUid && swissIsHost) {
     publishUserTournament(generated.hostUid, swissEditCode, generated);
   }
   renderSwiss();
