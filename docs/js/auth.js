@@ -1300,6 +1300,7 @@
     "judges",
     "revoxAccounts",
     "swissViewCodes",
+    "presence",
     "battleRoyale/players",
     "battleRoyale/challenges",
     "battleRoyale/meta"
@@ -1322,6 +1323,9 @@
     judges:          [],  // value is a plain string
     revoxAccounts:   [],
     swissViewCodes:  [],
+    // Keys are UIDs. `connections` is a set of live-connection ids ({N} …);
+    // `lastSeen` is a server-timestamp (ms) of when the last one dropped.
+    presence:        ["connections", "lastSeen"],
     // Battle Royale: keys are UIDs (players) / challenge IDs (challenges).
     "battleRoyale/players":    ["username", "points", "isJudge", "updatedAt"],
     "battleRoyale/challenges": ["challengerName", "opponentName", "judgeName", "wager", "status", "winnerUid", "createdAt"],
@@ -1352,6 +1356,11 @@
       <div class="developer-db-table-wrap"><div id="developer-db-table"></div></div>
     `;
     const tabs = panel.querySelectorAll(".developer-db-tab");
+    // Desktop mice can't drag the (hidden) scrollbar and the wheel scrolls
+    // vertically, so let a vertical wheel scroll this horizontal row sideways.
+    if (typeof enableHorizontalWheelScroll === "function") {
+      enableHorizontalWheelScroll(panel.querySelector(".developer-db-tabs"));
+    }
     const refresh = panel.querySelector("#developer-db-refresh");
     const addBtn = panel.querySelector("#developer-db-add");
     const tableEl = panel.querySelector("#developer-db-table");

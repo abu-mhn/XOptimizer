@@ -554,6 +554,27 @@ h1 {
             mask-position: center;
 }
 
+/* Sub-tab row icons (History / Tournament / Battle Royale / Buzz Bey regions).
+   Masked silhouette filled with currentColor, so the icon takes the active
+   theme's text color exactly like the label — replacing the old
+   `filter: brightness(0) invert(1)` hack that forced them white on every
+   accent theme. The icon URL is passed inline as --sub-ico. */
+.sub-tab-ico {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+    background-color: currentColor;
+    -webkit-mask-image: var(--sub-ico);
+            mask-image: var(--sub-ico);
+    -webkit-mask-size: contain;
+            mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+            mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+            mask-position: center;
+}
+
 /* Note: prior `.tab[data-mode="..."] img { filter: brightness(0) invert(1) }`
    blocks for deck / swiss / revox / calculator / settings have been removed.
    Those tabs now use `.tab-icon-mask` spans filled with currentColor, so
@@ -1852,6 +1873,26 @@ body.forest-mode   .developer-tag-desc { color: #57606a; }
 }
 .developer-db-tabs::-webkit-scrollbar {
     display: none;                /* Chrome / Safari / new Edge */
+}
+/* Desktop (mouse) has no touch-scroll, so surface a slim draggable scrollbar
+   and let a vertical wheel scroll the row sideways (wired in auth.js). */
+@media (min-width: 700px) and (pointer: fine) {
+    .developer-db-tabs {
+        scrollbar-width: thin;                 /* Firefox */
+        -ms-overflow-style: auto;
+        scrollbar-color: #6e7681 transparent;
+    }
+    .developer-db-tabs::-webkit-scrollbar {
+        display: block;
+        height: 8px;
+    }
+    .developer-db-tabs::-webkit-scrollbar-thumb {
+        background: #6e7681;
+        border-radius: 999px;
+    }
+    .developer-db-tabs::-webkit-scrollbar-track {
+        background: transparent;
+    }
 }
 .developer-db-tab {
     appearance: none;
@@ -4394,7 +4435,8 @@ body.forest-mode .image-popup-dot.active {
 }
 
 .calc-btn img,
-.btn-reset img {
+.btn-reset img,
+.btn-lucky img {
     filter: brightness(0) invert(1);
 }
 
