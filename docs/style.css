@@ -11474,6 +11474,31 @@ body.light-mode .swiss-top-rank-2 .swiss-top-rank-name {
     min-width: 0;
 }
 
+/* "Advanced" / "Advancing" badge on standings rows that qualify for the
+   knockout bracket. Green once locked in, blue while still projected. */
+.swiss-adv-badge {
+    display: inline-block;
+    flex: 0 0 auto;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    line-height: 1.5;
+    white-space: nowrap;
+    border: 1px solid transparent;
+}
+.swiss-adv-badge.is-advanced {
+    background: rgba(63, 185, 80, 0.16);
+    color: #56d364;
+    border-color: rgba(63, 185, 80, 0.4);
+}
+.swiss-adv-badge.is-pending {
+    background: rgba(56, 139, 253, 0.14);
+    color: #58a6ff;
+    border-color: rgba(56, 139, 253, 0.4);
+}
+
 /* Standings name cell rendered as a tap-to-rename button (host-only). Strip
    the native button chrome so it reads as plain text until hovered. */
 .swiss-name-edit {

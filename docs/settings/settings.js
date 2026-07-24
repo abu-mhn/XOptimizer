@@ -105,6 +105,7 @@ Tournament
 - Reshuffle the draw — a Reshuffle button (group formats, round 1, no scores yet) re-randomises the groups and round-1 pairings from the same players, for a fresh draw without a full reset
 - Move a player between groups — a Move button opens a popup where the host taps a group letter next to any player to move them there; only the round-1 pairings of the two affected groups re-draw. Same gate as Reshuffle (round 1, before scores)
 - Group standings show a plain-language key for the abbreviations: W-L-D (Wins-Losses-Draws), PS (Points Scored), PD (Points Difference) and MB (Median-Buchholz tiebreaker)
+- Group standings mark who advances — once the group stage finishes, an "Advancing" badge appears next to the players who make it through to the finals
 - Toolbar buttons show icon + text labels (Share / Sub-hosts / + Add / − Remove / Reset or Leave) and sit on a horizontal row with an invisible scroller, so the row scrolls sideways on narrow phone screens instead of clipping or wrapping
 - Rename any participant after the tournament starts — tap their name in a group's Standings
 - Adjust the total round count mid-tournament — tap "Round X / Y" in a group header; already-played rounds are kept

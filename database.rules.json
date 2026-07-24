@@ -4,7 +4,7 @@
       ".read": "auth != null && (root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')",
       "$code": {
         ".read": true,
-        ".write": "auth != null && (!data.exists() || data.child('hostUid').val() === auth.uid)",
+        ".write": "auth != null && (!data.exists() || data.child('hostUid').val() === auth.uid || (!newData.exists() && (root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')))",
 
         "hostUid": {
           ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 128 && (data.exists() ? newData.val() === data.val() : newData.val() === auth.uid)"

@@ -1675,14 +1675,53 @@ function renderSwissGroupMatches(state, gi) {
   return `<div class="swiss-rounds-scroll">${rounds.join("")}</div>`;
 }
 
+// Names that advance from the group stage to the knockout bracket. Uses the
+// real bracket once it's built; otherwise projects the same top-N-across-groups
+// selection the bracket builder will use. Empty for swiss-only (no knockout)
+// and single-elim (no group stage).
+function swissAdvancingNames(state) {
+  if (!state || state.mode === "single-elim") return new Set();
+  const matches = state.matches || {};
+  // Bracket already built → advancers are everyone who appears in it.
+  const inBracket = new Set();
+  Object.values(matches).forEach(m => {
+    if (m && m.bracket) { if (m.a) inBracket.add(m.a); if (m.b) inBracket.add(m.b); }
+  });
+  if (inBracket.size) return inBracket;
+  if (state.mode === "swiss-only") return new Set();          // group records ARE the final
+  if (!Array.isArray(state.groups) || !state.groups.length) return new Set();
+  const topN = (typeof state.topN === "number" && state.topN >= 2) ? state.topN : 8; // legacy = top 8
+  const rr = state.pairing === "round-robin";
+  const pool = [];
+  state.groups.forEach((membersG, gj) => {
+    computeStandings(membersG, matches, gj, rr).forEach((entry, rankInGroup) =>
+      pool.push({ rankInGroup, entry }));
+  });
+  pool.sort((a, b) =>
+    a.rankInGroup - b.rankInGroup ||
+    ((b.entry.wins || 0) - (a.entry.wins || 0)) ||
+    ((b.entry.pointsScored || 0) - (a.entry.pointsScored || 0)) ||
+    ((b.entry.pointsDiff || 0) - (a.entry.pointsDiff || 0)) ||
+    ((b.entry.medianBuchholz || 0) - (a.entry.medianBuchholz || 0)) ||
+    (a.entry.name || "").localeCompare(b.entry.name || ""));
+  return new Set(pool.slice(0, topN).map(p => p.entry.name).filter(Boolean));
+}
+
 function renderSwissGroupStandings(state, gi, canEdit) {
   const members = state.groups[gi];
   const standings = computeStandings(members, state.matches, gi, state.pairing === "round-robin");
+  // Flag the players who qualify for the knockout — but only once the group
+  // stage is settled (all groups finished, or the bracket is already built).
+  // Before that it's a meaningless 0-0 projection, so no badge is shown.
+  const stageDone = (typeof isGroupStageComplete === "function" && isGroupStageComplete(state))
+    || Object.values(state.matches || {}).some(m => m && m.bracket);
+  const advancing = stageDone ? swissAdvancingNames(state) : new Set();
   const rows = standings.map((row, idx) => {
     const pd = row.pointsDiff > 0 ? `+${row.pointsDiff}` : `${row.pointsDiff}`;
     // Host / co-host can rename a participant straight from the standings,
     // even mid-tournament — the name cell becomes a tap-to-rename button.
-    const nameInner = swissNameCellInner(row.name);
+    const advBadge = advancing.has(row.name) ? ` <span class="swiss-adv-badge is-advanced">Advancing</span>` : "";
+    const nameInner = swissNameCellInner(row.name, advBadge);
     const nameCell = canEdit
       ? `<button type="button" class="swiss-name-cell swiss-name-edit" data-rename="${escapeHtml(row.name)}" title="Tap to rename">${nameInner}</button>`
       : `<span class="swiss-name-cell">${nameInner}</span>`;
@@ -2316,7 +2355,10 @@ function renderSwissRoomBadge() {
     `);
   }
   // Co-host pills (blue) — one for each of the room's designated sub-hosts.
+  // Never show the host as their own co-host, even if a stale self-entry exists.
+  const hostKeyForPills = subHostKey(hostName || "");
   Object.keys(swissSubHosts || {})
+    .filter(k => k !== hostKeyForPills)
     .map(k => swissSubHosts[k])
     .filter(Boolean)
     .sort((a, b) => String(a).localeCompare(String(b)))
@@ -2358,7 +2400,9 @@ function renderCoHostsButton() {
 function renderCoHostList() {
   const listEl = document.getElementById("cohost-list");
   if (!listEl) return;
-  const keys = Object.keys(swissSubHosts || {});
+  // Don't list the host as a co-host (a stale self-entry can exist).
+  const hostKeys = swissHostUsernameKeys();
+  const keys = Object.keys(swissSubHosts || {}).filter(k => !hostKeys.has(k));
   if (!keys.length) {
     listEl.innerHTML = `<p class="swiss-rooms-empty">No sub-hosts yet — add a username above.</p>`;
     return;
@@ -2374,10 +2418,27 @@ function renderCoHostList() {
   });
 }
 
+// The host can't be their own co-host — collect the username key(s) that
+// identify the host so the sub-host typeahead and the add-guard can exclude
+// them. Uses the signed-in username (only the host opens this popup) and the
+// room's stored hostName.
+function swissHostUsernameKeys() {
+  const keys = new Set();
+  const add = (n) => { const k = subHostKey(n || ""); if (k) keys.add(k); };
+  if (window.getCurrentUsername) add(window.getCurrentUsername());
+  try { const s = loadSwiss(); if (s && s.hostName) add(s.hostName); } catch (e) {}
+  return keys;
+}
+
 function addSubHost(name) {
   const cleaned = String(name || "").trim().slice(0, 30);
   const key = subHostKey(cleaned);
   if (!key) return;
+  // The host is already the host — they can't also add themselves as a co-host.
+  if (swissHostUsernameKeys().has(key)) {
+    alert("You're the host — you can't add yourself as a co-host.");
+    return;
+  }
   swissSubHosts = swissSubHosts || {};
   swissSubHosts[key] = cleaned;
   if (swissRoomRef) {
@@ -2447,8 +2508,9 @@ function updateCoHostUsernameOptions(query) {
   if (!box) return;
   const input = document.getElementById("cohost-username-input");
   const q = String(query || "").trim().toLowerCase();
+  const hostKeys = swissHostUsernameKeys();  // never suggest the host themselves
   const matches = q
-    ? coHostUsernamePool.filter(n => n.toLowerCase().indexOf(q) >= 0).slice(0, 12)
+    ? coHostUsernamePool.filter(n => n.toLowerCase().indexOf(q) >= 0 && !hostKeys.has(subHostKey(n))).slice(0, 12)
     : [];
   if (!matches.length) {
     box.innerHTML = "";
