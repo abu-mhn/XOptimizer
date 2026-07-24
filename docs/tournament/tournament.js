@@ -32,6 +32,7 @@ let swissHostNameResolving = {}; // hostUid -> in-flight resolve guard
 let swissSessionRole = null;     // this session's role: "host" | "co-host" | "participant" | "view"
 let swissArchiveView = false;    // viewing a finished tournament from the public Past archive (read-only, no live room)
 let swissArchiveState = null;    // the archived tournament being viewed — kept in memory (NOT localStorage) so it never leaks into a real local tournament across page navigation
+let swissArchiveReturnSession = null; // the live room session (host/co-host/participant) suspended when a Past tournament was opened, so returning to Hosting restores the right role instead of demoting to a viewer
 const pastTournamentArchived = new Set(); // editCodes this session already snapshotted to pastTournaments
 
 function initFirebase() {
@@ -9484,6 +9485,20 @@ function renderPastTournamentsList(list, rooms) {
 // toolbar's Reset button to a Back button.
 function openArchivedTournament(snap) {
   if (!snap) return;
+  // Remember the live room session (if any) BEFORE disconnectSwissRoom wipes it,
+  // so returning to Hosting reconnects as the host / co-host / participant we were
+  // — instead of leaving the local tournament rendered as a plain viewer. Only
+  // capture when coming from a live view; jumping archive→archive keeps the
+  // originally suspended session so it can still be restored on the way back.
+  if (!swissArchiveView) {
+    swissArchiveReturnSession = swissEditCode ? {
+      editCode: swissEditCode,
+      viewCode: swissViewCode,
+      asHost: swissIsHost,
+      canEdit: swissCanEdit,
+      role: swissSessionRole
+    } : null;
+  }
   disconnectSwissRoom();
   swissArchiveView = true;
   swissEditCode = null;
@@ -9534,7 +9549,15 @@ function teardownArchiveView() {
   const hostingFieldset = document.querySelector("#tournament-panel-hosting fieldset");
   if (view && hostingFieldset) hostingFieldset.appendChild(view);
   document.getElementById("tournament-panel-past")?.classList.remove("past-archive-open");
-  renderSwiss();
+  // Restore the suspended live session so the host stays the host (and co-hosts /
+  // participants keep their role) after peeking at a Past tournament.
+  const restore = swissArchiveReturnSession;
+  swissArchiveReturnSession = null;
+  if (restore && restore.editCode) {
+    connectSwissRoom(restore.editCode, restore.viewCode, restore.asHost, restore.canEdit, restore.role);
+  } else {
+    renderSwiss();
+  }
 }
 
 // Leave the read-only archive view and go back to the Past list (stays on the
