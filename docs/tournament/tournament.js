@@ -1730,7 +1730,7 @@ function renderSwissGroupStandings(state, gi, canEdit) {
       <span class="swiss-rank">${idx + 1}</span>
       ${nameCell}
       <span class="swiss-record">${row.wins}W-${row.losses}L-${row.draws}D</span>
-      <span class="swiss-tiebreak" title="Points Scored · Points Difference · Median-Buchholz">PS ${row.pointsScored} · PD ${pd} · MB ${row.medianBuchholz}</span>
+      <span class="swiss-tiebreak" title="Points Scored · Points Difference · Tie Break">PS ${row.pointsScored} · PD ${pd} · TB ${row.medianBuchholz}</span>
     </li>
   `;
   }).join("");
@@ -1739,7 +1739,7 @@ function renderSwissGroupStandings(state, gi, canEdit) {
       <span class="swiss-record">W-L-D</span> Wins-Losses-Draws ·
       <strong>PS</strong> Points Scored ·
       <strong>PD</strong> Points Difference ·
-      <strong>MB</strong> Median-Buchholz (tiebreaker)
+      <strong>TB</strong> Tie Break
     </p>`;
 }
 

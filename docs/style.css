@@ -8934,10 +8934,21 @@ body.light-mode .swiss-group-progress {
 }
 .swiss-reg-format {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 6px;
     font-size: 0.85rem;
     color: #c9d1d9;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;          /* Firefox — hide scrollbar */
+}
+.swiss-reg-format::-webkit-scrollbar {
+    display: none;                  /* Chrome/Safari — hide scrollbar */
+}
+/* Keep every chip on the single scrolling line instead of shrinking/wrapping. */
+.swiss-reg-format > * {
+    flex: 0 0 auto;
+    white-space: nowrap;
 }
 
 /* Banned-parts panel in the registering view. The chip is intentionally
