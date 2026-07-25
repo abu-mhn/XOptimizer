@@ -216,6 +216,7 @@ const DATA = {
     { atk: 6, def: 14, sta: 10, height: 55, weight: 5.2, name: "7-55" },
     { atk: 8, def: 10, sta: 12, height: 70, weight: 7.7, name: "8-70" },
     { atk: 18, def: 9, sta: 3, height: 50, weight: 5.7, name: "1-50", meta: true },
+    { atk: 8, def: 9, sta: 13, height: 80, weight: 0, name: "8-80" }
   ],
 
   bits: [

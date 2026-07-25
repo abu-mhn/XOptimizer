@@ -9360,6 +9360,20 @@ button.swiss-reg-name-edit:focus-visible {
     color: #d29922;
     border: 1px solid rgba(210, 153, 34, 0.4);
 }
+/* Over a profile banner (pic / gif) the faint amber "Unpaid" is hard to read,
+   so on those rows only, use a solid high-contrast amber pill. */
+.swiss-reg-row.has-rank-banner .swiss-reg-paid:not(.is-paid) {
+    font-weight: 700;
+    background: #e3a71a;
+    color: #241a00;
+    border-color: #c98f10;
+}
+.swiss-reg-row.has-rank-banner .swiss-reg-paid.is-paid {
+    font-weight: 700;
+    background: #2ea043;
+    color: #04140a;
+    border-color: #238636;
+}
 button.swiss-reg-paid {
     cursor: pointer;
 }
