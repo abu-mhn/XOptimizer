@@ -11318,6 +11318,105 @@ function isRevoxAdminUnlocked() {
   return typeof window.isRevoxAdmin === "function" && window.isRevoxAdmin();
 }
 
+function isRevoxMemberUnlocked() {
+  return typeof window.isRevoxMember === "function" && window.isRevoxMember();
+}
+
+// A Revox Member submits their own result to the pending queue; a Revox Admin
+// reviews and approves it into the ranking. The submitter's uid is stamped so
+// the rules can gate creation to self and let the owner cancel it.
+function submitRevoxPending(name, points, tournament, placing, date) {
+  const db = initFirebase();
+  if (!db) return Promise.reject(new Error("firebase not configured"));
+  const user = window.getCurrentUser && window.getCurrentUser();
+  if (!user) return Promise.reject(new Error("sign in first"));
+  const entry = {
+    name: String(name || "").trim().slice(0, 30),
+    tournament: String(tournament || "").trim().slice(0, 80),
+    placing: Number(placing) || 0,
+    points: Number(points) || 0,
+    date: String(date || "").trim().slice(0, 10),
+    uid: user.uid,
+    createdAt: new Date().toISOString()
+  };
+  if (!entry.name) return Promise.reject(new Error("bad name"));
+  return db.ref("revoxPending").push(entry);
+}
+
+// Approve a pending submission: fold it into the member's ranking, then drop
+// the pending entry. Admin only (enforced by rules + UI gating).
+function approveRevoxPending(id, data) {
+  const db = initFirebase();
+  if (!db || !id || !data) return Promise.reject(new Error("bad input"));
+  return addRevoxEntry(data.name, data.points, data.tournament, data.placing, data.date)
+    .then(() => db.ref("revoxPending/" + id).remove());
+}
+
+// Reject / cancel a pending submission — just remove it.
+function rejectRevoxPending(id) {
+  const db = initFirebase();
+  if (!db || !id) return Promise.reject(new Error("bad input"));
+  return db.ref("revoxPending/" + id).remove();
+}
+
+// Render the pending-submissions panel: Approve / Reject for admins (all
+// submissions), or a read-only "awaiting approval" list of their own for a
+// plain member. Hidden entirely when there's nothing pending to show.
+function renderRevoxPending() {
+  const container = document.getElementById("revox-pending-list");
+  if (!container) return;
+  const db = initFirebase();
+  if (!db) { container.innerHTML = ""; return; }
+  const isAdmin = isRevoxAdminUnlocked();
+  const myUid = (window.getCurrentUser && window.getCurrentUser() && window.getCurrentUser().uid) || "";
+  if (!isAdmin && !myUid) { container.innerHTML = ""; return; }
+  db.ref("revoxPending").once("value").then(snap => {
+    const data = snap.val() || {};
+    let entries = Object.keys(data).map(id => Object.assign({ id }, data[id]));
+    if (!isAdmin) entries = entries.filter(e => e.uid === myUid);
+    entries.sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+    if (!entries.length) { container.innerHTML = ""; return; }
+    const heading = isAdmin ? "Pending approvals" : "Your pending submissions";
+    container.innerHTML = `<h3 class="revox-pending-title">${heading}</h3>` + entries.map(e => {
+      const meta = [
+        escapeHtml(e.tournament || "—"),
+        ordinalPlace(e.placing) || "—",
+        `${Number(e.points) || 0} pts`,
+        formatRevoxDate(e.date) || ""
+      ].filter(Boolean).join(" · ");
+      const actions = isAdmin
+        ? `<button type="button" class="revox-pending-btn revox-pending-approve" data-revox-approve="${escapeHtml(e.id)}">Approve</button>
+           <button type="button" class="revox-pending-btn revox-pending-reject" data-revox-reject="${escapeHtml(e.id)}">Reject</button>`
+        : `<button type="button" class="revox-pending-btn revox-pending-reject" data-revox-reject="${escapeHtml(e.id)}" title="Cancel this submission">Cancel</button>`;
+      const tag = isAdmin ? "" : `<span class="revox-pending-tag">Awaiting approval</span>`;
+      return `<div class="revox-pending-row">
+        <div class="revox-pending-info"><strong>${escapeHtml(e.name || "")}</strong><span>${meta}</span>${tag}</div>
+        <div class="revox-pending-actions">${actions}</div>
+      </div>`;
+    }).join("");
+    container.querySelectorAll("[data-revox-approve]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.revoxApprove;
+        const e = data[id];
+        if (!e) return;
+        btn.disabled = true;
+        approveRevoxPending(id, e)
+          .then(() => renderRevoxRanking())
+          .catch(err => { btn.disabled = false; alert("Approve failed: " + (err && err.message || err)); });
+      });
+    });
+    container.querySelectorAll("[data-revox-reject]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.revoxReject;
+        btn.disabled = true;
+        rejectRevoxPending(id)
+          .then(() => renderRevoxPending())
+          .catch(err => { btn.disabled = false; alert("Failed: " + (err && err.message || err)); });
+      });
+    });
+  }).catch(() => { container.innerHTML = ""; });
+}
+
 // Records a tournament result for a member. If the same name (after key
 // normalization) already exists, the new points are added to the running
 // total and the tournament + placing are updated to this latest result.
@@ -11436,6 +11535,7 @@ function renderRevoxRanking() {
   const container = document.getElementById("revox-ranking-list");
   if (!container) return;
   updateRevoxAdminUI();
+  renderRevoxPending();
   if (!firebaseReady()) {
     container.innerHTML = `<p class="tournament-results-empty">Live sync isn't configured on this build.</p>`;
     return;
@@ -11545,7 +11645,12 @@ function updateRevoxAdminUI() {
   // The add form shows only for Revox-Admin accounts. The Revox tab is
   // already tag-gated, but a non-admin could still reach /revox/ by URL —
   // for them the page stays read-only.
-  document.getElementById("revox-admin-form")?.classList.toggle("hidden", !isRevoxAdminUnlocked());
+  const isAdmin = isRevoxAdminUnlocked();
+  document.getElementById("revox-admin-form")?.classList.toggle("hidden", !isAdmin);
+  // A Revox Member who isn't an admin gets the self-submit button; admins add
+  // results directly, so they don't need it.
+  document.getElementById("revox-member-submit")
+    ?.classList.toggle("hidden", !(isRevoxMemberUnlocked() && !isAdmin));
 }
 
 // Show one member's recorded tournament results in a popup, newest first.
@@ -11847,19 +11952,27 @@ function showRevoxHistory(key, name) {
 
   // When set, the Add popup is editing this existing result instead of adding.
   let revoxEditCtx = null;
+  // "admin" = add/edit into the ranking (Revox Admin); "submit" = a member
+  // submitting their own result to the pending-approval queue.
+  let revoxPopupMode = "admin";
 
-  // Open the Add Result popup. With editCtx it edits an existing result for
-  // that member; without it, adds a new one. Revox Admins only.
-  const openPopup = (prefillName, editCtx) => {
-    if (!popup || !isRevoxAdminUnlocked()) return;
+  // Open the Result popup. With editCtx it edits an existing result (admin);
+  // mode "submit" lets a member queue their own result for approval; otherwise
+  // an admin adds a new one.
+  const openPopup = (prefillName, editCtx, mode) => {
+    revoxPopupMode = mode === "submit" ? "submit" : "admin";
+    if (!popup) return;
+    if (revoxPopupMode === "submit") { if (!isRevoxMemberUnlocked()) return; }
+    else if (!isRevoxAdminUnlocked()) return;
     revoxEditCtx = editCtx || null;
+    const submit = revoxPopupMode === "submit";
     const titleEl = popup.querySelector(".popup-title");
     const confirmBtn = document.getElementById("revox-add-confirm");
-    if (titleEl) titleEl.textContent = editCtx ? "Edit Result" : "Add Result";
-    if (confirmBtn) confirmBtn.textContent = editCtx ? "Save" : "Add";
+    if (titleEl) titleEl.textContent = submit ? "Submit Result" : (editCtx ? "Edit Result" : "Add Result");
+    if (confirmBtn) confirmBtn.textContent = submit ? "Submit" : (editCtx ? "Save" : "Add");
     if (tournamentEl) tournamentEl.value = editCtx ? (editCtx.tournament || "") : "";
-    // The member is fixed when pre-filled (row Add) or editing — lock the name.
-    const locked = (typeof prefillName === "string" && prefillName !== "") || !!editCtx;
+    // The member is fixed when pre-filled (row Add), editing, or self-submitting.
+    const locked = (typeof prefillName === "string" && prefillName !== "") || !!editCtx || submit;
     if (nameEl) {
       nameEl.value = locked ? (prefillName || "") : "";
       nameEl.readOnly = locked;
@@ -11902,12 +12015,18 @@ function showRevoxHistory(key, name) {
   }
 
   document.getElementById("revox-add-btn")?.addEventListener("click", () => openPopup());
+  document.getElementById("revox-submit-btn")?.addEventListener("click", () => {
+    const myName = (window.getCurrentUsername && window.getCurrentUsername()) || "";
+    if (!myName) { alert("Set a username on your profile before submitting."); return; }
+    openPopup(myName, null, "submit");
+  });
   document.getElementById("revox-add-cancel")?.addEventListener("click", closePopup);
   // Click the dimmed backdrop (but not the card) to dismiss.
   popup?.addEventListener("click", e => { if (e.target === popup) closePopup(); });
 
   document.getElementById("revox-add-confirm")?.addEventListener("click", () => {
-    if (!isRevoxAdminUnlocked()) return;
+    const submit = revoxPopupMode === "submit";
+    if (submit ? !isRevoxMemberUnlocked() : !isRevoxAdminUnlocked()) return;
     const tournament = (tournamentEl?.value || "").trim();
     const name = (nameEl?.value || "").trim();
     const date = (dateEl?.value || "").trim();
@@ -11917,6 +12036,14 @@ function showRevoxHistory(key, name) {
     if (!date) { setStatus("Pick a date."); return; }
     if (!placing) { setStatus("Pick a placing."); return; }
     const pts = revoxPointsForPlacing(placing);
+    // Member self-submit — goes to the pending queue for a Revox Admin to approve.
+    if (submit) {
+      setStatus("Submitting…");
+      submitRevoxPending(name, pts, tournament, Number(placing), date)
+        .then(() => { closePopup(); renderRevoxPending(); })
+        .catch(e => setStatus("Submit failed: " + (e?.message || e)));
+      return;
+    }
     setStatus("Saving…");
     const done = () => { closePopup(); renderRevoxRanking(); };
     if (revoxEditCtx) {

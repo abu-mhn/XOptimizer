@@ -588,6 +588,12 @@
   // "Revox Admin" tag instead of a separate password login.
   window.isRevoxAdmin = function isRevoxAdmin() { return hasTag("Revox Admin"); };
 
+  // A "Revox Member" (admins count as members too) can submit their own
+  // tournament result to the Revox ranking, pending Revox-Admin approval.
+  window.isRevoxMember = function isRevoxMember() {
+    return hasTag("Revox Member") || hasTag("Revox Admin");
+  };
+
   // Exposed so the Tournament tab can hide the "Test" button (which bulk-adds
   // synthetic participants) from accounts that aren't on the QA team.
   window.isTester = function isTester() { return hasTag("Tester"); };
