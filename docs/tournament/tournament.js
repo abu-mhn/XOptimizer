@@ -11672,6 +11672,8 @@ function populateRevoxNameOptions(memberNames) {
   }).catch(() => { /* index not readable yet — ranking members only */ });
 }
 
+let revoxRankingRef = null;
+let revoxRankingData = {};
 function renderRevoxRanking() {
   const container = document.getElementById("revox-ranking-list");
   if (!container) return;
@@ -11681,11 +11683,28 @@ function renderRevoxRanking() {
     container.innerHTML = `<p class="tournament-results-empty">Live sync isn't configured on this build.</p>`;
     return;
   }
-  container.innerHTML = `<p class="tournament-results-loading">Loading members…</p>`;
   const db = initFirebase();
-  db.ref("revoxRanking").once("value")
-    .then(snap => {
-      const data = snap.val() || {};
+  // Already listening: re-render from cached data (e.g. an admin approval landed,
+  // or the Revox-Admin role resolved after first paint) with no extra read and
+  // no "Loading" flash. The live listener keeps every device in step, so an
+  // approved result shows up immediately without a refresh.
+  if (revoxRankingRef) { renderRevoxRankingFrom(revoxRankingData); return; }
+  container.innerHTML = `<p class="tournament-results-loading">Loading members…</p>`;
+  revoxRankingRef = db.ref("revoxRanking");
+  revoxRankingRef.on("value",
+    snap => { revoxRankingData = snap.val() || {}; renderRevoxRankingFrom(revoxRankingData); },
+    err => {
+      console.warn("Revox ranking load failed:", err);
+      const c = document.getElementById("revox-ranking-list");
+      if (c) c.innerHTML = `<p class="tournament-results-empty">Couldn't load the Revox ranking right now.</p>`;
+    });
+}
+
+function renderRevoxRankingFrom(data) {
+  const container = document.getElementById("revox-ranking-list");
+  if (!container) return;
+  data = data || {};
+  {
       const list = Object.entries(data)
         .map(([key, v]) => {
           // The tournament + date shown are the member's most recent result
@@ -11770,16 +11789,13 @@ function renderRevoxRanking() {
           btn.addEventListener("click", () => {
             const key = btn.dataset.revoxDelete;
             if (!confirm(`Remove ${btn.dataset.revoxName} from the ranking?`)) return;
-            deleteRevoxEntry(key).then(renderRevoxRanking)
+            // The live listener repaints once the entry is removed.
+            deleteRevoxEntry(key)
               .catch(e => alert("Delete failed: " + (e?.message || e)));
           });
         });
       }
-    })
-    .catch(err => {
-      console.warn("Revox ranking load failed:", err);
-      container.innerHTML = `<p class="tournament-results-empty">Couldn't load the Revox ranking right now.</p>`;
-    });
+  }
 }
 
 function updateRevoxAdminUI() {
