@@ -537,6 +537,25 @@
   function updateFriendsNavBadges() {
     const total = totalUnread();
     const label = total > 99 ? "99+" : String(total);
+    const friendsItem = document.querySelector('a.tab-more-item[data-mode="friends"]');
+    if (friendsItem) {
+      let cnt = friendsItem.querySelector(".tab-count");
+      if (total > 0) {
+        if (!cnt) {
+          cnt = document.createElement("span");
+          cnt.className = "tab-count";
+          friendsItem.appendChild(cnt);
+        }
+        cnt.textContent = label;
+        cnt.setAttribute("aria-label", `${total} unread message${total === 1 ? "" : "s"}`);
+      } else if (cnt) {
+        cnt.remove();
+      }
+    }
+    // Roll every sub-tab count (Friends + Revox + …) up into the collapsed More
+    // button so they combine. Fall back to writing just our own total if the
+    // shared helper hasn't loaded yet.
+    if (window.refreshMoreTabAlert) { window.refreshMoreTabAlert(); return; }
     const moreBtn = document.getElementById("tab-more-btn");
     if (moreBtn) {
       let dot = moreBtn.querySelector(".tab-alert");
@@ -551,21 +570,6 @@
         dot.title = "Unread messages";
       } else if (dot) {
         dot.remove();
-      }
-    }
-    const friendsItem = document.querySelector('a.tab-more-item[data-mode="friends"]');
-    if (friendsItem) {
-      let cnt = friendsItem.querySelector(".tab-count");
-      if (total > 0) {
-        if (!cnt) {
-          cnt = document.createElement("span");
-          cnt.className = "tab-count";
-          friendsItem.appendChild(cnt);
-        }
-        cnt.textContent = label;
-        cnt.setAttribute("aria-label", `${total} unread message${total === 1 ? "" : "s"}`);
-      } else if (cnt) {
-        cnt.remove();
       }
     }
   }

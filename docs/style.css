@@ -10762,6 +10762,78 @@ body.bronze-mode .revox-row-btn:hover { background: rgba(198, 128, 68, 0.3); bor
 .revox-pending-reject { background: rgba(248, 81, 73, 0.14); color: #f85149; border-color: rgba(248, 81, 73, 0.4); }
 .revox-pending-reject:hover { background: rgba(248, 81, 73, 0.24); }
 
+/* Evidence upload in the submit popup. */
+.revox-evidence-input {
+    display: block;
+    width: 100%;
+    margin-bottom: 8px;
+    color: #c9d1d9;
+    font: inherit;
+    font-size: 0.85rem;
+}
+.revox-evidence-preview {
+    display: block;
+    max-width: 100%;
+    max-height: 160px;
+    border-radius: 8px;
+    border: 1px solid rgba(110, 118, 129, 0.35);
+    margin-bottom: 8px;
+}
+.revox-evidence-preview.hidden { display: none; }
+
+/* Evidence thumbnail on a pending row (click to enlarge). */
+.revox-pending-evidence {
+    width: 42px;
+    height: 42px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid rgba(110, 118, 129, 0.4);
+    flex: 0 0 auto;
+    cursor: pointer;
+    background: rgba(110, 118, 129, 0.15);
+}
+.revox-pending-evidence-none {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #8b949e;
+    font-weight: 700;
+    cursor: default;
+}
+
+/* Full-screen evidence lightbox. */
+.revox-evidence-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 4000;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    cursor: zoom-out;
+}
+.revox-evidence-lightbox img {
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 8px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+}
+.revox-evidence-close {
+    position: fixed;
+    top: 16px;
+    right: 20px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    width: 40px;
+    height: 40px;
+    font-size: 1.6rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
 /* Add Result popup — the Placing dropdown spans the card width, and Points
    is a locked read-only display derived from the chosen placing. */
 #revox-add-placing {

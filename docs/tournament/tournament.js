@@ -11322,10 +11322,43 @@ function isRevoxMemberUnlocked() {
   return typeof window.isRevoxMember === "function" && window.isRevoxMember();
 }
 
+// Downscale + JPEG-compress a chosen image File to a data URL small enough for
+// a pending entry (max edge ~1000px, quality stepped down until under ~380 KB).
+// Phone photos are multi-MB, so this keeps them within the Firebase field cap.
+function compressEvidenceImage(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !/^image\//.test(file.type || "")) { reject(new Error("Pick an image file.")); return; }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Couldn't read that file."));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Couldn't load that image."));
+      img.onload = () => {
+        const MAX = 1000;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          const s = MAX / Math.max(w, h);
+          w = Math.round(w * s); h = Math.round(h * s);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        let q = 0.8, url = canvas.toDataURL("image/jpeg", q);
+        while (url.length > 380000 && q > 0.3) { q -= 0.1; url = canvas.toDataURL("image/jpeg", q); }
+        if (url.length > 500000) { reject(new Error("Image too large — try a smaller photo.")); return; }
+        resolve(url);
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 // A Revox Member submits their own result to the pending queue; a Revox Admin
 // reviews and approves it into the ranking. The submitter's uid is stamped so
-// the rules can gate creation to self and let the owner cancel it.
-function submitRevoxPending(name, points, tournament, placing, date) {
+// the rules can gate creation to self and let the owner cancel it. `photo` is a
+// compressed evidence image (data URL) shown to the admin during review.
+function submitRevoxPending(name, points, tournament, placing, date, photo) {
   const db = initFirebase();
   if (!db) return Promise.reject(new Error("firebase not configured"));
   const user = window.getCurrentUser && window.getCurrentUser();
@@ -11336,6 +11369,7 @@ function submitRevoxPending(name, points, tournament, placing, date) {
     placing: Number(placing) || 0,
     points: Number(points) || 0,
     date: String(date || "").trim().slice(0, 10),
+    photo: String(photo || "").slice(0, 500000),
     uid: user.uid,
     createdAt: new Date().toISOString()
   };
@@ -11389,11 +11423,21 @@ function renderRevoxPending() {
            <button type="button" class="revox-pending-btn revox-pending-reject" data-revox-reject="${escapeHtml(e.id)}">Reject</button>`
         : `<button type="button" class="revox-pending-btn revox-pending-reject" data-revox-reject="${escapeHtml(e.id)}" title="Cancel this submission">Cancel</button>`;
       const tag = isAdmin ? "" : `<span class="revox-pending-tag">Awaiting approval</span>`;
+      const evi = e.photo
+        ? `<img class="revox-pending-evidence" src="${e.photo}" alt="Evidence" data-revox-evidence="${escapeHtml(e.id)}" title="Tap to view evidence">`
+        : `<span class="revox-pending-evidence revox-pending-evidence-none" title="No evidence attached">?</span>`;
       return `<div class="revox-pending-row">
+        ${evi}
         <div class="revox-pending-info"><strong>${escapeHtml(e.name || "")}</strong><span>${meta}</span>${tag}</div>
         <div class="revox-pending-actions">${actions}</div>
       </div>`;
     }).join("");
+    container.querySelectorAll("[data-revox-evidence]").forEach(img => {
+      img.addEventListener("click", () => {
+        const e = data[img.dataset.revoxEvidence];
+        if (e && e.photo) showRevoxEvidence(e.photo);
+      });
+    });
     container.querySelectorAll("[data-revox-approve]").forEach(btn => {
       btn.addEventListener("click", () => {
         const id = btn.dataset.revoxApprove;
@@ -11416,6 +11460,86 @@ function renderRevoxPending() {
     });
   }).catch(() => { container.innerHTML = ""; });
 }
+
+// Full-screen preview of an evidence image; click / Esc to dismiss.
+function showRevoxEvidence(src) {
+  if (!src) return;
+  const existing = document.getElementById("revox-evidence-lightbox");
+  if (existing) existing.remove();
+  const box = document.createElement("div");
+  box.id = "revox-evidence-lightbox";
+  box.className = "revox-evidence-lightbox";
+  box.innerHTML = `<img src="${src}" alt="Evidence"><button type="button" class="revox-evidence-close" aria-label="Close">&times;</button>`;
+  const close = () => box.remove();
+  box.addEventListener("click", close);
+  document.addEventListener("keydown", function esc(e) {
+    if (e.key === "Escape") { close(); document.removeEventListener("keydown", esc); }
+  });
+  document.body.appendChild(box);
+}
+
+// Sum every More-menu item's own count badge (.tab-count) into the collapsed
+// More button's alert (.tab-alert), so Friends unread + Revox pending (and any
+// future sub-tab badge) combine instead of overwriting each other. Exposed on
+// window so friends.js can share it.
+window.refreshMoreTabAlert = function refreshMoreTabAlert() {
+  const moreBtn = document.getElementById("tab-more-btn");
+  if (!moreBtn) return;
+  let total = 0;
+  document.querySelectorAll(".tab-more-item .tab-count").forEach(el => {
+    const t = (el.textContent || "").trim();
+    const n = parseInt(t, 10);
+    if (!isNaN(n)) total += (t.indexOf("+") >= 0 ? n + 1 : n);
+  });
+  let dot = moreBtn.querySelector(".tab-alert");
+  if (total > 0) {
+    if (!dot) { dot = document.createElement("span"); dot.className = "tab-alert"; moreBtn.appendChild(dot); }
+    dot.textContent = total > 99 ? "99+" : String(total);
+    dot.title = "Needs attention";
+  } else if (dot) {
+    dot.remove();
+  }
+};
+
+// Show / clear the pending-approval count on the Revox tab (More-menu item),
+// then roll it into the More button badge.
+function updateRevoxNavBadge(count) {
+  const item = document.querySelector('a.tab-more-item[data-mode="revox"]');
+  if (item) {
+    let cnt = item.querySelector(".tab-count");
+    if (count > 0) {
+      if (!cnt) { cnt = document.createElement("span"); cnt.className = "tab-count"; item.appendChild(cnt); }
+      cnt.textContent = count > 99 ? "99+" : String(count);
+      cnt.setAttribute("aria-label", `${count} awaiting approval`);
+    } else if (cnt) {
+      cnt.remove();
+    }
+  }
+  if (window.refreshMoreTabAlert) window.refreshMoreTabAlert();
+}
+
+// Live badge on the Revox tab counting submissions awaiting approval. Runs on
+// every page for Revox Admins (so they see it wherever they are); cleared for
+// everyone else.
+(function initRevoxPendingBadge() {
+  let ref = null;
+  const detach = () => { if (ref) { try { ref.off(); } catch (e) {} ref = null; } };
+  const sync = () => {
+    const db = firebaseReady() ? initFirebase() : null;
+    if (!db || !isRevoxAdminUnlocked()) {
+      detach();
+      updateRevoxNavBadge(0);
+      return;
+    }
+    if (ref) return; // already listening
+    ref = db.ref("revoxPending");
+    ref.on("value",
+      snap => updateRevoxNavBadge(snap.exists() ? Object.keys(snap.val() || {}).length : 0),
+      () => { /* read blocked / offline — leave the badge as-is */ });
+  };
+  window.addEventListener("userprofilechange", sync);
+  sync();
+})();
 
 // Records a tournament result for a member. If the same name (after key
 // normalization) already exists, the new points are added to the running
@@ -11887,7 +12011,32 @@ function showRevoxHistory(key, name) {
   const tournamentEl = document.getElementById("revox-add-tournament");
   const dateEl = document.getElementById("revox-add-date");
   const statusEl = document.getElementById("revox-add-status");
+  const evidenceRow = document.getElementById("revox-add-evidence-row");
+  const evidenceInput = document.getElementById("revox-add-evidence");
+  const evidencePreview = document.getElementById("revox-add-evidence-preview");
+  // Compressed evidence data URL for the current submission ("" when none).
+  let revoxEvidenceData = "";
   const setStatus = (m) => { if (statusEl) statusEl.textContent = m || ""; };
+
+  // Reset the evidence field (input, preview, stored data).
+  const clearEvidence = () => {
+    revoxEvidenceData = "";
+    if (evidenceInput) evidenceInput.value = "";
+    if (evidencePreview) { evidencePreview.src = ""; evidencePreview.classList.add("hidden"); }
+  };
+  // Compress + preview a chosen evidence photo.
+  if (evidenceInput) {
+    evidenceInput.addEventListener("change", () => {
+      const file = evidenceInput.files && evidenceInput.files[0];
+      if (!file) { clearEvidence(); return; }
+      setStatus("Processing photo…");
+      compressEvidenceImage(file).then(url => {
+        revoxEvidenceData = url;
+        if (evidencePreview) { evidencePreview.src = url; evidencePreview.classList.remove("hidden"); }
+        setStatus("");
+      }).catch(e => { clearEvidence(); setStatus(e?.message || "Couldn't use that photo."); });
+    });
+  }
 
   // Mirror the chosen placing's points into the locked Points display.
   const syncPoints = () => {
@@ -11981,6 +12130,9 @@ function showRevoxHistory(key, name) {
     if (dateEl) dateEl.value = (editCtx && editCtx.date) ? editCtx.date : todayISO();
     if (editCtx && editCtx.placing) setPlacing(String(editCtx.placing));
     else resetPlacing();
+    // Evidence upload is a member-submit-only field (proof of the result).
+    clearEvidence();
+    if (evidenceRow) evidenceRow.classList.toggle("hidden", !submit);
     setStatus("");
     popup.classList.remove("hidden");
     setTimeout(() => tournamentEl?.focus(), 0);
@@ -12038,8 +12190,9 @@ function showRevoxHistory(key, name) {
     const pts = revoxPointsForPlacing(placing);
     // Member self-submit — goes to the pending queue for a Revox Admin to approve.
     if (submit) {
+      if (!revoxEvidenceData) { setStatus("Attach an evidence photo of your result."); return; }
       setStatus("Submitting…");
-      submitRevoxPending(name, pts, tournament, Number(placing), date)
+      submitRevoxPending(name, pts, tournament, Number(placing), date, revoxEvidenceData)
         .then(() => { closePopup(); renderRevoxPending(); })
         .catch(e => setStatus("Submit failed: " + (e?.message || e)));
       return;

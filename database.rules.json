@@ -286,6 +286,7 @@
         "placing":    { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 8" },
         "points":     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
         "date":       { ".validate": "newData.isString() && newData.val().length <= 10" },
+        "photo":      { ".validate": "newData.isString() && newData.val().length <= 500000" },
         "uid":        { ".validate": "newData.isString() && newData.val() === auth.uid" },
         "createdAt":  { ".validate": "newData.isString() && newData.val().length <= 32" },
         "$other":     { ".validate": false }
