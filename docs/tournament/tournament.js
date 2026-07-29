@@ -11430,7 +11430,7 @@ function renderRevoxPendingFrom(data) {
   container.innerHTML = `<h3 class="revox-pending-title">${heading}</h3>` + entries.map(e => {
     const meta = [
       escapeHtml(e.tournament || "—"),
-      ordinalPlace(e.placing) || "—",
+      revoxPlacingLabel(e.placing) || "—",
       `${Number(e.points) || 0} pts`,
       formatRevoxDate(e.date) || ""
     ].filter(Boolean).join(" · ");
@@ -11625,10 +11625,25 @@ function todayISO() {
   return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
 }
 
-// Top 8 scoring: 1st = 8 pts, 2nd = 7 ... 8th = 1. Placing drives Points.
+// Scoring: 1st = 7 pts, 2nd = 5, 3rd = 3, anyone else = 2. Placing drives Points.
+// "Others" is stored as placing 4 (any placing >= 4 scores 2). Placing 0 = none.
 function revoxPointsForPlacing(placing) {
   const p = Number(placing);
-  return (p >= 1 && p <= 8) ? 9 - p : 0;
+  if (p === 1) return 7;
+  if (p === 2) return 5;
+  if (p === 3) return 3;
+  if (p >= 4) return 2;
+  return 0;
+}
+
+// Label a stored result placing: 1st / 2nd / 3rd, or "Others" for 4+.
+function revoxPlacingLabel(placing) {
+  const p = Number(placing);
+  if (p === 1) return "1st";
+  if (p === 2) return "2nd";
+  if (p === 3) return "3rd";
+  if (p >= 4) return "Others";
+  return "";
 }
 
 // Inline icons for the Revox action buttons (fill follows currentColor).
@@ -11986,7 +12001,7 @@ function showRevoxHistory(key, name) {
         const bits = [];
         const d = formatRevoxDate(r.date);
         if (d) bits.push(d);
-        if (Number(r.placing)) bits.push(ordinalPlace(r.placing));
+        if (Number(r.placing)) bits.push(revoxPlacingLabel(r.placing));
         const pts = Number(r.points) || 0;
         bits.push(pts + " pt" + (pts === 1 ? "" : "s"));
         // Edit / delete are offered to Revox Admins on real recorded results
