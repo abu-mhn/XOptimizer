@@ -11440,8 +11440,8 @@ function renderRevoxPendingFrom(data) {
       : `<button type="button" class="revox-pending-btn revox-pending-reject" data-revox-reject="${escapeHtml(e.id)}" title="Cancel this submission">Cancel</button>`;
     const tag = isAdmin ? "" : `<span class="revox-pending-tag">Awaiting approval</span>`;
     const evi = e.photo
-      ? `<img class="revox-pending-evidence" src="${e.photo}" alt="Evidence" data-revox-evidence="${escapeHtml(e.id)}" title="Tap to view evidence">`
-      : `<span class="revox-pending-evidence revox-pending-evidence-none" title="No evidence attached">?</span>`;
+      ? `<img class="revox-pending-evidence" src="${e.photo}" alt="Reference" data-revox-evidence="${escapeHtml(e.id)}" title="Tap to view reference photo">`
+      : `<span class="revox-pending-evidence revox-pending-evidence-none" title="No reference photo attached">?</span>`;
     return `<div class="revox-pending-row">
       <div class="revox-pending-main">
         ${evi}
@@ -11486,7 +11486,7 @@ function showRevoxEvidence(src) {
   const box = document.createElement("div");
   box.id = "revox-evidence-lightbox";
   box.className = "revox-evidence-lightbox";
-  box.innerHTML = `<img src="${src}" alt="Evidence"><button type="button" class="revox-evidence-close" aria-label="Close">&times;</button>`;
+  box.innerHTML = `<img src="${src}" alt="Reference photo"><button type="button" class="revox-evidence-close" aria-label="Close">&times;</button>`;
   const close = () => box.remove();
   box.addEventListener("click", close);
   document.addEventListener("keydown", function esc(e) {
@@ -12207,7 +12207,7 @@ function showRevoxHistory(key, name) {
     const pts = revoxPointsForPlacing(placing);
     // Member self-submit — goes to the pending queue for a Revox Admin to approve.
     if (submit) {
-      if (!revoxEvidenceData) { setStatus("Attach an evidence photo of your result."); return; }
+      if (!revoxEvidenceData) { setStatus("Attach a reference photo of your result."); return; }
       setStatus("Submitting…");
       submitRevoxPending(name, pts, tournament, Number(placing), date, revoxEvidenceData)
         .then(() => { closePopup(); renderRevoxPending(); })
