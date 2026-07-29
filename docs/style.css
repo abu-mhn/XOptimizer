@@ -10732,6 +10732,13 @@ body.bronze-mode .revox-row-btn:hover { background: rgba(198, 128, 68, 0.3); bor
     border: 1px solid rgba(210, 153, 34, 0.3);
     border-radius: 10px;
 }
+.revox-pending-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex: 1 1 auto;
+}
 .revox-pending-info {
     display: flex;
     flex-direction: column;
@@ -10761,6 +10768,18 @@ body.bronze-mode .revox-row-btn:hover { background: rgba(198, 128, 68, 0.3); bor
 .revox-pending-approve:hover { background: rgba(63, 185, 80, 0.3); }
 .revox-pending-reject { background: rgba(248, 81, 73, 0.14); color: #f85149; border-color: rgba(248, 81, 73, 0.4); }
 .revox-pending-reject:hover { background: rgba(248, 81, 73, 0.24); }
+/* On phones the row is too cramped with everything on one line — stack it:
+   thumbnail + details on top, the Approve/Reject actions on their own line. */
+@media (max-width: 480px) {
+    .revox-pending-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+    .revox-pending-info span { white-space: normal; }
+    .revox-pending-actions { justify-content: flex-end; }
+    .revox-pending-btn { padding: 7px 16px; }
+}
 
 /* Evidence upload in the submit popup. */
 .revox-evidence-input {

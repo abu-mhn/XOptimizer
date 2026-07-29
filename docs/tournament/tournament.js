@@ -11393,72 +11393,89 @@ function rejectRevoxPending(id) {
   return db.ref("revoxPending/" + id).remove();
 }
 
-// Render the pending-submissions panel: Approve / Reject for admins (all
-// submissions), or a read-only "awaiting approval" list of their own for a
-// plain member. Hidden entirely when there's nothing pending to show.
+// Live listener on the pending queue so the panel updates the moment an admin
+// approves / rejects (or a new submission lands) — a one-time read left members
+// staring at an "awaiting approval" row that had already been rejected.
+let revoxPendingRef = null;
+let revoxPendingData = {};
 function renderRevoxPending() {
   const container = document.getElementById("revox-pending-list");
-  if (!container) return;
+  if (!container) return; // not on the Revox page
   const db = initFirebase();
   if (!db) { container.innerHTML = ""; return; }
+  // Already listening: re-render from cached data so a later profile/role change
+  // (Revox Admin tag resolving after first paint) is reflected right away.
+  if (revoxPendingRef) { renderRevoxPendingFrom(revoxPendingData); return; }
+  revoxPendingRef = db.ref("revoxPending");
+  revoxPendingRef.on("value",
+    snap => { revoxPendingData = snap.val() || {}; renderRevoxPendingFrom(revoxPendingData); },
+    () => { const c = document.getElementById("revox-pending-list"); if (c) c.innerHTML = ""; });
+}
+
+// Render the pending-submissions panel from a data snapshot: Approve / Reject
+// for admins (all submissions), or a member's own "awaiting approval" list.
+// Hidden entirely when there's nothing pending to show for this viewer.
+function renderRevoxPendingFrom(data) {
+  const container = document.getElementById("revox-pending-list");
+  if (!container) return;
+  data = data || {};
   const isAdmin = isRevoxAdminUnlocked();
   const myUid = (window.getCurrentUser && window.getCurrentUser() && window.getCurrentUser().uid) || "";
   if (!isAdmin && !myUid) { container.innerHTML = ""; return; }
-  db.ref("revoxPending").once("value").then(snap => {
-    const data = snap.val() || {};
-    let entries = Object.keys(data).map(id => Object.assign({ id }, data[id]));
-    if (!isAdmin) entries = entries.filter(e => e.uid === myUid);
-    entries.sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
-    if (!entries.length) { container.innerHTML = ""; return; }
-    const heading = isAdmin ? "Pending approvals" : "Your pending submissions";
-    container.innerHTML = `<h3 class="revox-pending-title">${heading}</h3>` + entries.map(e => {
-      const meta = [
-        escapeHtml(e.tournament || "—"),
-        ordinalPlace(e.placing) || "—",
-        `${Number(e.points) || 0} pts`,
-        formatRevoxDate(e.date) || ""
-      ].filter(Boolean).join(" · ");
-      const actions = isAdmin
-        ? `<button type="button" class="revox-pending-btn revox-pending-approve" data-revox-approve="${escapeHtml(e.id)}">Approve</button>
-           <button type="button" class="revox-pending-btn revox-pending-reject" data-revox-reject="${escapeHtml(e.id)}">Reject</button>`
-        : `<button type="button" class="revox-pending-btn revox-pending-reject" data-revox-reject="${escapeHtml(e.id)}" title="Cancel this submission">Cancel</button>`;
-      const tag = isAdmin ? "" : `<span class="revox-pending-tag">Awaiting approval</span>`;
-      const evi = e.photo
-        ? `<img class="revox-pending-evidence" src="${e.photo}" alt="Evidence" data-revox-evidence="${escapeHtml(e.id)}" title="Tap to view evidence">`
-        : `<span class="revox-pending-evidence revox-pending-evidence-none" title="No evidence attached">?</span>`;
-      return `<div class="revox-pending-row">
+  let entries = Object.keys(data).map(id => Object.assign({ id }, data[id]));
+  if (!isAdmin) entries = entries.filter(e => e.uid === myUid);
+  entries.sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+  if (!entries.length) { container.innerHTML = ""; return; }
+  const heading = isAdmin ? "Pending approvals" : "Your pending submissions";
+  container.innerHTML = `<h3 class="revox-pending-title">${heading}</h3>` + entries.map(e => {
+    const meta = [
+      escapeHtml(e.tournament || "—"),
+      ordinalPlace(e.placing) || "—",
+      `${Number(e.points) || 0} pts`,
+      formatRevoxDate(e.date) || ""
+    ].filter(Boolean).join(" · ");
+    const actions = isAdmin
+      ? `<button type="button" class="revox-pending-btn revox-pending-approve" data-revox-approve="${escapeHtml(e.id)}">Approve</button>
+         <button type="button" class="revox-pending-btn revox-pending-reject" data-revox-reject="${escapeHtml(e.id)}">Reject</button>`
+      : `<button type="button" class="revox-pending-btn revox-pending-reject" data-revox-reject="${escapeHtml(e.id)}" title="Cancel this submission">Cancel</button>`;
+    const tag = isAdmin ? "" : `<span class="revox-pending-tag">Awaiting approval</span>`;
+    const evi = e.photo
+      ? `<img class="revox-pending-evidence" src="${e.photo}" alt="Evidence" data-revox-evidence="${escapeHtml(e.id)}" title="Tap to view evidence">`
+      : `<span class="revox-pending-evidence revox-pending-evidence-none" title="No evidence attached">?</span>`;
+    return `<div class="revox-pending-row">
+      <div class="revox-pending-main">
         ${evi}
         <div class="revox-pending-info"><strong>${escapeHtml(e.name || "")}</strong><span>${meta}</span>${tag}</div>
-        <div class="revox-pending-actions">${actions}</div>
-      </div>`;
-    }).join("");
-    container.querySelectorAll("[data-revox-evidence]").forEach(img => {
-      img.addEventListener("click", () => {
-        const e = data[img.dataset.revoxEvidence];
-        if (e && e.photo) showRevoxEvidence(e.photo);
-      });
+      </div>
+      <div class="revox-pending-actions">${actions}</div>
+    </div>`;
+  }).join("");
+  container.querySelectorAll("[data-revox-evidence]").forEach(img => {
+    img.addEventListener("click", () => {
+      const e = data[img.dataset.revoxEvidence];
+      if (e && e.photo) showRevoxEvidence(e.photo);
     });
-    container.querySelectorAll("[data-revox-approve]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const id = btn.dataset.revoxApprove;
-        const e = data[id];
-        if (!e) return;
-        btn.disabled = true;
-        approveRevoxPending(id, e)
-          .then(() => renderRevoxRanking())
-          .catch(err => { btn.disabled = false; alert("Approve failed: " + (err && err.message || err)); });
-      });
+  });
+  container.querySelectorAll("[data-revox-approve]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.revoxApprove;
+      const e = data[id];
+      if (!e) return;
+      btn.disabled = true;
+      // The live listener repaints the panel once the entry is removed.
+      approveRevoxPending(id, e)
+        .then(() => renderRevoxRanking())
+        .catch(err => { btn.disabled = false; alert("Approve failed: " + (err && err.message || err)); });
     });
-    container.querySelectorAll("[data-revox-reject]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const id = btn.dataset.revoxReject;
-        btn.disabled = true;
-        rejectRevoxPending(id)
-          .then(() => renderRevoxPending())
-          .catch(err => { btn.disabled = false; alert("Failed: " + (err && err.message || err)); });
-      });
+  });
+  container.querySelectorAll("[data-revox-reject]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.revoxReject;
+      btn.disabled = true;
+      rejectRevoxPending(id)
+        .catch(err => { btn.disabled = false; alert("Failed: " + (err && err.message || err)); });
     });
-  }).catch(() => { container.innerHTML = ""; });
+  });
 }
 
 // Full-screen preview of an evidence image; click / Esc to dismiss.
