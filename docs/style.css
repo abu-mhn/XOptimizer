@@ -6017,6 +6017,16 @@ body.light-mode .part-img {
 .scoreboard-avatar.hidden {
     display: none;
 }
+/* Keep a long player name on one line within its half of the board and
+   truncate with an ellipsis, instead of stretching / overflowing the layout. */
+.scoreboard-player-name {
+    display: block;
+    max-width: 42vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+}
 
 .scoreboard-score {
     font-size: clamp(4rem, 15vw, 8rem);
@@ -8503,10 +8513,15 @@ body.mono-mode .popup-ok:hover {
 .calling-monitor-overlay .mon-cards { display: flex; flex-direction: column; gap: 12px; }
 .calling-monitor-overlay .mon-card { background: #161b22; border: 1px solid #30363d; border-radius: 14px; padding: 18px 12px; text-align: center; }
 .calling-monitor-overlay .mon-live { border-color: #3fb950; box-shadow: 0 0 0 2px rgba(63, 185, 80, .25); }
-.calling-monitor-overlay .mon-players { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; max-width: 100%; }
-.calling-monitor-overlay .mon-p { font-size: 1.6rem; font-weight: 800; line-height: 1.15; max-width: 100%; overflow-wrap: anywhere; }
+.calling-monitor-overlay .mon-players { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: nowrap; max-width: 100%; }
+.calling-monitor-overlay .mon-p { font-size: 1.6rem; font-weight: 800; line-height: 1.15; min-width: 0; max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .calling-monitor-overlay .mon-vs { font-size: 1rem; font-weight: 700; color: #8b949e; }
+.calling-monitor-overlay .mon-score { margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 10px; line-height: 1; font-variant-numeric: tabular-nums; }
+.calling-monitor-overlay .mon-score-n { font-size: 2.2rem; font-weight: 900; color: #3fb950; min-width: 1.4ch; text-align: center; }
+.calling-monitor-overlay .mon-score-dash { font-size: 1.4rem; font-weight: 700; color: #6e7681; }
 .calling-monitor-overlay .mon-ctx { margin-top: 8px; font-size: .85rem; color: #8b949e; font-weight: 600; }
+.calling-monitor-overlay .mon-judge { margin-top: 6px; font-size: .8rem; color: #8b949e; font-weight: 600; }
+.calling-monitor-overlay .mon-judge strong { color: #58a6ff; font-weight: 800; }
 .calling-monitor-overlay .mon-next { display: flex; flex-direction: column; gap: 8px; }
 .calling-monitor-overlay .mon-next-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 10px 12px; }
 .calling-monitor-overlay .mon-next-players { font-size: 1rem; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -9167,6 +9182,45 @@ body.forest-mode   .swiss-banned-chip { color: #b42d2d; }
     align-items: flex-start;
     gap: 2px;
 }
+/* Heading + sort toggle share one row; the submeta line sits below. */
+.swiss-reg-heading-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+}
+.swiss-reg-sort-group {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.swiss-reg-sort {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: #c9d1d9;
+    background: rgba(110, 118, 129, 0.15);
+    border: 1px solid rgba(110, 118, 129, 0.35);
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.swiss-reg-sort svg {
+    width: 13px;
+    height: 13px;
+    flex: 0 0 auto;
+}
+.swiss-reg-sort:hover,
+.swiss-reg-sort:focus-visible {
+    background: rgba(110, 118, 129, 0.28);
+    outline: none;
+}
 .swiss-reg-heading {
     margin: 0;
     font-size: 1rem;
@@ -9243,6 +9297,86 @@ body.forest-mode   .swiss-banned-chip { color: #b42d2d; }
     border-radius: 8px;
     overflow: hidden;        /* clip banner / chip contents to the rounded corners */
     min-width: 0;            /* let the row shrink inside its flex parent on mobile */
+}
+/* Participant search box (registering view). */
+.swiss-reg-search-wrap {
+    position: relative;
+    margin-bottom: 8px;
+}
+.swiss-reg-search-ico {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 15px;
+    height: 15px;
+    color: #8b949e;
+    pointer-events: none;
+}
+.swiss-reg-search {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 12px 8px 32px;
+    font: inherit;
+    font-size: 0.9rem;
+    color: #e6edf3;
+    background: rgba(110, 118, 129, 0.12);
+    border: 1px solid rgba(110, 118, 129, 0.35);
+    border-radius: 8px;
+}
+.swiss-reg-search:focus {
+    outline: none;
+    border-color: #58a6ff;
+    background: rgba(110, 118, 129, 0.18);
+}
+.swiss-reg-search::placeholder { color: #8b949e; }
+/* Search-filter visibility. Bare .hidden loses to .swiss-reg-row's display, so scope it. */
+.swiss-reg-row.hidden { display: none; }
+.swiss-reg-noresults {
+    list-style: none;
+    padding: 12px 10px;
+    color: #8b949e;
+    font-size: 0.85rem;
+    text-align: center;
+}
+.swiss-reg-noresults.hidden { display: none; }
+/* Registrant filter — deck status (host/co-host) + Paid/Unpaid (Keeper).
+   Single line; overflow scrolls sideways with a hidden scrollbar. */
+.swiss-reg-paidfilter {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 4px;
+    margin-bottom: 8px;
+    padding: 3px;
+    background: rgba(110, 118, 129, 0.12);
+    border: 1px solid rgba(110, 118, 129, 0.3);
+    border-radius: 999px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;          /* Firefox — hide scrollbar */
+}
+.swiss-reg-paidfilter::-webkit-scrollbar {
+    display: none;                  /* Chrome/Safari — hide scrollbar */
+}
+.swiss-reg-paidfilter-btn {
+    flex: 0 0 auto;                 /* keep each pill on the one scrolling line */
+    white-space: nowrap;
+}
+.swiss-reg-paidfilter-btn {
+    padding: 4px 14px;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #8b949e;
+    background: transparent;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+}
+.swiss-reg-paidfilter-btn:hover { color: #c9d1d9; }
+.swiss-reg-paidfilter-btn.is-active {
+    color: #fff;
+    background: rgba(88, 166, 255, 0.25);
 }
 .swiss-reg-num {
     color: #8b949e;
@@ -10569,6 +10703,7 @@ body.bronze-mode .revox-row-btn:hover { background: rgba(198, 128, 68, 0.3); bor
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    gap: 6px;
 }
 
 .revox-icon-btn svg {

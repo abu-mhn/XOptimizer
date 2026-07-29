@@ -33,6 +33,8 @@ let swissSessionRole = null;     // this session's role: "host" | "co-host" | "p
 let swissArchiveView = false;    // viewing a finished tournament from the public Past archive (read-only, no live room)
 let swissArchiveState = null;    // the archived tournament being viewed — kept in memory (NOT localStorage) so it never leaks into a real local tournament across page navigation
 let swissArchiveReturnSession = null; // the live room session (host/co-host/participant) suspended when a Past tournament was opened, so returning to Hosting restores the right role instead of demoting to a viewer
+let swissRegSearchQuery = "";    // current participant-search filter text (registering view); kept across re-renders so a live room sync doesn't wipe an active search
+let swissRegFilter = "all";      // registrant list filter: "all" | "no-deck" | "banned" | "incomplete" | "deck" (host/co-host) | "paid" | "unpaid" (Keeper)
 const pastTournamentArchived = new Set(); // editCodes this session already snapshotted to pastTournaments
 
 function initFirebase() {
@@ -446,7 +448,11 @@ function pushSwissMatchUpdate(matchId, match, state, newMatchIds, extraUpdates) 
   const updates = {
     [`matches/${matchId}/scoreA`]: match.scoreA,
     [`matches/${matchId}/scoreB`]: match.scoreB,
-    [`matches/${matchId}/startedAt`]: null
+    [`matches/${matchId}/startedAt`]: null,
+    // Clear the running "live score" and calling judge now the final result is in.
+    [`matches/${matchId}/liveA`]: null,
+    [`matches/${matchId}/liveB`]: null,
+    [`matches/${matchId}/judge`]: null
   };
   if (newMatchIds && newMatchIds.length) {
     newMatchIds.forEach(id => {
@@ -467,12 +473,82 @@ function pushSwissMatchUpdate(matchId, match, state, newMatchIds, extraUpdates) 
 
 // Small push for just the "match is being scored" flag so other refs see
 // the in-progress state the moment someone opens the scoreboard.
-function pushSwissMatchStart(matchId, startedAt) {
+function pushSwissMatchStart(matchId, startedAt, judge) {
   if (swissApplyingRemote) return;
   if (!swissRoomRef || !swissCanEdit) return;
+  const updates = {
+    [`matches/${matchId}/startedAt`]: startedAt,
+    // Set the calling judge when going live; clear it when the match stops.
+    [`matches/${matchId}/judge`]: startedAt == null ? null : (judge || null)
+  };
   swissCoHostUidReady
-    .then(() => swissRoomRef.child(`matches/${matchId}/startedAt`).set(startedAt))
+    .then(() => swissRoomRef.update(updates))
     .catch(e => console.warn("Swiss start push failed:", e));
+}
+
+// Live running score for the match currently being scored, so the Calling
+// Monitor can show "2 – 1" as it happens. Firebase writes are throttled
+// (rapid taps) with a trailing flush; the local state is updated immediately so
+// a monitor on the SAME device repaints without waiting for the round-trip.
+let swissLiveScorePush = { matchId: null, timer: null, pending: null };
+function pushSwissMatchLiveScore(matchId, a, b) {
+  // Update local state + repaint any open monitor right away (works even for a
+  // local-only tournament with no room).
+  try {
+    const s = loadSwiss();
+    if (s.matches && s.matches[matchId]) {
+      s.matches[matchId].liveA = a;
+      s.matches[matchId].liveB = b;
+      persistSwiss(s);
+      if (typeof updateCallingMonitor === "function") updateCallingMonitor();
+    }
+  } catch (e) { /* non-fatal */ }
+  // Remote sync only when connected as host/co-host.
+  if (!swissRoomRef || !swissCanEdit) return;
+  // Throttle the remote write to ~350ms, always flushing the latest value.
+  swissLiveScorePush.matchId = matchId;
+  swissLiveScorePush.pending = { a, b };
+  if (swissLiveScorePush.timer) return;
+  const flush = () => {
+    const p = swissLiveScorePush.pending;
+    const mid = swissLiveScorePush.matchId;
+    swissLiveScorePush.pending = null;
+    swissLiveScorePush.timer = null;
+    if (!p || !mid || !swissRoomRef || !swissCanEdit) return;
+    swissCoHostUidReady
+      .then(() => swissRoomRef.update({
+        [`matches/${mid}/liveA`]: p.a,
+        [`matches/${mid}/liveB`]: p.b
+      }))
+      .catch(e => console.warn("Swiss live-score push failed:", e));
+  };
+  flush(); // leading-edge write, then throttle follow-ups
+  swissLiveScorePush.timer = setTimeout(() => {
+    swissLiveScorePush.timer = null;
+    if (swissLiveScorePush.pending) flush();
+  }, 350);
+}
+
+// Drop the running live score for a match (toggled off / abandoned) both
+// locally and remotely, so the monitor stops showing a stale score.
+function clearSwissMatchLiveScore(matchId) {
+  swissLiveScorePush.pending = null;
+  try {
+    const s = loadSwiss();
+    if (s.matches && s.matches[matchId] && (s.matches[matchId].liveA != null || s.matches[matchId].liveB != null)) {
+      delete s.matches[matchId].liveA;
+      delete s.matches[matchId].liveB;
+      persistSwiss(s);
+    }
+  } catch (e) { /* non-fatal */ }
+  if (swissRoomRef && swissCanEdit) {
+    swissCoHostUidReady
+      .then(() => swissRoomRef.update({
+        [`matches/${matchId}/liveA`]: null,
+        [`matches/${matchId}/liveB`]: null
+      }))
+      .catch(() => {});
+  }
 }
 
 function initSwissRoomOnLoad() {
@@ -636,6 +712,35 @@ function listRegistrants(state) {
     deck: normalizeBeyCheckDeck(r && r.deck),
     paid: !!(r && r.paid)
   }));
+}
+
+// Registration time embedded in a registrant id (`r_<base36 ms>_<rand>`), so
+// the list can be ordered by when each player signed up. Returns null for ids
+// that don't carry the timestamp prefix (they fall back to a name sort).
+function registrantOrderKey(id) {
+  const m = /^r_([0-9a-z]+)_/.exec(String(id || ""));
+  if (m) {
+    const n = parseInt(m[1], 36);
+    if (!isNaN(n)) return n;
+  }
+  return null;
+}
+
+// How the registrant list is ordered: "<field>-<dir>" where field is "name"
+// (default) or "time" (registration order), and dir is "asc" (default) or
+// "desc". Persisted so the host's choice sticks across renders and reloads.
+const SWISS_REG_SORT_KEY = "swissRegSort";
+const SWISS_REG_SORTS = ["name-asc", "name-desc", "time-asc", "time-desc"];
+function getSwissRegSort() {
+  let v;
+  try { v = localStorage.getItem(SWISS_REG_SORT_KEY) || ""; } catch (e) { v = ""; }
+  if (v === "name") v = "name-asc"; // migrate legacy field-only values
+  if (v === "time") v = "time-asc";
+  return SWISS_REG_SORTS.indexOf(v) >= 0 ? v : "name-asc";
+}
+function setSwissRegSort(mode) {
+  try { localStorage.setItem(SWISS_REG_SORT_KEY, SWISS_REG_SORTS.indexOf(mode) >= 0 ? mode : "name-asc"); }
+  catch (e) {}
 }
 
 // True when the signed-in account may toggle fee-paid status: the host always,
@@ -1461,9 +1566,11 @@ function startSwissMatch(matchId) {
     const s = loadSwiss();
     if (s.matches[matchId]) {
       s.matches[matchId].startedAt = null;
+      delete s.matches[matchId].judge;
       persistSwiss(s);
       pushSwissMatchStart(matchId, null);
     }
+    clearSwissMatchLiveScore(matchId); // drop the running score from the monitor
     if (typeof window.resetScoreboardToDefault === "function") {
       window.resetScoreboardToDefault();
     }
@@ -1473,14 +1580,18 @@ function startSwissMatch(matchId) {
 
   // Going live ON an unscored match — mark startedAt and claim the device
   // slot. Edits don't flip live (the card shows the score, not a badge).
+  // Stamp the judge (this device's signed-in name) so the Calling Monitor can
+  // tell participants who's calling them.
   if (!isEdit) {
     swissLiveMatchId = matchId;
     const now = Date.now();
+    const judgeName = (window.getCurrentUsername && window.getCurrentUsername()) || "";
     const s = loadSwiss();
     if (s.matches[matchId]) {
       s.matches[matchId].startedAt = now;
+      if (judgeName) s.matches[matchId].judge = judgeName;
       persistSwiss(s);
-      pushSwissMatchStart(matchId, now);
+      pushSwissMatchStart(matchId, now, judgeName);
       renderSwiss();
     }
   }
@@ -1579,7 +1690,10 @@ function startSwissMatch(matchId) {
     persistSwiss(s);
     pushSwissMatchUpdate(matchId, stored, s, newMatchIds, extraUpdates);
     renderSwiss();
-  }, isEdit ? match.scoreA : 0, isEdit ? match.scoreB : 0);
+  }, isEdit ? match.scoreA : 0, isEdit ? match.scoreB : 0,
+    // Live-score hook — only for a live match (edits aren't shown on the
+    // monitor). Pushes the running score to the room as it changes.
+    isEdit ? null : (({ scoreA, scoreB }) => pushSwissMatchLiveScore(matchId, scoreA, scoreB)));
 }
 
 let swissGroupViews = {}; // gi -> "matches" | "standings"
@@ -3244,15 +3358,20 @@ body{background:#0d1117;color:#e6edf3;font-family:system-ui,"Segoe UI",Roboto,sa
 .mon-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(38vw,1fr));gap:2vh 2vw}
 .mon-card{background:#161b22;border:1px solid #30363d;border-radius:16px;padding:3vh 2vw;text-align:center}
 .mon-live{border-color:#3fb950;box-shadow:0 0 0 2px rgba(63,185,80,.25)}
-.mon-players{display:flex;align-items:center;justify-content:center;gap:1.5vw;flex-wrap:wrap}
-.mon-p{font-size:4vw;font-weight:800;line-height:1.1}
-.mon-vs{font-size:2vw;font-weight:700;color:#8b949e}
+.mon-players{display:flex;align-items:center;justify-content:center;gap:1.5vw;flex-wrap:nowrap;max-width:100%}
+.mon-p{font-size:4vw;font-weight:800;line-height:1.1;min-width:0;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mon-vs{font-size:2vw;font-weight:700;color:#8b949e;flex:0 0 auto}
+.mon-score{margin-top:1.4vh;display:flex;align-items:center;justify-content:center;gap:1.2vw;font-variant-numeric:tabular-nums;line-height:1}
+.mon-score-n{font-size:5vw;font-weight:900;color:#3fb950;min-width:1.4ch;text-align:center}
+.mon-score-dash{font-size:3vw;font-weight:700;color:#6e7681}
 .mon-ctx{margin-top:1.5vh;font-size:1.6vw;color:#8b949e;font-weight:600}
+.mon-judge{margin-top:1vh;font-size:1.5vw;color:#8b949e;font-weight:600}
+.mon-judge strong{color:#58a6ff;font-weight:800}
 .mon-next{display:flex;flex-direction:column;gap:1vh}
-.mon-next-row{display:flex;justify-content:space-between;align-items:baseline;background:#161b22;border:1px solid #30363d;border-radius:10px;padding:1.4vh 1.6vw}
-.mon-next-players{font-size:2.2vw;font-weight:700}
+.mon-next-row{display:flex;justify-content:space-between;align-items:baseline;gap:1.6vw;background:#161b22;border:1px solid #30363d;border-radius:10px;padding:1.4vh 1.6vw}
+.mon-next-players{font-size:2.2vw;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mon-next-players em{color:#8b949e;font-style:normal;font-weight:600;font-size:1.6vw;margin:0 .6vw}
-.mon-next-ctx{font-size:1.5vw;color:#8b949e;font-weight:600}
+.mon-next-ctx{font-size:1.5vw;color:#8b949e;font-weight:600;flex:0 0 auto;white-space:nowrap}
 .mon-empty{font-size:2.4vw;color:#8b949e;padding:3vh 0}
 .mon-empty-sm{font-size:1.8vw;padding:1.5vh 0}
 .mon-fs{position:fixed;bottom:2vh;right:2vw;z-index:10;background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:.8vh 1.2vw;font-size:1.8vw;line-height:1;cursor:pointer;font-family:inherit;opacity:.55}
@@ -3305,8 +3424,11 @@ window.__goFullscreen=function(){try{var d=document.documentElement,r=d.requestF
 
 function callingMatchLabel(state, m) {
   if (m.bracket) {
-    const roundMs = Object.values(state.matches || {}).filter(x => x.bracket && x.round === m.round);
-    const nm = (typeof getBracketRoundName === "function") ? getBracketRoundName(roundMs) : "";
+    // getBracketRoundName wants the COUNT of match slots in the round (bye slots
+    // included, so a Round of 16 counts 8) — passing the array gave "Round of NaN".
+    const roundCount = Object.values(state.matches || {})
+      .filter(x => x.bracket && x.round === m.round).length;
+    const nm = (typeof getBracketRoundName === "function") ? getBracketRoundName(roundCount) : "";
     return nm || "Knockout";
   }
   const parts = [];
@@ -3331,7 +3453,14 @@ function computeCallingLists(state) {
 function callingMonitorBoardHtml(state) {
   const { live, upNext } = computeCallingLists(state);
   const liveHtml = live.length
-    ? live.map(m => `<div class="mon-card mon-live"><div class="mon-players"><span class="mon-p">${escapeHtml(m.a)}</span><span class="mon-vs">VS</span><span class="mon-p">${escapeHtml(m.b)}</span></div><div class="mon-ctx">${escapeHtml(callingMatchLabel(state, m))}</div></div>`).join("")
+    ? live.map(m => {
+        const la = typeof m.liveA === "number" ? m.liveA : 0;
+        const lb = typeof m.liveB === "number" ? m.liveB : 0;
+        const judge = m.judge
+          ? `<div class="mon-judge">Called by <strong>${escapeHtml(m.judge)}</strong></div>`
+          : "";
+        return `<div class="mon-card mon-live"><div class="mon-players"><span class="mon-p">${escapeHtml(m.a)}</span><span class="mon-vs">VS</span><span class="mon-p">${escapeHtml(m.b)}</span></div><div class="mon-score"><span class="mon-score-n">${la}</span><span class="mon-score-dash">–</span><span class="mon-score-n">${lb}</span></div><div class="mon-ctx">${escapeHtml(callingMatchLabel(state, m))}</div>${judge}</div>`;
+      }).join("")
     : `<div class="mon-empty">No match is live right now.</div>`;
   const nextHtml = upNext.length
     ? upNext.map(m => `<div class="mon-next-row"><span class="mon-next-players">${escapeHtml(m.a)} <em>vs</em> ${escapeHtml(m.b)}</span><span class="mon-next-ctx">${escapeHtml(callingMatchLabel(state, m))}</span></div>`).join("")
@@ -3774,9 +3903,25 @@ function renderSwissRegisteringMarkup(state) {
   // disconnect locally.
   const canEdit = !!swissCanEdit;
   const canRegisterSelf = !!swissCanEdit;
-  const registrants = listRegistrants(state).sort((a, b) =>
-    (a.name || "").localeCompare(b.name || "")
-  );
+  // Order the list by name (A–Z, default) or registration time, ascending or
+  // descending. "Time" uses the timestamp embedded in each registrant id; ids
+  // without one fall back to the name comparison.
+  const regSort = getSwissRegSort();
+  const sortField = regSort.indexOf("time") === 0 ? "time" : "name";
+  const sortDesc = regSort.indexOf("desc") >= 0;
+  const registrants = listRegistrants(state).sort((a, b) => {
+    let cmp;
+    if (sortField === "time") {
+      const ta = registrantOrderKey(a.id), tb = registrantOrderKey(b.id);
+      if (ta != null && tb != null) cmp = ta - tb;
+      else if (ta != null) cmp = -1;
+      else if (tb != null) cmp = 1;
+      else cmp = (a.name || "").localeCompare(b.name || "");
+    } else {
+      cmp = (a.name || "").localeCompare(b.name || "");
+    }
+    return sortDesc ? -cmp : cmp;
+  });
   const minTotal = swissRegistrationMinimum(state);
   const enoughRegistrants = registrants.length >= minTotal;
   const capVal = participantCap(state);
@@ -3785,6 +3930,10 @@ function renderSwissRegisteringMarkup(state) {
   // has paid; everyone in the room sees the "Paid" badge.
   const canMarkPaid = canMarkFeePaid();
   const paidCount = registrants.filter(r => r.paid).length;
+  // Registrant filter — deck-status options for host/co-hosts, plus Paid/Unpaid
+  // for a Keeper who's in the room (they track fees).
+  const isKeeperHere = !!swissCanEdit && (typeof window.isKeeper === "function" && window.isKeeper());
+  const regFilter = swissRegFilter;
 
   const modeLabel = tournamentFormatLabel(state.mode, state.pairing, false, state.topN);
   // Hosts / co-hosts can tweak the format while still waiting for players —
@@ -3874,14 +4023,19 @@ function renderSwissRegisteringMarkup(state) {
         const bannedHits = findBannedPartsInDeck(r.deck, getBannedParts(state));
         const deckSlotsTotal = BEY_CHECK_DECK_SIZE;
         let deckBadge;
+        let deckStatus; // token for the deck filter: none | banned | partial | ok
         if (emptySlots.length === deckSlotsTotal) {
+          deckStatus = "none";
           deckBadge = `<span class="swiss-reg-deck-badge swiss-reg-deck-badge-missing">No deck</span>`;
         } else if (bannedHits.length > 0) {
+          deckStatus = "banned";
           const names = bannedHits.map(h => `${h.name} (Slot ${h.slot})`).join(", ");
           deckBadge = `<span class="swiss-reg-deck-badge swiss-reg-deck-badge-banned" title="Banned: ${escapeHtml(names)}">Banned parts</span>`;
         } else if (incompleteSlots.length > 0) {
+          deckStatus = "partial";
           deckBadge = `<span class="swiss-reg-deck-badge swiss-reg-deck-badge-partial" title="Slot${incompleteSlots.length === 1 ? "" : "s"} ${incompleteSlots.join(", ")} missing parts">Incomplete</span>`;
         } else {
+          deckStatus = "ok";
           deckBadge = `<span class="swiss-reg-deck-badge">Deck ✓</span>`;
         }
         // Hosts and co-hosts can tap any registrant's name to edit it.
@@ -3904,9 +4058,10 @@ function renderSwissRegisteringMarkup(state) {
         } else if (r.paid) {
           paidEl = `<span class="swiss-reg-paid is-paid" title="Fee paid">Paid ✓</span>`;
         }
-        // data-rank-name drives the banner background (hydrateRegistrantBanners).
+        // data-rank-name drives the banner background (hydrateRegistrantBanners);
+        // data-paid drives the Keeper-only Paid/Unpaid filter.
         const rowNameAttr = r.name ? ` data-rank-name="${escapeHtml(r.name)}"` : "";
-        return `<li class="swiss-reg-row"${rowNameAttr}>
+        return `<li class="swiss-reg-row"${rowNameAttr} data-paid="${r.paid ? "1" : "0"}" data-deck="${deckStatus}">
           <span class="swiss-reg-num">${i + 1}</span>
           ${avatarEl}
           <div class="swiss-reg-body">
@@ -4007,14 +4162,46 @@ function renderSwissRegisteringMarkup(state) {
     <section class="swiss-registering">
       <div class="swiss-reg-format">${formatBits.join("")}</div>
       <div class="swiss-reg-heading-row">
-        <h3 class="swiss-reg-heading">Registrants <span class="swiss-reg-count">${capVal != null ? `${registrants.length} / ${capVal}` : registrants.length}</span>${isFull ? `<span class="swiss-reg-full-pill">Full</span>` : ""}</h3>
+        <div class="swiss-reg-heading-top">
+          <h3 class="swiss-reg-heading">Registrants <span class="swiss-reg-count">${capVal != null ? `${registrants.length} / ${capVal}` : registrants.length}</span>${isFull ? `<span class="swiss-reg-full-pill">Full</span>` : ""}</h3>
+          ${canEdit && registrants.length > 1
+            ? `<div class="swiss-reg-sort-group">
+                 <button type="button" class="swiss-reg-sort" id="swiss-reg-sort-field" title="Sort by name or registration time">
+                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h13M3 12h9M3 18h5"/></svg>
+                   <span>${sortField === "time" ? "Time" : "Name"}</span>
+                 </button>
+                 <button type="button" class="swiss-reg-sort swiss-reg-sort-dir" id="swiss-reg-sort-dir" title="${sortDesc ? "Descending" : "Ascending"} — tap to reverse">
+                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${sortDesc ? `<path d="M12 5v14M19 12l-7 7-7-7"/>` : `<path d="M12 19V5M5 12l7-7 7 7"/>`}</svg>
+                   <span>${sortField === "time" ? (sortDesc ? "Newest" : "Oldest") : (sortDesc ? "Z–A" : "A–Z")}</span>
+                 </button>
+               </div>`
+            : ""}
+        </div>
         ${swissRegSubmeta(minTotal, canMarkPaid ? paidCount : null)}
       </div>
       ${bannedPartsPanelHtml}
       ${(selfRegBtnHtml || bulkGuestsBtnHtml || banPartsBtnHtml || testRegBtnHtml || copyNamesBtnHtml)
         ? `<div class="swiss-reg-host-actions">${selfRegBtnHtml}${bulkGuestsBtnHtml}${banPartsBtnHtml}${testRegBtnHtml}${copyNamesBtnHtml}</div>`
         : ""}
-      <ul class="swiss-reg-list">${registrantRows}</ul>
+      ${canEdit && registrants.length > 3
+        ? `<div class="swiss-reg-search-wrap">
+             <svg class="swiss-reg-search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+             <input type="search" id="swiss-reg-search" class="swiss-reg-search" placeholder="Search participants…" autocomplete="off" value="${escapeHtml(swissRegSearchQuery)}">
+           </div>`
+        : ""}
+      ${canEdit && registrants.length > 1
+        ? `<div class="swiss-reg-paidfilter" role="group" aria-label="Filter registrants">
+             ${[
+               { v: "all", label: "All" },
+               { v: "no-deck", label: "No Deck" },
+               { v: "banned", label: "Banned Parts" },
+               { v: "incomplete", label: "Incomplete" },
+               { v: "deck", label: "Deck" },
+               ...(isKeeperHere ? [{ v: "paid", label: "Paid" }, { v: "unpaid", label: "Unpaid" }] : [])
+             ].map(o => `<button type="button" class="swiss-reg-paidfilter-btn${regFilter === o.v ? " is-active" : ""}" data-regfilter="${o.v}">${o.label}</button>`).join("")}
+           </div>`
+        : ""}
+      <ul class="swiss-reg-list">${registrantRows}<li class="swiss-reg-noresults hidden">No participants match your search.</li></ul>
       <div class="swiss-reg-actions">${startBtnHtml}</div>
     </section>
   `;
@@ -4033,9 +4220,82 @@ function updateRegisteringSetting(patch) {
   renderSwiss();
 }
 
+// Filter the registrant rows in the DOM (no re-render, so typing keeps focus)
+// by the participant-search text AND the Keeper-only Paid/Unpaid filter. A row
+// shows only if it matches both. A "no matches" line shows when an active
+// filter hides everyone.
+function applySwissRegFilters(view) {
+  const scope = view || document;
+  const list = scope.querySelector(".swiss-reg-list");
+  if (!list) return;
+  const q = (swissRegSearchQuery || "").trim().toLowerCase();
+  const f = swissRegFilter; // all | no-deck | banned | deck | paid | unpaid
+  let visible = 0;
+  list.querySelectorAll(".swiss-reg-row").forEach(row => {
+    const name = (row.dataset.rankName
+      || row.querySelector(".swiss-reg-name")?.textContent
+      || "").toLowerCase();
+    const matchQ = !q || name.indexOf(q) >= 0;
+    const isPaid = row.dataset.paid === "1";
+    const deck = row.dataset.deck || "";
+    let matchF = true;
+    if (f === "paid") matchF = isPaid;
+    else if (f === "unpaid") matchF = !isPaid;
+    else if (f === "no-deck") matchF = deck === "none";
+    else if (f === "banned") matchF = deck === "banned";
+    else if (f === "incomplete") matchF = deck === "partial";
+    else if (f === "deck") matchF = deck === "ok";
+    const show = matchQ && matchF;
+    row.classList.toggle("hidden", !show);
+    if (show) visible++;
+  });
+  const filtering = !!q || f !== "all";
+  const none = list.querySelector(".swiss-reg-noresults");
+  if (none) none.classList.toggle("hidden", !(filtering && visible === 0));
+}
+
 function bindSwissRegisteringHandlers(view, state) {
   view.querySelector("#swiss-edit-name")?.addEventListener("click", showEditTournamentNamePopup);
   view.querySelector("#swiss-cohosts")?.addEventListener("click", showCoHostsPopup);
+  view.querySelector("#swiss-reg-sort-field")?.addEventListener("click", () => {
+    const s = getSwissRegSort();
+    const desc = s.indexOf("desc") >= 0;
+    const field = s.indexOf("time") === 0 ? "name" : "time"; // toggle field, keep direction
+    setSwissRegSort(field + (desc ? "-desc" : "-asc"));
+    renderSwiss();
+  });
+  view.querySelector("#swiss-reg-sort-dir")?.addEventListener("click", () => {
+    const s = getSwissRegSort();
+    const field = s.indexOf("time") === 0 ? "time" : "name";
+    const desc = s.indexOf("desc") >= 0; // flip direction, keep field
+    setSwissRegSort(field + (desc ? "-asc" : "-desc"));
+    renderSwiss();
+  });
+  const regSearch = view.querySelector("#swiss-reg-search");
+  const regFilterBtns = view.querySelectorAll("[data-regfilter]");
+  if (regSearch) {
+    regSearch.addEventListener("input", () => {
+      swissRegSearchQuery = regSearch.value;
+      applySwissRegFilters(view);
+    });
+  }
+  regFilterBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      swissRegFilter = btn.dataset.regfilter || "all";
+      regFilterBtns.forEach(b => b.classList.toggle("is-active", b === btn));
+      applySwissRegFilters(view);
+    });
+  });
+  // If the persisted filter isn't offered to this user (e.g. a Keeper-only
+  // Paid/Unpaid filter for a non-keeper), fall back to All so rows aren't
+  // silently hidden with no active button to clear it.
+  if (regFilterBtns.length && swissRegFilter !== "all"
+      && !Array.from(regFilterBtns).some(b => b.dataset.regfilter === swissRegFilter)) {
+    swissRegFilter = "all";
+    regFilterBtns.forEach(b => b.classList.toggle("is-active", b.dataset.regfilter === "all"));
+  }
+  // Re-apply any active search / row filter after a (re-)render.
+  if (regSearch || regFilterBtns.length) applySwissRegFilters(view);
   view.querySelector("#swiss-clear")?.addEventListener("click", resetSwiss);
   view.querySelector("#swiss-edit-mode")?.addEventListener("click", showSwissFormatPopup);
   view.querySelector("#swiss-edit-groups")?.addEventListener("click", () => {

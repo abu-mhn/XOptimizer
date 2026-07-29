@@ -10,6 +10,10 @@ let scoreboardSaveCallback = null;
   // (across both sides combined) advances the displayed round.
   let scorePresses = 0;
   const PRESSES_PER_ROUND = 3;
+  // Optional callback fired on every score change (re-keyed to the original
+  // A/B order), so the running score can be pushed to the room and shown live
+  // on the tournament Calling Monitor.
+  let scoreboardScoreChange = null;
 
   const overlay = document.getElementById("scoreboard-overlay");
   const scoreAEl = document.getElementById("score-a");
@@ -65,6 +69,12 @@ let scoreboardSaveCallback = null;
     scoreAEl.textContent = scoreA;
     scoreBEl.textContent = scoreB;
     if (roundEl) roundEl.textContent = `${ordinal(currentRound())} Round`;
+    if (typeof scoreboardScoreChange === "function") {
+      // `swapped` (declared below) flips the visible sides — re-key so the
+      // callback always receives scores in the original m.a / m.b order.
+      const out = swapped ? { scoreA: scoreB, scoreB: scoreA } : { scoreA, scoreB };
+      try { scoreboardScoreChange(out); } catch (e) { /* non-fatal */ }
+    }
   }
 
   // iPadOS 13+ Safari/Chrome report the UA as desktop "Macintosh" (no "iPad"),
@@ -205,9 +215,12 @@ let scoreboardSaveCallback = null;
     scoreA = scoreB;
     scoreB = tmpScore;
     if (labelA && labelB) {
-      const tmpLabel = labelA.textContent;
-      labelA.textContent = labelB.textContent;
-      labelB.textContent = tmpLabel;
+      // Swap the FULL label (avatar + name), not just text — `.textContent`
+      // dropped the avatar <img>, so the profile pic vanished on swap.
+      // Swapping innerHTML moves the already-resolved photo across, no reload.
+      const tmpLabel = labelA.innerHTML;
+      labelA.innerHTML = labelB.innerHTML;
+      labelB.innerHTML = tmpLabel;
     }
     swapped = !swapped;
     updateDisplay();
@@ -222,6 +235,7 @@ let scoreboardSaveCallback = null;
     const cb = scoreboardSaveCallback;
     scoreboardSaveCallback = null;
     closeBtn.classList.add("hidden");
+    scoreboardScoreChange = null; // stop pushing live score once the match is saved
     if (cb) {
       // Re-key to original m.a/m.b order if the user swapped sides.
       const out = swapped
@@ -256,18 +270,19 @@ let scoreboardSaveCallback = null;
     scoreB = 0;
     scorePresses = 0;
     swapped = false;
+    scoreboardScoreChange = null;
     updateDisplay();
     closeBtn?.classList.add("hidden");
   };
 
   // Load names/scores + save callback onto the board, revealing it if already
   // in landscape (otherwise the orientation handler shows it on tilt).
-  function setupScoreboard(nameA, nameB, onSave, initialA, initialB) {
+  function setupScoreboard(nameA, nameB, onSave, initialA, initialB, onScoreChange) {
     // Safety net: if called for a view-only participant, drop the match
     // context and fall back to the default standalone scoreboard (no save
     // callback, no pre-filled names/scores).
     if (swissEditCode && !swissCanEdit) {
-      nameA = ""; nameB = ""; onSave = null; initialA = 0; initialB = 0;
+      nameA = ""; nameB = ""; onSave = null; initialA = 0; initialB = 0; onScoreChange = null;
     }
     setScoreboardLabel(labelA, nameA || "A");
     setScoreboardLabel(labelB, nameB || "B");
@@ -275,6 +290,10 @@ let scoreboardSaveCallback = null;
     scoreB = typeof initialB === "number" ? initialB : 0;
     scorePresses = 0;
     swapped = false;
+    // Set the live-score hook BEFORE the first updateDisplay so the opening
+    // 0–0 is pushed immediately (the monitor shows the score the moment the
+    // match goes live).
+    scoreboardScoreChange = typeof onScoreChange === "function" ? onScoreChange : null;
     updateDisplay();
     scoreboardSaveCallback = typeof onSave === "function" ? onSave : null;
     closeBtn?.classList.toggle("hidden", !scoreboardSaveCallback);
@@ -308,8 +327,8 @@ let scoreboardSaveCallback = null;
   // Scores are entered only via the scoreboard overlay. On mobile it's revealed
   // by tilting to landscape; on desktop openScoreboard shows it as a modal
   // popup directly (no tilt / fullscreen needed).
-  window.openScoreboard = function (nameA, nameB, onSave, initialA, initialB) {
-    setupScoreboard(nameA, nameB, onSave, initialA, initialB);
+  window.openScoreboard = function (nameA, nameB, onSave, initialA, initialB, onScoreChange) {
+    setupScoreboard(nameA, nameB, onSave, initialA, initialB, onScoreChange);
     if (!isMobile) openScoreboardDesktopModal();
   };
 
@@ -324,9 +343,9 @@ let scoreboardSaveCallback = null;
   // armScoreboard is the silent (auto) entry — used by Battle Royale to arm the
   // board the moment a battle is accepted, so the Judge just tilts to score.
   // No desktop alert (nothing to do on a device that can't tilt).
-  window.armScoreboard = function (nameA, nameB, onSave, initialA, initialB) {
+  window.armScoreboard = function (nameA, nameB, onSave, initialA, initialB, onScoreChange) {
     if (!isMobile) return;
-    setupScoreboard(nameA, nameB, onSave, initialA, initialB);
+    setupScoreboard(nameA, nameB, onSave, initialA, initialB, onScoreChange);
   };
 
   if (isMobile) {
