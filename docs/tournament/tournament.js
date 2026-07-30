@@ -11142,9 +11142,9 @@ function syncTournamentRankingAwards(state) {
   Object.entries(awards).forEach(([name, points]) => awardPlayerIfNew(name, points));
   // Any participant whose account is tagged "Revox Member" or "Revox Admin"
   // (looked up via the public `revoxAccounts` index — see auth.js
-  // PUBLIC_TAG_INDEXES) and finishes in the Top 8 also gets a Revox ranking
-  // entry, scored Top-8-style. Fetch the index once and pass the resolved
-  // name-set down so we don't fan out one read per placing.
+  // PUBLIC_TAG_INDEXES) who played gets a Revox ranking entry: 1st/2nd/3rd
+  // score 7/5/3, and everyone else who played earns "Others" (2 pts). Fetch the
+  // index once and pass the resolved name-set down so we don't read per placing.
   const placings = computeTournamentRevoxPlacings(state);
   if (!Object.keys(placings).length) return;
   const tName = (state.tournamentName || "").trim();
@@ -11226,6 +11226,14 @@ function computeTournamentRevoxPlacings(state) {
     }
   }
   topEight.forEach(name => set(name, 5));
+  // Participation credit: any non-guest, non-test player who played a real
+  // (non-bye) match earns "Others" (placing 6 → 2 pts), even without reaching
+  // the knockout. set() keeps the best placing, so placers keep their 1st–5th.
+  Object.values(matches).forEach(m => {
+    if (!m || m.bye) return;
+    if (m.a) set(m.a, 6);
+    if (m.b) set(m.b, 6);
+  });
   return placings;
 }
 
