@@ -87,7 +87,13 @@ const DATA = {
     { atk: 33, def: 17, sta: 50, weight: 33.2, spindirection: "R", name: "Spider Man", codename: "SPIDERMAN" },
     { atk: 55, def: 22, sta: 23, weight: 34.3, spindirection: "R", name: "Venom", codename: "VENOM" },
     { atk: 23, def: 55, sta: 22, weight: 31.5, spindirection: "R", name: "Luke Skywalker", codename: "LUKESKYWALKER" },
-    { atk: 28, def: 60, sta: 12, weight: 30.7, spindirection: "R", name: "Darth Vader", codename: "DARTHVADER" }
+    { atk: 28, def: 60, sta: 12, weight: 30.7, spindirection: "R", name: "Darth Vader", codename: "DARTHVADER" },
+    { atk: 40, def: 43, sta: 17, weight: 30.3, spindirection: "R", name: "Mandalorian", codename: "MANDALORIAN" },
+    { atk: 32, def: 35, sta: 33, weight: 30.5, spindirection: "R", name: "Moff Gideon", codename: "MOFFGIDEON" },
+    { atk: 27, def: 35, sta: 38, weight: 31.1, spindirection: "R", name: "Megatron", codename: "MEGATRON" },
+    { atk: 22, def: 55, sta: 23, weight: 33.3, spindirection: "R", name: "Optimus Prime", codename: "OPTIMUSPRIME" },
+    { atk: 18, def: 27, sta: 55, weight: 29.5, spindirection: "R", name: "Starscream", codename: "STARSCREAM" },
+    { atk: 60, def: 27, sta: 13, weight: 35.7, spindirection: "R", name: "Optimus Primal", codename: "OPTIMUSPRIMAL" }
   ],
 
   lockChips: [
