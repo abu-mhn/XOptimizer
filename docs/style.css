@@ -8504,9 +8504,20 @@ body.mono-mode .popup-ok:hover {
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     padding: 18px 16px 28px;
+    /* The monitor is a projector / second-screen view — a visible scrollbar
+       just eats screen edge. Keep it scrollable, hide the bar itself. */
+    scrollbar-width: none;          /* Firefox */
+    -ms-overflow-style: none;       /* old Edge/IE */
+}
+
+.calling-monitor-overlay::-webkit-scrollbar {
+    display: none;
 }
 .calling-monitor-overlay .mon-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding-right: 44px; border-bottom: 2px solid #30363d; padding-bottom: 10px; margin-bottom: 16px; }
+.calling-monitor-overlay .mon-headline { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .calling-monitor-overlay .mon-title { font-size: 1.4rem; font-weight: 800; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Format line under the tournament name — "Swiss + Top 8", "Round Robin", etc. */
+.calling-monitor-overlay .mon-format { font-size: .72rem; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: #3fb950; }
 .calling-monitor-overlay .mon-clock { font-size: 1.05rem; font-weight: 700; color: #8b949e; font-variant-numeric: tabular-nums; flex: 0 0 auto; }
 .calling-monitor-overlay .mon-now h2 { font-size: .8rem; letter-spacing: 2px; color: #3fb950; margin-bottom: 10px; }
 .calling-monitor-overlay .mon-upnext h2 { font-size: .8rem; letter-spacing: 2px; color: #8b949e; margin: 22px 0 10px; }
@@ -8560,6 +8571,15 @@ body.mono-mode .popup-ok:hover {
 
 .swiss-toolbar-actions::-webkit-scrollbar {
     display: none;
+}
+
+/* While the row is being dragged sideways with a mouse: show the grabbing
+   cursor and stop the drag from selecting the button labels instead. */
+.swiss-toolbar-actions.is-drag-scrolling,
+.swiss-toolbar-actions.is-drag-scrolling * {
+    cursor: grabbing;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .swiss-toolbar .btn-icon-sm {

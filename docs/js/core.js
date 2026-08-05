@@ -726,13 +726,76 @@ document.querySelectorAll(".sub-tab").forEach(tab => {
 // horizontal wheel / trackpad swipe already scrolls it natively, so that's
 // left alone, and the page wheel is only hijacked when the row can scroll.
 function enableHorizontalWheelScroll(el) {
-  if (!el) return;
+  if (!el || el.dataset.wheelScrollBound) return;
+  el.dataset.wheelScrollBound = "1";
   el.addEventListener("wheel", (e) => {
     if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;     // horizontal input
     if (el.scrollWidth <= el.clientWidth) return;             // nothing to scroll
     el.scrollLeft += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY; // line vs pixel
     e.preventDefault();
   }, { passive: false });
+}
+
+// Grab-and-drag panning for the same horizontal-only rows. Touch already pans
+// natively, so this only takes over for mouse / pen — otherwise a row whose
+// scrollbar is hidden has no mouse affordance at all. Buttons inside the row
+// keep working: a press only becomes a drag past DRAG_SLOP px, and the click
+// that trails a real drag is swallowed so nothing fires under the cursor.
+function enableHorizontalDragScroll(el) {
+  if (!el || el.dataset.dragScrollBound) return;
+  el.dataset.dragScrollBound = "1";
+
+  const DRAG_SLOP = 4;
+  let pointerId = null, startX = 0, startScroll = 0, dragging = false, swallowClick = false;
+
+  el.addEventListener("pointerdown", (e) => {
+    swallowClick = false;
+    if (e.pointerType === "touch" || e.button !== 0) return;
+    if (el.scrollWidth <= el.clientWidth) return;
+    pointerId = e.pointerId;
+    startX = e.clientX;
+    startScroll = el.scrollLeft;
+    dragging = false;
+  });
+
+  el.addEventListener("pointermove", (e) => {
+    if (e.pointerId !== pointerId) return;
+    // A release outside the row can leave pointerId set with no pointerup;
+    // without this, a later hover would pan with no button held.
+    if (!(e.buttons & 1)) { pointerId = null; dragging = false; el.classList.remove("is-drag-scrolling"); return; }
+    const dx = e.clientX - startX;
+    if (!dragging) {
+      if (Math.abs(dx) < DRAG_SLOP) return;
+      dragging = true;
+      el.setPointerCapture(pointerId);
+      el.classList.add("is-drag-scrolling");
+    }
+    el.scrollLeft = startScroll - dx;
+  });
+
+  const endDrag = (e) => {
+    if (e.pointerId !== pointerId) return;
+    if (dragging) {
+      swallowClick = true;
+      el.classList.remove("is-drag-scrolling");
+      if (el.hasPointerCapture && el.hasPointerCapture(pointerId)) el.releasePointerCapture(pointerId);
+    }
+    pointerId = null;
+    dragging = false;
+  };
+  el.addEventListener("pointerup", endDrag);
+  el.addEventListener("pointercancel", endDrag);
+
+  // Capture phase so the button's own handler never sees the post-drag click.
+  el.addEventListener("click", (e) => {
+    if (!swallowClick) return;
+    swallowClick = false;
+    e.stopPropagation();
+    e.preventDefault();
+  }, true);
+
+  // Native image/text dragging would otherwise hijack the gesture mid-pan.
+  el.addEventListener("dragstart", (e) => { if (dragging) e.preventDefault(); });
 }
 
 (function restoreModeTabsScrollSync() {

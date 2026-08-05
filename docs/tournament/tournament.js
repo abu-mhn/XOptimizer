@@ -3349,10 +3349,13 @@ let monitorVoiceObj = null;       // cached female voice for the in-page overlay
 const CALLING_MONITOR_SHELL = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Calling Monitor</title>
 <style>
 :root{color-scheme:dark}*{box-sizing:border-box;margin:0;padding:0}
-body{background:#0d1117;color:#e6edf3;font-family:system-ui,"Segoe UI",Roboto,sans-serif;min-height:100vh;padding:3vh 4vw}
+body{background:#0d1117;color:#e6edf3;font-family:system-ui,"Segoe UI",Roboto,sans-serif;min-height:100vh;padding:3vh 4vw;scrollbar-width:none;-ms-overflow-style:none}
+body::-webkit-scrollbar{display:none}
 .mon-head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #30363d;padding-bottom:12px;margin-bottom:3vh}
+.mon-headline{display:flex;flex-direction:column;gap:.6vh;min-width:0}
 .mon-title{font-size:3.2vw;font-weight:800;letter-spacing:.5px}
-.mon-clock{font-size:2.4vw;font-weight:700;color:#8b949e;font-variant-numeric:tabular-nums}
+.mon-format{font-size:1.5vw;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#3fb950}
+.mon-clock{font-size:2.4vw;font-weight:700;color:#8b949e;font-variant-numeric:tabular-nums;flex:0 0 auto}
 .mon-now h2{font-size:1.8vw;letter-spacing:3px;color:#3fb950;margin-bottom:1.5vh}
 .mon-upnext h2{font-size:1.8vw;letter-spacing:3px;color:#8b949e;margin:4vh 0 1.5vh}
 .mon-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(38vw,1fr));gap:2vh 2vw}
@@ -3466,7 +3469,7 @@ function callingMonitorBoardHtml(state) {
     ? upNext.map(m => `<div class="mon-next-row"><span class="mon-next-players">${escapeHtml(m.a)} <em>vs</em> ${escapeHtml(m.b)}</span><span class="mon-next-ctx">${escapeHtml(callingMatchLabel(state, m))}</span></div>`).join("")
     : `<div class="mon-empty mon-empty-sm">Nothing queued.</div>`;
   return `
-    <div class="mon-head"><span class="mon-title">${escapeHtml(state.tournamentName || "Tournament")}</span><span class="mon-clock" id="mon-clock"></span></div>
+    <div class="mon-head"><div class="mon-headline"><span class="mon-title">${escapeHtml(state.tournamentName || "Tournament")}</span><span class="mon-format">${escapeHtml(tournamentFormatLabel(state.mode, state.pairing, false, state.topN))}</span></div><span class="mon-clock" id="mon-clock"></span></div>
     <section class="mon-now"><h2>NOW CALLING</h2><div class="mon-cards">${liveHtml}</div></section>
     <section class="mon-upnext"><h2>UP NEXT</h2><div class="mon-next">${nextHtml}</div></section>`;
 }
@@ -3595,6 +3598,18 @@ function openCallingMonitor() {
   if (ok) updateCallingMonitor();
 }
 
+// The toolbar action row is a single nowrap line with a hidden scrollbar, so
+// on desktop it has no scroll affordance of its own. Give it both: a vertical
+// mouse wheel pans it sideways, and it can be grabbed and dragged. Called from
+// every branch of renderSwiss that paints a toolbar (the registering view and
+// the running view each render their own).
+function bindSwissToolbarScroll(root) {
+  root.querySelectorAll(".swiss-toolbar-actions").forEach(el => {
+    if (typeof enableHorizontalWheelScroll === "function") enableHorizontalWheelScroll(el);
+    if (typeof enableHorizontalDragScroll === "function") enableHorizontalDragScroll(el);
+  });
+}
+
 function renderSwiss() {
   const view = document.getElementById("swiss-view");
   const setup = document.getElementById("swiss-setup");
@@ -3637,6 +3652,7 @@ function renderSwiss() {
     view.innerHTML = renderSwissRegisteringMarkup(state);
     bindSwissRegisteringHandlers(view, state);
     bindSwissRoomBadge(view);
+    bindSwissToolbarScroll(view);
     return;
   }
 
@@ -3807,11 +3823,7 @@ function renderSwiss() {
   hydrateTournamentAvatars(view);
   bindTournamentProfileNames(view);
   hydrateTop8Banners(view);
-  // Let a vertical mouse wheel scroll the toolbar actions row sideways on
-  // desktop (it has no touch-scroll and its scrollbar is hidden).
-  if (typeof enableHorizontalWheelScroll === "function") {
-    view.querySelectorAll(".swiss-toolbar-actions").forEach(el => enableHorizontalWheelScroll(el));
-  }
+  bindSwissToolbarScroll(view);
   view.querySelector("#swiss-start-bracket")?.addEventListener("click", startSwissBracket);
   view.querySelector("#swiss-edit-participants")?.addEventListener("click", showBulkAddParticipantsPopup);
   view.querySelector("#swiss-remove-participants")?.addEventListener("click", showRemoveParticipantsPopup);
@@ -5874,25 +5886,35 @@ function startRegisteringTournament() {
       bannedDecks.push(`${display} — ${parts}`);
     }
   });
-  if (missingDecks.length || incompleteDecks.length || bannedDecks.length) {
-    const sections = [];
-    if (missingDecks.length) {
-      sections.push(`No deck submitted:\n${missingDecks.join("\n")}`);
-    }
-    if (incompleteDecks.length) {
-      sections.push(`Deck has incomplete slots:\n${incompleteDecks.join("\n")}`);
-    }
-    if (bannedDecks.length) {
-      sections.push(`Deck contains banned parts:\n${bannedDecks.join("\n")}`);
-    }
-    const proceed = confirm(`${sections.join("\n\n")}\n\nStart anyway?`);
-    if (!proceed) return;
-  }
   const names = registrants.map(r => (r.name || "").trim()).filter(Boolean);
   if (names.length < minTotal) {
     alert("Some registrants are missing a name.");
     return;
   }
+  // Final gate before the draw is generated. One dialog carries both halves —
+  // the format about to start (so the host can catch a wrong pick before it's
+  // locked in) and the deck problems found above — rather than making the host
+  // clear two confirms back to back when decks are also incomplete.
+  const summary = [
+    `Format: ${tournamentFormatLabel(state.mode, state.pairing, false, state.topN)}`,
+    `Players: ${names.length}`
+  ];
+  if (state.mode !== "single-elim") {
+    summary.push(`Groups: ${getGroupCount(state)}`);
+    // Round robin's length falls out of the group size once the draw exists,
+    // so there's no meaningful number to show yet — only Swiss has a set total.
+    if (state.pairing !== "round-robin") summary.push(`Rounds: ${getRoundCount(state)}`);
+  }
+  summary.push(`Scoring: ${state.ranked ? "Ranked" : "Casual"}`);
+  const warnings = [];
+  if (missingDecks.length) warnings.push(`No deck submitted:\n${missingDecks.join("\n")}`);
+  if (incompleteDecks.length) warnings.push(`Deck has incomplete slots:\n${incompleteDecks.join("\n")}`);
+  if (bannedDecks.length) warnings.push(`Deck contains banned parts:\n${bannedDecks.join("\n")}`);
+  const warningBlock = warnings.length ? `\n\n${warnings.join("\n\n")}` : "";
+  const proceed = confirm(
+    `Start this tournament?\n\n${summary.join("\n")}${warningBlock}\n\n` +
+    `Registration closes and the draw is generated.`);
+  if (!proceed) return;
   const namesText = names.join("\n");
   const generated = state.mode === "single-elim"
     ? generateSingleElimFromText(namesText, state.tournamentName, state.placementDepth)
