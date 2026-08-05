@@ -1549,151 +1549,139 @@ function startSwissMatch(matchId) {
     return;
   }
 
-  // One live match per device. If we're already live on a different match,
-  // block and tell the user to switch that one off first.
-  if (swissLiveMatchId && swissLiveMatchId !== matchId) {
-    alert("You're already live on another match. Tap that card to switch it off first.");
-    return;
-  }
-
   const isEdit = match.scoreA != null && match.scoreB != null;
 
-  // Tapping the same unscored match we went live on toggles live OFF:
-  // clears the in-progress flag, resets the scoreboard to default. Any
-  // scores entered but not saved are discarded.
-  if (!isEdit && swissLiveMatchId === matchId) {
-    swissLiveMatchId = null;
-    const s = loadSwiss();
-    if (s.matches[matchId]) {
-      s.matches[matchId].startedAt = null;
-      delete s.matches[matchId].judge;
-      persistSwiss(s);
-      pushSwissMatchStart(matchId, null);
-    }
-    clearSwissMatchLiveScore(matchId); // drop the running score from the monitor
-    if (typeof window.resetScoreboardToDefault === "function") {
-      window.resetScoreboardToDefault();
-    }
-    renderSwiss();
-    return;
-  }
+  // Going live ON an unscored match. Edits don't flip live (the card shows the
+  // score, not a badge), and a match already live on this device just reopens —
+  // re-stamping startedAt would reshuffle its place in the monitor's queue.
+  if (!isEdit && swissLiveMatchId !== matchId) markSwissMatchLive(matchId);
 
-  // Going live ON an unscored match — mark startedAt and claim the device
-  // slot. Edits don't flip live (the card shows the score, not a badge).
-  // Stamp the judge (this device's signed-in name) so the Calling Monitor can
-  // tell participants who's calling them.
-  if (!isEdit) {
-    swissLiveMatchId = matchId;
-    const now = Date.now();
-    const judgeName = (window.getCurrentUsername && window.getCurrentUsername()) || "";
-    const s = loadSwiss();
-    if (s.matches[matchId]) {
-      s.matches[matchId].startedAt = now;
-      if (judgeName) s.matches[matchId].judge = judgeName;
-      persistSwiss(s);
-      pushSwissMatchStart(matchId, now, judgeName);
-      renderSwiss();
-    }
-  }
-
-  window.openScoreboard(match.a, match.b, ({ scoreA, scoreB }) => {
-    swissLiveMatchId = null;
-    const s = loadSwiss();
-    const stored = s.matches[matchId];
-    if (!stored) return;
-    stored.scoreA = scoreA;
-    stored.scoreB = scoreB;
-    stored.startedAt = null;
-
-    // Group match: on a fresh completion of the latest generated round,
-    // auto-generate the next round. Skip on edits and on bracket matches.
-    let newMatchIds = null;
-    if (!isEdit && !stored.bracket) {
-      const gi = stored.groupIndex;
-      const latestRoundIdx = (s.groupRounds[gi] || 0) - 1;
-      if (stored.round === latestRoundIdx && isGroupRoundComplete(s.matches, gi, latestRoundIdx)) {
-        if ((s.groupRounds[gi] || 0) < getRoundCount(s)) {
-          const before = new Set(Object.keys(s.matches));
-          appendGroupRound(s, gi);
-          newMatchIds = Object.keys(s.matches).filter(k => !before.has(k));
-        }
-      }
-    }
-
-    let extraUpdates = null;
-
-    // Auto-generate the knockout bracket the moment every group's final
-    // round completes, so no one has to hunt for a "Start" button.
-    // Only fires once — the hasSwissBracket guard makes this idempotent for
-    // late edits that don't change group completion. Skipped for swiss-only
-    // mode, which ends after the group stage with no knockout.
-    if (s.mode !== "swiss-only" && !stored.bracket && isGroupStageComplete(s) && !hasSwissBracket(s)) {
-      const bracketMatches = buildBracketMatches(s);
-      Object.assign(s.matches, bracketMatches);
-      newMatchIds = (newMatchIds || []).concat(Object.keys(bracketMatches));
-      // buildTopNBracketMatches stamps bracketSize / preFinalRounds onto the
-      // state so the renderer + propagation know the shape — push them too,
-      // otherwise other devices would render an empty / mis-shaped bracket.
-      if (typeof s.bracketSize === "number" || typeof s.preFinalRounds === "number") {
-        extraUpdates = extraUpdates || {};
-        if (typeof s.bracketSize === "number") extraUpdates["bracketSize"] = s.bracketSize;
-        if (typeof s.preFinalRounds === "number") extraUpdates["preFinalRounds"] = s.preFinalRounds;
-      }
-    }
-
-    // Bracket match: propagate both winner and loser into their respective
-    // downstream slots. Winners go up the main bracket (SF → F) or the
-    // consolation bracket (CQF → 5th); losers drop into placement matches
-    // (SF → 3rd, QF → CQF, CQF → 7th). Ties leave both downstream slots
-    // blank so the UI flags them for re-scoring.
-    if (stored.bracket) {
-      const prop = getBracketPropagation(stored.round, stored.bracketIndex, s);
-      extraUpdates = {};
-      if (prop) {
-        let winner = null, loser = null;
-        if (scoreA > scoreB) { winner = stored.a; loser = stored.b; }
-        else if (scoreB > scoreA) { winner = stored.b; loser = stored.a; }
-        if (prop.winner && s.matches[prop.winner.toId]) {
-          s.matches[prop.winner.toId][prop.winner.slot] = winner;
-          extraUpdates[`matches/${prop.winner.toId}/${prop.winner.slot}`] = winner;
-        }
-        if (prop.loser && s.matches[prop.loser.toId]) {
-          s.matches[prop.loser.toId][prop.loser.slot] = loser;
-          extraUpdates[`matches/${prop.loser.toId}/${prop.loser.slot}`] = loser;
-        }
-      }
-      // After propagation, a downstream slot whose sibling upstream is a
-      // phantom (BYE-vs-BYE) may now be a half-filled bye — auto-advance
-      // it so the lone real player skips ahead. Cascades up the bracket.
-      autoAdvanceByes(s, extraUpdates);
-      if (Object.keys(extraUpdates).length === 0) extraUpdates = null;
-    }
-
-    // Win-rate update. Bump the global /winRates counters once per match,
-    // gated on a wrApplied flag so re-scoring doesn't double-count. Only
-    // non-guest registrants are tracked (guests / single-elim by-name
-    // entries don't have a stable account key). Runs after the bracket
-    // propagation so a match's terminal state is recorded first.
-    if (!isEdit) {
-      const wrUpdates = maybeApplyMatchWinRate(matchId, stored, s);
-      if (wrUpdates && wrUpdates.matchPatch) {
-        // Mark the match as counted on the local state + Firebase so other
-        // devices see the flag and don't re-apply.
-        Object.assign(stored, wrUpdates.matchPatch);
-        extraUpdates = extraUpdates || {};
-        Object.entries(wrUpdates.matchPatch).forEach(([k, v]) => {
-          extraUpdates[`matches/${matchId}/${k}`] = v;
-        });
-      }
-    }
-
-    persistSwiss(s);
-    pushSwissMatchUpdate(matchId, stored, s, newMatchIds, extraUpdates);
-    renderSwiss();
-  }, isEdit ? match.scoreA : 0, isEdit ? match.scoreB : 0,
+  window.openScoreboard(match.a, match.b,
+    ({ scoreA, scoreB }) => commitSwissMatchScore(matchId, scoreA, scoreB, isEdit),
+    isEdit ? match.scoreA : 0, isEdit ? match.scoreB : 0,
     // Live-score hook — only for a live match (edits aren't shown on the
     // monitor). Pushes the running score to the room as it changes.
     isEdit ? null : (({ scoreA, scoreB }) => pushSwissMatchLiveScore(matchId, scoreA, scoreB)));
+}
+
+// Flip a match to LIVE for this device: stamps startedAt so it shows as NOW
+// CALLING on the Calling Monitor, stamps the judge (this device's signed-in
+// name) so players know who's calling them, and claims the device's single
+// live slot. Shared by the scoreboard and the manual score popup — a match
+// being scored by hand is just as live as one on the scoreboard.
+function markSwissMatchLive(matchId) {
+  swissLiveMatchId = matchId;
+  const now = Date.now();
+  const judgeName = (window.getCurrentUsername && window.getCurrentUsername()) || "";
+  const s = loadSwiss();
+  if (!s.matches[matchId]) return;
+  s.matches[matchId].startedAt = now;
+  if (judgeName) s.matches[matchId].judge = judgeName;
+  persistSwiss(s);
+  pushSwissMatchStart(matchId, now, judgeName);
+  renderSwiss();
+}
+
+// Commit a final score and everything that follows from it: next-round
+// generation, knockout build, bracket propagation, bye auto-advance and the
+// win-rate bump. Shared by the live scoreboard and the judge's manual score
+// entry so both paths leave an identical tournament state behind.
+function commitSwissMatchScore(matchId, scoreA, scoreB, isEdit) {
+  // Only release the live slot if THIS match held it — scoring a different
+  // match by hand must not drop a match this device is live on.
+  if (swissLiveMatchId === matchId) swissLiveMatchId = null;
+  const s = loadSwiss();
+  const stored = s.matches[matchId];
+  if (!stored) return;
+  stored.scoreA = scoreA;
+  stored.scoreB = scoreB;
+  stored.startedAt = null;
+
+  // Group match: on a fresh completion of the latest generated round,
+  // auto-generate the next round. Skip on edits and on bracket matches.
+  let newMatchIds = null;
+  if (!isEdit && !stored.bracket) {
+    const gi = stored.groupIndex;
+    const latestRoundIdx = (s.groupRounds[gi] || 0) - 1;
+    if (stored.round === latestRoundIdx && isGroupRoundComplete(s.matches, gi, latestRoundIdx)) {
+      if ((s.groupRounds[gi] || 0) < getRoundCount(s)) {
+        const before = new Set(Object.keys(s.matches));
+        appendGroupRound(s, gi);
+        newMatchIds = Object.keys(s.matches).filter(k => !before.has(k));
+      }
+    }
+  }
+
+  let extraUpdates = null;
+
+  // Auto-generate the knockout bracket the moment every group's final
+  // round completes, so no one has to hunt for a "Start" button.
+  // Only fires once — the hasSwissBracket guard makes this idempotent for
+  // late edits that don't change group completion. Skipped for swiss-only
+  // mode, which ends after the group stage with no knockout.
+  if (s.mode !== "swiss-only" && !stored.bracket && isGroupStageComplete(s) && !hasSwissBracket(s)) {
+    const bracketMatches = buildBracketMatches(s);
+    Object.assign(s.matches, bracketMatches);
+    newMatchIds = (newMatchIds || []).concat(Object.keys(bracketMatches));
+    // buildTopNBracketMatches stamps bracketSize / preFinalRounds onto the
+    // state so the renderer + propagation know the shape — push them too,
+    // otherwise other devices would render an empty / mis-shaped bracket.
+    if (typeof s.bracketSize === "number" || typeof s.preFinalRounds === "number") {
+      extraUpdates = extraUpdates || {};
+      if (typeof s.bracketSize === "number") extraUpdates["bracketSize"] = s.bracketSize;
+      if (typeof s.preFinalRounds === "number") extraUpdates["preFinalRounds"] = s.preFinalRounds;
+    }
+  }
+
+  // Bracket match: propagate both winner and loser into their respective
+  // downstream slots. Winners go up the main bracket (SF → F) or the
+  // consolation bracket (CQF → 5th); losers drop into placement matches
+  // (SF → 3rd, QF → CQF, CQF → 7th). Ties leave both downstream slots
+  // blank so the UI flags them for re-scoring.
+  if (stored.bracket) {
+    const prop = getBracketPropagation(stored.round, stored.bracketIndex, s);
+    extraUpdates = {};
+    if (prop) {
+      let winner = null, loser = null;
+      if (scoreA > scoreB) { winner = stored.a; loser = stored.b; }
+      else if (scoreB > scoreA) { winner = stored.b; loser = stored.a; }
+      if (prop.winner && s.matches[prop.winner.toId]) {
+        s.matches[prop.winner.toId][prop.winner.slot] = winner;
+        extraUpdates[`matches/${prop.winner.toId}/${prop.winner.slot}`] = winner;
+      }
+      if (prop.loser && s.matches[prop.loser.toId]) {
+        s.matches[prop.loser.toId][prop.loser.slot] = loser;
+        extraUpdates[`matches/${prop.loser.toId}/${prop.loser.slot}`] = loser;
+      }
+    }
+    // After propagation, a downstream slot whose sibling upstream is a
+    // phantom (BYE-vs-BYE) may now be a half-filled bye — auto-advance
+    // it so the lone real player skips ahead. Cascades up the bracket.
+    autoAdvanceByes(s, extraUpdates);
+    if (Object.keys(extraUpdates).length === 0) extraUpdates = null;
+  }
+
+  // Win-rate update. Bump the global /winRates counters once per match,
+  // gated on a wrApplied flag so re-scoring doesn't double-count. Only
+  // non-guest registrants are tracked (guests / single-elim by-name
+  // entries don't have a stable account key). Runs after the bracket
+  // propagation so a match's terminal state is recorded first.
+  if (!isEdit) {
+    const wrUpdates = maybeApplyMatchWinRate(matchId, stored, s);
+    if (wrUpdates && wrUpdates.matchPatch) {
+      // Mark the match as counted on the local state + Firebase so other
+      // devices see the flag and don't re-apply.
+      Object.assign(stored, wrUpdates.matchPatch);
+      extraUpdates = extraUpdates || {};
+      Object.entries(wrUpdates.matchPatch).forEach(([k, v]) => {
+        extraUpdates[`matches/${matchId}/${k}`] = v;
+      });
+    }
+  }
+
+  persistSwiss(s);
+  pushSwissMatchUpdate(matchId, stored, s, newMatchIds, extraUpdates);
+  renderSwiss();
 }
 
 let swissGroupViews = {}; // gi -> "matches" | "standings"
@@ -1729,7 +1717,7 @@ function renderSwissMatchCard(matchNum, id, m, seedA, seedB, isRoundRobin) {
   const hint = done
     ? "Tap to fix score"
     : isMine
-      ? "Tap to switch LIVE off"
+      ? "Live — tap to score"
       : live
         ? "Match in progress on another device"
         : "Tap to go LIVE on this match";
@@ -2083,7 +2071,7 @@ function renderSwissBracketCard(label, id, m) {
       : done
         ? "Tap to fix score"
         : isMine
-          ? "Tap to switch LIVE off"
+          ? "Live — tap to score"
           : live
             ? "Match in progress on another device"
             : "Tap to go LIVE on this match";
@@ -7280,6 +7268,7 @@ function showBeyCheckPopup(matchId) {
   const slotsHost = popup.querySelector("#bey-check-slots");
   const status = popup.querySelector("#bey-check-status");
   const scoreBtn = popup.querySelector("#bey-check-score");
+  const boardBtn = popup.querySelector("#bey-check-scoreboard");
   const cancelBtn = popup.querySelector("#bey-check-cancel");
 
   if (subtitle) subtitle.textContent = `${match.a} vs ${match.b}`;
@@ -7432,15 +7421,113 @@ function showBeyCheckPopup(matchId) {
   const close = () => {
     popup.classList.add("hidden");
     scoreBtn.onclick = null;
+    if (boardBtn) boardBtn.onclick = null;
     cancelBtn.onclick = null;
     tabs.forEach(t => { t.onclick = null; });
   };
 
   cancelBtn.onclick = close;
-  scoreBtn.onclick = () => {
-    close();
-    startSwissMatch(matchId);
+  // Two ways to record the result: the full scoreboard (goes LIVE, drives the
+  // Calling Monitor, counts up point by point), or a straight number entry for
+  // a judge who already has the final score on paper. Both go live, and a match
+  // comes off live only when its score is saved.
+  if (boardBtn) boardBtn.onclick = () => { close(); startSwissMatch(matchId); };
+  scoreBtn.onclick = () => { close(); showManualScorePopup(matchId); };
+}
+
+// Type-the-number scoring. Skips the scoreboard entirely and commits straight
+// through commitSwissMatchScore, so round generation, bracket propagation and
+// win rates all behave exactly as if the score came off the scoreboard.
+function showManualScorePopup(matchId) {
+  const popup = document.getElementById("manual-score-popup");
+  if (!popup) return;
+  if (swissEditCode && !swissCanEdit) { notifyCoHostEditBlocked(); return; }
+
+  const state = loadSwiss();
+  const match = state.matches && state.matches[matchId];
+  if (!match) return;
+  if (match.bye) { alert(`${match.a} has a BYE this round.`); return; }
+  if (!match.b) { alert("This match doesn't have both players yet."); return; }
+
+  const nameA = popup.querySelector("#manual-score-name-a");
+  const nameB = popup.querySelector("#manual-score-name-b");
+  const inputA = popup.querySelector("#manual-score-a");
+  const inputB = popup.querySelector("#manual-score-b");
+  const status = popup.querySelector("#manual-score-status");
+  const saveBtn = popup.querySelector("#manual-score-save");
+  const cancelBtn = popup.querySelector("#manual-score-cancel");
+
+  // Re-scoring a finished match pre-fills what's already there; a fresh match
+  // starts at 0 - 0.
+  const isEdit = match.scoreA != null && match.scoreB != null;
+  if (nameA) nameA.textContent = match.a || "";
+  if (nameB) nameB.textContent = match.b || "";
+  if (inputA) inputA.value = isEdit ? match.scoreA : 0;
+  if (inputB) inputB.value = isEdit ? match.scoreB : 0;
+  if (status) status.textContent = "";
+
+  popup.classList.remove("hidden");
+  setTimeout(() => { inputA?.focus(); inputA?.select(); }, 0);
+
+  // Scoring by hand is still calling a match, so it goes LIVE exactly like the
+  // scoreboard does: NOW CALLING on the monitor, the judge's name attached,
+  // and the numbers pushed as they're typed so the board tracks along.
+  if (!isEdit) {
+    markSwissMatchLive(matchId);
+    pushSwissMatchLiveScore(matchId, 0, 0);
+  }
+  const pushLive = () => {
+    if (isEdit) return; // editing a finished match isn't a live call
+    const a = Number(inputA?.value);
+    const b = Number(inputB?.value);
+    pushSwissMatchLiveScore(matchId,
+      Number.isFinite(a) && a >= 0 ? a : 0,
+      Number.isFinite(b) && b >= 0 ? b : 0);
   };
+  if (inputA) inputA.oninput = pushLive;
+  if (inputB) inputB.oninput = pushLive;
+
+  const close = () => {
+    popup.classList.add("hidden");
+    saveBtn.onclick = null;
+    cancelBtn.onclick = null;
+    if (inputA) { inputA.onkeydown = null; inputA.oninput = null; }
+    if (inputB) { inputB.onkeydown = null; inputB.oninput = null; }
+  };
+
+  const save = () => {
+    const a = Number(inputA?.value);
+    const b = Number(inputB?.value);
+    if (!Number.isFinite(a) || !Number.isFinite(b) || a < 0 || b < 0
+        || !Number.isInteger(a) || !Number.isInteger(b)) {
+      if (status) {
+        status.textContent = "Enter a whole number of points for each player.";
+        status.className = "swiss-join-status is-err";
+      }
+      return;
+    }
+    // A tie leaves a bracket match's downstream slots empty, so flag it here
+    // rather than letting the bracket silently stall.
+    if (match.bracket && a === b
+        && !confirm("A tie leaves the next bracket slot empty and has to be re-scored. Save anyway?")) {
+      return;
+    }
+    close();
+    // The running score lives outside the match record, so it has to be
+    // cleared or the monitor keeps showing one for a finished match. Safe to
+    // call unconditionally — it no-ops when there's nothing live to clear.
+    clearSwissMatchLiveScore(matchId);
+    commitSwissMatchScore(matchId, a, b, isEdit);
+  };
+
+  saveBtn.onclick = save;
+  cancelBtn.onclick = close;
+  const onKey = (e) => {
+    if (e.key === "Enter") { e.preventDefault(); save(); }
+    else if (e.key === "Escape") { e.preventDefault(); close(); }
+  };
+  if (inputA) inputA.onkeydown = onKey;
+  if (inputB) inputB.onkeydown = onKey;
 }
 
 function showEditTournamentNamePopup() {

@@ -2752,6 +2752,51 @@ body.bronze-mode   .bey-check-part-name { color: #f0e2d2; }
     flex-wrap: wrap;
 }
 
+/* Manual score entry — one row per player: name on the left, number box on
+   the right, so the judge can type a final score without the scoreboard. The
+   inputs also carry .tournament-name-input so they inherit every theme's
+   field colours; the rules here only reshape it into a narrow number box. */
+.manual-score-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.manual-score-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.manual-score-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-weight: 700;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.manual-score-input.manual-score-input {
+    flex: 0 0 auto;
+    width: 5.5ch;
+    text-align: center;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+
+#manual-score-status {
+    margin-bottom: 8px;
+    font-size: .85rem;
+    min-height: 1.2em;
+}
+
+#manual-score-status.is-err {
+    color: #f85149;
+}
+
 #bey-check-status {
     margin-bottom: 8px;
     font-size: .85rem;
@@ -11912,6 +11957,38 @@ body.light-mode .swiss-bye-tag {
 }
 
 .scoreboard-close.hidden {
+    display: none;
+}
+
+/* Exit without saving — desktop only (mobile leaves the board by tilting back
+   to portrait). Sits in the opposite corner from the green save check so the
+   two can't be mistaken for each other mid-match. */
+.scoreboard-exit {
+    position: absolute;
+    top: 12px;
+    left: 16px;
+    z-index: 10;
+    background: rgba(33, 38, 45, .92);
+    color: #e6edf3;
+    border: 1px solid #30363d;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.scoreboard-exit:hover {
+    background: #da3633;
+    border-color: #da3633;
+    color: #fff;
+}
+
+.scoreboard-exit.hidden {
     display: none;
 }
 

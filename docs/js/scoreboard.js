@@ -22,6 +22,7 @@ let scoreboardSaveCallback = null;
   const labelB = overlay?.querySelector(".scoreboard-right .scoreboard-player-label");
   const resetBtn = document.getElementById("scoreboard-reset");
   const closeBtn = document.getElementById("scoreboard-close");
+  const exitBtn = document.getElementById("scoreboard-exit");
   const leftSide = document.getElementById("scoreboard-left");
   const rightSide = document.getElementById("scoreboard-right");
   const roundEl = document.getElementById("scoreboard-round");
@@ -246,6 +247,10 @@ let scoreboardSaveCallback = null;
     pendingResetOnPortrait = true;
     // Desktop: no portrait tilt will follow, so hide + reset the modal now.
     if (!isMobile && desktopModalOpen) closeScoreboardDesktopModal();
+    // Mobile: if we're the ones holding the screen in landscape, let go — the
+    // reset above is driven by a tilt back to portrait, which a locked screen
+    // would never deliver.
+    if (isMobile && orientationLocked) releaseLandscape();
   });
 
   const isLandscape = () => screen.orientation ? screen.orientation.type.startsWith("landscape") : window.innerWidth > window.innerHeight;
@@ -256,6 +261,52 @@ let scoreboardSaveCallback = null;
   const exitFullscreen = () => {
     const fn = document.exitFullscreen || document.webkitExitFullscreen;
     if (fn && (document.fullscreenElement || document.webkitFullscreenElement)) fn.call(document).catch(() => {});
+  };
+
+  // Release a landscape lock so the phone follows its physical position again.
+  // Safe to call when nothing is locked.
+  const unlockOrientation = () => {
+    try { screen.orientation?.unlock?.(); } catch (e) { /* unsupported */ }
+  };
+
+  // True while we're holding the screen in landscape ourselves.
+  let orientationLocked = false;
+
+  // Rotate the phone to landscape on tap instead of making the judge tilt it.
+  // The Screen Orientation API only allows a lock while fullscreen, so the two
+  // are chained — and both need the user gesture that got us here, which is why
+  // this runs straight off the button click with no await in front of it.
+  //
+  // Android Chromium supports this. iOS Safari has no screen.orientation.lock
+  // at all, so the promise chain no-ops and the existing tilt-to-reveal flow is
+  // still what shows the board there.
+  const tryLockLandscape = () => {
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    const lock = screen.orientation && screen.orientation.lock;
+    // Both are checked up front: optional-calling a missing lock() resolves
+    // instead of throwing, which would leave us claiming a lock we never got —
+    // and entering fullscreen for a rotation that can't happen would strand the
+    // page fullscreen in portrait with the board still hidden.
+    if (!req || !lock) return;
+    Promise.resolve()
+      .then(() => req.call(el))
+      .then(() => lock.call(screen.orientation, "landscape"))
+      .then(() => {
+        // Locked: tilting back to portrait no longer works as the way out, so
+        // surface the exit button on mobile as well.
+        orientationLocked = true;
+        exitBtn?.classList.remove("hidden");
+      })
+      .catch(() => exitFullscreen()); // refused — undo the fullscreen, tilt still works
+  };
+
+  // Hand orientation control back to the phone and drop out of fullscreen.
+  const releaseLandscape = () => {
+    orientationLocked = false;
+    exitBtn?.classList.add("hidden");
+    unlockOrientation();
+    exitFullscreen();
   };
 
   // Clear any match-linked state so the scoreboard behaves as the default
@@ -314,10 +365,14 @@ let scoreboardSaveCallback = null;
   function openScoreboardDesktopModal() {
     overlay.classList.remove("hidden");
     desktopModalOpen = true;
+    // Desktop-only: mobile dismisses by tilting back to portrait, so the exit
+    // button stays hidden there.
+    exitBtn?.classList.remove("hidden");
   }
   function closeScoreboardDesktopModal() {
     overlay.classList.add("hidden");
     desktopModalOpen = false;
+    exitBtn?.classList.add("hidden");
     pendingResetOnPortrait = false;
     if (typeof window.resetScoreboardToDefault === "function") {
       window.resetScoreboardToDefault();
@@ -329,15 +384,58 @@ let scoreboardSaveCallback = null;
   // popup directly (no tilt / fullscreen needed).
   window.openScoreboard = function (nameA, nameB, onSave, initialA, initialB, onScoreChange) {
     setupScoreboard(nameA, nameB, onSave, initialA, initialB, onScoreChange);
-    if (!isMobile) openScoreboardDesktopModal();
+    if (isMobile) {
+      // Already landscape? setupScoreboard has revealed it. Otherwise rotate
+      // for them rather than waiting on a tilt.
+      if (!isLandscape()) tryLockLandscape();
+    } else {
+      openScoreboardDesktopModal();
+    }
   };
 
-  // Desktop dismiss without saving — Escape closes the modal and clears the
-  // (unsaved) match context. No-op on mobile / when no modal is open.
+  // Desktop dismiss without saving. Mobile leaves the board by tilting back to
+  // portrait, so this is desktop-only — there the modal would otherwise be
+  // escapable only by a keypress with nothing on screen to say so.
+  function dismissScoreboardDesktopModal() {
+    if (!desktopModalOpen) return;
+    // Only worth a confirm when there's something to lose: a score was entered
+    // on a match that's waiting to be saved.
+    if (scoreboardSaveCallback && (scoreA > 0 || scoreB > 0)
+        && !confirm("Exit without saving? The score on screen won't be recorded.")) {
+      return;
+    }
+    scoreboardSaveCallback = null;
+    scoreboardScoreChange = null; // stop pushing a live score for an abandoned board
+    closeScoreboardDesktopModal();
+  }
+
+  // Same button on mobile, but there it undoes the landscape lock instead of
+  // closing a modal — without it a locked screen has no in-page way out.
+  function dismissScoreboardMobile() {
+    if (scoreboardSaveCallback && (scoreA > 0 || scoreB > 0)
+        && !confirm("Exit without saving? The score on screen won't be recorded.")) {
+      return;
+    }
+    scoreboardSaveCallback = null;
+    scoreboardScoreChange = null;
+    releaseLandscape();
+    overlay.classList.add("hidden");
+    pendingResetOnPortrait = false;
+    if (typeof window.resetScoreboardToDefault === "function") {
+      window.resetScoreboardToDefault();
+    }
+  }
+
+  exitBtn?.addEventListener("click", () => {
+    if (isMobile) dismissScoreboardMobile();
+    else dismissScoreboardDesktopModal();
+  });
+
+  // Escape is the keyboard equivalent of the same button. No-op on mobile /
+  // when no modal is open.
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape" || !desktopModalOpen) return;
-    scoreboardSaveCallback = null;
-    closeScoreboardDesktopModal();
+    dismissScoreboardDesktopModal();
   });
 
   // armScoreboard is the silent (auto) entry — used by Battle Royale to arm the
@@ -355,7 +453,7 @@ let scoreboardSaveCallback = null;
       if (isLandscape()) { overlay.classList.remove("hidden"); enterFullscreen(); }
       else {
         overlay.classList.add("hidden");
-        exitFullscreen();
+        releaseLandscape();
         // Now-in-portrait: if the user just saved a match, clear the match
         // context so the next tilt shows the default board.
         if (pendingResetOnPortrait) {

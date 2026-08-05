@@ -839,8 +839,34 @@
       <div class="bey-check-slots" id="bey-check-slots"></div>
       <div id="bey-check-status" class="swiss-join-status"></div>
       <div class="popup-actions bey-check-actions">
+        <button type="button" id="bey-check-scoreboard" class="btn">Scoreboard</button>
         <button type="button" id="bey-check-score" class="btn">Score Match</button>
         <button type="button" id="bey-check-cancel" class="btn popup-cancel">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MANUAL SCORE POPUP ================= -->
+  <div id="manual-score-popup" class="popup-overlay hidden">
+    <div class="popup-card">
+      <h2 class="popup-title">Score Match</h2>
+      <p class="popup-subtitle">Type the final score for each player.</p>
+      <div class="manual-score-rows" id="manual-score-rows">
+        <label class="manual-score-row">
+          <span class="manual-score-name" id="manual-score-name-a"></span>
+          <input type="number" id="manual-score-a" class="tournament-name-input manual-score-input"
+                 inputmode="numeric" min="0" step="1" value="0">
+        </label>
+        <label class="manual-score-row">
+          <span class="manual-score-name" id="manual-score-name-b"></span>
+          <input type="number" id="manual-score-b" class="tournament-name-input manual-score-input"
+                 inputmode="numeric" min="0" step="1" value="0">
+        </label>
+      </div>
+      <div id="manual-score-status" class="swiss-join-status"></div>
+      <div class="popup-actions">
+        <button type="button" id="manual-score-save" class="btn">Save Score</button>
+        <button type="button" id="manual-score-cancel" class="btn popup-cancel">Cancel</button>
       </div>
     </div>
   </div>
@@ -1102,6 +1128,7 @@
   <!-- ================= SCOREBOARD OVERLAY ================= -->
   <div id="scoreboard-overlay" class="scoreboard-overlay hidden">
     <button class="scoreboard-close hidden" id="scoreboard-close" title="Save &amp; Close">&#x2713;</button>
+    <button class="scoreboard-exit hidden" id="scoreboard-exit" title="Exit without saving" aria-label="Exit without saving">&#x2715;</button>
     <div class="scoreboard-side scoreboard-left" id="scoreboard-left">
       <div class="scoreboard-player-label">A</div>
       <div class="scoreboard-score-row">
