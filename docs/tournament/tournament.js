@@ -1561,7 +1561,11 @@ function startSwissMatch(matchId) {
     isEdit ? match.scoreA : 0, isEdit ? match.scoreB : 0,
     // Live-score hook — only for a live match (edits aren't shown on the
     // monitor). Pushes the running score to the room as it changes.
-    isEdit ? null : (({ scoreA, scoreB }) => pushSwissMatchLiveScore(matchId, scoreA, scoreB)));
+    isEdit ? null : (({ scoreA, scoreB }) => pushSwissMatchLiveScore(matchId, scoreA, scoreB)),
+    // Closing the board with X / Escape instead of saving takes the match back
+    // off LIVE — it was only live because the board was open. Edits never went
+    // live, so there's nothing to undo for them.
+    isEdit ? null : (() => endSwissMatchLive(matchId)));
 }
 
 // Flip a match to LIVE for this device: stamps startedAt so it shows as NOW
@@ -1579,6 +1583,23 @@ function markSwissMatchLive(matchId) {
   if (judgeName) s.matches[matchId].judge = judgeName;
   persistSwiss(s);
   pushSwissMatchStart(matchId, now, judgeName);
+  renderSwiss();
+}
+
+// Take a match back OFF live: clears the in-progress flag and the judge, drops
+// the running score from the Calling Monitor and frees this device's live slot.
+// Called when a scoring surface is abandoned — the match was only live because
+// that surface was open, so leaving it should put the match back as it was.
+function endSwissMatchLive(matchId) {
+  if (swissLiveMatchId === matchId) swissLiveMatchId = null;
+  const s = loadSwiss();
+  if (s.matches[matchId]) {
+    s.matches[matchId].startedAt = null;
+    delete s.matches[matchId].judge;
+    persistSwiss(s);
+    pushSwissMatchStart(matchId, null);
+  }
+  clearSwissMatchLiveScore(matchId);
   renderSwiss();
 }
 
@@ -7520,11 +7541,18 @@ function showManualScorePopup(matchId) {
     commitSwissMatchScore(matchId, a, b, isEdit);
   };
 
+  // Backing out takes the match off LIVE again — opening this popup is what put
+  // it there. An edit was never live, so it just closes.
+  const cancel = () => {
+    close();
+    if (!isEdit) endSwissMatchLive(matchId);
+  };
+
   saveBtn.onclick = save;
-  cancelBtn.onclick = close;
+  cancelBtn.onclick = cancel;
   const onKey = (e) => {
     if (e.key === "Enter") { e.preventDefault(); save(); }
-    else if (e.key === "Escape") { e.preventDefault(); close(); }
+    else if (e.key === "Escape") { e.preventDefault(); cancel(); }
   };
   if (inputA) inputA.onkeydown = onKey;
   if (inputB) inputB.onkeydown = onKey;

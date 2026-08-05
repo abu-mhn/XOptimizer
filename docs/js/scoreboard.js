@@ -14,6 +14,8 @@ let scoreboardSaveCallback = null;
   // A/B order), so the running score can be pushed to the room and shown live
   // on the tournament Calling Monitor.
   let scoreboardScoreChange = null;
+  // Fired once when the board is closed without saving (X / Escape).
+  let scoreboardCancelCallback = null;
 
   const overlay = document.getElementById("scoreboard-overlay");
   const scoreAEl = document.getElementById("score-a");
@@ -235,6 +237,7 @@ let scoreboardSaveCallback = null;
   closeBtn?.addEventListener("click", () => {
     const cb = scoreboardSaveCallback;
     scoreboardSaveCallback = null;
+    scoreboardCancelCallback = null; // saved, so the dismiss hook must not fire
     closeBtn.classList.add("hidden");
     scoreboardScoreChange = null; // stop pushing live score once the match is saved
     if (cb) {
@@ -322,19 +325,23 @@ let scoreboardSaveCallback = null;
     scorePresses = 0;
     swapped = false;
     scoreboardScoreChange = null;
+    scoreboardCancelCallback = null;
     updateDisplay();
     closeBtn?.classList.add("hidden");
   };
 
   // Load names/scores + save callback onto the board, revealing it if already
   // in landscape (otherwise the orientation handler shows it on tilt).
-  function setupScoreboard(nameA, nameB, onSave, initialA, initialB, onScoreChange) {
+  function setupScoreboard(nameA, nameB, onSave, initialA, initialB, onScoreChange, onCancel) {
     // Safety net: if called for a view-only participant, drop the match
     // context and fall back to the default standalone scoreboard (no save
     // callback, no pre-filled names/scores).
     if (swissEditCode && !swissCanEdit) {
-      nameA = ""; nameB = ""; onSave = null; initialA = 0; initialB = 0; onScoreChange = null;
+      nameA = ""; nameB = ""; onSave = null; initialA = 0; initialB = 0; onScoreChange = null; onCancel = null;
     }
+    // Fired when the board is dismissed without saving, so the caller can undo
+    // whatever opening it set up (the tournament takes the match off LIVE).
+    scoreboardCancelCallback = typeof onCancel === "function" ? onCancel : null;
     setScoreboardLabel(labelA, nameA || "A");
     setScoreboardLabel(labelB, nameB || "B");
     scoreA = typeof initialA === "number" ? initialA : 0;
@@ -382,8 +389,8 @@ let scoreboardSaveCallback = null;
   // Scores are entered only via the scoreboard overlay. On mobile it's revealed
   // by tilting to landscape; on desktop openScoreboard shows it as a modal
   // popup directly (no tilt / fullscreen needed).
-  window.openScoreboard = function (nameA, nameB, onSave, initialA, initialB, onScoreChange) {
-    setupScoreboard(nameA, nameB, onSave, initialA, initialB, onScoreChange);
+  window.openScoreboard = function (nameA, nameB, onSave, initialA, initialB, onScoreChange, onCancel) {
+    setupScoreboard(nameA, nameB, onSave, initialA, initialB, onScoreChange, onCancel);
     if (isMobile) {
       // Already landscape? setupScoreboard has revealed it. Otherwise rotate
       // for them rather than waiting on a tilt.
@@ -406,7 +413,16 @@ let scoreboardSaveCallback = null;
     }
     scoreboardSaveCallback = null;
     scoreboardScoreChange = null; // stop pushing a live score for an abandoned board
+    fireScoreboardCancel();
     closeScoreboardDesktopModal();
+  }
+
+  // Run the dismiss hook exactly once — the caller uses it to undo what opening
+  // the board set up, so a second call would act on an already-cleared match.
+  function fireScoreboardCancel() {
+    const cb = scoreboardCancelCallback;
+    scoreboardCancelCallback = null;
+    if (cb) cb();
   }
 
   // Same button on mobile, but there it undoes the landscape lock instead of
@@ -418,6 +434,7 @@ let scoreboardSaveCallback = null;
     }
     scoreboardSaveCallback = null;
     scoreboardScoreChange = null;
+    fireScoreboardCancel();
     releaseLandscape();
     overlay.classList.add("hidden");
     pendingResetOnPortrait = false;
