@@ -685,7 +685,14 @@ function getGroupCount(state) {
 // Human-readable format label. Round robin reuses the swiss / swiss-only mode
 // keys plus a `pairing: "round-robin"` flag, so the label keys off both.
 // `shortElim` picks the compact "Single Elim" for room cards.
+// Bracket-only formats: the draw IS the bracket, so there's no group stage,
+// no rounds/groups settings and nothing to reshuffle.
+function isElimMode(mode) {
+  return mode === "single-elim" || mode === "double-elim";
+}
+
 function tournamentFormatLabel(mode, pairing, shortElim, topN) {
+  if (mode === "double-elim") return shortElim ? "Double Elim" : "Double Elimination";
   if (mode === "single-elim") return shortElim ? "Single Elim" : "Single Elimination";
   const base = pairing === "round-robin" ? "Round Robin" : "Swiss";
   if (mode === "swiss-only") return base;
@@ -803,7 +810,7 @@ function loadSwiss() {
     const hasGroups = raw && Array.isArray(raw.groups);
     const hasMatches = raw && raw.matches && Object.keys(raw.matches).length > 0;
     const isRegistering = raw && raw.phase === "registering";
-    if (raw && (hasGroups || hasMatches || raw.mode === "single-elim" || isRegistering)) {
+    if (raw && (hasGroups || hasMatches || isElimMode(raw.mode) || isRegistering)) {
       if (!raw.matches) raw.matches = {};
       // Migrate legacy global `roundsGenerated` into the per-group array.
       if (!Array.isArray(raw.groupRounds)) {
@@ -1250,12 +1257,162 @@ function generateSingleElimFromText(text, tournamentName, placementDepth) {
   return state;
 }
 
+// =========================== DOUBLE ELIMINATION ===========================
+// Winners bracket + losers bracket + grand final with bracket reset. A player
+// is only out after two losses.
+//
+// For a bracket of S = 2^k slots (k >= 2):
+//   bracket-wb{r}-{i}  round "wb{r}", r = 0 … k-1    — S/2^(r+1) matches
+//   bracket-lb{L}-{i}  round "lb{L}", L = 0 … 2k-3   — S/2^(⌊L/2⌋+2) matches
+//   bracket-gf-0       round "gf"    — WB winner (slot a) vs LB winner (slot b)
+//   bracket-gf2-0      round "gf2"   — the reset, created on the fly only when
+//                                      the LB winner takes GF1
+//
+// LB rounds alternate. Even rounds consolidate LB survivors against each other;
+// odd rounds pair a survivor (slot a) against the WB player who just dropped
+// (slot b). That alternation is why the LB is twice as long as the WB.
+function deWbRounds(bracketSize) { return Math.round(Math.log2(bracketSize || 4)); }
+function deLbRounds(bracketSize) { return Math.max(0, 2 * deWbRounds(bracketSize) - 2); }
+function deWbMatchCount(bracketSize, r) { return bracketSize / Math.pow(2, r + 1); }
+function deLbMatchCount(bracketSize, L) { return bracketSize / Math.pow(2, Math.floor(L / 2) + 2); }
+
+// "wb2" → {kind:"wb", index:2}. Returns null for any non-double-elim round, so
+// the shared bracket helpers can use it as a cheap "is this double elim?" test.
+function deParseRound(round) {
+  if (typeof round !== "string") return null;
+  const wb = /^wb(\d+)$/.exec(round);
+  if (wb) return { kind: "wb", index: Number(wb[1]) };
+  const lb = /^lb(\d+)$/.exec(round);
+  if (lb) return { kind: "lb", index: Number(lb[1]) };
+  if (round === "gf") return { kind: "gf" };
+  if (round === "gf2") return { kind: "gf2" };
+  return null;
+}
+
+function generateDoubleElimFromText(text, tournamentName, placementDepth) {
+  const names = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  const seen = new Set();
+  const unique = [];
+  names.forEach(n => { if (!seen.has(n.toLowerCase())) { seen.add(n.toLowerCase()); unique.push(n); } });
+
+  // 3 is the real floor: a 2-slot bracket has no losers bracket to drop into,
+  // which would just be a best-of series rather than double elimination.
+  if (unique.length < 3) {
+    alert(`Double elimination needs at least 3 participants (${unique.length} provided).`);
+    return null;
+  }
+
+  let bracketSize = 4;
+  while (bracketSize < unique.length) bracketSize *= 2;
+  const k = deWbRounds(bracketSize);
+
+  const shuffled = shuffleArray(unique);
+  while (shuffled.length < bracketSize) shuffled.push(null); // tail BYEs
+
+  const state = {
+    groups: null,
+    matches: {},
+    groupRounds: [],
+    mode: "double-elim",
+    bracketSize,
+    // Kept so the shared bracket helpers that read preFinalRounds (scroll
+    // targeting, ranking-point tiers) still see a sane winners-side depth.
+    preFinalRounds: k - 1,
+    placementDepth: clampPlacementDepth(placementDepth),
+    participants: unique,
+    tournamentName: (tournamentName || "").trim() || null
+  };
+
+  const empty = (round, idx) => ({
+    bracket: true, round, bracketIndex: idx,
+    groupIndex: null, a: null, b: null,
+    scoreA: null, scoreB: null, startedAt: null, bye: false
+  });
+
+  for (let i = 0; i < bracketSize / 2; i++) {
+    state.matches[`bracket-wb0-${i}`] = { ...empty("wb0", i), a: shuffled[i * 2], b: shuffled[i * 2 + 1] };
+  }
+  for (let r = 1; r < k; r++) {
+    for (let i = 0; i < deWbMatchCount(bracketSize, r); i++) {
+      state.matches[`bracket-wb${r}-${i}`] = empty(`wb${r}`, i);
+    }
+  }
+  for (let L = 0; L < deLbRounds(bracketSize); L++) {
+    for (let i = 0; i < deLbMatchCount(bracketSize, L); i++) {
+      state.matches[`bracket-lb${L}-${i}`] = empty(`lb${L}`, i);
+    }
+  }
+  state.matches["bracket-gf-0"] = empty("gf", 0);
+
+  autoAdvanceByes(state);
+  return state;
+}
+
+// Where a double-elim match's winner and loser go. LB losers return a null
+// loser target — they're out, and their finishing place comes from the round
+// they went out in rather than from a playoff.
+function doubleElimPropagation(parsed, i, state) {
+  const S = (state && state.bracketSize) || 4;
+  const k = deWbRounds(S);
+  const lbLast = 2 * k - 3;
+  if (parsed.kind === "gf" || parsed.kind === "gf2") return null; // terminal
+
+  if (parsed.kind === "wb") {
+    const r = parsed.index;
+    const slot = i % 2 === 0 ? "a" : "b";
+    const winner = r < k - 1
+      ? { toId: `bracket-wb${r + 1}-${Math.floor(i / 2)}`, slot }
+      : { toId: "bracket-gf-0", slot: "a" };
+    // WB round 0 losers pair up with each other in LB round 0. Every later WB
+    // loser drops into the odd LB round waiting for it, one per match, in slot
+    // b — slot a is held for the LB survivor who fought their way there.
+    const loser = r === 0
+      ? { toId: `bracket-lb0-${Math.floor(i / 2)}`, slot }
+      : { toId: `bracket-lb${2 * r - 1}-${i}`, slot: "b" };
+    return { winner, loser };
+  }
+
+  const L = parsed.index;
+  if (L >= lbLast) return { winner: { toId: "bracket-gf-0", slot: "b" }, loser: null };
+  // Even → the next (odd) round has the same match count, so index carries over
+  // and the winner takes slot a. Odd → the next round halves, so pairs merge.
+  const winner = L % 2 === 0
+    ? { toId: `bracket-lb${L + 1}-${i}`, slot: "a" }
+    : { toId: `bracket-lb${L + 1}-${Math.floor(i / 2)}`, slot: i % 2 === 0 ? "a" : "b" };
+  return { winner, loser: null };
+}
+
+// Inverse of the above: which match feeds this slot. Used by the bye
+// auto-advance to tell a permanently-empty slot from one still being decided.
+function doubleElimUpstream(parsed, i, slot, state) {
+  const S = (state && state.bracketSize) || 4;
+  const k = deWbRounds(S);
+  const lbLast = 2 * k - 3;
+  if (parsed.kind === "gf2") return "bracket-gf-0";
+  if (parsed.kind === "gf") {
+    return slot === "a" ? `bracket-wb${k - 1}-0` : `bracket-lb${lbLast}-0`;
+  }
+  if (parsed.kind === "wb") {
+    if (parsed.index === 0) return null; // seeded from the draw
+    return `bracket-wb${parsed.index - 1}-${i * 2 + (slot === "a" ? 0 : 1)}`;
+  }
+  const L = parsed.index;
+  if (L === 0) return `bracket-wb0-${i * 2 + (slot === "a" ? 0 : 1)}`; // both slots are WB drops
+  if (L % 2 === 1) {
+    const r = (L + 1) / 2; // the WB round that drops into this one
+    return slot === "a" ? `bracket-lb${L - 1}-${i}` : `bracket-wb${r}-${i}`;
+  }
+  return `bracket-lb${L - 1}-${i * 2 + (slot === "a" ? 0 : 1)}`;
+}
+
 // Returns the match id whose winner OR loser feeds the given slot, or null
 // if this slot has no upstream match (R0 slots, or the final in a 2-player
 // bracket). The winner-vs-loser distinction doesn't matter to the callers
 // (phantom detection and the auto-advance live-upstream check) — they only
 // care whether *something* live still feeds the slot.
 function bracketUpstreamSource(round, bracketIndex, slot, state) {
+  const de = deParseRound(round);
+  if (de) return doubleElimUpstream(de, bracketIndex, slot, state);
   if (typeof round === "number") {
     if (round === 0) return null;
     const j = slot === "a" ? bracketIndex * 2 : bracketIndex * 2 + 1;
@@ -1326,14 +1483,26 @@ function computeBracketPhantoms(state) {
     changed = false;
     entries.forEach(([id, m]) => {
       if (phantoms.has(id)) return;
-      const aSrc = bracketUpstreamSource(m.round, m.bracketIndex, "a", state);
-      const bSrc = bracketUpstreamSource(m.round, m.bracketIndex, "b", state);
-      const aDead = aSrc == null
-        ? !(m.a != null && m.a !== "")
-        : phantoms.has(aSrc);
-      const bDead = bSrc == null
-        ? !(m.b != null && m.b !== "")
-        : phantoms.has(bSrc);
+      // A slot is dead when nothing can ever fill it: no upstream and no seeded
+      // player, an upstream that's itself a phantom, or — the case double elim
+      // hits constantly — an upstream that's a BYE feeding us its *loser*. A
+      // bye has no loser to give, so that slot stays empty forever.
+      const slotDead = (slot) => {
+        const src = bracketUpstreamSource(m.round, m.bracketIndex, slot, state);
+        if (src == null) {
+          const seeded = slot === "a" ? m.a : m.b;
+          return !(seeded != null && seeded !== "");
+        }
+        if (phantoms.has(src)) return true;
+        const up = state.matches[src];
+        if (up && up.bye) {
+          const prop = getBracketPropagation(up.round, up.bracketIndex, state);
+          if (prop && prop.loser && prop.loser.toId === id && prop.loser.slot === slot) return true;
+        }
+        return false;
+      };
+      const aDead = slotDead("a");
+      const bDead = slotDead("b");
       if (aDead && bDead) {
         phantoms.add(id);
         changed = true;
@@ -1353,10 +1522,13 @@ function computeBracketPhantoms(state) {
 // If `updates` is provided, each mutated leaf path is recorded there so the
 // caller can sync the diff to Firebase (used by the live-scoring path).
 function autoAdvanceByes(state, updates) {
-  const phantoms = computeBracketPhantoms(state);
   let changed = true;
   let iter = 0;
   while (changed && iter < 100) {
+    // Recomputed each pass: marking a match as a bye can strand a downstream
+    // slot that was still live a moment ago (its loser feed just evaporated),
+    // and that newly-dead slot is what lets the next pass make progress.
+    const phantoms = computeBracketPhantoms(state);
     changed = false;
     Object.entries(state.matches).forEach(([id, m]) => {
       if (!m.bracket || phantoms.has(id)) return;
@@ -1675,6 +1847,21 @@ function commitSwissMatchScore(matchId, scoreA, scoreB, isEdit) {
         extraUpdates[`matches/${prop.loser.toId}/${prop.loser.slot}`] = loser;
       }
     }
+    // Grand-final bracket reset. The WB player reached GF1 undefeated; the LB
+    // player arrived with one loss. If the LB player wins, they're level at one
+    // loss each and neither is eliminated yet, so a decider is created on the
+    // spot. The WB player winning ends it — they'd be handing out a second loss.
+    if (s.mode === "double-elim" && stored.round === "gf"
+        && scoreB > scoreA && !s.matches["bracket-gf2-0"]) {
+      const reset = {
+        bracket: true, round: "gf2", bracketIndex: 0, groupIndex: null,
+        a: stored.a, b: stored.b,
+        scoreA: null, scoreB: null, startedAt: null, bye: false
+      };
+      s.matches["bracket-gf2-0"] = reset;
+      extraUpdates["matches/bracket-gf2-0"] = reset;
+      newMatchIds = (newMatchIds || []).concat(["bracket-gf2-0"]);
+    }
     // After propagation, a downstream slot whose sibling upstream is a
     // phantom (BYE-vs-BYE) may now be a half-filled bye — auto-advance
     // it so the lone real player skips ahead. Cascades up the bracket.
@@ -1804,7 +1991,7 @@ function renderSwissGroupMatches(state, gi) {
 // selection the bracket builder will use. Empty for swiss-only (no knockout)
 // and single-elim (no group stage).
 function swissAdvancingNames(state) {
-  if (!state || state.mode === "single-elim") return new Set();
+  if (!state || isElimMode(state.mode)) return new Set();
   const matches = state.matches || {};
   // Bracket already built → advancers are everyone who appears in it.
   const inBracket = new Set();
@@ -1984,7 +2171,7 @@ function computeSwissRoundsScrollTarget(scrollEl, state) {
   const isBracketStrip = !!scrollEl.closest(".swiss-bracket");
   if (!isBracketStrip || !state) return scrollEl.scrollWidth;
 
-  if (state.mode === "single-elim") {
+  if (isElimMode(state.mode)) {
     return computeSingleElimScrollTarget(scrollEl, state);
   }
 
@@ -2147,7 +2334,15 @@ function renderSwissTop8({ final, third, fifth, seventh }) {
     rows.push({ rank: 8, name: loser });
   }
 
-  if (!rows.length) return "";
+  return renderPlacementRows(rows);
+}
+
+// Shared podium markup for a [{rank, name}] list — avatars, medals and the
+// data-rank-* attributes hydrateTop8Banners needs to paint each row with the
+// player's banner. Double elim builds its rows from elimination order instead
+// of placement matches, but renders through here so both look identical.
+function renderPlacementRows(rows) {
+  if (!rows || !rows.length) return "";
 
   const ordinal = (n) => ({ 1: "1st", 2: "2nd", 3: "3rd" })[n] || (n + "th");
   const medal = (n) => ({ 1: "🥇", 2: "🥈", 3: "🥉" })[n] || "";
@@ -2175,6 +2370,9 @@ function renderSwissTop8({ final, third, fifth, seventh }) {
 }
 
 function renderSwissBracket(state) {
+  if (state.mode === "double-elim") {
+    return renderDoubleElimBracket(state);
+  }
   if (state.mode === "single-elim") {
     return renderSingleElimBracket(state);
   }
@@ -2213,6 +2411,77 @@ function getBracketShortLabel(matchesInRound, index) {
   if (matchesInRound === 2) return `SF${index + 1}`;
   if (matchesInRound === 4) return `QF${index + 1}`;
   return `R${index + 1}`;
+}
+
+// Two scrolling strips — winners bracket on top, losers bracket below — with
+// the grand final (and the reset, once it exists) in its own column at the end
+// of the winners strip, which is where both brackets converge.
+function renderDoubleElimBracket(state) {
+  const S = state.bracketSize || 4;
+  const k = deWbRounds(S);
+  const lbRounds = deLbRounds(S);
+  const matches = state.matches || {};
+
+  const col = (title, cards) => `
+    <div class="swiss-round-col">
+      <div class="swiss-round-title">${title}</div>
+      <div class="swiss-match-list">${cards.join("")}</div>
+    </div>`;
+
+  const wbCols = [];
+  for (let r = 0; r < k; r++) {
+    const count = deWbMatchCount(S, r);
+    const cards = [];
+    for (let i = 0; i < count; i++) {
+      const id = `bracket-wb${r}-${i}`;
+      if (matches[id]) cards.push(renderSwissBracketCard(getBracketShortLabel(count, i), id, matches[id]));
+    }
+    // The last winners round is the WB final, not the tournament final — name
+    // it so nobody mistakes it for the decider.
+    wbCols.push(col(r === k - 1 ? "Winners Final" : getBracketRoundName(count), cards));
+  }
+
+  const gf = matches["bracket-gf-0"];
+  const gf2 = matches["bracket-gf2-0"];
+  if (gf) {
+    const parts = [
+      `<div class="swiss-round-title">Grand Final</div>`,
+      `<div class="swiss-match-list">${renderSwissBracketCard("GF", "bracket-gf-0", gf)}</div>`
+    ];
+    if (gf2) {
+      parts.push(`<div class="swiss-round-subtitle">Bracket Reset</div>`);
+      parts.push(`<div class="swiss-match-list">${renderSwissBracketCard("GF2", "bracket-gf2-0", gf2)}</div>`);
+    }
+    wbCols.push(`<div class="swiss-round-col">${parts.join("")}</div>`);
+  }
+
+  const lbCols = [];
+  for (let L = 0; L < lbRounds; L++) {
+    const count = deLbMatchCount(S, L);
+    const cards = [];
+    for (let i = 0; i < count; i++) {
+      const id = `bracket-lb${L}-${i}`;
+      if (matches[id]) cards.push(renderSwissBracketCard(`L${L + 1}-${i + 1}`, id, matches[id]));
+    }
+    if (cards.length) lbCols.push(col(L === lbRounds - 1 ? "Losers Final" : `Losers R${L + 1}`, cards));
+  }
+
+  const podium = renderPlacementRows(
+    computeDoubleElimPlacements(state).map(p => ({ rank: p.place, name: p.name })));
+
+  return `
+    <section class="swiss-bracket">
+      <header class="swiss-bracket-header">
+        <span class="swiss-bracket-title">Double Elimination — ${S}-slot bracket</span>
+      </header>
+      ${podium}
+      <div class="swiss-bracket-subhead">Winners Bracket</div>
+      <div class="swiss-rounds-scroll">${wbCols.join("")}</div>
+      ${lbCols.length ? `
+        <div class="swiss-bracket-subhead">Losers Bracket</div>
+        <div class="swiss-rounds-scroll">${lbCols.join("")}</div>` : ""}
+    </section>
+  `;
 }
 
 function renderSingleElimBracket(state) {
@@ -3693,7 +3962,11 @@ function renderSwiss() {
   const placementIds = isSingleElim
     ? singleElimPlacementIds(state.matches)
     : ["bracket-f-0", "bracket-3rd-0", "bracket-5th-0", "bracket-7th-0"];
-  const allPlacementsDone = bracketActive && placementIds.every(id => isMatchDecided(state.matches[id]));
+  // Double elim has no placement matches — the grand final (plus the reset it
+  // may force) settles everything, so defer to the shared completion check.
+  const allPlacementsDone = state.mode === "double-elim"
+    ? isDoubleElimComplete(state)
+    : bracketActive && placementIds.every(id => isMatchDecided(state.matches[id]));
   const isSwissOnly = state.mode === "swiss-only";
   const tournamentComplete = isTournamentComplete(state);
   // Archive view is always read-only. Otherwise: a local (non-room) tournament
@@ -3959,7 +4232,7 @@ function renderSwissRegisteringMarkup(state) {
   const modeLabel = tournamentFormatLabel(state.mode, state.pairing, false, state.topN);
   // Hosts / co-hosts can tweak the format while still waiting for players —
   // no matches exist yet, so changing groups / rounds / Top-8 is safe.
-  const isSwiss = state.mode !== "single-elim";
+  const isSwiss = !isElimMode(state.mode);
   // Round robin has no round count to set — its rounds are generated from the
   // group size so every participant plays every other one.
   const isRoundRobin = state.pairing === "round-robin";
@@ -5803,6 +6076,7 @@ function maybeApplyMatchWinRate(matchId, storedBefore, state) {
 // then get an alert from the generator.
 function swissRegistrationMinimum(state) {
   if (!state) return 0;
+  if (state.mode === "double-elim") return 3;
   if (state.mode === "single-elim") return 2;
   // Swiss / Swiss + Top N: need enough per group for SWISS_MIN_PER_GROUP and
   // enough total for the knockout's slots. New tournaments carry state.topN
@@ -5908,7 +6182,7 @@ function startRegisteringTournament() {
     `Format: ${tournamentFormatLabel(state.mode, state.pairing, false, state.topN)}`,
     `Players: ${names.length}`
   ];
-  if (state.mode !== "single-elim") {
+  if (!isElimMode(state.mode)) {
     summary.push(`Groups: ${getGroupCount(state)}`);
     // Round robin's length falls out of the group size once the draw exists,
     // so there's no meaningful number to show yet — only Swiss has a set total.
@@ -5925,7 +6199,9 @@ function startRegisteringTournament() {
     `Registration closes and the draw is generated.`);
   if (!proceed) return;
   const namesText = names.join("\n");
-  const generated = state.mode === "single-elim"
+  const generated = state.mode === "double-elim"
+    ? generateDoubleElimFromText(namesText, state.tournamentName, state.placementDepth)
+    : state.mode === "single-elim"
     ? generateSingleElimFromText(namesText, state.tournamentName, state.placementDepth)
     : generateSwissFromText(namesText, state.tournamentName, getRoundCount(state), getGroupCount(state), state.pairing);
   if (!generated) return; // generator already alerted
@@ -6104,6 +6380,9 @@ function isGroupStageComplete(state) {
 }
 
 function getBracketPropagation(round, bracketIndex, state) {
+  // Double elimination has its own winners / losers / grand-final routing.
+  const de = deParseRound(round);
+  if (de) return doubleElimPropagation(de, bracketIndex, state);
   // Return both winner and loser destinations. Placement-final rounds
   // (f, 3rd, 5th, 7th, 9th, 11th, 13th, 15th) are terminal and return null.
   if (round === "qf") {
@@ -6638,6 +6917,7 @@ const BEY_CHECK_FIELD_ORDER = [
 //   - otherwise (swiss + top 8)  → all four placement matches decided
 function isTournamentComplete(state) {
   if (!state) return false;
+  if (state.mode === "double-elim") return isDoubleElimComplete(state);
   const isSwissOnly = state.mode === "swiss-only";
   const isSingleElim = state.mode === "single-elim";
   const bracketActive = typeof hasSwissBracket === "function" ? hasSwissBracket(state) : !!state.bracket;
@@ -6668,6 +6948,56 @@ const SINGLE_ELIM_PLACEMENT_FINAL_IDS = [
 function singleElimPlacementIds(matches) {
   if (!matches) return ["bracket-f-0"];
   return SINGLE_ELIM_PLACEMENT_FINAL_IDS.filter(id => matches[id]);
+}
+
+const deDecided = (m) => !!m && m.scoreA != null && m.scoreB != null && m.scoreA !== m.scoreB;
+const deResult = (m) => deDecided(m)
+  ? (m.scoreA > m.scoreB ? { winner: m.a, loser: m.b } : { winner: m.b, loser: m.a })
+  : null;
+
+// Done once the title is settled: either the undefeated WB player took GF1, or
+// the reset that their loss forced has been played out.
+function isDoubleElimComplete(state) {
+  const matches = (state && state.matches) || {};
+  const gf = matches["bracket-gf-0"];
+  if (!deDecided(gf)) return false;
+  if (gf.scoreA > gf.scoreB) return true; // WB player won — no reset needed
+  return deDecided(matches["bracket-gf2-0"]);
+}
+
+// Places fall out of elimination order: you finish where you were knocked out.
+// 1st/2nd come from whichever grand final actually decided it, 3rd from the LB
+// final loser, and each earlier LB round contributes its losers as a tied block
+// (two players out in the same round share a place). Capped at placementDepth.
+function computeDoubleElimPlacements(state) {
+  const matches = (state && state.matches) || {};
+  const S = (state && state.bracketSize) || 4;
+  const lbLast = 2 * deWbRounds(S) - 3;
+  const out = [];
+
+  const reset = matches["bracket-gf2-0"];
+  const decider = deDecided(reset) ? deResult(reset)
+    : (deDecided(matches["bracket-gf-0"]) && matches["bracket-gf-0"].scoreA > matches["bracket-gf-0"].scoreB
+        ? deResult(matches["bracket-gf-0"])
+        : null);
+  if (decider) {
+    out.push({ place: 1, name: decider.winner });
+    out.push({ place: 2, name: decider.loser });
+  }
+
+  let place = 3;
+  for (let L = lbLast; L >= 0; L--) {
+    const count = deLbMatchCount(S, L);
+    for (let i = 0; i < count; i++) {
+      const r = deResult(matches[`bracket-lb${L}-${i}`]);
+      // A bye-decided LB match has no real loser to rank.
+      if (r && r.loser) out.push({ place, name: r.loser });
+    }
+    place += count; // everyone out in this round shares the same place
+  }
+
+  const depth = clampPlacementDepth(state && state.placementDepth);
+  return out.filter(p => p.name && p.place <= depth);
 }
 
 // Write the Best Parts panel snapshot the Dashboard reads, using the
@@ -7606,7 +7936,7 @@ function showEditTournamentNamePopup() {
 // players during round 1 — once any group has generated round 2, it closes.
 function canAddParticipant(state) {
   if (!state) return false;
-  if (state.mode === "single-elim") return true;
+  if (isElimMode(state.mode)) return true;
   if (!Array.isArray(state.groups) || !state.groups.length) return true;
   const maxRound = state.groups.reduce((m, _, gi) => Math.max(m, state.groupRounds[gi] || 0), 0);
   return maxRound <= 1; // 1 = only round 1 (index 0) generated
@@ -7881,8 +8211,9 @@ function removeRunningParticipantByRegen(name) {
     return false;
   }
   let next;
-  if (state.mode === "single-elim") {
-    next = generateSingleElimFromText(remaining.join("\n"), state.tournamentName, state.placementDepth);
+  if (isElimMode(state.mode)) {
+    next = (state.mode === "double-elim" ? generateDoubleElimFromText : generateSingleElimFromText)(
+      remaining.join("\n"), state.tournamentName, state.placementDepth);
   } else {
     next = generateSwissFromText(remaining.join("\n"), state.tournamentName,
       getRoundCount(state), getGroupCount(state), state.pairing);
@@ -7913,7 +8244,7 @@ function removeRunningParticipantByRegen(name) {
 // format (not single-elim / not into the knockout bracket), every group is
 // only on round 1, and no scores have been entered yet.
 function canReshuffleTournament(state) {
-  if (!state || state.mode === "single-elim") return false;
+  if (!state || isElimMode(state.mode)) return false;
   if (state.bracket) return false; // knockout already started
   const gr = state.groupRounds || [];
   const onRound1 = gr.length > 0 && gr.every(r => (r || 0) <= 1);
@@ -7976,7 +8307,7 @@ function showBulkAddParticipantsPopup() {
   document.getElementById("bulk-add-participants-popup")?.remove();
 
   const hasGroups = Array.isArray(state.groups) && state.groups.length;
-  const canSlotIn = state.mode !== "single-elim" && hasGroups;
+  const canSlotIn = !isElimMode(state.mode) && hasGroups;
   const blurb = canSlotIn
     ? "Enter one name per line. Each player slots into round 1 as a free win (or pairs against an existing bye) — no reset, no decks required. The judge fills in decks at match time."
     : "Enter one name per line. Single-elimination brackets can't take new players mid-tournament, so the bracket regenerates from scratch — current matches and scores will be lost. You'll confirm before that happens.";
@@ -8088,8 +8419,8 @@ Charlie" style="width:100%; min-height:140px; resize:vertical;"></textarea>
 
     const namesText = combined.join("\n");
     let next;
-    if (state.mode === "single-elim") {
-      next = generateSingleElimFromText(namesText, state.tournamentName, state.placementDepth);
+    if (isElimMode(state.mode)) {
+      next = (state.mode === "double-elim" ? generateDoubleElimFromText : generateSingleElimFromText)(namesText, state.tournamentName, state.placementDepth);
     } else {
       next = generateSwissFromText(namesText, state.tournamentName,
         getRoundCount(state), getGroupCount(state), state.pairing);
@@ -8230,7 +8561,7 @@ function showAddParticipantPopup() {
     // them against an existing round-1 bye), no reset. Single-elim has a fixed
     // bracket with no open slot, so it regenerates.
     const hasGroups = Array.isArray(state.groups) && state.groups.length;
-    const canSlotIn = state.mode !== "single-elim" && hasGroups;
+    const canSlotIn = !isElimMode(state.mode) && hasGroups;
     if (canSlotIn) {
       if (!addSwissParticipantRound1(name, deck)) return; // helper alerted
       renderSwiss();
@@ -8247,8 +8578,9 @@ function showAddParticipantPopup() {
                 `Because ${reason} will be regenerated — all current matches and scores will be lost. Continue?`;
     if (!confirm(msg)) return;
     let next;
-    if (state.mode === "single-elim") {
-      next = generateSingleElimFromText(names.join("\n"), state.tournamentName, state.placementDepth);
+    if (isElimMode(state.mode)) {
+      next = (state.mode === "double-elim" ? generateDoubleElimFromText : generateSingleElimFromText)(
+        names.join("\n"), state.tournamentName, state.placementDepth);
     } else {
       next = generateSwissFromText(names.join("\n"), state.tournamentName,
         getRoundCount(state), getGroupCount(state), state.pairing);
@@ -8596,6 +8928,7 @@ function showTournamentModePopup(onPick) {
   const swissBtn = popup.querySelector("#tournament-mode-swiss");
   const rrBtn = popup.querySelector("#tournament-mode-roundrobin");
   const singleBtn = popup.querySelector("#tournament-mode-single");
+  const doubleBtn = popup.querySelector("#tournament-mode-double");
   const cancelBtn = popup.querySelector("#tournament-mode-cancel");
   const nameInput = popup.querySelector("#tournament-name-input");
   const nameLabel = popup.querySelector('label[for="tournament-name-input"]');
@@ -8608,6 +8941,7 @@ function showTournamentModePopup(onPick) {
     swissBtn.onclick = null;
     if (rrBtn) rrBtn.onclick = null;
     singleBtn.onclick = null;
+    if (doubleBtn) doubleBtn.onclick = null;
     cancelBtn.onclick = null;
   };
   // Last step of every chain: ask for an optional participant limit, then
@@ -8669,6 +9003,17 @@ function showTournamentModePopup(onPick) {
       finishWithCap("single-elim", name, undefined, true, undefined, undefined, undefined, depth);
     });
   };
+  // Double elim takes the same depth picker — its places come from elimination
+  // round rather than playoff matches, but the host still chooses how deep to
+  // rank.
+  if (doubleBtn) doubleBtn.onclick = () => {
+    const name = nameInput ? nameInput.value.trim() : "";
+    teardown();
+    showSingleElimDepthPopup((depth) => {
+      if (depth == null) return;
+      finishWithCap("double-elim", name, undefined, true, undefined, undefined, undefined, depth);
+    });
+  };
   cancelBtn.onclick = () => teardown();
   popup.classList.remove("hidden");
   if (nameInput) setTimeout(() => nameInput.focus(), 0);
@@ -8687,6 +9032,7 @@ function showSwissFormatPopup() {
   const swissBtn = popup.querySelector("#tournament-mode-swiss");
   const rrBtn = popup.querySelector("#tournament-mode-roundrobin");
   const singleBtn = popup.querySelector("#tournament-mode-single");
+  const doubleBtn = popup.querySelector("#tournament-mode-double");
   const cancelBtn = popup.querySelector("#tournament-mode-cancel");
   const nameInput = popup.querySelector("#tournament-name-input");
   const nameLabel = popup.querySelector('label[for="tournament-name-input"]');
@@ -8698,6 +9044,7 @@ function showSwissFormatPopup() {
     if (swissBtn) swissBtn.onclick = null;
     if (rrBtn) rrBtn.onclick = null;
     if (singleBtn) singleBtn.onclick = null;
+    if (doubleBtn) doubleBtn.onclick = null;
     if (cancelBtn) cancelBtn.onclick = null;
     if (nameInput) nameInput.classList.remove("hidden");
     if (nameLabel) nameLabel.classList.remove("hidden");
@@ -8738,6 +9085,14 @@ function showSwissFormatPopup() {
     showSingleElimDepthPopup((depth) => {
       if (depth == null) return; // cancelled the format change at the depth step
       updateRegisteringSetting({ mode: "single-elim", pairing: null, placementDepth: depth });
+    }, currentDepth);
+  };
+  if (doubleBtn) doubleBtn.onclick = () => {
+    teardown();
+    const currentDepth = (typeof s.placementDepth === "number") ? s.placementDepth : 8;
+    showSingleElimDepthPopup((depth) => {
+      if (depth == null) return;
+      updateRegisteringSetting({ mode: "double-elim", pairing: null, placementDepth: depth });
     }, currentDepth);
   };
   if (cancelBtn) cancelBtn.onclick = teardown;
@@ -8869,7 +9224,8 @@ document.getElementById("swiss-generate")?.addEventListener("click", async () =>
 // flows check it to ensure only the original host (signed into the same
 // account on any device) can wipe or kick off the room.
 function createRegisteringTournamentState({ mode, tournamentName, roundCount, ranked, groupCount, pairing, topN, placementDepth, maxParticipants, visibility, hostUid }) {
-  const safeMode = mode === "single-elim" ? "single-elim"
+  const safeMode = mode === "double-elim" ? "double-elim"
+    : mode === "single-elim" ? "single-elim"
     : mode === "swiss-only" ? "swiss-only"
     : "swiss";
   const state = {
@@ -8947,6 +9303,7 @@ function placementLabel(n) {
 }
 
 function computeTournamentPlacements(state) {
+  if (state?.mode === "double-elim") return computeDoubleElimPlacements(state);
   const matches = state?.matches || {};
   const matchResult = m => {
     if (!m || m.scoreA == null || m.scoreB == null || m.scoreA === m.scoreB) return null;
@@ -9700,7 +10057,7 @@ function renderLobbyRooms(list, rooms) {
     const countLabel = isRunning ? "players" : "registered";
     // Show the cap so players see the limit before joining (e.g. "5 / 16").
     const meta = [cap != null ? `${count} / ${cap} ${countLabel}` : `${count} ${countLabel}`];
-    if (r.mode !== "single-elim") {
+    if (!isElimMode(r.mode)) {
       if (r.groupCount) meta.push(`${r.groupCount} groups`);
       if (r.roundCount) meta.push(`${r.roundCount} rounds`);
     }
@@ -11227,11 +11584,17 @@ function computeTournamentRankingAwards(state) {
     if (guestNames.has(name)) return;
     if (awards[name] == null || pts > awards[name]) awards[name] = pts;
   };
-  // Podium
-  const f = matchResult(matches["bracket-f-0"]);
-  if (f) { set(f.winner, 5); set(f.loser, 4); }
-  const third = matchResult(matches["bracket-3rd-0"]);
-  if (third) { set(third.winner, 3); set(third.loser, 2); }
+  // Podium. Double elim has no bracket-f-0 / bracket-3rd-0 — its finishing
+  // order comes from elimination round, so award off the computed placements.
+  if (state?.mode === "double-elim") {
+    const tiers = { 1: 5, 2: 4, 3: 3, 4: 2 };
+    computeDoubleElimPlacements(state).forEach(p => set(p.name, tiers[p.place]));
+  } else {
+    const f = matchResult(matches["bracket-f-0"]);
+    if (f) { set(f.winner, 5); set(f.loser, 4); }
+    const third = matchResult(matches["bracket-3rd-0"]);
+    if (third) { set(third.winner, 3); set(third.loser, 2); }
+  }
   // Top 8 = anyone in the knockout bracket. For Swiss this is everyone in
   // any `bracket-*` match; for Single Elim it's the QF round and beyond
   // (or every participant if the bracket is small enough that QFs == R0).
@@ -11243,6 +11606,27 @@ function computeTournamentRankingAwards(state) {
         if (m.b) topEight.add(m.b);
       }
     });
+  } else if (state?.mode === "double-elim") {
+    // Everyone who reached the losers-bracket back half or the winners final
+    // survived at least as deep as a single-elim quarterfinalist.
+    const S = state.bracketSize || 4;
+    if (S <= 8) {
+      getParticipants(state).forEach(n => { if (n) topEight.add(n); });
+    } else {
+      const lbCut = deLbRounds(S) - 4; // last four LB rounds = the final eight
+      Object.values(matches).forEach(m => {
+        if (!m || !m.bracket) return;
+        const de = deParseRound(m.round);
+        if (!de) return;
+        const deep = de.kind === "gf" || de.kind === "gf2"
+          || (de.kind === "wb" && de.index >= deWbRounds(S) - 2)
+          || (de.kind === "lb" && de.index >= lbCut);
+        if (deep) {
+          if (m.a) topEight.add(m.a);
+          if (m.b) topEight.add(m.b);
+        }
+      });
+    }
   } else if (state?.mode === "single-elim") {
     const preFinal = state.preFinalRounds || 0;
     if (preFinal <= 2) {
@@ -11345,6 +11729,27 @@ function computeTournamentRevoxPlacings(state) {
         if (m.b) topEight.add(m.b);
       }
     });
+  } else if (state?.mode === "double-elim") {
+    // Everyone who reached the losers-bracket back half or the winners final
+    // survived at least as deep as a single-elim quarterfinalist.
+    const S = state.bracketSize || 4;
+    if (S <= 8) {
+      getParticipants(state).forEach(n => { if (n) topEight.add(n); });
+    } else {
+      const lbCut = deLbRounds(S) - 4; // last four LB rounds = the final eight
+      Object.values(matches).forEach(m => {
+        if (!m || !m.bracket) return;
+        const de = deParseRound(m.round);
+        if (!de) return;
+        const deep = de.kind === "gf" || de.kind === "gf2"
+          || (de.kind === "wb" && de.index >= deWbRounds(S) - 2)
+          || (de.kind === "lb" && de.index >= lbCut);
+        if (deep) {
+          if (m.a) topEight.add(m.a);
+          if (m.b) topEight.add(m.b);
+        }
+      });
+    }
   } else if (state?.mode === "single-elim") {
     const preFinal = state.preFinalRounds || 0;
     if (preFinal <= 2) {

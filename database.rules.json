@@ -23,7 +23,7 @@
         },
         "mode": {
           ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || root.child('swissRooms').child($code).child('coHostUids').child(auth.uid).val() === true)",
-          ".validate": "newData.isString() && (newData.val() === 'swiss' || newData.val() === 'swiss-only' || newData.val() === 'single-elim')"
+          ".validate": "newData.isString() && (newData.val() === 'swiss' || newData.val() === 'swiss-only' || newData.val() === 'single-elim' || newData.val() === 'double-elim')"
         },
         "pairing": {
           ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || root.child('swissRooms').child($code).child('coHostUids').child(auth.uid).val() === true)",
@@ -188,7 +188,7 @@
         "editCode":        { ".validate": "newData.isString() && newData.val().length <= 16" },
         "viewCode":        { ".validate": "newData.isString() && newData.val().length <= 16" },
         "name":            { ".validate": "newData.isString() && newData.val().length <= 80" },
-        "mode":            { ".validate": "newData.isString() && (newData.val() === 'swiss' || newData.val() === 'swiss-only' || newData.val() === 'single-elim')" },
+        "mode":            { ".validate": "newData.isString() && (newData.val() === 'swiss' || newData.val() === 'swiss-only' || newData.val() === 'single-elim' || newData.val() === 'double-elim')" },
         "roundCount":      { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10" },
         "groupCount":      { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 8" },
         "registrantCount": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000" },
@@ -223,7 +223,7 @@
           "editCode":  { ".validate": "newData.isString() && newData.val().length <= 16" },
           "viewCode":  { ".validate": "newData.isString() && newData.val().length <= 16" },
           "name":      { ".validate": "newData.isString() && newData.val().length <= 80" },
-          "mode":      { ".validate": "newData.isString() && (newData.val() === 'swiss' || newData.val() === 'swiss-only' || newData.val() === 'single-elim')" },
+          "mode":      { ".validate": "newData.isString() && (newData.val() === 'swiss' || newData.val() === 'swiss-only' || newData.val() === 'single-elim' || newData.val() === 'double-elim')" },
           "phase":     { ".validate": "newData.isString() && (newData.val() === 'registering' || newData.val() === 'running')" },
           "createdAt": { ".validate": "newData.isString() && newData.val().length <= 32" },
           "$other":    { ".validate": false }

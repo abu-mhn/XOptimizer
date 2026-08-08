@@ -11691,6 +11691,17 @@ body.stormy-mode .btn-small:hover {
     font-size: 0.95rem;
 }
 
+/* Double elimination stacks two scrolling strips — this labels each one so
+   the winners and losers brackets can't be confused for one another. */
+.swiss-bracket-subhead {
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    color: #8b949e;
+    padding: 10px 2px 6px;
+}
+
 .swiss-top-8 {
     list-style: none;
     margin: 0 0 12px;
