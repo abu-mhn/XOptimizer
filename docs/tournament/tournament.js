@@ -2171,6 +2171,9 @@ function computeSwissRoundsScrollTarget(scrollEl, state) {
   const isBracketStrip = !!scrollEl.closest(".swiss-bracket");
   if (!isBracketStrip || !state) return scrollEl.scrollWidth;
 
+  if (state.mode === "double-elim") {
+    return computeDoubleElimScrollTarget(scrollEl, state);
+  }
   if (isElimMode(state.mode)) {
     return computeSingleElimScrollTarget(scrollEl, state);
   }
@@ -2194,6 +2197,48 @@ function computeSwissRoundsScrollTarget(scrollEl, state) {
     const colRect = cols[1].getBoundingClientRect();
     return Math.max(0, scrollEl.scrollLeft + (colRect.left - scrollRect.left));
   }
+  return scrollEl.scrollWidth;
+}
+
+// Double elim renders two strips, so each one has to track its own progress.
+// Both start at the leftmost column and step right as each round finishes —
+// the winners strip walks wb0…wb{k-1} then the grand-final column, the losers
+// strip walks lb0…lb{last}. Which strip we're in is read off the rounds its
+// own cards carry, so the two never scroll each other.
+function computeDoubleElimScrollTarget(scrollEl, state) {
+  const cols = scrollEl.querySelectorAll(".swiss-round-col");
+  if (cols.length < 2) return 0;
+
+  const S = state.bracketSize || 4;
+  const phantoms = computeBracketPhantoms(state);
+  const entries = Object.entries(state.matches || {}).filter(([, m]) => m && m.bracket);
+  const roundDone = (round) => {
+    const ms = entries.filter(([id, m]) => m.round === round && !phantoms.has(id));
+    if (ms.length === 0) return true; // nothing real to play here — skip past it
+    return ms.every(([, m]) => m.bye || (m.scoreA != null && m.scoreB != null && m.scoreA !== m.scoreB));
+  };
+
+  // The renderer tags each strip, so this never depends on strip order or on
+  // a card happening to be clickable.
+  const isLosers = scrollEl.dataset.deStrip === "lb";
+
+  const rounds = isLosers
+    ? Array.from({ length: deLbRounds(S) }, (_, L) => `lb${L}`)
+    : Array.from({ length: deWbRounds(S) }, (_, r) => `wb${r}`);
+
+  const alignTo = (idx) => {
+    const col = cols[idx];
+    if (!col) return scrollEl.scrollWidth;
+    const scrollRect = scrollEl.getBoundingClientRect();
+    const colRect = col.getBoundingClientRect();
+    return Math.max(0, scrollEl.scrollLeft + (colRect.left - scrollRect.left));
+  };
+
+  for (let i = 0; i < rounds.length; i++) {
+    if (!roundDone(rounds[i])) return alignTo(i);
+  }
+  // Every round in this strip is done. The winners strip has one more column
+  // (the grand final); the losers strip ends here.
   return scrollEl.scrollWidth;
 }
 
@@ -2476,10 +2521,10 @@ function renderDoubleElimBracket(state) {
       </header>
       ${podium}
       <div class="swiss-bracket-subhead">Winners Bracket</div>
-      <div class="swiss-rounds-scroll">${wbCols.join("")}</div>
+      <div class="swiss-rounds-scroll" data-de-strip="wb">${wbCols.join("")}</div>
       ${lbCols.length ? `
         <div class="swiss-bracket-subhead">Losers Bracket</div>
-        <div class="swiss-rounds-scroll">${lbCols.join("")}</div>` : ""}
+        <div class="swiss-rounds-scroll" data-de-strip="lb">${lbCols.join("")}</div>` : ""}
     </section>
   `;
 }
