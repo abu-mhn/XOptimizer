@@ -77,9 +77,9 @@ const DATA = {
     { atk: 10, def: 60, sta: 30, weight: 37.4, spindirection: "R", name: "Heavens Ring", codename: "HEAVENSRING" },
     { atk: 85, def: 35, sta: 25, weight: 43.7, spindirection: "R", name: "Glory Valkyrie", codename: "GLORYVALKYRIE", expandCx: true },
     {
-      atk: 50, def: 50, sta: 30, weight: 0, spindirection: "R", name: "Hells Nether", codename: "HELLSNETHER", expandCx: true, currentMode: 0, modes: [
-        { modeName: "Normal", atk: 50, def: 50, sta: 30, weight: 0, spindirection: "R" },
-        { modeName: "Low", atk: 70, def: 45, sta: 15, weight: 0, spindirection: "R" },
+      atk: 50, def: 50, sta: 30, weight: 42.3, spindirection: "R", name: "Hells Nether", codename: "HELLSNETHER", expandCx: true, currentMode: 0, modes: [
+        { modeName: "Normal", atk: 50, def: 50, sta: 30, weight: 42.3, spindirection: "R" },
+        { modeName: "Low", atk: 70, def: 45, sta: 15, weight: 42.3, spindirection: "R" },
       ]
     },
     { atk: 22, def: 60, sta: 18, weight: 29.5, spindirection: "R", name: "Thanos", codename: "THANOS" },
