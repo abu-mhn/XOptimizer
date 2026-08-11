@@ -2495,6 +2495,15 @@ function deSlotHints(state, id) {
     const feedsLoser = prop && prop.loser && prop.loser.toId === id && prop.loser.slot === slot;
     return feedsLoser ? `Loser of ${deCardLabel(state, srcId)}` : "";
   };
+  // The grand final (and the reset, which keeps the same seating) is the one
+  // place a winner-fed slot is worth naming — it's where the two brackets
+  // meet, and saying which bracket someone arrives from beats a match label.
+  if (parsed.kind === "gf" || parsed.kind === "gf2") {
+    return {
+      a: m.a ? "" : "Winner of Winners Bracket",
+      b: m.b ? "" : "Winner of Losers Bracket"
+    };
+  }
   return { a: hint("a"), b: hint("b") };
 }
 
@@ -2534,11 +2543,21 @@ function renderDoubleElimBracket(state) {
   // height and shift the Grand Final card off the centre line the Winners
   // Final's connector runs to. The reset gets its own column instead.
   if (gf) {
-    wbCols.push(col("Grand Final", [renderSwissBracketCard("GF", "bracket-gf-0", gf, deSlotHints(state, "bracket-gf-0"))],
-      gf2 ? "straight" : null));
-    if (gf2) {
-      wbCols.push(col("Bracket Reset", [renderSwissBracketCard("GF2", "bracket-gf2-0", gf2)]));
-    }
+    wbCols.push(col("Grand Final",
+      [renderSwissBracketCard("GF", "bracket-gf-0", gf, deSlotHints(state, "bracket-gf-0"))],
+      "straight"));
+    // The reset is shown from the start, marked "if necessary" — it only gets
+    // played when the losers-bracket player wins the grand final. Until then
+    // it's a display-only placeholder: with both slots empty the card renders
+    // as pending, so it carries no data-match and can't be opened or scored.
+    const resetMatch = gf2 || {
+      bracket: true, round: "gf2", bracketIndex: 0, groupIndex: null,
+      a: null, b: null, scoreA: null, scoreB: null, startedAt: null, bye: false
+    };
+    wbCols.push(col("Bracket Reset (if necessary)",
+      [renderSwissBracketCard("GF2", "bracket-gf2-0", resetMatch,
+        gf2 ? deSlotHints(state, "bracket-gf2-0")
+            : { a: "Winner of Winners Bracket", b: "Winner of Losers Bracket" })]));
   }
 
   const lbCols = [];
