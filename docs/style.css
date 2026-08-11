@@ -111,6 +111,69 @@ h1 {
 .mode-tabs::-webkit-scrollbar {
     display: none;
 }
+
+/* Off-screen unread pointer. position:sticky inside the horizontal scroller
+   pins it to the visible edge while the tabs slide underneath, so it stays put
+   until you scroll far enough to reach the tab it points at. */
+.mode-tabs-alert-pointer {
+    position: sticky;
+    z-index: 2;
+    flex: 0 0 auto;
+    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px 8px;
+    border: none;
+    border-radius: 999px;
+    background: #da3633;
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 800;
+    line-height: 1.4;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .45);
+}
+
+.mode-tabs-alert-pointer.is-left {
+    left: 2px;
+    margin-right: -4px;
+    flex-direction: row;
+    animation: mode-tabs-alert-nudge-left 1.6s ease-in-out infinite;
+}
+
+.mode-tabs-alert-pointer.is-right {
+    right: 2px;
+    margin-left: -4px;
+    flex-direction: row-reverse;
+    animation: mode-tabs-alert-nudge-right 1.6s ease-in-out infinite;
+}
+
+.mode-tabs-alert-pointer.hidden {
+    display: none;
+}
+
+.mode-tabs-alert-arrow {
+    font-size: 0.95rem;
+    line-height: 1;
+}
+
+/* A small repeating nudge toward the edge — the cue that the row slides. */
+@keyframes mode-tabs-alert-nudge-right {
+    0%, 100% { transform: translateX(0); }
+    50%      { transform: translateX(3px); }
+}
+
+@keyframes mode-tabs-alert-nudge-left {
+    0%, 100% { transform: translateX(0); }
+    50%      { transform: translateX(-3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mode-tabs-alert-pointer.is-left,
+    .mode-tabs-alert-pointer.is-right { animation: none; }
+}
 .mode-tabs > .tab {
     flex: 0 0 auto;
 }

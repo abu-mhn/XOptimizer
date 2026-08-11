@@ -923,6 +923,85 @@ function enableHorizontalDragScroll(el) {
   });
 })();
 
+// The tab row scrolls sideways on mobile, so a tab carrying an unread badge
+// (the More button's count) can sit off-screen with nothing telling you it's
+// there — or that the row slides at all. This pins a small pulsing counter to
+// whichever edge the badge is past; tap it to scroll straight to that tab.
+// Built in JS so no page markup has to change.
+(function tabBarAlertPointer() {
+  const tabs = document.querySelector(".mode-tabs");
+  if (!tabs) return;
+
+  const make = (side) => {
+    const el = document.createElement("button"); // <button>, so the `.tab:last-of-type`
+    el.type = "button";                          // centering rule (which targets <a>) still holds
+    el.className = `mode-tabs-alert-pointer is-${side} hidden`;
+    el.innerHTML = `<span class="mode-tabs-alert-arrow"></span><span class="mode-tabs-alert-count"></span>`;
+    return el;
+  };
+  const left = make("left");
+  const right = make("right");
+  left.querySelector(".mode-tabs-alert-arrow").textContent = "‹";
+  right.querySelector(".mode-tabs-alert-arrow").textContent = "›";
+  tabs.prepend(left);
+  tabs.appendChild(right);
+
+  const targets = { left: null, right: null };
+
+  // Only touch the DOM when something actually changed — the observer below
+  // watches this same subtree, and unconditional writes would loop forever.
+  const setText = (el, txt) => { if (el.textContent !== txt) el.textContent = txt; };
+  const setHidden = (el, hide) => { if (el.classList.contains("hidden") !== hide) el.classList.toggle("hidden", hide); };
+
+  function update() {
+    // Compared as viewport rects rather than offsetLeft/scrollLeft: the row
+    // carries 16px of horizontal padding, so offsets don't line up with the
+    // scroll position.
+    const view = tabs.getBoundingClientRect();
+    const found = { left: { total: 0, tab: null }, right: { total: 0, tab: null } };
+
+    tabs.querySelectorAll(".tab").forEach(tab => {
+      const badge = tab.querySelector(".tab-alert, .tab-count");
+      if (!badge) return;
+      const box = tab.getBoundingClientRect();
+      // 8px of slack so a tab flush with the edge doesn't count as hidden.
+      const side = box.right <= view.left + 8 ? "left"
+        : (box.left >= view.right - 8 ? "right" : null);
+      if (!side) return;
+      const n = parseInt((badge.textContent || "").trim(), 10);
+      found[side].total += isNaN(n) ? 0 : n;
+      if (!found[side].tab) found[side].tab = tab;
+    });
+
+    [["left", left], ["right", right]].forEach(([side, el]) => {
+      const hit = found[side];
+      targets[side] = hit.tab;
+      setHidden(el, !hit.tab);
+      if (!hit.tab) return;
+      setText(el.querySelector(".mode-tabs-alert-count"), hit.total > 99 ? "99+" : String(hit.total || ""));
+      const name = hit.tab.getAttribute("aria-label") || "more tabs";
+      el.setAttribute("aria-label", `Scroll to ${name}`);
+      el.setAttribute("title", `${name} needs attention — tap to scroll`);
+    });
+  }
+
+  [["left", left], ["right", right]].forEach(([side, el]) => {
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      targets[side]?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    });
+  });
+
+  tabs.addEventListener("scroll", update, { passive: true });
+  window.addEventListener("resize", update);
+  // Badges appear long after load (auth + Firebase), so watch for them rather
+  // than reading once.
+  new MutationObserver(update).observe(tabs, {
+    childList: true, subtree: true, characterData: true
+  });
+  update();
+})();
+
 // Library filter chips + sort row: vertical wheel scrolls them horizontally.
 enableHorizontalWheelScroll(document.querySelector(".library-filter"));
 enableHorizontalWheelScroll(document.querySelector(".library-sort"));
