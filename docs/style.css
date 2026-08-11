@@ -9928,6 +9928,101 @@ button.swiss-reg-paid:hover {
     gap: 8px;
 }
 
+/* ---- Bracket connector lines ------------------------------------------
+   Inside a bracket every match becomes an equal-height slot, so a match in
+   round r+1 lands exactly on the midpoint of its two feeders in round r
+   (round r has twice the slots, each half as tall). That alignment is what
+   lets the elbows below be drawn with pure CSS.
+
+   The whole elbow is drawn by the SOURCE column, inside the 18px flex gap:
+   9px out to the joiner, the vertical, then 9px on to the next card. A
+   column only draws when the renderer marks it with data-connect, so side
+   branches (Consolation, 3rd place) never sprout lines into nowhere.
+     data-connect="pair"     two matches merge into one  (a halving round)
+     data-connect="straight" one match feeds one         (LB drop rounds) */
+.swiss-bracket .swiss-round-col {
+    display: flex;
+    flex-direction: column;
+}
+
+.swiss-bracket .swiss-match-list {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.swiss-bracket .swiss-match-wrap {
+    flex: 1 1 0;
+    align-content: center;   /* centre the card in its taller slot */
+    position: relative;
+}
+
+.swiss-bracket .swiss-round-col[data-connect] > .swiss-match-list > .swiss-match-wrap::after,
+.swiss-bracket .swiss-round-col[data-connect] > .swiss-match-list > .swiss-match-wrap::before {
+    content: "";
+    position: absolute;
+    border-color: #4d5866;
+    border-style: solid;
+    border-width: 0;
+    pointer-events: none;
+}
+
+/* 1:1 — a single horizontal line straight across the gap. */
+.swiss-bracket .swiss-round-col[data-connect="straight"] > .swiss-match-list > .swiss-match-wrap::after {
+    left: 100%;
+    top: 50%;
+    width: 18px;
+    border-top-width: 2px;
+}
+
+/* Halving — the first of each pair draws its stub plus the vertical down to
+   its partner's centre; the slot is exactly one centre-to-centre apart. */
+.swiss-bracket .swiss-round-col[data-connect="pair"] > .swiss-match-list > .swiss-match-wrap::after {
+    left: 100%;
+    top: 50%;
+    width: 9px;
+    border-top-width: 2px;
+}
+
+/* The list keeps its 8px gap, so consecutive centres sit (slot + 8px) apart —
+   the vertical has to span that, not just the slot, or it stops short. */
+.swiss-bracket .swiss-round-col[data-connect="pair"] > .swiss-match-list > .swiss-match-wrap:nth-child(odd)::after {
+    height: calc(100% + 8px);
+    border-right-width: 2px;
+}
+
+/* …and carries on from the joiner's midpoint into the next round's card. */
+/* Leaves the joiner at its midpoint — half of (slot + 8px) below this card's
+   centre — which is exactly where the next round's card is centred. */
+.swiss-bracket .swiss-round-col[data-connect="pair"] > .swiss-match-list > .swiss-match-wrap:nth-child(odd)::before {
+    left: calc(100% + 9px);
+    top: calc(100% + 4px);
+    width: 9px;
+    border-top-width: 2px;
+}
+
+/* A lone trailing match with no partner would draw a vertical into empty
+   space — give it the straight run instead. */
+.swiss-bracket .swiss-round-col[data-connect="pair"] > .swiss-match-list > .swiss-match-wrap:nth-child(odd):last-child::after {
+    height: 0;
+    width: 18px;
+    border-right-width: 0;
+}
+
+.swiss-bracket .swiss-round-col[data-connect="pair"] > .swiss-match-list > .swiss-match-wrap:nth-child(odd):last-child::before {
+    display: none;
+}
+
+/* Only the column's FIRST match list is a real round — anything after it is a
+   side branch (Consolation, 3rd / 5th / 7th place) and must not draw into the
+   next column. CSS has no :first-of-class, and :first-of-type would test the
+   div type (the round title is the first div), so instead draw on every list
+   above and switch it back off for any list that follows another. */
+.swiss-bracket .swiss-round-col[data-connect] > .swiss-match-list ~ .swiss-match-list > .swiss-match-wrap::after,
+.swiss-bracket .swiss-round-col[data-connect] > .swiss-match-list ~ .swiss-match-list > .swiss-match-wrap::before {
+    display: none;
+}
+
 .swiss-match-wrap {
     display: grid;
     grid-template-columns: 1.6em 1fr;
@@ -11849,6 +11944,13 @@ body.light-mode .swiss-top-rank-2 .swiss-top-rank-name {
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
+}
+
+/* An unfilled bracket slot. Usually blank; in the losers bracket it carries a
+   "Loser of W1-3" hint, set apart from real names so it never reads as one. */
+.swiss-name-text.swiss-name-pending {
+    font-style: italic;
+    color: #8b949e;
 }
 
 /* "Advanced" / "Advancing" badge on standings rows that qualify for the

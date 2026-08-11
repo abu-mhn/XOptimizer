@@ -2276,23 +2276,28 @@ function computeSingleElimScrollTarget(scrollEl, state) {
 // `extraHtml` is optional trailing markup, e.g. the BYE tag. A real player
 // name gets data-reg-name so the hydrator can resolve it; "TBD" / empty
 // slots get a plain placeholder with no lookup.
-function swissNameCellInner(name, extraHtml) {
+function swissNameCellInner(name, extraHtml, placeholder) {
   const clean = String(name == null ? "" : name);
+  // Legacy states can carry a literal "TBD" as the name — treat it as empty.
   const isReal = clean && clean !== "TBD";
   const attr = isReal ? ` data-reg-name="${escapeHtml(clean)}"` : "";
+  // An unfilled slot shows nothing, unless the caller supplies a hint about
+  // who lands there (the losers bracket says which match feeds it).
+  const shown = isReal ? clean : (placeholder || "");
+  const cls = isReal ? "swiss-name-text" : "swiss-name-text swiss-name-pending";
   return `<img class="swiss-name-avatar" src="${PROFILE_VIEW_PHOTO_PH}" alt=""${attr}>`
-    + `<span class="swiss-name-text">${escapeHtml(clean || "TBD")}</span>`
+    + `<span class="${cls}">${escapeHtml(shown)}</span>`
     + (extraHtml || "");
 }
 
 // Full match-card name cell — the inner content wrapped in a .swiss-name-cell
 // span. (Standings build their own wrapper, since the cell there is a
 // tap-to-rename button — see renderSwissGroupStandings.)
-function swissMatchNameCell(name, extraHtml) {
-  return `<span class="swiss-name-cell">${swissNameCellInner(name, extraHtml)}</span>`;
+function swissMatchNameCell(name, extraHtml, placeholder) {
+  return `<span class="swiss-name-cell">${swissNameCellInner(name, extraHtml, placeholder)}</span>`;
 }
 
-function renderSwissBracketCard(label, id, m) {
+function renderSwissBracketCard(label, id, m, slotHints) {
   // Bracket BYE — one slot empty, auto-scored. Renders as a single-row card.
   if (m.bye) {
     const player = m.a || m.b || "";
@@ -2339,11 +2344,11 @@ function renderSwissBracketCard(label, id, m) {
     <div class="swiss-match-num">${label}${liveBadge}${tieBadge}</div>
     <div class="${cardClass}"${clickable}>
       <div class="swiss-match-row ${aWin ? "swiss-match-row-win" : (done && !isTie) ? "swiss-match-row-lose" : ""}">
-        ${swissMatchNameCell(m.a || "TBD")}
+        ${swissMatchNameCell(m.a, "", slotHints && slotHints.a)}
         <span class="swiss-score-cell ${aWin ? "swiss-score-win" : ""}">${aScore}</span>
       </div>
       <div class="swiss-match-row ${bWin ? "swiss-match-row-win" : (done && !isTie) ? "swiss-match-row-lose" : ""}">
-        ${swissMatchNameCell(m.b || "TBD")}
+        ${swissMatchNameCell(m.b, "", slotHints && slotHints.b)}
         <span class="swiss-score-cell ${bWin ? "swiss-score-win" : ""}">${bScore}</span>
       </div>
     </div>
@@ -2461,14 +2466,49 @@ function getBracketShortLabel(matchesInRound, index) {
 // Two scrolling strips — winners bracket on top, losers bracket below — with
 // the grand final (and the reset, once it exists) in its own column at the end
 // of the winners strip, which is where both brackets converge.
+// The label printed on a double-elim card. Winners and losers cards are both
+// round-qualified (W2-3 = winners round 2, match 3) so a "Loser of …" hint
+// always points at exactly one card — the shared getBracketShortLabel reuses
+// "R1, R2, …" across rounds, which would be ambiguous in a 32+ bracket.
+function deCardLabel(state, id) {
+  const m = state && state.matches && state.matches[id];
+  const p = m && deParseRound(m.round);
+  if (!p) return "";
+  if (p.kind === "wb") return `W${p.index + 1}-${m.bracketIndex + 1}`;
+  if (p.kind === "lb") return `L${p.index + 1}-${m.bracketIndex + 1}`;
+  return p.kind === "gf2" ? "GF2" : "GF";
+}
+
+// What to show in an empty slot: which match delivers the player who'll fill
+// it. Only loser-fed slots are named ("Loser of W1-3") — a slot waiting on a
+// winner stays blank, matching how printed brackets read.
+function deSlotHints(state, id) {
+  const m = state.matches[id];
+  const parsed = deParseRound(m.round);
+  if (!parsed) return null;
+  const hint = (slot) => {
+    if (m[slot]) return "";            // already filled
+    const srcId = doubleElimUpstream(parsed, m.bracketIndex, slot, state);
+    const src = srcId && state.matches[srcId];
+    if (!src) return "";
+    const prop = getBracketPropagation(src.round, src.bracketIndex, state);
+    const feedsLoser = prop && prop.loser && prop.loser.toId === id && prop.loser.slot === slot;
+    return feedsLoser ? `Loser of ${deCardLabel(state, srcId)}` : "";
+  };
+  return { a: hint("a"), b: hint("b") };
+}
+
 function renderDoubleElimBracket(state) {
   const S = state.bracketSize || 4;
   const k = deWbRounds(S);
   const lbRounds = deLbRounds(S);
   const matches = state.matches || {};
 
-  const col = (title, cards) => `
-    <div class="swiss-round-col">
+  // `connect` says how this column joins the one after it, which is what the
+  // CSS uses to draw the elbows: "pair" when two matches merge into one,
+  // "straight" when it's 1:1, omitted for the last column in a strip.
+  const col = (title, cards, connect) => `
+    <div class="swiss-round-col"${connect ? ` data-connect="${connect}"` : ""}>
       <div class="swiss-round-title">${title}</div>
       <div class="swiss-match-list">${cards.join("")}</div>
     </div>`;
@@ -2479,25 +2519,26 @@ function renderDoubleElimBracket(state) {
     const cards = [];
     for (let i = 0; i < count; i++) {
       const id = `bracket-wb${r}-${i}`;
-      if (matches[id]) cards.push(renderSwissBracketCard(getBracketShortLabel(count, i), id, matches[id]));
+      if (matches[id]) cards.push(renderSwissBracketCard(deCardLabel(state, id), id, matches[id], deSlotHints(state, id)));
     }
     // The last winners round is the WB final, not the tournament final — name
-    // it so nobody mistakes it for the decider.
-    wbCols.push(col(r === k - 1 ? "Winners Final" : getBracketRoundName(count), cards));
+    // it so nobody mistakes it for the decider. Winners rounds halve all the
+    // way down; the WB final then runs 1:1 into the grand final.
+    wbCols.push(col(r === k - 1 ? "Winners Final" : getBracketRoundName(count), cards,
+      r === k - 1 ? "straight" : "pair"));
   }
 
   const gf = matches["bracket-gf-0"];
   const gf2 = matches["bracket-gf2-0"];
+  // One list per column throughout: two stacked lists would share the column
+  // height and shift the Grand Final card off the centre line the Winners
+  // Final's connector runs to. The reset gets its own column instead.
   if (gf) {
-    const parts = [
-      `<div class="swiss-round-title">Grand Final</div>`,
-      `<div class="swiss-match-list">${renderSwissBracketCard("GF", "bracket-gf-0", gf)}</div>`
-    ];
+    wbCols.push(col("Grand Final", [renderSwissBracketCard("GF", "bracket-gf-0", gf, deSlotHints(state, "bracket-gf-0"))],
+      gf2 ? "straight" : null));
     if (gf2) {
-      parts.push(`<div class="swiss-round-subtitle">Bracket Reset</div>`);
-      parts.push(`<div class="swiss-match-list">${renderSwissBracketCard("GF2", "bracket-gf2-0", gf2)}</div>`);
+      wbCols.push(col("Bracket Reset", [renderSwissBracketCard("GF2", "bracket-gf2-0", gf2)]));
     }
-    wbCols.push(`<div class="swiss-round-col">${parts.join("")}</div>`);
   }
 
   const lbCols = [];
@@ -2506,9 +2547,16 @@ function renderDoubleElimBracket(state) {
     const cards = [];
     for (let i = 0; i < count; i++) {
       const id = `bracket-lb${L}-${i}`;
-      if (matches[id]) cards.push(renderSwissBracketCard(`L${L + 1}-${i + 1}`, id, matches[id]));
+      if (matches[id]) cards.push(renderSwissBracketCard(deCardLabel(state, id), id, matches[id], deSlotHints(state, id)));
     }
-    if (cards.length) lbCols.push(col(L === lbRounds - 1 ? "Losers Final" : `Losers R${L + 1}`, cards));
+    // Losers rounds alternate: an even round runs 1:1 into the odd round that
+    // pairs its survivors with the fresh winners-bracket drop, and that odd
+    // round then halves. The last one exits to the grand final in the other
+    // strip, so it draws nothing.
+    if (cards.length) {
+      const connect = L === lbRounds - 1 ? null : (L % 2 === 0 ? "straight" : "pair");
+      lbCols.push(col(L === lbRounds - 1 ? "Losers Final" : `Losers R${L + 1}`, cards, connect));
+    }
   }
 
   const podium = renderPlacementRows(
@@ -2539,7 +2587,8 @@ function renderSingleElimBracket(state) {
   const cqf0 = state.matches["bracket-cqf-0"];
   const cqf1 = state.matches["bracket-cqf-1"];
 
-  // Pre-final round columns
+  // Pre-final round columns. Every round halves into the next, so they all
+  // draw pair elbows — except the last one when a Consolation column is about
   const columnHtml = [];
   for (let r = 0; r < preFinalRounds; r++) {
     const matchesInRound = bracketSize / Math.pow(2, r + 1);
@@ -2551,43 +2600,45 @@ function renderSingleElimBracket(state) {
       if (m) cards.push(renderSwissBracketCard(getBracketShortLabel(matchesInRound, j), id, m));
     }
     columnHtml.push(`
-      <div class="swiss-round-col">
+      <div class="swiss-round-col" data-connect="pair">
         <div class="swiss-round-title">${roundName}</div>
         <div class="swiss-match-list">${cards.join("")}</div>
       </div>
     `);
   }
 
-  // Consolation column — only when the bracket has a quarterfinal round.
+  // Final column — the Final and nothing else. Every other list stacked in
+  // here would share the column's height, pushing the Final card up out of the
+  // midpoint its semifinal connector points at. The placement matches get
+  // their own strip below instead.
+  columnHtml.push(`
+    <div class="swiss-round-col">
+      <div class="swiss-round-title">Final</div>
+      <div class="swiss-match-list">${finalMatch ? renderSwissBracketCard("F", "bracket-f-0", finalMatch) : ""}</div>
+    </div>
+  `);
+
+  // Side branches — Consolation (QF losers) and the 3rd / 5th / 7th playoffs.
+  // One column each, below the main bracket, so the bracket strip above stays
+  // a clean run of halving rounds.
+  const placementCols = [];
+  const placementCol = (title, cards) => `
+    <div class="swiss-round-col">
+      <div class="swiss-round-title">${title}</div>
+      <div class="swiss-match-list">${cards}</div>
+    </div>`;
   if (cqf0 || cqf1) {
     const cqfCards = [];
     if (cqf0) cqfCards.push(renderSwissBracketCard("C1", "bracket-cqf-0", cqf0));
     if (cqf1) cqfCards.push(renderSwissBracketCard("C2", "bracket-cqf-1", cqf1));
-    columnHtml.push(`
-      <div class="swiss-round-col">
-        <div class="swiss-round-title">Consolation</div>
-        <div class="swiss-match-list">${cqfCards.join("")}</div>
-      </div>
-    `);
+    placementCols.push(placementCol("Consolation", cqfCards.join("")));
   }
-
-  // Final column — Final, plus 3rd / 5th / 7th place matches when present.
-  const finalColParts = [];
-  finalColParts.push(`<div class="swiss-round-title">Final</div>`);
-  finalColParts.push(`<div class="swiss-match-list">${finalMatch ? renderSwissBracketCard("F", "bracket-f-0", finalMatch) : ""}</div>`);
-  if (thirdMatch) {
-    finalColParts.push(`<div class="swiss-round-subtitle">3rd Place</div>`);
-    finalColParts.push(`<div class="swiss-match-list">${renderSwissBracketCard("3rd", "bracket-3rd-0", thirdMatch)}</div>`);
-  }
-  if (fifthMatch) {
-    finalColParts.push(`<div class="swiss-round-subtitle">5th Place</div>`);
-    finalColParts.push(`<div class="swiss-match-list">${renderSwissBracketCard("5th", "bracket-5th-0", fifthMatch)}</div>`);
-  }
-  if (seventhMatch) {
-    finalColParts.push(`<div class="swiss-round-subtitle">7th Place</div>`);
-    finalColParts.push(`<div class="swiss-match-list">${renderSwissBracketCard("7th", "bracket-7th-0", seventhMatch)}</div>`);
-  }
-  columnHtml.push(`<div class="swiss-round-col">${finalColParts.join("")}</div>`);
+  if (thirdMatch) placementCols.push(placementCol("3rd Place", renderSwissBracketCard("3rd", "bracket-3rd-0", thirdMatch)));
+  if (fifthMatch) placementCols.push(placementCol("5th Place", renderSwissBracketCard("5th", "bracket-5th-0", fifthMatch)));
+  if (seventhMatch) placementCols.push(placementCol("7th Place", renderSwissBracketCard("7th", "bracket-7th-0", seventhMatch)));
+  const placementHtml = placementCols.length ? `
+    <div class="swiss-bracket-subhead">Placement Matches</div>
+    <div class="swiss-rounds-scroll">${placementCols.join("")}</div>` : "";
 
   const topRankings = renderSwissTop8({
     final: finalMatch ? { id: "bracket-f-0", m: finalMatch } : null,
@@ -2609,6 +2660,7 @@ function renderSingleElimBracket(state) {
       <div class="swiss-rounds-scroll">
         ${columnHtml.join("")}
       </div>
+      ${placementHtml}
       ${loserHtml}
     </section>
   `;
@@ -2718,11 +2770,11 @@ function renderSwissTop8Bracket(state) {
       </header>
       ${top8}
       <div class="swiss-rounds-scroll">
-        <div class="swiss-round-col">
+        <div class="swiss-round-col" data-connect="pair">
           <div class="swiss-round-title">Quarterfinals</div>
           <div class="swiss-match-list">${qfHtml}</div>
         </div>
-        <div class="swiss-round-col">
+        <div class="swiss-round-col" data-connect="pair">
           <div class="swiss-round-title">Semifinals</div>
           <div class="swiss-match-list">${sfHtml}</div>
           <div class="swiss-round-subtitle">Consolation (QF losers)</div>
