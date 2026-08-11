@@ -482,7 +482,19 @@ function pushSwissMatchStart(matchId, startedAt, judge) {
     [`matches/${matchId}/judge`]: startedAt == null ? null : (judge || null)
   };
   swissCoHostUidReady
-    .then(() => swissRoomRef.update(updates))
+    .then(() => {
+      // This write waits on the co-host permission write, so a quick score can
+      // overtake it. Re-check before sending: never stamp startedAt back onto a
+      // match that finished while this was queued, or the room ends up with a
+      // scored match still flagged live.
+      if (startedAt != null) {
+        try {
+          const cur = loadSwiss().matches[matchId];
+          if (cur && cur.scoreA != null && cur.scoreB != null) return;
+        } catch (e) { /* fall through and write */ }
+      }
+      return swissRoomRef.update(updates);
+    })
     .catch(e => console.warn("Swiss start push failed:", e));
 }
 
@@ -1745,6 +1757,19 @@ function startSwissMatch(matchId) {
 // name) so players know who's calling them, and claims the device's single
 // live slot. Shared by the scoreboard and the manual score popup — a match
 // being scored by hand is just as live as one on the scoreboard.
+// Match ids already announced as started on this device. Two paths can raise
+// the same toast — the local confirmation below and the remote-snapshot diff —
+// and a room can deliver more than one snapshot for a single write, so the
+// announcement is made idempotent rather than relying on every caller to guess
+// whether someone else already did it. Cleared when the match leaves LIVE, so
+// a restarted match announces again.
+const announcedMatchStartIds = new Set();
+function announceMatchStartOnce(matchId, payload) {
+  if (!matchId || announcedMatchStartIds.has(matchId)) return;
+  announcedMatchStartIds.add(matchId);
+  if (typeof showMatchStartToast === "function") showMatchStartToast(payload);
+}
+
 function markSwissMatchLive(matchId) {
   swissLiveMatchId = matchId;
   const now = Date.now();
@@ -1756,6 +1781,19 @@ function markSwissMatchLive(matchId) {
   persistSwiss(s);
   pushSwissMatchStart(matchId, now, judgeName);
   renderSwiss();
+
+  // Announce it on this device too. detectAndAnnounceMatchStarts deliberately
+  // skips whoever started the match, so the judge otherwise gets no confirmation
+  // that the match went live — the scoreboard at least opens a board, but Score
+  // Match just shows a number pad. The remote echo still skips this device
+  // (swissLiveMatchId is already set), so there's no double toast.
+  const live = s.matches[matchId];
+  const me = (window.getCurrentUsername && window.getCurrentUsername()) || "";
+  announceMatchStartOnce(matchId, {
+    a: live.a, b: live.b,
+    where: matchWhereLabel(live),
+    isMine: !!me && (me === live.a || me === live.b)
+  });
 }
 
 // Take a match back OFF live: clears the in-progress flag and the judge, drops
@@ -1764,6 +1802,7 @@ function markSwissMatchLive(matchId) {
 // that surface was open, so leaving it should put the match back as it was.
 function endSwissMatchLive(matchId) {
   if (swissLiveMatchId === matchId) swissLiveMatchId = null;
+  announcedMatchStartIds.delete(matchId);
   const s = loadSwiss();
   if (s.matches[matchId]) {
     s.matches[matchId].startedAt = null;
@@ -1783,6 +1822,7 @@ function commitSwissMatchScore(matchId, scoreA, scoreB, isEdit) {
   // Only release the live slot if THIS match held it — scoring a different
   // match by hand must not drop a match this device is live on.
   if (swissLiveMatchId === matchId) swissLiveMatchId = null;
+  announcedMatchStartIds.delete(matchId);
   const s = loadSwiss();
   const stored = s.matches[matchId];
   if (!stored) return;
@@ -4929,12 +4969,16 @@ function detectAndAnnounceMatchStarts(prevState, remote) {
     if (!m || !m.startedAt) return;
     if (m.bye) return;
     if (!m.a || !m.b) return;
+    // A match with a score is finished, whatever startedAt says — a late
+    // go-live write can land after the result and leave both set. Announcing
+    // that as a fresh start is how a saved match toasted "MATCH STARTED".
+    if (m.scoreA != null && m.scoreB != null) return;
     const before = prevMatches[id];
     const wasStarted = !!(before && before.startedAt);
     if (wasStarted) return; // already started — not a fresh transition
     if (swissLiveMatchId === id) return; // THIS device started it
     const isMine = myNames.has(m.a) || myNames.has(m.b);
-    showMatchStartToast({ a: m.a, b: m.b, where: matchWhereLabel(m), isMine });
+    announceMatchStartOnce(id, { a: m.a, b: m.b, where: matchWhereLabel(m), isMine });
   });
 }
 
@@ -4949,6 +4993,16 @@ function matchWhereLabel(m) {
     return round != null ? `Round ${round} · Group ${letter}` : `Group ${letter}`;
   }
   if (m.bracket) {
+    // Double elim first — its rounds are strings the table below doesn't cover,
+    // so without this every match would just read "Bracket".
+    const de = typeof deParseRound === "function" ? deParseRound(m.round) : null;
+    if (de) {
+      if (de.kind === "gf") return "Grand Final";
+      if (de.kind === "gf2") return "Bracket Reset";
+      return de.kind === "wb"
+        ? `Winners Round ${de.index + 1}`
+        : `Losers Round ${de.index + 1}`;
+    }
     const labels = { qf: "Quarterfinal", sf: "Semifinal", cqf: "Consolation QF", f: "Final", "3rd": "3rd Place", "5th": "5th Place", "7th": "7th Place" };
     return labels[m.round] || (typeof m.round === "number" ? `Round ${m.round + 1}` : "Bracket");
   }
@@ -9366,7 +9420,10 @@ function createRegisteringTournamentState({ mode, tournamentName, roundCount, ra
   // Closed = private (not listed in the public lobby; join by code). Open is
   // the default, so only the "closed" flag is stored.
   if (visibility === "closed") state.visibility = "closed";
-  if (safeMode !== "single-elim") {
+  // Both elimination formats are bracket-only: no groups, no round count, and
+  // a placement depth instead. (This tested single-elim alone, so double-elim
+  // fell through to the Swiss branch and never stored its depth.)
+  if (!isElimMode(safeMode)) {
     state.groupCount = SWISS_GROUP_OPTIONS.includes(Number(groupCount))
       ? Number(groupCount) : SWISS_GROUP_COUNT_DEFAULT;
     // Round robin derives its rounds from group size, so it skips roundCount.
@@ -9383,10 +9440,9 @@ function createRegisteringTournamentState({ mode, tournamentName, roundCount, ra
       state.topN = (Number.isFinite(nVal) && nVal >= 2 && nVal <= 64) ? nVal : 8;
     }
   } else {
-    // Single-elim placement depth — any integer 2–16 (default 8). Carried
-    // through generateSingleElimFromText, which clamps it down to whatever
-    // the bracket can actually host and builds the matching consolation
-    // matches.
+    // Placement depth — any integer from 2 up. Carried through the generator,
+    // which clamps it to whatever the bracket can actually host and builds the
+    // matching consolation matches.
     state.placementDepth = clampPlacementDepth(placementDepth);
   }
   return state;
