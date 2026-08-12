@@ -12839,9 +12839,17 @@ function deleteRevoxResult(key, resultId, name) {
 }
 
 // Load the member's profile (photo + tags) into the history popup header.
-// `uid` comes from the ranking row's key when it has one. Preferring it over
-// the name lookup keeps the header working for a member whose username
-// changed — the old name no longer has a `usernames` entry to resolve.
+// Load the member's photo, banner, tags and bio into the history popup.
+//
+// Reads the PUBLIC `profiles/{usernameKey}` mirror — the same source the
+// ranking list's avatars and row banners use — so the header fills in for
+// every viewer. It used to read `users/{uid}`, which the rules only expose
+// to that user or a Developer, so ordinary members saw a blank header when
+// looking at anyone but themselves.
+//
+// `uid` comes from the ranking row's key when it has one, and only backs up
+// the public read: it resolves for your own account or a Developer, which is
+// worth keeping for a member whose public mirror hasn't been written yet.
 function loadRevoxHeaderProfile(name, uid) {
   const photoEl = document.getElementById("revox-history-photo");
   const bannerEl = document.getElementById("revox-history-banner");
@@ -12849,16 +12857,16 @@ function loadRevoxHeaderProfile(name, uid) {
   const bioEl = document.getElementById("revox-history-bio");
   const db = initFirebase();
   if (!db || (!name && !uid)) return;
-  const resolveUid = uid
-    ? Promise.resolve(uid)
-    : db.ref("usernames/" + subHostKey(name)).once("value")
-        .then(snap => { const v = snap.val(); return (v && v.uid) || ""; });
-  resolveUid.then(resolved => {
-    if (!resolved) return null;
-    return db.ref("users/" + resolved).once("value");
-  }).then(snap => {
-    if (!snap) return;
-    const p = snap.val() || {};
+  const key = rankingKey(name || "");
+  const fromProfiles = key
+    ? db.ref("profiles/" + key).once("value").then(s => s.val()).catch(() => null)
+    : Promise.resolve(null);
+  fromProfiles.then(p => {
+    if (p && (p.photo || p.banner || p.bio || p.tags)) return p;
+    if (!uid) return null;
+    return db.ref("users/" + uid).once("value").then(s => s.val()).catch(() => null);
+  }).then(p => {
+    if (!p) return;
     if (photoEl) {
       if (p.photo) photoEl.src = p.photo;
       photoEl.style.objectPosition = p.photoPos || "50% 50%";
