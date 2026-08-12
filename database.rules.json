@@ -201,7 +201,7 @@
     "pastTournaments": {
       ".read": true,
       "$code": {
-        ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || (data.exists() && data.child('hostUid').val() === auth.uid))",
+        ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || (data.exists() && data.child('hostUid').val() === auth.uid) || (!newData.exists() && (root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')))",
         "hostUid": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 128" }
       }
     },
@@ -274,7 +274,25 @@
 
     "revoxRanking": {
       ".read": true,
-      "$name": { ".write": "auth != null" }
+      "$key": {
+        ".write": "auth != null",
+        "name":       { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 30" },
+        "uid":        { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 128" },
+        "points":     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000" },
+        "tournament": { ".validate": "newData.isString() && newData.val().length <= 80" },
+        "placing":    { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 8" },
+        "date":       { ".validate": "newData.isString() && newData.val().length <= 10" },
+        "results": {
+          "$resultId": {
+            "tournament": { ".validate": "newData.isString() && newData.val().length <= 80" },
+            "placing":    { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 8" },
+            "points":     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+            "date":       { ".validate": "newData.isString() && newData.val().length <= 10" },
+            "$other":     { ".validate": false }
+          }
+        },
+        "$other": { ".validate": false }
+      }
     },
 
     "revoxPending": {
@@ -332,7 +350,7 @@
     "revoxAccounts": {
       ".read": true,
       "$key": {
-        ".write": "auth != null && (root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')",
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer' || ($key === auth.uid && data.exists() && newData.exists() && (root.child('users').child(auth.uid).child('tags').child('Revox Member').val() === true || root.child('users').child(auth.uid).child('tags').child('Revox Admin').val() === true)))",
         ".validate": "newData.isString() && newData.val().length <= 30"
       }
     },

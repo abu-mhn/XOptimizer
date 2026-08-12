@@ -307,8 +307,9 @@
   // read without needing access to the whole users tree:
   //   Judge          → judges/{usernameKey}: username
   //   Guest Judge    → judges/{usernameKey}: username
-  //   Revox Member   → revoxAccounts/{usernameKey}: username
-  //   Revox Admin    → revoxAccounts/{usernameKey}: username
+  //   Revox Member   → revoxAccounts/{uid}: username
+  //   Revox Admin    → revoxAccounts/{uid}: username
+  // (see PUBLIC_INDEX_KEY_MODES below for why the two nodes key differently)
   //
   // Two tags can target the same node (Revox Member / Admin both feed the
   // Revox tab's Add-Result dropdown; Judge / Guest Judge both feed the
@@ -326,6 +327,26 @@
     "Revox Member": "revoxAccounts",
     "Revox Admin":  "revoxAccounts"
   };
+  // How each public index node is keyed.
+  //   revoxAccounts → account uid. The key is then immutable, so a rename
+  //     can't orphan an entry — only the stored display name changes. Both
+  //     readers (the Revox auto-award gate and the Add-Result dropdown) use
+  //     Object.values, so the key is theirs to choose.
+  //   judges → usernameKey. Battle Royale's judge picker resolves these keys
+  //     through usernames/{key}/uid and profiles/{key}/tags/Judge
+  //     (battleroyale.js fetchAllJudges), so re-keying would break it.
+  // Anything not listed defaults to usernameKey.
+  const PUBLIC_INDEX_KEY_MODES = {
+    revoxAccounts: "uid"
+  };
+  function publicIndexKeyFor(node, uid, username) {
+    return PUBLIC_INDEX_KEY_MODES[node] === "uid"
+      ? String(uid || "")
+      : usernameKey(username || "");
+  }
+  function publicIndexIsUidKeyed(node) {
+    return PUBLIC_INDEX_KEY_MODES[node] === "uid";
+  }
   function publicIndexesForTag(tag) {
     const node = PUBLIC_TAG_INDEXES[tag];
     return node ? [node] : [];
@@ -459,6 +480,111 @@
     }).catch(() => { /* read failed — try again next sign-in */ });
   }
 
+  // The Revox leaderboard is keyed by uid and carries the username only as a
+  // display label, so a rename has to re-label the row. Left stale, the row
+  // keeps the old name until that member's next result — and its avatar and
+  // banner disappear with it, since both resolve through
+  // profiles/{usernameKey(name)} and the old key is deleted on rename.
+  // Only ever updates a row that already exists: writing blind would add a
+  // phantom 0-point member to the leaderboard.
+  function refreshRevoxDisplayName(db, uid, username) {
+    if (!db || !uid || !username) return Promise.resolve();
+    return db.ref("revoxRanking/" + uid).once("value").then(snap => {
+      if (!snap.exists()) return null;
+      return db.ref("revoxRanking/" + uid + "/name")
+        .set(String(username).trim().slice(0, 30));
+    }).catch(() => { /* not a Revox member, or write blocked — harmless */ });
+  }
+
+  // A uid-keyed public index (revoxAccounts) stores the username as its
+  // VALUE, so a rename has to refresh it — otherwise the Revox Add-Result
+  // dropdown and the auto-award gate keep offering the old name until a
+  // Developer next opens the Users tab. Only ever updates an entry that
+  // already exists, so this can't be used to add yourself to an index; the
+  // rules enforce the same thing independently.
+  function refreshPublicIndexNames(db, uid, username) {
+    if (!db || !uid || !username) return Promise.resolve();
+    const name = String(username).trim().slice(0, 30);
+    return Promise.all(allPublicIndexNodes().filter(publicIndexIsUidKeyed).map(node =>
+      db.ref(node + "/" + uid).once("value").then(snap => {
+        if (!snap.exists()) return null; // not in this index — nothing to do
+        return db.ref(node + "/" + uid).set(name);
+      }).catch(() => { /* not tagged, or write blocked — harmless */ })
+    ));
+  }
+
+  // One-off migration: re-key /revoxAccounts from usernameKey to account uid.
+  // Run from the browser console signed in as a Developer:
+  //
+  //   await migrateRevoxAccountsToUidKeys()                        // dry run
+  //   await migrateRevoxAccountsToUidKeys({ apply: true })
+  //   await migrateRevoxAccountsToUidKeys({ apply: true, pruneOrphans: true })
+  //
+  // Keys that are already uids have their stored display name refreshed if it
+  // drifted. Keys belonging to no live account — usernames abandoned by a
+  // rename — are reported as orphans, and deleted only with pruneOrphans.
+  // The whole thing lands as one atomic update, so no entry ever disappears
+  // mid-flight.
+  function migrateRevoxAccountsToUidKeys(opts) {
+    const o = opts || {};
+    const apply = o.apply === true;
+    const pruneOrphans = o.pruneOrphans === true;
+    let db;
+    try { db = firebase.database(); } catch (e) { db = null; }
+    if (!db) return Promise.reject(new Error("firebase not configured"));
+    const node = "revoxAccounts";
+    return Promise.all([
+      db.ref(node).once("value").then(s => s.val() || {}),
+      db.ref("usernames").once("value").then(s => s.val() || {})
+    ]).then(pair => {
+      const index = pair[0], names = pair[1];
+      const byKey = {}, nameByUid = {}, uidSet = {};
+      Object.keys(names).forEach(k => {
+        const rec = names[k] || {};
+        if (!rec.uid) return;
+        byKey[k] = { uid: rec.uid, username: rec.username || k };
+        uidSet[rec.uid] = true;
+        nameByUid[rec.uid] = rec.username || k;
+      });
+      const patch = {};
+      const report = { apply, total: Object.keys(index).length, moves: [], refreshed: [], orphans: [] };
+      Object.keys(index).forEach(k => {
+        if (uidSet[k]) { // already uid-keyed — just keep the name honest
+          const current = nameByUid[k];
+          if (current && index[k] !== current) {
+            patch[k] = current;
+            report.refreshed.push({ key: k, from: index[k], to: current });
+          }
+          return;
+        }
+        const hit = byKey[k];
+        if (hit) {
+          patch[hit.uid] = hit.username;
+          patch[k] = null;
+          report.moves.push({ from: k, to: hit.uid, name: hit.username });
+        } else {
+          report.orphans.push({ key: k, value: index[k] });
+          if (pruneOrphans) patch[k] = null;
+        }
+      });
+      if (!apply) {
+        console.info("[revoxAccounts migration] DRY RUN — nothing written.");
+        console.table(report.moves);
+        if (report.refreshed.length) console.table(report.refreshed);
+        if (report.orphans.length) console.table(report.orphans);
+        return report;
+      }
+      if (!Object.keys(patch).length) { console.info("[revoxAccounts migration] nothing to do."); return report; }
+      return db.ref(node).update(patch).then(() => {
+        console.info("[revoxAccounts migration] done.",
+          report.moves.length, "moved,", report.refreshed.length, "renamed,",
+          report.orphans.length, "orphan(s)" + (pruneOrphans ? " deleted." : " left in place."));
+        return report;
+      });
+    });
+  }
+  window.migrateRevoxAccountsToUidKeys = migrateRevoxAccountsToUidKeys;
+
   // Persist the signed-in user's profile. `username` is trimmed/capped and
   // must be unique across accounts; `photo` is a (downscaled) data-URL or "".
   // Rejects if the username is already taken by someone else.
@@ -501,7 +627,13 @@
       const newKey = usernameKey(clean.username);
       const oldKey = usernameKey(prevUsername);
       if (db && oldKey && oldKey !== newKey) {
-        return db.ref("profiles/" + oldKey).set(null).catch(() => {});
+        return db.ref("profiles/" + oldKey).set(null).catch(() => {})
+          // Re-label the uid-keyed Revox row so the leaderboard shows the new
+          // name (and keeps its avatar) without waiting for the next result.
+          .then(() => refreshRevoxDisplayName(db, u.uid, clean.username))
+          // Same for the uid-keyed public tag indexes, whose stored value is
+          // the display name.
+          .then(() => refreshPublicIndexNames(db, u.uid, clean.username));
       }
     }).then(() => {
       return claimUsername(u.uid, u.email || "", clean.username, prevUsername);
@@ -1062,19 +1194,33 @@
       allPublicIndexNodes().forEach(node => { indexPatches[node] = {}; });
       (developerUsers || []).forEach(u => {
         if (!u.username) return;
-        const key = usernameKey(u.username);
-        if (!key) return;
         const coveredIndexes = new Set(publicIndexesForTagList(u.tags));
         Object.keys(indexPatches).forEach(node => {
+          // Each node is keyed its own way — uid for revoxAccounts,
+          // usernameKey for the rest.
+          const key = publicIndexKeyFor(node, u.uid, u.username);
+          if (!key) return;
           indexPatches[node][key] = coveredIndexes.has(node) ? u.username : null;
         });
       });
-      Object.keys(indexPatches).forEach(node => {
-        const patch = indexPatches[node];
-        if (Object.keys(patch).length) {
-          db.ref(node).update(patch).catch(() => {});
-        }
-      });
+      // `developerUsers` comes from the full `usernames` node, so any index
+      // key it doesn't account for belongs to no live account — a username
+      // key abandoned by a rename, which nothing else ever clears. Prune
+      // those. Guarded on a non-empty user list: pruning against a failed or
+      // partial read would wipe the whole index.
+      if ((developerUsers || []).length) {
+        Object.keys(indexPatches).forEach(node => {
+          const patch = indexPatches[node];
+          db.ref(node).once("value").then(snap => {
+            Object.keys(snap.val() || {}).forEach(k => {
+              if (!Object.prototype.hasOwnProperty.call(patch, k)) patch[k] = null;
+            });
+          }).catch(() => { /* couldn't read — patch without pruning */ })
+            .then(() => {
+              if (Object.keys(patch).length) db.ref(node).update(patch).catch(() => {});
+            });
+        });
+      }
       // Backfill the public `profiles` index with each user's username,
       // tag set, photo, banner and bio — so hover cards, registrant
       // avatars and ranking-row banners resolve for accounts that predate
@@ -1170,8 +1316,9 @@
   // disturbing the tags they already have. For tags in PUBLIC_TAG_INDEXES
   // we also mirror the assignment into the corresponding public index node
   // (e.g. Judge → `judges/{usernameKey}`, Revox Member / Admin →
-  // `revoxAccounts/{usernameKey}`) so other tabs can list those users
-  // without needing read access to the whole users tree.
+  // `revoxAccounts/{uid}`) so other tabs can list those users without
+  // needing read access to the whole users tree. publicIndexKeyFor picks
+  // the right key shape per node.
   function addDeveloperTag(uid, username) {
     if (!uid) return;
     let db;
@@ -1190,12 +1337,11 @@
       return userRef.child("tags").child(tag).set(true).then(() => tag);
     }).then(tag => {
       if (!tag) return;
-      const ukey = usernameKey(username || "");
-      if (ukey) {
-        publicIndexesForTag(tag).forEach(node => {
-          db.ref(node + "/" + ukey).set(username || "").catch(() => {});
-        });
-      }
+      publicIndexesForTag(tag).forEach(node => {
+        const key = publicIndexKeyFor(node, uid, username);
+        if (!key) return;
+        db.ref(node + "/" + key).set(username || "").catch(() => {});
+      });
       alert('Added the "' + tag + '" tag to ' + username + '.');
       loadDeveloperUsers();
     }).catch(e => {
@@ -1231,14 +1377,12 @@
       const removedIndexes = publicIndexesForTag(tag);
       if (removedIndexes.length) {
         const stillCoveredIndexes = new Set(publicIndexesForTagList(remainingTags));
-        const ukey = usernameKey(username || "");
-        if (ukey) {
-          removedIndexes.forEach(node => {
-            if (!stillCoveredIndexes.has(node)) {
-              db.ref(node + "/" + ukey).set(null).catch(() => {});
-            }
-          });
-        }
+        removedIndexes.forEach(node => {
+          if (stillCoveredIndexes.has(node)) return;
+          const key = publicIndexKeyFor(node, uid, username);
+          if (!key) return;
+          db.ref(node + "/" + key).set(null).catch(() => {});
+        });
       }
       loadDeveloperUsers();
     }).catch(e => {
@@ -1320,13 +1464,17 @@
     usernames:       ["uid", "username", "email"],
     profiles:        ["username", "bio", "tags", "photo", "banner"],
     ranking:         ["points"],
-    revoxRanking:    ["points", "results"],
+    // Keys are UIDs (legacy rows are keyed by username until migrated —
+    // see migrateRevoxToUidKeys in tournament.js).
+    revoxRanking:    ["name", "uid", "points", "results"],
     winRates:        ["username", "wins", "losses", "ties", "updatedAt"],
     // Keys are UIDs. Each cell shows the nested {count, awarded, ...} object
     // for that achievement (the generic renderer summarizes it as
     // "{4} count, awarded, awardedAt, updatedAt").
     achievements:    ["dragonTamer", "dragonSlayer", "lonewolf", "rushHour", "kingOfJungle", "sharknado", "sorcererSupreme"],
     judges:          [],  // value is a plain string
+    // Keys are UIDs; the value is the member's display name. `judges` is
+    // still keyed by usernameKey — see PUBLIC_INDEX_KEY_MODES.
     revoxAccounts:   [],
     swissViewCodes:  [],
     // Keys are UIDs. `connections` is a set of live-connection ids ({N} …);

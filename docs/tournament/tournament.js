@@ -12104,7 +12104,10 @@ function submitRevoxPending(name, points, tournament, placing, date, photo) {
 function approveRevoxPending(id, data) {
   const db = initFirebase();
   if (!db || !id || !data) return Promise.reject(new Error("bad input"));
-  return addRevoxEntry(data.name, data.points, data.tournament, data.placing, data.date)
+  // The submission records the member's uid (rules pin it to the submitter),
+  // so approve by uid rather than re-resolving the name — a member who renamed
+  // while the submission sat in the queue would otherwise fork a new row.
+  return addRevoxEntry(data.name, data.points, data.tournament, data.placing, data.date, data.uid)
     .then(() => db.ref("revoxPending/" + id).remove());
 }
 
@@ -12280,43 +12283,179 @@ function updateRevoxNavBadge(count) {
   sync();
 })();
 
-// Records a tournament result for a member. If the same name (after key
-// normalization) already exists, the new points are added to the running
-// total and the tournament + placing are updated to this latest result.
-// A transaction keeps concurrent admin writes from losing updates.
-function addRevoxEntry(name, points, tournament, placing, date) {
+// ---- Member identity --------------------------------------------------
+// Revox rows are keyed by the member's account uid, which never changes.
+// They used to be keyed by rankingKey(username): renaming an account
+// orphaned the old row, and the member's next result silently opened a
+// fresh one under the new name instead of continuing their history.
+//
+// Members with no account yet (an admin recording results by hand for
+// someone who hasn't registered) can't have a uid, so they get a
+// "name:<rankingKey>" placeholder key. mergeRevoxRows folds that row into
+// the real uid row the first time a result is recorded after they register.
+const REVOX_UNCLAIMED_PREFIX = "name:";
+
+function revoxUnclaimedKey(name) {
+  const k = rankingKey(name);
+  return k ? REVOX_UNCLAIMED_PREFIX + k : "";
+}
+
+function isRevoxUnclaimedKey(key) {
+  return String(key || "").indexOf(REVOX_UNCLAIMED_PREFIX) === 0;
+}
+
+// A row key is the member's uid unless it's a placeholder — so the history
+// popup can load their profile without a username round-trip.
+function revoxUidFromKey(key) {
+  return isRevoxUnclaimedKey(key) ? "" : String(key || "");
+}
+
+// Resolve a username to its account uid via the public `usernames` index.
+// Resolves to "" when the name has no account, which is not an error —
+// that member just stays on a placeholder key.
+function revoxUidForName(name) {
+  const db = initFirebase();
+  const key = rankingKey(name);
+  if (!db || !key) return Promise.resolve("");
+  return db.ref("usernames/" + key + "/uid").once("value")
+    .then(snap => {
+      const uid = snap.val();
+      return (typeof uid === "string" && uid) ? uid : "";
+    })
+    .catch(() => "");
+}
+
+// Fold `legacyKeys` into the row at `targetKey`, summing points, combining
+// the results histories and deleting the sources. Result ids are Firebase
+// push ids so they never collide across merged rows; a legacy row that
+// predates the results history contributes its single top-level result
+// under a freshly minted id, so the merged history matches the points.
+//
+// `preferredName` wins over any name already on the rows: callers pass the
+// member's CURRENT username, and the whole point of a merge is that some of
+// the source rows are labelled with a stale pre-rename name.
+function mergeRevoxRows(targetKey, legacyKeys, preferredName) {
+  const db = initFirebase();
+  if (!db || !targetKey) return Promise.resolve(false);
+  const root = db.ref("revoxRanking");
+  const sources = (legacyKeys || []).filter(k => k && k !== targetKey);
+  if (!sources.length) return Promise.resolve(false);
+  return Promise.all(sources.map(k =>
+    root.child(k).once("value").then(s => ({ key: k, val: s.val() })).catch(() => ({ key: k, val: null }))
+  )).then(rows => {
+    const live = rows.filter(r => r.val);
+    if (!live.length) return false;
+    // Flatten the sources first: push ids must be minted outside the
+    // transaction, which can retry.
+    let carryPoints = 0;
+    let carryName = "";
+    const carryResults = {};
+    live.forEach(({ val }) => {
+      carryPoints += Number(val.points) || 0;
+      if (!carryName && val.name) carryName = val.name;
+      if (val.results) {
+        Object.assign(carryResults, val.results);
+      } else if (val.tournament) {
+        carryResults[root.child(targetKey).child("results").push().key] = {
+          tournament: String(val.tournament).slice(0, 80),
+          placing: Number(val.placing) || 0,
+          points: Number(val.points) || 0,
+          date: String(val.date || "").slice(0, 10)
+        };
+      }
+    });
+    return root.child(targetKey).transaction(curr => {
+      const results = Object.assign({}, (curr && curr.results) || {}, carryResults);
+      let latest = null;
+      Object.keys(results).forEach(k => {
+        const r = results[k] || {};
+        if (!latest || String(r.date || "") > String(latest.date || "")) latest = r;
+      });
+      const row = {
+        points: ((curr && Number(curr.points)) || 0) + carryPoints,
+        tournament: (latest && latest.tournament) || "",
+        placing: (latest && Number(latest.placing)) || 0,
+        date: (latest && latest.date) || "",
+        results
+      };
+      // `name` is validated as a non-empty string, so only write it when we
+      // actually have one — an empty value would reject the whole merge.
+      const nm = (String(preferredName || "").trim() || (curr && curr.name) || carryName || "").slice(0, 30);
+      if (nm) row.name = nm;
+      if (!isRevoxUnclaimedKey(targetKey)) row.uid = targetKey;
+      return row;
+    }).then(() =>
+      Promise.all(live.map(({ key }) => root.child(key).remove().catch(() => {})))
+    ).then(() => true);
+  });
+}
+
+// The row key to write a result for `name` under, merging any leftover
+// name-keyed rows for that member on the way. Always resolves to a usable
+// key: the account uid when the name maps to one, the placeholder otherwise.
+//
+// `knownUid` short-circuits the name lookup. Callers holding the member's
+// uid outright (a pending submission records it alongside the name) should
+// pass it: the name on a queued submission is a snapshot, so it can be stale
+// by the time an admin approves it, but the uid never is.
+function resolveRevoxKey(name, knownUid) {
+  const cleanName = String(name || "").trim();
+  if (!cleanName) return Promise.resolve("");
+  const placeholder = revoxUnclaimedKey(cleanName);
+  const lookup = knownUid ? Promise.resolve(String(knownUid)) : revoxUidForName(cleanName);
+  return lookup.then(uid => {
+    if (!uid) return placeholder;
+    // Both the pre-migration key and the placeholder can hold history for
+    // this member — sweep them onto the uid row before writing.
+    return mergeRevoxRows(uid, [rankingKey(cleanName), placeholder], cleanName)
+      .catch(() => {})
+      .then(() => uid);
+  });
+}
+
+// Records a tournament result for a member, keyed by their account uid so
+// the history survives a username change. The new points are added to the
+// running total and the tournament + placing are updated to this latest
+// result. A transaction keeps concurrent admin writes from losing updates.
+function addRevoxEntry(name, points, tournament, placing, date, knownUid) {
   const db = initFirebase();
   if (!db) return Promise.reject(new Error("firebase not configured"));
-  const cleanName = String(name || "").trim();
+  // Sliced to 30 to match the `name` validation on /revoxRanking.
+  const cleanName = String(name || "").trim().slice(0, 30);
   const pts = Number(points);
   if (!cleanName || !Number.isFinite(pts)) return Promise.reject(new Error("bad input"));
-  const key = rankingKey(cleanName);
-  if (!key) return Promise.reject(new Error("bad name"));
   const tour = String(tournament || "").trim().slice(0, 80);
   const place = Number(placing) || 0;
   const dt = String(date || "").trim().slice(0, 10);
-  // Each Add appends one result so a member keeps a full tournament history;
-  // the top-level tournament/placing/date mirror this latest result.
-  const entryRef = db.ref("revoxRanking/" + key);
-  const resultId = entryRef.child("results").push().key;
-  return entryRef.transaction(curr => {
-    const results = (curr && curr.results) || {};
-    results[resultId] = { tournament: tour, placing: place, points: pts, date: dt };
-    // The row mirror is the most recent result by date — not whichever was
-    // added last (results can be entered out of chronological order).
-    let latest = null;
-    Object.keys(results).forEach(k => {
-      const r = results[k] || {};
-      if (!latest || String(r.date || "") > String(latest.date || "")) latest = r;
+  return resolveRevoxKey(cleanName, knownUid).then(key => {
+    if (!key) throw new Error("bad name");
+    // Each Add appends one result so a member keeps a full tournament history;
+    // the top-level tournament/placing/date mirror this latest result.
+    const entryRef = db.ref("revoxRanking/" + key);
+    const resultId = entryRef.child("results").push().key;
+    return entryRef.transaction(curr => {
+      const results = (curr && curr.results) || {};
+      results[resultId] = { tournament: tour, placing: place, points: pts, date: dt };
+      // The row mirror is the most recent result by date — not whichever was
+      // added last (results can be entered out of chronological order).
+      let latest = null;
+      Object.keys(results).forEach(k => {
+        const r = results[k] || {};
+        if (!latest || String(r.date || "") > String(latest.date || "")) latest = r;
+      });
+      const row = {
+        // The display name tracks the name this result was recorded under, so
+        // a renamed member's existing row re-labels itself instead of forking.
+        name: cleanName,
+        points: ((curr && Number(curr.points)) || 0) + pts,
+        tournament: (latest && latest.tournament) || "",
+        placing: (latest && Number(latest.placing)) || 0,
+        date: (latest && latest.date) || "",
+        results
+      };
+      if (!isRevoxUnclaimedKey(key)) row.uid = key;
+      return row;
     });
-    return {
-      name: (curr && curr.name) || cleanName,
-      points: ((curr && Number(curr.points)) || 0) + pts,
-      tournament: (latest && latest.tournament) || "",
-      placing: (latest && Number(latest.placing)) || 0,
-      date: (latest && latest.date) || "",
-      results
-    };
   });
 }
 
@@ -12325,6 +12464,106 @@ function deleteRevoxEntry(key) {
   if (!db || !key) return Promise.reject(new Error("bad input"));
   return db.ref("revoxRanking/" + key).remove();
 }
+
+// One-off migration from the legacy username-keyed rows to uid-keyed rows.
+// Run from the browser console on the Revox tab, signed in as a Revox Admin:
+//
+//   await migrateRevoxToUidKeys()                  // dry run — prints the plan
+//   await migrateRevoxToUidKeys({ apply: true })   // performs the merges
+//
+// A row whose name no longer resolves to an account — the member was renamed
+// before this migration, so `usernames/<oldkey>` was cleared — cannot be
+// matched automatically. Those are reported as `unresolved`; map them by hand:
+//
+//   await migrateRevoxToUidKeys({ apply: true, manualMap: { oldkey: "<uid>" } })
+//
+// Merging is additive (points sum, histories combine) and each source row is
+// deleted only after its merge commits, so a re-run is safe.
+function migrateRevoxToUidKeys(opts) {
+  const o = opts || {};
+  const apply = o.apply === true;
+  const manualMap = o.manualMap || {};
+  const db = initFirebase();
+  if (!db) return Promise.reject(new Error("firebase not configured"));
+  return db.ref("revoxRanking").once("value").then(snap => {
+    const data = snap.val() || {};
+    const keys = Object.keys(data);
+    // Resolve every row's target uid in parallel.
+    return Promise.all(keys.map(key => {
+      const row = data[key] || {};
+      if (row.uid && row.uid === key) return { key, row, target: key, state: "already" };
+      const manual = manualMap[key];
+      if (typeof manual === "string" && manual) return { key, row, target: manual, state: "manual" };
+      const name = isRevoxUnclaimedKey(key)
+        ? key.slice(REVOX_UNCLAIMED_PREFIX.length)
+        : (row.name || key);
+      // The legacy key already IS the username key; fall back to the stored
+      // display name in case the two ever drifted.
+      return revoxUidForName(key)
+        .then(uid => uid || (rankingKey(name) !== key ? revoxUidForName(name) : ""))
+        .then(uid => uid
+          ? { key, row, target: uid, state: "resolved" }
+          : { key, row, target: "", state: "unresolved" });
+    }));
+  }).then(plan => {
+    const already = plan.filter(p => p.state === "already");
+    const unresolved = plan.filter(p => p.state === "unresolved");
+    const moves = plan.filter(p => (p.state === "resolved" || p.state === "manual") && p.target !== p.key);
+    // Several legacy rows can belong to one member (an old name and a new
+    // one) — merge them in a single pass per target so points sum once.
+    const byTarget = {};
+    moves.forEach(m => {
+      if (!byTarget[m.target]) byTarget[m.target] = { sources: [], name: "", nameIsCurrent: false };
+      const t = byTarget[m.target];
+      t.sources.push(m.key);
+      // A "resolved" source matched the live `usernames` index, so its name is
+      // the member's current one. A manually-mapped source is by definition
+      // labelled with the stale pre-rename name — never let it win the label.
+      const isCurrent = m.state === "resolved";
+      if (m.row.name && (!t.name || (isCurrent && !t.nameIsCurrent))) {
+        t.name = m.row.name;
+        t.nameIsCurrent = isCurrent;
+      }
+    });
+    const report = {
+      apply,
+      totalRows: plan.length,
+      alreadyKeyedByUid: already.map(p => p.key),
+      merges: Object.keys(byTarget).map(t => ({
+        target: t, sources: byTarget[t].sources, name: byTarget[t].name
+      })),
+      unresolved: unresolved.map(p => ({
+        key: p.key,
+        name: p.row.name || "",
+        points: Number(p.row.points) || 0,
+        hint: "no account for this name — pass manualMap: { \"" + p.key + "\": \"<uid>\" }"
+      }))
+    };
+    if (!apply) {
+      console.info("[revox migration] DRY RUN — nothing written. Re-run with { apply: true }.");
+      console.table(report.merges);
+      if (report.unresolved.length) console.table(report.unresolved);
+      return report;
+    }
+    const targets = Object.keys(byTarget);
+    return targets.reduce(
+      (chain, t) => chain.then(() =>
+        mergeRevoxRows(t, byTarget[t].sources, byTarget[t].name)
+          .then(ok => console.info("[revox migration] merged", byTarget[t].sources, "->", t, ok ? "ok" : "(nothing to move)"))
+          .catch(e => {
+            console.warn("[revox migration] merge failed for", t, e);
+            report.failed = report.failed || [];
+            report.failed.push({ target: t, error: (e && e.message) || String(e) });
+          })
+      ),
+      Promise.resolve()
+    ).then(() => {
+      console.info("[revox migration] done.", report.unresolved.length, "row(s) still unresolved.");
+      return report;
+    });
+  });
+}
+window.migrateRevoxToUidKeys = migrateRevoxToUidKeys;
 
 // "1" -> "1st", "2" -> "2nd", "3" -> "3rd", "4".."8" -> "4th".."8th".
 function ordinalPlace(n) {
@@ -12455,7 +12694,11 @@ function renderRevoxRankingFrom(data) {
           });
           return {
             key,
-            name: (v && v.name) || key,
+            // Rows are keyed by uid, so the key is never a fallback display
+            // name any more — only a placeholder key still carries one.
+            name: (v && v.name)
+              || (isRevoxUnclaimedKey(key) ? key.slice(REVOX_UNCLAIMED_PREFIX.length) : "")
+              || "Unknown member",
             points: (v && Number(v.points)) || 0,
             tournament: latest ? (latest.tournament || "") : ((v && v.tournament) || ""),
             placing: latest ? (Number(latest.placing) || 0) : ((v && Number(v.placing)) || 0),
@@ -12596,17 +12839,23 @@ function deleteRevoxResult(key, resultId, name) {
 }
 
 // Load the member's profile (photo + tags) into the history popup header.
-function loadRevoxHeaderProfile(name) {
+// `uid` comes from the ranking row's key when it has one. Preferring it over
+// the name lookup keeps the header working for a member whose username
+// changed — the old name no longer has a `usernames` entry to resolve.
+function loadRevoxHeaderProfile(name, uid) {
   const photoEl = document.getElementById("revox-history-photo");
   const bannerEl = document.getElementById("revox-history-banner");
   const tagsEl = document.getElementById("revox-history-tags");
   const bioEl = document.getElementById("revox-history-bio");
   const db = initFirebase();
-  if (!db || !name) return;
-  db.ref("usernames/" + subHostKey(name)).once("value").then(snap => {
-    const v = snap.val();
-    if (!v || !v.uid) return null;
-    return db.ref("users/" + v.uid).once("value");
+  if (!db || (!name && !uid)) return;
+  const resolveUid = uid
+    ? Promise.resolve(uid)
+    : db.ref("usernames/" + subHostKey(name)).once("value")
+        .then(snap => { const v = snap.val(); return (v && v.uid) || ""; });
+  resolveUid.then(resolved => {
+    if (!resolved) return null;
+    return db.ref("users/" + resolved).once("value");
   }).then(snap => {
     if (!snap) return;
     const p = snap.val() || {};
@@ -12672,7 +12921,7 @@ function showRevoxHistory(key, name) {
   if (tagsEl) tagsEl.innerHTML = "";
   if (bioEl) { bioEl.textContent = ""; bioEl.style.display = "none"; }
   if (wrEl) { wrEl.textContent = ""; wrEl.classList.add("hidden"); }
-  loadRevoxHeaderProfile(name);
+  loadRevoxHeaderProfile(name, revoxUidFromKey(key));
   // Public /winRates read. Same shape and rendering as the profile dropdown
   // and account card, so the same person sees the same numbers wherever
   // their stats appear.
