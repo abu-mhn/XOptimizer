@@ -4413,6 +4413,21 @@ function renderSwissRegisteringMarkup(state) {
         formatBits.push(`<span class="swiss-reg-format-bit">${getRoundCount(state)} rounds</span>`);
       }
     }
+    // A Swiss room that cuts to a knockout also gets a placement-depth chip,
+    // so the host can run e.g. a Top 8 cut that only decides 1st–4th. Worded
+    // "Ranks top N" because the format chip beside it already reads
+    // "Swiss + Top 8" — that N is the cut size, this one is how deep it
+    // ranks, and two bare "Top N" chips would be unreadable. Capped at the
+    // cut size: a bracket can't rank more finishers than entered it.
+    if (state.mode !== "swiss-only") {
+      const cutN = (typeof state.topN === "number" && state.topN >= 2) ? state.topN : 8;
+      const rankDepth = Math.min(clampPlacementDepth(state.placementDepth), cutN);
+      if (canEdit) {
+        formatBits.push(`<button type="button" class="swiss-reg-format-bit swiss-reg-format-editable" id="swiss-edit-depth" title="Tap to change how deep the bracket ranks">Ranks top ${rankDepth}</button>`);
+      } else {
+        formatBits.push(`<span class="swiss-reg-format-bit">Ranks top ${rankDepth}</span>`);
+      }
+    }
   } else {
     // Single elimination — show (and let the host edit) the placement depth.
     const depthLabel = `Top ${clampPlacementDepth(state.placementDepth)}`;
@@ -6810,17 +6825,26 @@ function buildTopNBracketMatches(state) {
     }
   }
   newMatches["bracket-f-0"] = emptyBracketMatch("f", 0);
-  if (topN >= 4) {
+  // How deep the knockout ranks, mirroring generateSingleElimFromText so both
+  // bracket paths honour the same setting. Rooms created before this was
+  // configurable carry no placementDepth, and clampPlacementDepth falls back
+  // to 8 — the previous build-everything behaviour, so existing tournaments
+  // generate exactly as they did.
+  const depth = clampPlacementDepth(state.placementDepth);
+  if (topN >= 4 && depth >= 3) {
     newMatches["bracket-3rd-0"] = emptyBracketMatch("3rd", 0);
   }
-  // 5th/7th consolation chain — only when there's a real quarterfinal round
-  // (bracketSize >= 8). bracketUpstreamSource feeds CQF off the QF round
-  // (preFinal - 2 in the round-indexed numbering).
-  if (preFinalRounds >= 2) {
+  // 5th/7th consolation chain — needs a real quarterfinal round to feed it
+  // (bracketSize >= 8; bracketUpstreamSource resolves CQF off preFinal - 2)
+  // AND a placement depth that actually reaches those places. A Top 8 cut
+  // ranking only the top 4 stops after the 3rd-place match.
+  if (preFinalRounds >= 2 && depth >= 5) {
     newMatches["bracket-cqf-0"] = emptyBracketMatch("cqf", 0);
     newMatches["bracket-cqf-1"] = emptyBracketMatch("cqf", 1);
     newMatches["bracket-5th-0"] = emptyBracketMatch("5th", 0);
-    newMatches["bracket-7th-0"] = emptyBracketMatch("7th", 0);
+    if (depth >= 7) {
+      newMatches["bracket-7th-0"] = emptyBracketMatch("7th", 0);
+    }
   }
   return newMatches;
 }
@@ -8180,11 +8204,97 @@ function addSwissParticipantRound1(name, deck, opts) {
   return true;
 }
 
-// Remove a participant from a running tournament — same gate as add
-// (canAddParticipant — only allowed before round 2 starts). Both formats
-// regenerate from scratch with the named player dropped: simplest and
-// avoids fragile per-format match-unwinding logic. The host is warned
-// that current round-1 matches and scores will be lost.
+// Remove a participant from a Swiss or round-robin tournament still in round
+// 1, without regenerating anything. The exact inverse of
+// addSwissParticipantRound1, so the two stay symmetrical:
+//   - they held a free win        → that bye match leaves with them
+//   - a bye exists in their group → their opponent inherits it, and the
+//                                   emptied match is dropped
+//   - otherwise                   → their match becomes the opponent's free win
+// Every other group, pairing, score and setting is untouched, and the push is
+// a targeted update() rather than a whole-room set(). True on success.
+function removeSwissParticipantRound1(name) {
+  const s = loadSwiss();
+  if (!Array.isArray(s.groups) || !s.groups.length) return false;
+  if (!canAddParticipant(s)) return false;
+  const lower = String(name || "").trim().toLowerCase();
+  if (!lower) return false;
+  const gi = s.groups.findIndex(g => (g || []).some(n => (n || "").toLowerCase() === lower));
+  if (gi < 0) return false;
+
+  const matches = s.matches || {};
+  const updates = {};
+  const mine = Object.values(matches).find(m =>
+    m && m.round === 0 && m.groupIndex === gi &&
+    (((m.a || "").toLowerCase() === lower) || ((m.b || "").toLowerCase() === lower)));
+
+  if (mine) {
+    const opponent = (mine.a || "").toLowerCase() === lower ? mine.b : mine.a;
+    if (!opponent) {
+      // They held the free win — the bye match leaves with them.
+      delete s.matches[mine.id];
+      updates[`matches/${mine.id}`] = null;
+    } else {
+      // Pair the opponent into an existing free win if this group has one, so
+      // we never leave two byes sitting in the same round.
+      const bye = Object.values(matches).find(m =>
+        m && m !== mine && m.round === 0 && m.groupIndex === gi && m.bye && m.a && m.b == null);
+      if (bye) {
+        bye.b = opponent;
+        bye.bye = false;
+        bye.scoreA = null;
+        bye.scoreB = null;
+        updates[`matches/${bye.id}/b`] = opponent;
+        updates[`matches/${bye.id}/bye`] = false;
+        updates[`matches/${bye.id}/scoreA`] = null;
+        updates[`matches/${bye.id}/scoreB`] = null;
+        delete s.matches[mine.id];
+        updates[`matches/${mine.id}`] = null;
+      } else {
+        // The opponent inherits a free win in place of the match.
+        mine.a = opponent;
+        mine.b = null;
+        mine.bye = true;
+        mine.scoreA = null;
+        mine.scoreB = null;
+        updates[`matches/${mine.id}/a`] = opponent;
+        updates[`matches/${mine.id}/b`] = null;
+        updates[`matches/${mine.id}/bye`] = true;
+        updates[`matches/${mine.id}/scoreA`] = null;
+        updates[`matches/${mine.id}/scoreB`] = null;
+      }
+    }
+  }
+
+  s.groups[gi] = s.groups[gi].filter(n => (n || "").toLowerCase() !== lower);
+  if (Array.isArray(s.participants)) {
+    s.participants = s.participants.filter(n => (n || "").toLowerCase() !== lower);
+  }
+  // Drop every registrant under that name — duplicates are possible in odd
+  // edge cases, and leaving one behind would keep them in the standings.
+  const keptRegs = {};
+  Object.entries(s.registrants || {}).forEach(([id, r]) => {
+    if (r && typeof r.name === "string" && r.name.toLowerCase() === lower) {
+      updates[`registrants/${id}`] = null;
+      return;
+    }
+    keptRegs[id] = r;
+  });
+  s.registrants = keptRegs;
+
+  persistSwiss(s);
+  if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
+    updates[`groups/${gi}`] = s.groups[gi];
+    if (Array.isArray(s.participants)) updates.participants = s.participants;
+    swissRoomRef.update(updates).catch(e => console.warn("Remove participant push failed:", e));
+  }
+  return true;
+}
+
+// Remove a participant by regenerating the whole draw. Only used for
+// elimination brackets now, where the structure is fixed at generation time
+// and a player can't be unwound from it — group formats take the
+// no-reset path above. The host is warned that current matches are lost.
 function showRemoveParticipantsPopup() {
   if (!swissCanEdit) return;
   const state = loadSwiss();
@@ -8200,6 +8310,15 @@ function showRemoveParticipantsPopup() {
 
   document.getElementById("remove-participants-popup")?.remove();
 
+  // Group formats unwind a player out of round 1 in place. Elimination
+  // brackets are fixed at generation time, so they still regenerate — the
+  // same split addParticipant makes.
+  const canSlotOut = !isElimMode(state.mode)
+    && Array.isArray(state.groups) && state.groups.length > 0;
+  const blurb = canSlotOut
+    ? "Tap × next to a name to remove that player. Their round-1 match becomes a free win for their opponent — every other pairing, score and setting stays exactly as it is."
+    : "Tap × next to a name to remove that player. Elimination brackets can't drop a player mid-tournament, so the bracket regenerates from scratch and current matches and scores will be lost. You'll confirm before that happens.";
+
   const overlay = document.createElement("div");
   overlay.id = "remove-participants-popup";
   overlay.className = "popup-overlay";
@@ -8212,7 +8331,7 @@ function showRemoveParticipantsPopup() {
   overlay.innerHTML = `
     <div class="popup-card">
       <h2 class="popup-title">Remove Participant</h2>
-      <p class="popup-text" style="text-align: justify;">Tap × next to a name to remove that player. The bracket (or groups) regenerates from scratch, so any current round-1 matches and scores will be lost. You'll confirm before that happens.</p>
+      <p class="popup-text" style="text-align: justify;">${blurb}</p>
       <ul class="remove-participant-list">${rowsHtml}</ul>
       <div id="remove-participants-status" class="swiss-join-status"></div>
       <div class="popup-actions">
@@ -8244,8 +8363,19 @@ function showRemoveParticipantsPopup() {
     btn.addEventListener("click", () => {
       const name = btn.dataset.name;
       if (!name) return;
-      if (!confirm(`Remove ${name}? The bracket will regenerate and any current round-1 matches will be lost.`)) return;
-      const ok = removeRunningParticipantByRegen(name);
+      // The last participant can't be unwound either way — an empty draw
+      // isn't a tournament, so send the host to Reset instead.
+      if (getParticipants(loadSwiss()).length <= 1) {
+        alert("Can't remove the last participant — reset the tournament from the toolbar instead.");
+        return;
+      }
+      const msg = canSlotOut
+        ? `Remove ${name}? Their opponent gets a free win — no other pairing changes.`
+        : `Remove ${name}? The bracket will regenerate and any current matches will be lost.`;
+      if (!confirm(msg)) return;
+      const ok = canSlotOut
+        ? removeSwissParticipantRound1(name)
+        : removeRunningParticipantByRegen(name);
       if (!ok) {
         setStatus(`Couldn't remove ${name}. Try again.`, "err");
         return;
@@ -8380,18 +8510,27 @@ function removeRunningParticipantByRegen(name) {
     alert("Can't remove the last participant — reset the tournament from the toolbar instead.");
     return false;
   }
-  let next;
+  let regen;
   if (isElimMode(state.mode)) {
-    next = (state.mode === "double-elim" ? generateDoubleElimFromText : generateSingleElimFromText)(
+    regen = (state.mode === "double-elim" ? generateDoubleElimFromText : generateSingleElimFromText)(
       remaining.join("\n"), state.tournamentName, state.placementDepth);
   } else {
-    next = generateSwissFromText(remaining.join("\n"), state.tournamentName,
+    regen = generateSwissFromText(remaining.join("\n"), state.tournamentName,
       getRoundCount(state), getGroupCount(state), state.pairing);
-    if (next && state.mode === "swiss-only") next.mode = "swiss-only";
   }
-  if (!next) return false; // generator already alerted
-  if (typeof state.ranked === "boolean") next.ranked = state.ranked;
-  next.hostUid = state.hostUid || null;
+  if (!regen) return false; // generator already alerted
+  // Same shape as reshuffleTournament: spread the CURRENT state first so every
+  // setting survives, then let the fresh draw overwrite only what it actually
+  // produces (groups, groupRounds, matches, participants, bracket).
+  //
+  // Building `next` out of the generator's output alone dropped everything the
+  // generator doesn't emit — coHostUids, subHosts, eventDetails, bannedParts,
+  // topN, maxParticipants and the `awarded` dedup slots — and because the push
+  // below is a .set(), those were deleted from the room as well. Losing the
+  // draw AND every setting at once is what read as the tournament resetting.
+  // `mode` is restored last: the swiss generator always stamps "swiss", which
+  // would otherwise silently convert a swiss-only or round-robin room.
+  const next = { ...state, ...regen, mode: state.mode };
   // Carry registrants forward minus any entries that match the removed name
   // (case-insensitive). Multiple registrants can share a name in odd edge
   // cases — drop them all so the regenerated list stays consistent.
@@ -9136,15 +9275,21 @@ function showTournamentModePopup(onPick) {
     // Ask whether to add a knockout, and if so for what N.
     showTopEightPopup((mode) => {
       if (!mode) return; // user cancelled at the knockout step
-      const proceed = (topN) => {
+      const proceed = (topN, depth) => {
         showSwissRoundsPopup((rc) => {
-          showSwissGroupsPopup((gc) => finishWithCap(mode, name, rc, true, gc, undefined, topN), false);
+          showSwissGroupsPopup((gc) => finishWithCap(mode, name, rc, true, gc, undefined, topN, depth), false);
         });
       };
-      if (mode === "swiss-only") { proceed(null); return; }
+      if (mode === "swiss-only") { proceed(null, undefined); return; }
       showTopNPickerPopup((n) => {
         if (n == null) return; // cancelled at the size step
-        proceed(n);
+        // A knockout ranks as deep as the host wants — same picker the
+        // elimination formats use, so a Top 8 cut can decide just 1st–4th.
+        // Defaults to the cut size, i.e. rank everyone who made the bracket.
+        showSingleElimDepthPopup((depth) => {
+          if (depth == null) return; // cancelled at the depth step
+          proceed(n, depth);
+        }, n);
       });
     });
   };
@@ -9155,13 +9300,16 @@ function showTournamentModePopup(onPick) {
     // rounds are fixed by group size (everyone plays everyone once).
     showTopEightPopup((mode) => {
       if (!mode) return;
-      const proceed = (topN) => {
-        showSwissGroupsPopup((gc) => finishWithCap(mode, name, undefined, true, gc, "round-robin", topN), true);
+      const proceed = (topN, depth) => {
+        showSwissGroupsPopup((gc) => finishWithCap(mode, name, undefined, true, gc, "round-robin", topN, depth), true);
       };
-      if (mode === "swiss-only") { proceed(null); return; }
+      if (mode === "swiss-only") { proceed(null, undefined); return; }
       showTopNPickerPopup((n) => {
         if (n == null) return;
-        proceed(n);
+        showSingleElimDepthPopup((depth) => {
+          if (depth == null) return;
+          proceed(n, depth);
+        }, n);
       });
     }, true);
   };
@@ -9438,6 +9586,11 @@ function createRegisteringTournamentState({ mode, tournamentName, roundCount, ra
     if (safeMode === "swiss") {
       const nVal = Number(topN);
       state.topN = (Number.isFinite(nVal) && nVal >= 2 && nVal <= 64) ? nVal : 8;
+      // How deep that knockout ranks. Older call sites pass nothing, so fall
+      // back to the cut size — rank everyone who made the bracket, which is
+      // what the builder did before this became configurable.
+      state.placementDepth = clampPlacementDepth(
+        placementDepth == null ? state.topN : placementDepth);
     }
   } else {
     // Placement depth — any integer from 2 up. Carried through the generator,
