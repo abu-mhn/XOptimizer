@@ -2120,11 +2120,17 @@ function selectRandom(form, mode) {
 
 // --- Meta (random combo from parts flagged meta:true; falls back to full list) ---
 function selectMeta(form, mode) {
-  const pickMeta = (arr) => {
-    const eligible = arr.filter(p => p && !isExclusive(p));
-    const base = eligible.length > 0 ? eligible : arr;
+  // `extraFilter` narrows the candidates before the meta preference is applied
+  // (Clock Mirage restricts the ratchet slot to names ending in "5"), so the
+  // meta-first-then-fallback rule still runs *inside* that narrowed pool.
+  // Indices are always resolved against the original array.
+  const pickMeta = (arr, extraFilter) => {
+    const allowed = extraFilter ? arr.filter(p => p && extraFilter(p)) : arr;
+    const eligible = allowed.filter(p => p && !isExclusive(p));
+    const base = eligible.length > 0 ? eligible : allowed;
     const metas = base.filter(p => p.meta === true);
     const pool = metas.length > 0 ? metas : base;
+    if (pool.length === 0) return -1;
     const chosen = pool[Math.floor(Math.random() * pool.length)];
     return arr.indexOf(chosen);
   };
@@ -2150,16 +2156,14 @@ function selectMeta(form, mode) {
         getWrapper(form, "bit")._select(idx);
       }
     } else if (codename === "CLOCKMIRAGE") {
-      // Clock Mirage requires a ratchet ending in "5", and no -5 ratchet is
-      // flagged meta in DATA — so the usual meta-first preference would just
-      // fall through to a uniform random pick anyway. Skip the dead branch
-      // and pick uniformly from the -5 pool directly.
-      const valid = DATA.ratchets
-        .map((r, i) => ({ r, i }))
-        .filter(x => x.r.name.endsWith("5") && !isExclusive(x.r));
-      if (valid.length) {
-        getWrapper(form, "ratchet")._select(valid[Math.floor(Math.random() * valid.length)].i);
-      }
+      // Clock Mirage only accepts a ratchet whose name ends in "5" — and among
+      // those, Meta should pick a meta-flagged one (7-55), falling back to the
+      // rest of the -5 pool only if none are flagged. This previously picked
+      // uniformly across every -5 ratchet on the grounds that none carried the
+      // meta flag; that stopped being true, so Meta was handing out non-meta
+      // ratchets like 3-85 and M-85.
+      const rIdx = pickMeta(DATA.ratchets, r => r.name.endsWith("5"));
+      if (rIdx >= 0) getWrapper(form, "ratchet")._select(rIdx);
       const bIdx = pickMetaBit();
       if (bIdx >= 0) getWrapper(form, "bit")._select(bIdx);
     } else {

@@ -1763,10 +1763,20 @@ function startSwissMatch(matchId) {
 // announcement is made idempotent rather than relying on every caller to guess
 // whether someone else already did it. Cleared when the match leaves LIVE, so
 // a restarted match announces again.
-const announcedMatchStartIds = new Set();
-function announceMatchStartOnce(matchId, payload) {
-  if (!matchId || announcedMatchStartIds.has(matchId)) return;
-  announcedMatchStartIds.add(matchId);
+// Keyed by the startedAt stamp that was announced, not just the match id.
+// A room delivers several snapshots per write, and for a moment after a score
+// is saved the room still echoes that match's PRE-score shape (startedAt set,
+// no score yet). Saving clears every other suppressor at once — the live slot,
+// the local startedAt — so those echoes used to read as a brand-new call and
+// toast "MATCH STARTED" right after Save Score. Comparing the stamp makes the
+// announcement idempotent per actual call: a replay carries the same stamp and
+// is ignored, while a genuine re-call carries a fresh one and announces again.
+const announcedMatchStarts = new Map();
+function announceMatchStartOnce(matchId, startedAt, payload) {
+  if (!matchId) return;
+  const stamp = startedAt || 0;
+  if (announcedMatchStarts.get(matchId) === stamp) return;
+  announcedMatchStarts.set(matchId, stamp);
   if (typeof showMatchStartToast === "function") showMatchStartToast(payload);
 }
 
@@ -1789,7 +1799,7 @@ function markSwissMatchLive(matchId) {
   // (swissLiveMatchId is already set), so there's no double toast.
   const live = s.matches[matchId];
   const me = (window.getCurrentUsername && window.getCurrentUsername()) || "";
-  announceMatchStartOnce(matchId, {
+  announceMatchStartOnce(matchId, now, {
     a: live.a, b: live.b,
     where: matchWhereLabel(live),
     isMine: !!me && (me === live.a || me === live.b)
@@ -1802,7 +1812,9 @@ function markSwissMatchLive(matchId) {
 // that surface was open, so leaving it should put the match back as it was.
 function endSwissMatchLive(matchId) {
   if (swissLiveMatchId === matchId) swissLiveMatchId = null;
-  announcedMatchStartIds.delete(matchId);
+  // The announced stamp is deliberately kept: in-flight echoes of the call
+  // we're abandoning still carry it and must stay silent. A genuine re-call
+  // stamps a fresh startedAt, which announces on its own.
   const s = loadSwiss();
   if (s.matches[matchId]) {
     s.matches[matchId].startedAt = null;
@@ -1822,7 +1834,8 @@ function commitSwissMatchScore(matchId, scoreA, scoreB, isEdit) {
   // Only release the live slot if THIS match held it — scoring a different
   // match by hand must not drop a match this device is live on.
   if (swissLiveMatchId === matchId) swissLiveMatchId = null;
-  announcedMatchStartIds.delete(matchId);
+  // Same as endSwissMatchLive: keep the announced stamp. Clearing it here is
+  // exactly what let a post-save echo re-announce the match as just started.
   const s = loadSwiss();
   const stored = s.matches[matchId];
   if (!stored) return;
@@ -5016,7 +5029,7 @@ function detectAndAnnounceMatchStarts(prevState, remote) {
     if (wasStarted) return; // already started — not a fresh transition
     if (swissLiveMatchId === id) return; // THIS device started it
     const isMine = myNames.has(m.a) || myNames.has(m.b);
-    announceMatchStartOnce(id, { a: m.a, b: m.b, where: matchWhereLabel(m), isMine });
+    announceMatchStartOnce(id, m.startedAt, { a: m.a, b: m.b, where: matchWhereLabel(m), isMine });
   });
 }
 
@@ -11439,21 +11452,14 @@ function pickMetaFrom(arr, used, extraFilter) {
   return null;
 }
 
-// Uniform random ratchet ending in "5", honouring the per-deck `used`
-// exclusion. Falls back to ignoring `used` only when every -5 ratchet has
-// already been taken by another slot — better to repeat than to leave a
-// Clock Mirage slot with no ratchet at all.
+// Meta ratchet for a Clock Mirage slot: restricted to names ending in "5",
+// then the generic meta-first tiering does the rest — meta+unused, unused,
+// meta, anything — so a -5 ratchet that IS flagged meta (7-55) wins over one
+// that isn't, and the per-deck `used` exclusion is honoured throughout.
+// This used to pick uniformly across the whole -5 pool on the grounds that
+// none of them carried the meta flag; that stopped being true.
 function pickClockMirageRatchet(used) {
-  const arr = DATA.ratchets || [];
-  const baseFilter = p => p && !isExclusive(p) && p.name && p.name.endsWith("5");
-  const tiers = [
-    arr.filter(p => baseFilter(p) && !used.has(p.name)),
-    arr.filter(baseFilter)
-  ];
-  for (const pool of tiers) {
-    if (pool.length) return pool[Math.floor(Math.random() * pool.length)];
-  }
-  return null;
+  return pickMetaFrom(DATA.ratchets || [], used, r => !!r.name && r.name.endsWith("5"));
 }
 
 function pickMetaLockChip(used) {
@@ -11525,12 +11531,9 @@ function buildMetaSlot(mode, used) {
     return { mode, parts: { blade: blade.name, ratchet: NO_RATCHET, bit: bitName } };
   }
   if (codename === "CLOCKMIRAGE") {
-    // Clock Mirage requires a ratchet ending in "5", and no -5 ratchet is
-    // flagged meta in DATA. The generic pickMetaFrom would just churn
-    // through empty meta tiers before falling back to a uniform pick from
-    // the -5 pool — short-circuit straight to that pool (still honouring
-    // the deck-wide `used` exclusion so a Clock Mirage slot can't repeat
-    // a ratchet already locked in by another slot in the same deck).
+    // Clock Mirage restricts the ratchet slot to names ending in "5"; the
+    // picker prefers a meta-flagged one within that pool and still honours the
+    // deck-wide `used` exclusion.
     const ratchet = pickClockMirageRatchet(used);
     return { mode, parts: { blade: blade.name, ratchet: ratchet?.name || null, bit: bitName } };
   }
