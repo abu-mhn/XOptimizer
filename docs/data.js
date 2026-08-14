@@ -92,7 +92,7 @@ const DATA = {
     { atk: 32, def: 35, sta: 33, weight: 30.5, spindirection: "R", name: "Moff Gideon", codename: "MOFFGIDEON" },
     { atk: 27, def: 35, sta: 38, weight: 31.1, spindirection: "R", name: "Megatron", codename: "MEGATRON" },
     { atk: 22, def: 55, sta: 23, weight: 33.3, spindirection: "R", name: "Optimus Prime", codename: "OPTIMUSPRIME" },
-    { atk: 18, def: 27, sta: 55, weight: 29.5, spindirection: "R", name: "Starscream", codename: "STARSCREAM" },
+    { atk: 18, def: 27, sta: 55, weight: 29.5, spindirection: "R", name: "Star Scream", codename: "STARSCREAM" },
     { atk: 60, def: 27, sta: 13, weight: 35.7, spindirection: "R", name: "Optimus Primal", codename: "OPTIMUSPRIMAL" }
   ],
 
