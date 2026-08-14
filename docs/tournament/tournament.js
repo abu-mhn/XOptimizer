@@ -2217,6 +2217,12 @@ function computeSwissRoundsScrollTarget(scrollEl, state) {
   if (isElimMode(state.mode)) {
     return computeSingleElimScrollTarget(scrollEl, state);
   }
+  // A Swiss / Round Robin knockout uses the same round-indexed bracket the
+  // single-elim renderer draws, so it needs the same column walk. Only legacy
+  // Top 8 rooms fall through to the qf/sf/cqf logic below.
+  if (swissBracketIsRoundIndexed(state)) {
+    return computeSingleElimScrollTarget(scrollEl, state);
+  }
 
   const cols = scrollEl.querySelectorAll(".swiss-round-col");
   if (cols.length < 3) return scrollEl.scrollWidth;
@@ -2286,11 +2292,17 @@ function computeSingleElimScrollTarget(scrollEl, state) {
   const cols = scrollEl.querySelectorAll(".swiss-round-col");
   if (cols.length < 2) return scrollEl.scrollWidth;
 
-  const preFinalRounds = typeof state.preFinalRounds === "number" ? state.preFinalRounds : 0;
-  if (preFinalRounds === 0) return scrollEl.scrollWidth; // 2-player bracket — only the final column
-
   const phantoms = computeBracketPhantoms(state);
   const bracketEntries = Object.entries(state.matches || {}).filter(([, m]) => m && m.bracket);
+  // A Swiss knockout stores bracketSize / preFinalRounds on the room when the
+  // bracket is built, but a device that loaded the room before that landed can
+  // be missing it — derive the round count from the cards themselves so the
+  // strip still walks instead of jumping straight to the last column.
+  const preFinalRounds = typeof state.preFinalRounds === "number"
+    ? state.preFinalRounds
+    : bracketEntries.reduce(
+        (mx, [, m]) => (typeof m.round === "number" ? Math.max(mx, m.round + 1) : mx), 0);
+  if (preFinalRounds === 0) return scrollEl.scrollWidth; // 2-player bracket — only the final column
   const roundDone = (round) => {
     const ms = bracketEntries.filter(([id, m]) => m.round === round && !phantoms.has(id));
     if (ms.length === 0) return true; // round has only phantoms — nothing to play, treat as done
@@ -2466,15 +2478,26 @@ function renderSwissBracket(state) {
   if (state.mode === "single-elim") {
     return renderSingleElimBracket(state);
   }
-  // Legacy Top 8 tournaments keep their QF/SF/F structure — those matches
-  // are already in Firebase under those exact ids. New tournaments with a
-  // configurable topN use the single-elim renderer (round-indexed match ids).
-  const hasLegacyQF = Object.keys(state.matches || {}).some(k => k.startsWith("bracket-qf-"));
-  if (hasLegacyQF) return renderSwissTop8Bracket(state);
-  if (typeof state.topN === "number" && state.topN >= 2) {
-    return renderSwissTopNBracket(state);
-  }
+  if (swissBracketIsRoundIndexed(state)) return renderSwissTopNBracket(state);
   return renderSwissTop8Bracket(state);
+}
+
+// Which Swiss / Round Robin knockout structure a room has. Legacy Top 8 rooms
+// keep their bracket-qf-* / sf / cqf ids — those matches are already in
+// Firebase under those exact ids. Everything since the configurable topN
+// landed uses the round-indexed single-elim structure (bracket-r0-*, …).
+//
+// Both the renderer and the scroll-target logic branch on this, and they MUST
+// agree: they previously tested different things, so a round-indexed bracket
+// rendered correctly but fell through to the legacy qf/sf/cqf scroll checks.
+// Those found no "qf" round, concluded it wasn't finished, and pinned the
+// strip to scrollLeft 0 — snapping the bracket back to the left on every
+// re-render, i.e. every time a score was submitted.
+function swissBracketIsRoundIndexed(state) {
+  if (!state) return false;
+  const hasLegacyQF = Object.keys(state.matches || {}).some(k => k.startsWith("bracket-qf-"));
+  if (hasLegacyQF) return false;
+  return typeof state.topN === "number" && state.topN >= 2;
 }
 
 // Wrapper around the single-elim renderer for a Swiss+TopN knockout. Just
