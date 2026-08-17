@@ -1505,6 +1505,13 @@
       <div class="developer-db-toolbar">
         <button type="button" id="developer-db-add" class="btn btn-sm">+ Add entry</button>
         <button type="button" id="developer-db-refresh" class="btn btn-sm">Refresh</button>
+        <input type="search" id="developer-db-search" class="developer-db-search"
+               placeholder="Search this table…" autocomplete="off" spellcheck="false">
+        <label class="developer-db-sortwrap">Sort
+          <select id="developer-db-sort" class="developer-db-sort" title="Order the cards by any field"><option value=" key">Key</option></select>
+        </label>
+        <button type="button" id="developer-db-sortdir" class="developer-db-sortdir"
+                data-dir="asc" title="Ascending — tap to reverse" aria-label="Toggle sort direction">&#8593;</button>
       </div>
       <p class="swiss-join-status" id="developer-db-status"></p>
       <div class="developer-db-table-wrap"><div id="developer-db-table"></div></div>
@@ -1523,10 +1530,31 @@
     const load = () => renderDatabaseNode(activeNode, (entries) => {
       lastEntries = entries || [];
     });
+    const searchInput = panel.querySelector("#developer-db-search");
+    searchInput?.addEventListener("input", applyDbSearch);
+    // Sort is a display-only change — re-render from the entries we already
+    // hold rather than re-reading the node, and re-apply the search.
+    const reRender = () => {
+      if (!lastEntries.length) { load(); return; }
+      tableEl.innerHTML = renderDbTableHtml(activeNode, lastEntries);
+      applyDbSearch();
+    };
+    panel.querySelector("#developer-db-sort")?.addEventListener("change", reRender);
+    const sortDirBtn = panel.querySelector("#developer-db-sortdir");
+    sortDirBtn?.addEventListener("click", () => {
+      const desc = sortDirBtn.dataset.dir === "desc";
+      sortDirBtn.dataset.dir = desc ? "asc" : "desc";
+      sortDirBtn.innerHTML = desc ? "&#8593;" : "&#8595;";
+      sortDirBtn.title = desc ? "Ascending — tap to reverse" : "Descending — tap to reverse";
+      reRender();
+    });
     tabs.forEach(tab => {
       tab.addEventListener("click", () => {
         activeNode = tab.dataset.dbNode;
         tabs.forEach(t => t.classList.toggle("active", t === tab));
+        // A search typed for one node rarely means anything in the next, and
+        // a table that opens already filtered reads as an empty node.
+        if (searchInput) searchInput.value = "";
         load();
       });
     });
@@ -1559,6 +1587,56 @@
     load();
   }
 
+  // Refill the Sort dropdown for the node just loaded. Keeps the current
+  // choice when that field also exists on the new node (switching between
+  // users / profiles keeps a "username" sort), otherwise falls back to Key.
+  function populateDbSortOptions(nodeKey, entries) {
+    const sel = document.getElementById("developer-db-sort");
+    if (!sel) return;
+    const previous = sel.value;
+    const { firstIsScalar, cols } = dbColumnsFor(nodeKey, entries);
+    const opts = [{ v: DB_SORT_KEY, label: "Key" }];
+    if (firstIsScalar) opts.push({ v: DB_SORT_VALUE, label: "Value" });
+    else cols.forEach(c => opts.push({ v: c, label: c }));
+    sel.innerHTML = opts.map(o =>
+      `<option value="${String(o.v).replace(/"/g, "&quot;")}">${
+        String(o.label).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      }</option>`).join("");
+    sel.value = opts.some(o => o.v === previous) ? previous : DB_SORT_KEY;
+  }
+
+  // Filter the already-rendered rows in place — no re-read, no re-render, so
+  // typing never loses focus or costs a round trip. Matches the row's whole
+  // text (key + every cell), case-insensitively, so you can search by key,
+  // username, tournament name, uid — whatever's on screen.
+  function applyDbSearch() {
+    const tableEl = document.getElementById("developer-db-table");
+    const statusEl = document.getElementById("developer-db-status");
+    const input = document.getElementById("developer-db-search");
+    if (!tableEl) return;
+    const q = ((input && input.value) || "").trim().toLowerCase();
+    const rows = tableEl.querySelectorAll("tbody tr");
+    if (!rows.length) return;
+    let shown = 0;
+    rows.forEach(tr => {
+      // data-search covers every field including hidden columns; textContent
+      // is the fallback for any row rendered before that attribute existed.
+      const hay = tr.dataset && tr.dataset.search
+        ? tr.dataset.search
+        : (tr.textContent || "").toLowerCase();
+      const hit = !q || hay.indexOf(q) >= 0;
+      tr.classList.toggle("developer-db-row-hidden", !hit);
+      if (hit) shown++;
+    });
+    if (statusEl) {
+      statusEl.textContent = q
+        ? (shown ? `${shown} of ${rows.length} shown` : `No match for “${input.value.trim()}”`)
+        : `${rows.length} entr${rows.length === 1 ? "y" : "ies"}`;
+      statusEl.classList.remove("is-err", "is-pending");
+      statusEl.classList.add("is-ok");
+    }
+  }
+
   function renderDatabaseNode(nodeKey, onLoaded) {
     const tableEl = document.getElementById("developer-db-table");
     const statusEl = document.getElementById("developer-db-status");
@@ -1580,10 +1658,16 @@
         statusEl.textContent = "Empty.";
         statusEl.classList.replace("is-pending", "is-ok");
         if (typeof onLoaded === "function") onLoaded([]);
+        // Still refresh the Sort options — otherwise an empty node leaves the
+        // previous node's field names sitting in the dropdown.
+        populateDbSortOptions(nodeKey, []);
         return;
       }
       const entries = Object.entries(val);
       if (typeof onLoaded === "function") onLoaded(entries);
+      // Rebuild the Sort options for this node's fields before rendering, so
+      // the dropdown and the order on screen always agree.
+      populateDbSortOptions(nodeKey, entries);
       statusEl.textContent = `${entries.length} entr${entries.length === 1 ? "y" : "ies"}`;
       statusEl.classList.replace("is-pending", "is-ok");
       // winRates keys are sanitized lowercase usernames — not super
@@ -1601,13 +1685,18 @@
             }
           });
           tableEl.innerHTML = renderDbTableHtml(nodeKey, entries);
+          applyDbSearch();
         }).catch(() => {
           // Profiles read failed — still render winRates without names.
           tableEl.innerHTML = renderDbTableHtml(nodeKey, entries);
+          applyDbSearch();
         });
         return;
       }
       tableEl.innerHTML = renderDbTableHtml(nodeKey, entries);
+      // Re-apply any active search to the freshly rendered rows, so Refresh
+      // (and an edit / delete that re-renders) keeps the filter you typed.
+      applyDbSearch();
     }).catch(err => {
       console.warn("[db viewer] read failed:", nodeKey, err);
       statusEl.textContent = "Read failed: " + (err && err.message ? err.message : err);
@@ -1615,13 +1704,14 @@
     });
   }
 
-  function renderDbTableHtml(nodeKey, entries) {
-    const escape = (s) => String(s == null ? "" : s)
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-    // Columns: union of every key across every entry, so no field is
-    // silently hidden. Preset keys (for the nodes that have them) come
-    // first in their preset order; any extra keys follow alphabetically.
+  // Work out a node's columns once, so the renderer and the Sort dropdown can't
+  // disagree about what fields exist.
+  //
+  // Every field is shown — the card layout stacks them vertically, so there's
+  // no width pressure to hide any. The per-node preset is still used, purely
+  // for ORDER: the fields worth reading first (name, mode, host…) lead, and
+  // anything else follows alphabetically.
+  function dbColumnsFor(nodeKey, entries) {
     const firstVal = entries[0] && entries[0][1];
     const firstIsScalar = (firstVal == null) || typeof firstVal !== "object";
     let cols = [];
@@ -1635,22 +1725,100 @@
       const remaining = Array.from(all).filter(k => !presetSet.has(k)).sort();
       cols = preset.concat(remaining);
     }
+    return { firstIsScalar, cols };
+  }
+
+  // Sort keys use sentinels for the two pseudo-columns so they can't collide
+  // with a real field name.
+  const DB_SORT_KEY = " key";
+  const DB_SORT_VALUE = " value";
+
+  function dbSortSpec() {
+    const sel = document.getElementById("developer-db-sort");
+    const dirBtn = document.getElementById("developer-db-sortdir");
+    return {
+      col: (sel && sel.value) || DB_SORT_KEY,
+      desc: !!(dirBtn && dirBtn.dataset.dir === "desc")
+    };
+  }
+
+  // Compare two cell values of the same column. Numbers numerically, booleans
+  // true-first, objects by how many entries they hold (the only ordering that
+  // means anything for a "{12} …" summary cell), everything else as text with
+  // natural number handling so "Top 8" precedes "Top 12".
+  function dbCompareValues(a, b) {
+    if (typeof a === "number" && typeof b === "number") return a - b;
+    if (typeof a === "boolean" && typeof b === "boolean") return (b ? 1 : 0) - (a ? 1 : 0);
+    if (a && b && typeof a === "object" && typeof b === "object") {
+      return Object.keys(a).length - Object.keys(b).length;
+    }
+    return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
+  }
+
+  function dbSortEntries(entries, spec) {
+    const { col, desc } = spec;
+    const valueOf = ([key, val]) => {
+      if (col === DB_SORT_KEY) return key;
+      if (col === DB_SORT_VALUE) return val;
+      return (val && typeof val === "object") ? val[col] : undefined;
+    };
+    // "Blank" means whatever formatDbCell renders as "—", so what sinks to the
+    // bottom matches what looks empty on screen. An empty map counts: showing
+    // "—" but sorting above a populated one reads as a bug.
+    const isBlank = (v) => v === undefined || v === null || v === ""
+      || (typeof v === "object" && Object.keys(v).length === 0);
+    // Keys and uids are opaque identifiers, so they compare as plain text.
+    // Numeric collation is right for field values ("Top 8" before "Top 12")
+    // but scrambles codes like 49FG3W / 9CGR9N by their leading digits.
+    const byKey = (x, y) => String(x[0]).localeCompare(String(y[0]));
+    const dir = desc ? -1 : 1;
+    // Copy first — the caller's array is the cached entry list, and re-sorting
+    // it in place would make the order depend on how many times you've toggled.
+    return entries.slice().sort((x, y) => {
+      if (col === DB_SORT_KEY) return dir * byKey(x, y);
+      const a = valueOf(x), b = valueOf(y);
+      // Blanks always sink, whichever direction: a column that's empty on half
+      // the rows is useless if flipping to descending just fills the screen
+      // with dashes. Two blanks fall back to key order, so a column that's
+      // empty everywhere still lands in a predictable order rather than
+      // whatever order the node happened to arrive in.
+      const aB = isBlank(a), bB = isBlank(b);
+      if (aB || bB) return (aB && bB) ? byKey(x, y) : (aB ? 1 : -1);
+      const cmp = dbCompareValues(a, b);
+      // Ties fall back to the key so the order is stable and reproducible.
+      return cmp !== 0 ? dir * cmp : byKey(x, y);
+    });
+  }
+
+  function renderDbTableHtml(nodeKey, entries) {
+    const escape = (s) => String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    const { firstIsScalar, cols } = dbColumnsFor(nodeKey, entries);
+    entries = dbSortEntries(entries, dbSortSpec());
     const valueCol = firstIsScalar ? "Value" : null;
     const head = `<thead><tr><th>Key</th>${
       valueCol
         ? `<th>${escape(valueCol)}</th>`
         : cols.map(c => `<th>${escape(c)}</th>`).join("")
     }<th class="developer-db-actions-h">Actions</th></tr></thead>`;
+    // Cells are clipped with an ellipsis to keep columns readable, so every one
+    // also carries its full text as a title — hovering a truncated uid or
+    // tournament name shows the whole value without opening the JSON editor.
+    const cell = (colName, value, extraAttr) => {
+      const text = formatDbCell(value);
+      return `<td data-col="${escape(colName)}" title="${escape(text)}"${extraAttr || ""}>${escape(text)}</td>`;
+    };
     const rows = entries.map(([key, val]) => {
       let cells;
       if (firstIsScalar) {
-        cells = `<td data-col="${escape(valueCol || "Value")}">${escape(formatDbCell(val))}</td>`;
+        cells = cell(valueCol || "Value", val);
       } else if (val == null || typeof val !== "object") {
-        cells = `<td colspan="${cols.length}" data-col="Value">${escape(formatDbCell(val))}</td>`;
+        cells = cell("Value", val, ` colspan="${cols.length}"`);
       } else {
         // data-col on every cell so the mobile card layout can render the
         // column name as an inline label via CSS ::before.
-        cells = cols.map(c => `<td data-col="${escape(c)}">${escape(formatDbCell(val[c]))}</td>`).join("");
+        cells = cols.map(c => cell(c, val[c])).join("");
       }
       const actions = `
         <td class="developer-db-actions" data-col="Actions">
@@ -1658,7 +1826,17 @@
           <button type="button" class="developer-db-act" data-act="edit-json"   data-key="${escape(key)}" title="Edit raw JSON">{}</button>
           <button type="button" class="developer-db-act developer-db-act-del" data-act="delete" data-key="${escape(key)}" title="Delete">&#128465;</button>
         </td>`;
-      return `<tr><td class="developer-db-key" data-col="Key">${escape(key)}</td>${cells}${actions}</tr>`;
+      // Search haystack built from EVERY field, not just the visible columns —
+      // otherwise hiding a column would silently make its contents
+      // unsearchable. Pre-lowercased so filtering doesn't re-lowercase a long
+      // string on every keystroke, and built from formatDbCell so photo /
+      // banner data-URLs land as "[N KB img]" rather than the whole blob.
+      const haystack = [key].concat(
+        (val && typeof val === "object")
+          ? cols.map(c => formatDbCell(val[c]))
+          : [formatDbCell(val)]
+      ).join(" ").toLowerCase();
+      return `<tr data-search="${escape(haystack)}"><td class="developer-db-key" data-col="Key" title="${escape(key)}">${escape(key)}</td>${cells}${actions}</tr>`;
     }).join("");
     return `<table class="developer-db-table-inner">${head}<tbody>${rows}</tbody></table>`;
   }

@@ -1983,6 +1983,13 @@ body.forest-mode   .developer-db-tab.active { border-color: #b5c89a; border-bott
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+/* Action buttons keep their natural width. Without this the flexible search
+   field squeezes them until "+ Add entry" wraps onto two lines. */
+.developer-db-toolbar > .btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
 }
 .developer-db-label {
     font-size: 0.78rem;
@@ -2026,6 +2033,74 @@ body.forest-mode   .developer-db-tab.active { border-color: #b5c89a; border-bott
     font-weight: 600;
     max-width: 220px;
 }
+/* Rows filtered out by the search box. display:none rather than a re-render,
+   so typing keeps focus and costs no round trip. */
+.developer-db-table-inner tbody tr.developer-db-row-hidden {
+    display: none;
+}
+/* No row banding — the layout below is cards, not rows, so each entry is
+   already visually separated by its own border. */
+/* Search box sits on the toolbar row and takes the leftover width, so it grows
+   on a desktop and still fits beside the buttons on a phone. */
+.developer-db-search {
+    flex: 1 1 200px;
+    min-width: 150px;
+    /* Capped so it doesn't swallow the row on a wide screen and leave the
+       sort controls squashed against the right edge. */
+    max-width: 340px;
+    padding: 6px 10px;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    background: #0d1117;
+    color: #c9d1d9;
+    font-size: 0.82rem;
+}
+.developer-db-search::placeholder {
+    color: #6e7681;
+}
+.developer-db-sortwrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.78rem;
+    color: #8b949e;
+    white-space: nowrap;
+}
+.developer-db-sort {
+    /* A min-width keeps it reading as a control — sized to its content it
+       collapsed to almost nothing on a short option like "Key". */
+    min-width: 120px;
+    max-width: 170px;
+    padding: 6px 8px;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    background: #0d1117;
+    color: #c9d1d9;
+    font-size: 0.78rem;
+    cursor: pointer;
+}
+.developer-db-sortdir {
+    flex: 0 0 auto;
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    background: #0d1117;
+    color: #c9d1d9;
+    font-size: 0.85rem;
+    line-height: 1;
+    cursor: pointer;
+}
+.developer-db-sortdir:hover {
+    background: rgba(110, 118, 129, 0.22);
+}
+.developer-db-search:focus {
+    outline: none;
+    border-color: #388bfd;
+}
 .developer-db-table-inner tbody tr:hover { background: rgba(255, 255, 255, 0.04); }
 
 /* Per-row action buttons — small, sit at the end of each row. */
@@ -2052,76 +2127,96 @@ body.forest-mode   .developer-db-tab.active { border-color: #b5c89a; border-bott
 .developer-db-act-del { color: #ff7b72; }
 .developer-db-act-del:hover { background: rgba(248, 81, 73, 0.18); border-color: rgba(248, 81, 73, 0.45); }
 
-/* Mobile layout — table doesn't fit a phone with 10+ columns, so flip
-   each row into a vertical card. Header row is hidden because every
-   cell carries an inline label (the column name) via data-col. */
-@media (max-width: 600px) {
-    .developer-db-table-wrap {
-        border: none;
-        max-height: none;
-        overflow: visible;
-    }
-    .developer-db-table-inner,
-    .developer-db-table-inner tbody,
-    .developer-db-table-inner tr,
-    .developer-db-table-inner td {
-        display: block;
-        width: auto;
-        max-width: none;
-    }
-    .developer-db-table-inner thead { display: none; }
-    .developer-db-table-inner tbody tr {
-        border: 1px solid #30363d;
-        border-radius: 8px;
-        margin-bottom: 8px;
-        padding: 6px 4px;
-        background: rgba(255, 255, 255, 0.02);
-    }
-    .developer-db-table-inner tbody tr:hover { background: rgba(255, 255, 255, 0.04); }
-    .developer-db-table-inner td {
-        border: none;
-        padding: 3px 8px;
-        white-space: normal;
-        overflow: visible;
-        text-overflow: clip;
-        word-break: break-word;
-        font-size: 0.78rem;
-    }
-    .developer-db-table-inner td::before {
-        content: attr(data-col) ": ";
-        font-weight: 700;
-        opacity: 0.7;
-        margin-right: 4px;
-    }
-    .developer-db-table-inner td.developer-db-key {
-        font-size: 0.85rem;
-        padding-bottom: 4px;
-        margin-bottom: 4px;
-        border-bottom: 1px solid #30363d;
-    }
-    .developer-db-table-inner td.developer-db-key::before {
-        content: "";
-        margin: 0;
-    }
-    /* Action buttons row at the bottom of each mobile card. */
-    .developer-db-table-inner td.developer-db-actions {
-        text-align: left;
-        margin-top: 6px;
-        padding-top: 6px;
-        border-top: 1px solid #30363d;
-    }
-    .developer-db-table-inner td.developer-db-actions::before { content: ""; margin: 0; }
-    .developer-db-act { margin-left: 0; margin-right: 6px; }
-    /* Per-theme card backgrounds + key separator. */
-    body.light-mode    .developer-db-table-inner tbody tr,
-    body.tropical-mode .developer-db-table-inner tbody tr,
-    body.love-mode     .developer-db-table-inner tbody tr,
-    body.forest-mode   .developer-db-table-inner tbody tr { background: #ffffff; border-color: #d1d9e0; }
-    body.light-mode    .developer-db-table-inner td.developer-db-key,
-    body.tropical-mode .developer-db-table-inner td.developer-db-key,
-    body.love-mode     .developer-db-table-inner td.developer-db-key,
-    body.forest-mode   .developer-db-table-inner td.developer-db-key { border-bottom-color: #d1d9e0; }
+/* Card layout at EVERY width, not just on a phone. These nodes carry 10-20
+   fields (an archived tournament is a whole snapshot), so a column per field
+   is unreadable on any screen — you end up scrolling sideways just to read one
+   row. One card per entry, each field on its own labelled line, is legible at
+   any size. The header row is hidden because every cell already carries its
+   column name inline via data-col. */
+.developer-db-table-wrap {
+    border: none;
+    max-height: none;
+    overflow: visible;
 }
+.developer-db-table-inner,
+.developer-db-table-inner tr,
+.developer-db-table-inner td {
+    display: block;
+    width: auto;
+    max-width: none;
+}
+/* Cards tile across the available width — several abreast on a desktop, while
+   auto-fill collapses to a single column on a phone, which is exactly the
+   layout this had there before. */
+.developer-db-table-inner tbody {
+    display: grid;
+    /* auto-FIT, not auto-fill: auto-fill keeps empty tracks reserved, so a node
+       with one entry left its card in a 300px slot with the rest of the row
+       held blank. auto-fit collapses the unused tracks, so one card fills the
+       width and many cards still tile across it. */
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 10px;
+    align-items: start;
+}
+.developer-db-table-inner thead { display: none; }
+.developer-db-table-inner tbody tr {
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.02);
+}
+.developer-db-table-inner tbody tr:hover {
+    background: rgba(255, 255, 255, 0.045);
+    border-color: #444c56;
+}
+.developer-db-table-inner td {
+    border: none;
+    padding: 2px 0;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    word-break: break-word;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: #c9d1d9;
+}
+/* Field name dimmer than its value, so the eye lands on the data rather than
+   on a column of repeated labels. */
+.developer-db-table-inner td::before {
+    content: attr(data-col) ": ";
+    font-weight: 600;
+    color: #8b949e;
+    margin-right: 4px;
+}
+.developer-db-table-inner td.developer-db-key {
+    font-size: 0.92rem;
+    letter-spacing: 0.02em;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #30363d;
+}
+.developer-db-table-inner td.developer-db-key::before {
+    content: "";
+    margin: 0;
+}
+/* Action buttons row at the bottom of each card. */
+.developer-db-table-inner td.developer-db-actions {
+    text-align: left;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #30363d;
+}
+.developer-db-table-inner td.developer-db-actions::before { content: ""; margin: 0; }
+.developer-db-act { margin-left: 0; margin-right: 6px; }
+/* Per-theme card backgrounds + key separator. */
+body.light-mode    .developer-db-table-inner tbody tr,
+body.tropical-mode .developer-db-table-inner tbody tr,
+body.love-mode     .developer-db-table-inner tbody tr,
+body.forest-mode   .developer-db-table-inner tbody tr { background: #ffffff; border-color: #d1d9e0; }
+body.light-mode    .developer-db-table-inner td.developer-db-key,
+body.tropical-mode .developer-db-table-inner td.developer-db-key,
+body.love-mode     .developer-db-table-inner td.developer-db-key,
+body.forest-mode   .developer-db-table-inner td.developer-db-key { border-bottom-color: #d1d9e0; }
 
 /* Light themes — table on white with darker text + borders. */
 body.light-mode    .developer-db-table-wrap,
