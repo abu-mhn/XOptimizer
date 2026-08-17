@@ -9085,6 +9085,16 @@ body.light-mode .swiss-group-progress {
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;          /* Firefox — hide scrollbar */
 }
+/* The same chip row reused in the running view's toolbar, stacked directly
+   under the host badge inside .swiss-toolbar-idgroup, showing which format the
+   room is playing once registration has closed. The idgroup is a column with
+   align-items:flex-start, which sizes children to their content — so the row
+   needs max-width:100% (plus min-width:0) to scroll sideways on a narrow screen
+   rather than overflowing the toolbar. */
+.swiss-toolbar-format {
+    min-width: 0;
+    max-width: 100%;
+}
 .swiss-reg-format::-webkit-scrollbar {
     display: none;                  /* Chrome/Safari — hide scrollbar */
 }

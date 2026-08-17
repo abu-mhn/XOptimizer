@@ -712,6 +712,35 @@ function tournamentFormatLabel(mode, pairing, shortElim, topN) {
   return `${base} + Top ${n}`;
 }
 
+// Read-only format chips for the RUNNING view, so everyone can still see which
+// format the room is playing once registration closes and the editable chip row
+// goes away. Plain labels, not buttons — the format is locked once a draw
+// exists.
+//
+// Deliberately narrower than the registration row: group and round counts are
+// left out because each group header already reads "Group A · Round 1 / 3", and
+// the participant cap stops meaning anything once registration is closed.
+function renderSwissRunningFormatBits(state) {
+  if (!state) return "";
+  const bits = [tournamentFormatLabel(state.mode, state.pairing, false, state.topN)];
+  // Placings only exist where there's a bracket to decide them — swiss-only
+  // finishes on group records.
+  if (isElimMode(state.mode) || state.mode === "swiss") {
+    const cutN = (typeof state.topN === "number" && state.topN >= 2) ? state.topN : 8;
+    const placings = isElimMode(state.mode)
+      ? clampPlacementDepth(state.placementDepth)
+      : Math.min(clampPlacementDepth(state.placementDepth), cutN);
+    bits.push(`${placings} placings`);
+  }
+  // Same container class as the registration chip row, so the two look
+  // identical and this one inherits its hidden-scrollbar sideways scroll on
+  // narrow screens.
+  const chips = bits
+    .map(b => `<span class="swiss-reg-format-bit">${escapeHtml(b)}</span>`)
+    .join("");
+  return `<div class="swiss-reg-format swiss-toolbar-format">${chips}</div>`;
+}
+
 // Registration-phase helpers. A tournament with `phase: "registering"` is
 // open to self-signups via the Room tab; once the host clicks Start the
 // phase flips to "running" and the existing generators take over.
@@ -719,8 +748,21 @@ function isRegisteringPhase(state) {
   return !!(state && state.phase === "registering");
 }
 
+// Registrant ids embed a base-36 millisecond stamp that the "Added" sort reads
+// back out (see registrantOrderKey). Bulk add mints a whole pasted list inside
+// a single millisecond, so a raw Date.now() handed every one of those names an
+// identical stamp — the sort had nothing left to separate them and they came
+// out in whatever order the keys happened to arrive in, i.e. shuffled by the
+// random suffix. Keeping the stamp strictly increasing preserves the order
+// names were actually added, so a pasted list stays in paste order.
+//
+// The stamp can run a few ms ahead of the wall clock during a large paste;
+// that's harmless, since it's only ever compared against other registrant ids.
+let lastRegistrantStamp = 0;
 function generateRegistrantId() {
-  return `r_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  const now = Date.now();
+  lastRegistrantStamp = now > lastRegistrantStamp ? now : lastRegistrantStamp + 1;
+  return `r_${lastRegistrantStamp.toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function listRegistrants(state) {
@@ -1637,6 +1679,56 @@ function findMyRegistrantIds(state, editCode) {
     if (state.registrants[id]) out.add(id);
   });
   return Array.from(out);
+}
+
+// Take a started tournament back to the registration screen so the host can
+// change the format (or anything else) and start again. The draw — groups,
+// matches, scores, bracket — is discarded; everything else is kept:
+// registrants, sub-hosts, co-hosts, event details, banned parts, the
+// participant cap, the room codes. That's what separates this from Reset,
+// which tears the whole room down and makes every player sign up again.
+//
+// `awarded` is deliberately left alone. If the tournament had already finished
+// and paid out ranking / Revox points, those slots are exactly what stops the
+// same players being paid a second time when it's re-run.
+function reopenSwissRegistration() {
+  if (!swissCanEdit) return;
+  const state = loadSwiss();
+  if (isRegisteringPhase(state)) return; // already on the registration screen
+  const scored = Object.values(state.matches || {}).some(
+    m => m && !m.bye && (m.scoreA != null || m.scoreB != null));
+  const lead = scored
+    ? "Reopen registration?\n\nThe draw AND every score entered so far are discarded."
+    : "Reopen registration?\n\nThe current draw is discarded. No scores have been entered yet.";
+  if (!confirm(`${lead}\n\nRegistrants are kept, so you can change the format and start again.`)) return;
+
+  const next = { ...state, phase: "registering" };
+  next.groups = null;
+  next.groupRounds = [];
+  next.matches = {};
+  next.participants = [];
+  delete next.bracket;
+  delete next.bracketSize;
+  delete next.preFinalRounds;
+  persistSwiss(next);
+
+  if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
+    // update() with an explicit field list, NOT a root set() — same reason the
+    // start flow does: a set() at the room root is gated by the host-only
+    // .write rule and would be rejected for a co-host. Listing only the draw
+    // fields also leaves every other part of the room untouched by
+    // construction, rather than by remembering to carry it forward.
+    const updates = {
+      phase: "registering",
+      groups: null, matches: null, groupRounds: null, participants: null,
+      bracket: null, bracketSize: null, preFinalRounds: null
+    };
+    swissApplyingRemote = true;
+    swissRoomRef.update(updates)
+      .catch(e => console.warn("Reopen registration push failed:", e))
+      .finally(() => { swissApplyingRemote = false; });
+  }
+  renderSwiss();
 }
 
 function resetSwiss() {
@@ -2965,6 +3057,40 @@ const SHARE_TOURNAMENT_URL = "https://abu-mhn.github.io/XOptimizer/tournament/";
 const SHARE_TOURNAMENT_INVITE = "To the bladers that are planning to join this event, please click the link below for registration.";
 const SHARE_TOURNAMENT_INSTRUCTIONS = "New here? On the Tournament page, tap the Tutorial button (next to the QR / Refresh buttons) for a step-by-step guide on how to register as a Participant.";
 
+// "Join code: ABCD" copy button for a private room. Open rooms don't need one —
+// they're findable in the lobby — and only host / co-hosts see it, since
+// they're the ones who hand it out. Shown during registration AND while the
+// tournament runs: once the draw is up the code is how latecomers and
+// spectators follow along, which is exactly when a private room otherwise
+// looks unreachable.
+function renderSwissJoinCodeButton(state, canEdit) {
+  if (!state || state.visibility !== "closed" || !canEdit) return "";
+  const code = swissViewCode || state.viewCode || "";
+  if (!code) return "";
+  return `<button type="button" class="swiss-reg-joincode" id="swiss-share-joincode" data-code="${escapeHtml(code)}" title="Tap to copy — share this code so players can join and follow the tournament">Join code: <strong>${escapeHtml(code)}</strong></button>`;
+}
+
+// Tap-to-copy for the button above. Lives on its own so the registering and
+// running views can each wire it without duplicating the clipboard fallback.
+function bindSwissJoinCodeButton(view) {
+  view.querySelector("#swiss-share-joincode")?.addEventListener("click", (e) => {
+    const btn = e.currentTarget;
+    const code = btn.dataset.code || "";
+    if (!code) return;
+    const flash = () => {
+      const strong = btn.querySelector("strong");
+      const prev = strong ? strong.textContent : "";
+      if (strong) strong.textContent = "Copied!";
+      setTimeout(() => { if (strong) strong.textContent = prev; }, 1200);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(flash).catch(flash);
+    } else {
+      flash();
+    }
+  });
+}
+
 function renderSwissShareButton() {
   return `<button type="button" id="swiss-share" class="btn btn-icon-sm swiss-share-btn" aria-label="Copy tournament details" title="Copy tournament details to clipboard">
     <img src="assets/icons/share.png" alt=""
@@ -4226,7 +4352,16 @@ function renderSwiss() {
     <div class="swiss-toolbar">
       ${nameRowHtml}
       <div class="swiss-toolbar-row swiss-toolbar-info-row">
-        ${renderSwissRoomBadge()}
+        <div class="swiss-toolbar-idgroup">
+          ${renderSwissRoomBadge()}
+          ${state.visibility === "closed"
+            ? `<div class="swiss-toolbar-pills">
+                 <span class="swiss-reg-pill swiss-reg-pill-closed" title="Private — not listed in the lobby; players join with the code">Closed</span>
+                 ${renderSwissJoinCodeButton(state, canEdit)}
+               </div>`
+            : ""}
+          ${renderSwissRunningFormatBits(state)}
+        </div>
       </div>
       <div class="swiss-toolbar-row swiss-toolbar-actions-row">
         ${showStartKnockoutBtn ? `<button type="button" id="swiss-start-bracket" class="btn">Start Knockout</button>` : ""}
@@ -4238,6 +4373,7 @@ function renderSwiss() {
           ${canEdit && !tournamentComplete && canAddParticipant(state) ? `<button type="button" id="swiss-remove-participants" class="btn btn-icon-sm btn-icon-minus" aria-label="Remove participant" title="Remove participant"><span class="swiss-toolbar-btn-plus-icon">&minus;</span><span class="swiss-toolbar-btn-label">Remove</span></button>` : ""}
           ${canEdit && !tournamentComplete && canReshuffleTournament(state) ? `<button type="button" id="swiss-reshuffle" class="btn btn-icon-sm" aria-label="Reshuffle draw" title="Reshuffle the Round 1 draw"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="width:15px;height:15px;flex:0 0 auto;"><path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.66 6.83-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-2.8-2.71z"/></svg><span class="swiss-toolbar-btn-label">Reshuffle</span></button>` : ""}
           ${canEdit && !tournamentComplete && canReshuffleTournament(state) && state.groups && state.groups.length > 1 ? `<button type="button" id="swiss-move-participant" class="btn btn-icon-sm" aria-label="Move participant" title="Move a player to another group"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="width:15px;height:15px;flex:0 0 auto;"><path d="M6.99 11 3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg><span class="swiss-toolbar-btn-label">Move</span></button>` : ""}
+          ${canEdit && !tournamentComplete && !swissArchiveView ? `<button type="button" id="swiss-reopen" class="btn btn-icon-sm" aria-label="Reopen registration" title="Back to registration — change the format, then start again. Registrants are kept."><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="width:15px;height:15px;flex:0 0 auto;"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg><span class="swiss-toolbar-btn-label">Reopen</span></button>` : ""}
           ${swissArchiveView
             ? `<button type="button" id="swiss-archive-back" class="btn btn-reset btn-icon-sm" title="Back to Past tournaments">
                 <img src="assets/icons/exit-button.png" alt=""
@@ -4301,6 +4437,8 @@ function renderSwiss() {
   view.querySelector("#swiss-start-bracket")?.addEventListener("click", startSwissBracket);
   view.querySelector("#swiss-edit-participants")?.addEventListener("click", showBulkAddParticipantsPopup);
   view.querySelector("#swiss-remove-participants")?.addEventListener("click", showRemoveParticipantsPopup);
+  bindSwissJoinCodeButton(view);
+  view.querySelector("#swiss-reopen")?.addEventListener("click", reopenSwissRegistration);
   view.querySelector("#swiss-reshuffle")?.addEventListener("click", reshuffleTournament);
   view.querySelector("#swiss-move-participant")?.addEventListener("click", showMoveParticipantsPopup);
   view.querySelector("#swiss-cohosts")?.addEventListener("click", showCoHostsPopup);
@@ -4449,26 +4587,28 @@ function renderSwissRegisteringMarkup(state) {
         formatBits.push(`<span class="swiss-reg-format-bit">${getRoundCount(state)} rounds</span>`);
       }
     }
-    // A Swiss room that cuts to a knockout also gets a placement-depth chip,
-    // so the host can run e.g. a Top 8 cut that only decides 1st–4th. Worded
-    // "Ranks top N" because the format chip beside it already reads
-    // "Swiss + Top 8" — that N is the cut size, this one is how deep it
-    // ranks, and two bare "Top N" chips would be unreadable. Capped at the
-    // cut size: a bracket can't rank more finishers than entered it.
+    // A Swiss room that cuts to a knockout also gets a placings chip, so the
+    // host can run e.g. a Top 8 cut that only decides 1st–4th. Worded
+    // "N placings" rather than "Top N" because the format chip beside it
+    // already reads "Swiss + Top 8" — that N is the cut size, this one is how
+    // many finishers get placed, and two chips both saying "top N" read as the
+    // same setting twice. It also matches the "2 groups" / "3 rounds" shape of
+    // its neighbours. Capped at the cut size: a bracket can't place more
+    // finishers than entered it.
     if (state.mode !== "swiss-only") {
       const cutN = (typeof state.topN === "number" && state.topN >= 2) ? state.topN : 8;
-      const rankDepth = Math.min(clampPlacementDepth(state.placementDepth), cutN);
+      const placings = Math.min(clampPlacementDepth(state.placementDepth), cutN);
       if (canEdit) {
-        formatBits.push(`<button type="button" class="swiss-reg-format-bit swiss-reg-format-editable" id="swiss-edit-depth" title="Tap to change how deep the bracket ranks">Ranks top ${rankDepth}</button>`);
+        formatBits.push(`<button type="button" class="swiss-reg-format-bit swiss-reg-format-editable" id="swiss-edit-depth" title="Tap to change how many placings are decided">${placings} placings</button>`);
       } else {
-        formatBits.push(`<span class="swiss-reg-format-bit">Ranks top ${rankDepth}</span>`);
+        formatBits.push(`<span class="swiss-reg-format-bit">${placings} placings</span>`);
       }
     }
   } else {
-    // Single elimination — show (and let the host edit) the placement depth.
-    const depthLabel = `Top ${clampPlacementDepth(state.placementDepth)}`;
+    // Elimination formats — same setting, same wording as the Swiss chip above.
+    const depthLabel = `${clampPlacementDepth(state.placementDepth)} placings`;
     if (canEdit) {
-      formatBits.push(`<button type="button" class="swiss-reg-format-bit swiss-reg-format-editable" id="swiss-edit-depth" title="Tap to change placement depth">${depthLabel}</button>`);
+      formatBits.push(`<button type="button" class="swiss-reg-format-bit swiss-reg-format-editable" id="swiss-edit-depth" title="Tap to change how many placings are decided">${depthLabel}</button>`);
     } else {
       formatBits.push(`<span class="swiss-reg-format-bit">${depthLabel}</span>`);
     }
@@ -4652,9 +4792,7 @@ function renderSwissRegisteringMarkup(state) {
           <div class="swiss-toolbar-pills">
             <span class="swiss-reg-pill">Registration open</span>
             ${state.visibility === "closed" ? `<span class="swiss-reg-pill swiss-reg-pill-closed" title="Private — not listed in the lobby; players join with the code">Closed</span>` : ""}
-            ${(state.visibility === "closed" && canEdit && (swissViewCode || state.viewCode))
-              ? `<button type="button" class="swiss-reg-joincode" id="swiss-share-joincode" data-code="${escapeHtml(swissViewCode || state.viewCode)}" title="Tap to copy — share this code so players can join">Join code: <strong>${escapeHtml(swissViewCode || state.viewCode)}</strong></button>`
-              : ""}
+            ${renderSwissJoinCodeButton(state, canEdit)}
           </div>
           ${renderSwissRoomBadge()}
         </div>
@@ -4667,9 +4805,9 @@ function renderSwissRegisteringMarkup(state) {
           <h3 class="swiss-reg-heading">Registrants <span class="swiss-reg-count">${capVal != null ? `${registrants.length} / ${capVal}` : registrants.length}</span>${isFull ? `<span class="swiss-reg-full-pill">Full</span>` : ""}</h3>
           ${canEdit && registrants.length > 1
             ? `<div class="swiss-reg-sort-group">
-                 <button type="button" class="swiss-reg-sort" id="swiss-reg-sort-field" title="Sort by name or registration time">
+                 <button type="button" class="swiss-reg-sort" id="swiss-reg-sort-field" title="Sort by name, or by the order players were added (a pasted list keeps its paste order)">
                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h13M3 12h9M3 18h5"/></svg>
-                   <span>${sortField === "time" ? "Time" : "Name"}</span>
+                   <span>${sortField === "time" ? "Added" : "Name"}</span>
                  </button>
                  <button type="button" class="swiss-reg-sort swiss-reg-sort-dir" id="swiss-reg-sort-dir" title="${sortDesc ? "Descending" : "Ascending"} — tap to reverse">
                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${sortDesc ? `<path d="M12 5v14M19 12l-7 7-7-7"/>` : `<path d="M12 19V5M5 12l7-7 7 7"/>`}</svg>
@@ -4838,22 +4976,7 @@ function bindSwissRegisteringHandlers(view, state) {
   });
   bindSwissShareButton(view);
   // Copy the join code (Closed tournaments) to the clipboard.
-  view.querySelector("#swiss-share-joincode")?.addEventListener("click", (e) => {
-    const btn = e.currentTarget;
-    const code = btn.dataset.code || "";
-    if (!code) return;
-    const flash = () => {
-      const strong = btn.querySelector("strong");
-      const prev = strong ? strong.textContent : "";
-      if (strong) strong.textContent = "Copied!";
-      setTimeout(() => { if (strong) strong.textContent = prev; }, 1200);
-    };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(code).then(flash).catch(flash);
-    } else {
-      flash();
-    }
-  });
+  bindSwissJoinCodeButton(view);
   // Fee-paid toggle (host / Keeper only — read-only badges aren't buttons).
   view.querySelectorAll("button.swiss-reg-paid[data-reg-id]").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -6409,6 +6532,16 @@ function startRegisteringTournament() {
     // so there's no meaningful number to show yet — only Swiss has a set total.
     if (state.pairing !== "round-robin") summary.push(`Rounds: ${getRoundCount(state)}`);
   }
+  // How deep the knockout ranks. swiss-only has no bracket, so there's nothing
+  // to place beyond the group standings and the line is omitted. The figure is
+  // capped by what can actually be ranked — a bracket never places more
+  // finishers than entered it, and a Swiss bracket is limited by its cut size.
+  const hasKnockout = isElimMode(state.mode) || state.mode === "swiss";
+  if (hasKnockout) {
+    const cutN = (typeof state.topN === "number" && state.topN >= 2) ? state.topN : 8;
+    const rankable = isElimMode(state.mode) ? names.length : Math.min(cutN, names.length);
+    summary.push(`Placings: ${Math.min(clampPlacementDepth(state.placementDepth), rankable)}`);
+  }
   summary.push(`Scoring: ${state.ranked ? "Ranked" : "Casual"}`);
   const warnings = [];
   if (missingDecks.length) warnings.push(`No deck submitted:\n${missingDecks.join("\n")}`);
@@ -7157,9 +7290,14 @@ function isTournamentComplete(state) {
   if (!bracketActive) return false;
   const matches = state.matches || {};
   const decided = (m) => m && m.scoreA != null && m.scoreB != null && m.scoreA !== m.scoreB;
-  const placementIds = isSingleElim
-    ? singleElimPlacementIds(matches)
-    : ["bracket-f-0", "bracket-3rd-0", "bracket-5th-0", "bracket-7th-0"];
+  // Which placement finals have to be settled, read off the matches that were
+  // actually built rather than assumed. A Swiss / Round Robin knockout used to
+  // hardcode f + 3rd + 5th + 7th here, which held only while every Top-N
+  // bracket built the full consolation chain. Once the placings setting let a
+  // Top 8 cut decide just 1st–4th, the 5th/7th matches stopped existing and
+  // this could never be satisfied — so the tournament never registered as
+  // complete, and never archived to Past Tournaments.
+  const placementIds = singleElimPlacementIds(matches);
   return placementIds.every(id => decided(matches[id]));
 }
 window.isTournamentComplete = isTournamentComplete;
@@ -7177,7 +7315,11 @@ const SINGLE_ELIM_PLACEMENT_FINAL_IDS = [
 ];
 function singleElimPlacementIds(matches) {
   if (!matches) return ["bracket-f-0"];
-  return SINGLE_ELIM_PLACEMENT_FINAL_IDS.filter(id => matches[id]);
+  const present = SINGLE_ELIM_PLACEMENT_FINAL_IDS.filter(id => matches[id]);
+  // Never hand back an empty list: callers run .every() over it, and [].every()
+  // is true — an unrecognised bracket would report itself finished before a
+  // single match was played. Every bracket has a final, so that's the floor.
+  return present.length ? present : ["bracket-f-0"];
 }
 
 const deDecided = (m) => !!m && m.scoreA != null && m.scoreB != null && m.scoreA !== m.scoreB;
@@ -9095,17 +9237,19 @@ function showSingleElimDepthPopup(onPick, defaultDepth) {
   const overlay = document.createElement("div");
   overlay.id = "se-depth-popup";
   overlay.className = "popup-overlay";
+  // The heading carries the unit, so the buttons stay bare numbers rather than
+  // repeating "placings" four times across one row.
   const presetBtns = SE_DEPTH_PRESETS.map(n =>
-    `<button type="button" class="btn topn-preset se-depth-option" data-depth="${n}">Top ${n}</button>`
+    `<button type="button" class="btn topn-preset se-depth-option" data-depth="${n}">${n}</button>`
   ).join("");
   overlay.innerHTML = `
     <div class="popup-card">
-      <h2 class="popup-title">Placement Depth</h2>
-      <p class="popup-text">How many finishers should the tournament rank?</p>
+      <h2 class="popup-title">Placings</h2>
+      <p class="popup-text">How many finishers should get an official placing?</p>
       <div class="popup-actions" style="flex-wrap:wrap; gap:6px; margin-bottom:8px;">${presetBtns}</div>
-      <label class="popup-text" style="display:block; margin-top:6px;">Or pick a custom depth (2 or more):</label>
+      <label class="popup-text" style="display:block; margin-top:6px;">Or enter a custom number (2 or more):</label>
       <input type="number" id="se-depth-custom" class="account-bio" min="2" step="1" value="${def}" style="width:100%; padding:8px 10px;">
-      <p class="popup-text" style="opacity:.7; font-size:.85em; margin-top:4px;">The bracket ranks as deep as it can — currently up to 16th place.</p>
+      <p class="popup-text" style="opacity:.7; font-size:.85em; margin-top:4px;">The bracket decides as many placings as its size allows — currently up to 16th place.</p>
       <div class="popup-actions">
         <button type="button" id="se-depth-confirm" class="btn">Confirm</button>
         <button type="button" id="se-depth-cancel" class="btn popup-cancel">Cancel</button>
