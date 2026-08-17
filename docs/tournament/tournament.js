@@ -712,17 +712,33 @@ function tournamentFormatLabel(mode, pairing, shortElim, topN) {
   return `${base} + Top ${n}`;
 }
 
-// Read-only format chips for the RUNNING view, so everyone can still see which
-// format the room is playing once registration closes and the editable chip row
-// goes away. Plain labels, not buttons — the format is locked once a draw
-// exists.
+// Format chips for the RUNNING view, so everyone can still see which format the
+// room is playing once registration closes and the editable chip row goes away.
 //
 // Deliberately narrower than the registration row: group and round counts are
 // left out because each group header already reads "Group A · Round 1 / 3", and
 // the participant cap stops meaning anything once registration is closed.
-function renderSwissRunningFormatBits(state) {
+//
+// Both knockout settings — its size (Top N) and how many placings it decides —
+// only shape the BRACKET, and a Swiss / Round Robin room doesn't build that
+// bracket until the host taps Start Knockout. So both stay editable right
+// through the group stage and lock the moment the bracket exists (which for an
+// elimination room is from the moment it starts).
+//
+// The format itself (Swiss vs Round Robin vs an elimination bracket) can't
+// move: the groups already on screen were drawn from it. Tapping the format
+// chip therefore opens the bracket-size picker, not the format picker.
+function renderSwissRunningFormatBits(state, canEdit) {
   if (!state) return "";
-  const bits = [tournamentFormatLabel(state.mode, state.pairing, false, state.topN)];
+  const bracketBuilt = hasSwissBracket(state);
+  const formatLabel = escapeHtml(tournamentFormatLabel(state.mode, state.pairing, false, state.topN));
+  // Only a group format that actually cuts to a knockout has a size to change.
+  const canSizeKnockout = canEdit && !bracketBuilt && state.mode === "swiss";
+  const chips = [
+    canSizeKnockout
+      ? `<button type="button" class="swiss-reg-format-bit swiss-reg-format-editable" id="swiss-edit-topn" title="Tap to change how many players advance into the knockout — editable until it starts">${formatLabel}</button>`
+      : `<span class="swiss-reg-format-bit">${formatLabel}</span>`
+  ];
   // Placings only exist where there's a bracket to decide them — swiss-only
   // finishes on group records.
   if (isElimMode(state.mode) || state.mode === "swiss") {
@@ -730,15 +746,15 @@ function renderSwissRunningFormatBits(state) {
     const placings = isElimMode(state.mode)
       ? clampPlacementDepth(state.placementDepth)
       : Math.min(clampPlacementDepth(state.placementDepth), cutN);
-    bits.push(`${placings} placings`);
+    const label = `${placings} placings`;
+    chips.push(canEdit && !bracketBuilt
+      ? `<button type="button" class="swiss-reg-format-bit swiss-reg-format-editable" id="swiss-edit-depth" title="Tap to change how many placings are decided — editable until the knockout starts">${label}</button>`
+      : `<span class="swiss-reg-format-bit">${label}</span>`);
   }
   // Same container class as the registration chip row, so the two look
   // identical and this one inherits its hidden-scrollbar sideways scroll on
   // narrow screens.
-  const chips = bits
-    .map(b => `<span class="swiss-reg-format-bit">${escapeHtml(b)}</span>`)
-    .join("");
-  return `<div class="swiss-reg-format swiss-toolbar-format">${chips}</div>`;
+  return `<div class="swiss-reg-format swiss-toolbar-format">${chips.join("")}</div>`;
 }
 
 // Registration-phase helpers. A tournament with `phase: "registering"` is
@@ -4360,7 +4376,7 @@ function renderSwiss() {
                  ${renderSwissJoinCodeButton(state, canEdit)}
                </div>`
             : ""}
-          ${renderSwissRunningFormatBits(state)}
+          ${renderSwissRunningFormatBits(state, canEdit)}
         </div>
       </div>
       <div class="swiss-toolbar-row swiss-toolbar-actions-row">
@@ -4438,6 +4454,30 @@ function renderSwiss() {
   view.querySelector("#swiss-edit-participants")?.addEventListener("click", showBulkAddParticipantsPopup);
   view.querySelector("#swiss-remove-participants")?.addEventListener("click", showRemoveParticipantsPopup);
   bindSwissJoinCodeButton(view);
+  // The knockout's size and its placings stay editable through the group stage
+  // — the bracket that uses them isn't built until Start Knockout. Both
+  // re-check for a bracket on CLICK rather than trusting the render, so a
+  // knockout started on another device closes them off here too.
+  const knockoutLocked = (what) => {
+    alert(`The knockout bracket has already been generated — ${what} are locked in.`);
+    renderSwiss();
+  };
+  view.querySelector("#swiss-edit-topn")?.addEventListener("click", () => {
+    const s = loadSwiss();
+    if (hasSwissBracket(s)) return knockoutLocked("its size and placings");
+    showTopNPickerPopup((n) => {
+      if (n == null) return;
+      updateTournamentSetting({ topN: n });
+    }, (typeof s.topN === "number" && s.topN >= 2) ? s.topN : 8);
+  });
+  view.querySelector("#swiss-edit-depth")?.addEventListener("click", () => {
+    const s = loadSwiss();
+    if (hasSwissBracket(s)) return knockoutLocked("placings");
+    showSingleElimDepthPopup((depth) => {
+      if (depth == null) return;
+      updateTournamentSetting({ placementDepth: clampPlacementDepth(depth) });
+    }, s.placementDepth);
+  });
   view.querySelector("#swiss-reopen")?.addEventListener("click", reopenSwissRegistration);
   view.querySelector("#swiss-reshuffle")?.addEventListener("click", reshuffleTournament);
   view.querySelector("#swiss-move-participant")?.addEventListener("click", showMoveParticipantsPopup);
@@ -4848,15 +4888,24 @@ function renderSwissRegisteringMarkup(state) {
 
 // Apply a settings patch to the tournament while it's still in the
 // registering phase, persist locally and push to Firebase, then re-render.
-function updateRegisteringSetting(patch) {
+// Write a setting onto the live tournament (local + room) and re-render.
+// No phase guard — each caller decides when its own setting is still safe to
+// change. Placings, for instance, stay editable through the group stage.
+function updateTournamentSetting(patch) {
   const s = loadSwiss();
-  if (!isRegisteringPhase(s)) return;
   Object.assign(s, patch);
   persistSwiss(s);
   if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
     swissRoomRef.update(patch).catch(e => console.warn("Tournament setting push failed:", e));
   }
   renderSwiss();
+}
+
+// Registration-phase settings (format, groups, rounds, cap …). These describe
+// a draw that doesn't exist yet, so they're only valid before Start.
+function updateRegisteringSetting(patch) {
+  if (!isRegisteringPhase(loadSwiss())) return;
+  updateTournamentSetting(patch);
 }
 
 // Filter the registrant rows in the DOM (no re-render, so typing keeps focus)
@@ -5733,8 +5782,9 @@ function showEditRegistrantPopup(registrantId) {
     initialName: reg.name || "",
     initialDeck: normalizeBeyCheckDeck(reg.deck),
     lockName: !reg.isGuest,
-    // Guests may stay deck-less on edit too — only account registrations
-    // are held to a full 3-combo deck.
+    // Guests skip deck validation entirely. Account registrations may also be
+    // deck-less, but a deck they DO start has to be finished — see the submit
+    // handler in showRegisterPopup.
     allowEmptyDeck: !!reg.isGuest
   });
 }
@@ -6486,22 +6536,16 @@ function startRegisteringTournament() {
   // All three are overridable — the host can still start if (e.g.) a known
   // guest is going to fill in their deck at the judge's table.
   const bannedNames = getBannedParts(state);
-  const missingDecks = [];
   const incompleteDecks = [];
   const bannedDecks = [];
-  // listRegistrants() returns only {id, name, deck} — the isGuest flag is
-  // dropped, so read it from the raw state map here.
-  const rawRegistrants = (state && state.registrants) || {};
   registrants.forEach(r => {
     const display = r.name || "(unnamed)";
-    const raw = rawRegistrants[r.id] || {};
-    const isGuest = raw.isGuest === true;
     if (isBeyCheckDeckEmpty(r.deck)) {
-      // Guests are allowed to skip the deck entirely (the judge fills it
-      // in at match time), so a fully empty guest deck doesn't warrant a
-      // warning. Account registrants still surface here.
-      if (!isGuest) missingDecks.push(display);
-      return; // already covered by the missing-deck bucket
+      // A deck is optional for EVERYONE now, signed-in players included — the
+      // judge can fill one in at match time. Submitting one early is rewarded
+      // with double ranking points instead of being enforced here, so an empty
+      // deck is a choice rather than a problem worth warning the host about.
+      return;
     }
     const incompleteSlots = incompleteBeyCheckDeckSlotNumbers(r.deck);
     if (incompleteSlots.length) {
@@ -6544,7 +6588,6 @@ function startRegisteringTournament() {
   }
   summary.push(`Scoring: ${state.ranked ? "Ranked" : "Casual"}`);
   const warnings = [];
-  if (missingDecks.length) warnings.push(`No deck submitted:\n${missingDecks.join("\n")}`);
   if (incompleteDecks.length) warnings.push(`Deck has incomplete slots:\n${incompleteDecks.join("\n")}`);
   if (bannedDecks.length) warnings.push(`Deck contains banned parts:\n${bannedDecks.join("\n")}`);
   const warningBlock = warnings.length ? `\n\n${warnings.join("\n\n")}` : "";
@@ -9030,18 +9073,20 @@ function showAddParticipantPopup() {
       setStatus("That name is already in the tournament.", "err");
       return;
     }
-    const missingSlots = emptyBeyCheckDeckSlotNumbers(deck);
-    if (missingSlots.length) {
-      // Hard block — every participant needs all 3 slots built (same
-      // rule as the registration popup). Empty / partial decks break
-      // bey-check at match time.
-      const slotList = missingSlots.length === 1
-        ? `Slot ${missingSlots[0]}`
-        : missingSlots.length === BEY_CHECK_DECK_SIZE
-          ? "all 3 slots"
-          : "Slots " + missingSlots.join(" & ");
-      setStatus(`"${name}" needs a full 3-combo deck — fill ${slotList} before adding.`, "err");
-      return;
+    // Same rule as the registration popup: a deck is optional, so a player can
+    // be added with empty slots and the judge fills one in at match time. Only
+    // a HALF-built deck is rejected — it helps nobody and earns no bonus.
+    if (!isBeyCheckDeckEmpty(deck)) {
+      const incompleteSlots = incompleteBeyCheckDeckSlotNumbers(deck);
+      if (incompleteSlots.length) {
+        const slotList = incompleteSlots.length === 1
+          ? `Slot ${incompleteSlots[0]}`
+          : incompleteSlots.length === BEY_CHECK_DECK_SIZE
+            ? "all 3 slots"
+            : "Slots " + incompleteSlots.join(" & ");
+        setStatus(`"${name}" has a partly-built deck — finish ${slotList}, or clear the deck to add them without one.`, "err");
+        return;
+      }
     }
 
     // Swiss and round robin slot a player into round 1 as a free win (or pair
@@ -11339,10 +11384,13 @@ function showRegistrationPopup(room, options = {}) {
   // Guest registrants play normally but don't earn ranking points when
   // the tournament finishes.
   const asGuest = !!options.asGuest;
-  // Guests may register without building a deck — the all-3-slots block
-  // is lifted for them. Their empty deck contributes nothing to the
-  // finish part-usage pie chart (aggregatePartUsage skips empty decks).
-  // Real account registrations still need a full 3-combo deck.
+  // Guests skip deck validation altogether — a partly-built guest deck is
+  // accepted as-is, since the judge is filling it in at the table anyway.
+  // An empty deck contributes nothing to the finish part-usage pie chart
+  // (aggregatePartUsage skips empty decks).
+  //
+  // Account registrations are no longer required to bring a deck either; they
+  // just can't submit a HALF one. See the submit handler below.
   const allowEmptyDeck = asGuest || !!options.allowEmptyDeck;
 
   const setStatus = (msg, kind) => {
@@ -11365,7 +11413,7 @@ function showRegistrationPopup(room, options = {}) {
   if (deckHint) {
     deckHint.textContent = allowEmptyDeck
       ? "Deck is optional for guests — you can skip it and leave the slots empty. To add combos, tap a slot or paste a deck from the Deck tab."
-      : "Build the 3-combo deck you'll bring. The judge sees this deck at every match. Tip: copy a deck from the Deck tab, then paste it here.";
+      : "Deck is optional — you can register with the slots empty and the judge fills one in at your first match. Register a full 3-combo deck instead and you earn DOUBLE ranking points. Tap a slot to build it, or paste one from the Deck tab.";
   }
   // `lockName` makes the name field read-only (used by the "Register myself"
   // flow so the host can't impersonate someone else from their own device).
@@ -11507,28 +11555,16 @@ function showRegistrationPopup(room, options = {}) {
       nameInput?.focus();
       return;
     }
-    const missingSlots = emptyBeyCheckDeckSlotNumbers(deck);
-    if (missingSlots.length && !allowEmptyDeck) {
-      // Hard block — every registrant needs all 3 slots built. The judge
-      // sees this 3-combo deck at every match, so a partial registration
-      // breaks the bey-check flow. Tap any empty slot to build it, or
-      // paste a copied 3-slot deck from the Deck tab.
-      const slotList = missingSlots.length === 1
-        ? `Slot ${missingSlots[0]}`
-        : missingSlots.length === BEY_CHECK_DECK_SIZE
-          ? "all 3 slots"
-          : "Slots " + missingSlots.join(" & ");
-      const msg = isEdit
-        ? `Fill ${slotList} before saving — every registrant needs a full 3-combo deck.`
-        : `Fill ${slotList} before registering — every registrant needs a full 3-combo deck. Tap an empty slot, or paste from the Deck tab.`;
-      setStatus(msg, "err");
-      return;
-    }
-    // Stricter check for signed-in registrants: every slot must be COMPLETE
-    // for its mode (blade-only / blade+ratchet-only counts as incomplete).
-    // Guests are exempt (allowEmptyDeck covers both "skip the deck" and
-    // "save a partial deck").
-    if (!allowEmptyDeck) {
+    // A deck is optional for EVERYONE, signed-in players included — you can
+    // register with all three slots empty and the judge fills one in at the
+    // table. Submitting a full deck is rewarded with double ranking points
+    // instead of being enforced here.
+    //
+    // A HALF-built deck is still rejected though: it's no use to the judge at
+    // match time and doesn't earn the bonus either, so the player is asked to
+    // finish it or clear it rather than being left with a deck that does
+    // nothing for them. Guests skip the check entirely, as before.
+    if (!allowEmptyDeck && !isBeyCheckDeckEmpty(deck)) {
       const incompleteSlots = incompleteBeyCheckDeckSlotNumbers(deck);
       if (incompleteSlots.length) {
         const slotList = incompleteSlots.length === 1
@@ -12146,6 +12182,28 @@ function computeTournamentRankingAwards(state) {
   getParticipants(state).forEach(name => {
     if (!name || guestNames.has(name)) return;
     if (awards[name] == null) awards[name] = 1;
+  });
+  // Deck bonus: a signed-in player who registered a COMPLETE deck earns double
+  // ranking points, at every placing. Submitting a deck is optional, so this is
+  // the reward for turning up prepared rather than leaving the judge to fill
+  // one in at the table — a partly-filled deck doesn't qualify. Guests are
+  // excluded because they never score ranking points at all.
+  //
+  // Applied last, so it scales the final award rather than competing with the
+  // max() in set(): a doubled participation point (2) must not shadow a real
+  // top-8 placing (2), which is what would happen if it were folded in earlier.
+  // Revox points are deliberately untouched — they keep their own 7/5/3/2
+  // scheme so the club leaderboard stays comparable with past events.
+  const doubledNames = new Set();
+  Object.values(registrants).forEach(r => {
+    if (!r || r.isGuest === true || typeof r.name !== "string") return;
+    const deck = normalizeBeyCheckDeck(r.deck);
+    if (isBeyCheckDeckEmpty(deck)) return;
+    if (incompleteBeyCheckDeckSlotNumbers(deck).length) return;
+    doubledNames.add(r.name);
+  });
+  Object.keys(awards).forEach(name => {
+    if (doubledNames.has(name)) awards[name] *= 2;
   });
   return awards;
 }
