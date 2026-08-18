@@ -2031,7 +2031,6 @@ body.forest-mode   .developer-db-tab.active { border-color: #b5c89a; border-bott
 .developer-db-table-inner td.developer-db-key {
     color: #f0f6fc;
     font-weight: 600;
-    max-width: 220px;
 }
 /* Rows filtered out by the search box. display:none rather than a re-render,
    so typing keeps focus and costs no round trip. */
@@ -2048,7 +2047,9 @@ body.forest-mode   .developer-db-tab.active { border-color: #b5c89a; border-bott
     /* Capped so it doesn't swallow the row on a wide screen and leave the
        sort controls squashed against the right edge. */
     max-width: 340px;
-    padding: 6px 10px;
+    /* Fixed height so it lines up with the sort control beside it. */
+    height: 32px;
+    padding: 0 10px;
     border: 1px solid #30363d;
     border-radius: 6px;
     background: #0d1117;
@@ -2058,44 +2059,82 @@ body.forest-mode   .developer-db-tab.active { border-color: #b5c89a; border-bott
 .developer-db-search::placeholder {
     color: #6e7681;
 }
-.developer-db-sortwrap {
+/* Label, field and direction share one bordered shell — a segmented control,
+   rather than three separate boxes with a stray word floating beside them. */
+.developer-db-sortgroup {
     display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 0.78rem;
-    color: #8b949e;
-    white-space: nowrap;
-}
-.developer-db-sort {
-    /* A min-width keeps it reading as a control — sized to its content it
-       collapsed to almost nothing on a short option like "Key". */
-    min-width: 120px;
-    max-width: 170px;
-    padding: 6px 8px;
+    align-items: stretch;
+    /* Same flex sizing as the search field beside it, so the two controls end
+       up the same width — including when the toolbar wraps and they stack. */
+    flex: 1 1 200px;
+    min-width: 150px;
+    max-width: 340px;
+    height: 32px;
     border: 1px solid #30363d;
     border-radius: 6px;
     background: #0d1117;
+    overflow: hidden;
+}
+.developer-db-sortgroup:focus-within {
+    border-color: #388bfd;
+}
+.developer-db-sortlabel {
+    display: inline-flex;
+    align-items: center;
+    /* The global `label` rule near the top of this file carries
+       margin-bottom:12px, which pushed this segment up so its tint covered
+       only the top of the group. Zero it so the segment fills the height. */
+    margin: 0;
+    padding: 0 9px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #8b949e;
+    background: rgba(110, 118, 129, 0.14);
+    border-right: 1px solid #30363d;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.developer-db-sort {
+    /* The app hides every native <select> globally (see `select { display:none }`
+       near the top of this file) because most of them are replaced by custom
+       search-dropdown widgets. This one is a plain native select and has to opt
+       back in, or it renders as a zero-width gap in the toolbar. */
+    display: block;
+    /* Takes whatever the group has left over after the SORT label and the
+       direction button, so the control fills its width instead of leaving a
+       gap. min-width:0 lets it shrink below its content on a narrow screen
+       rather than forcing the group wider. */
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0 8px;
+    border: none;
+    background: transparent;
     color: #c9d1d9;
     font-size: 0.78rem;
     cursor: pointer;
 }
+.developer-db-sort:focus {
+    outline: none;
+}
 .developer-db-sortdir {
     flex: 0 0 auto;
-    width: 30px;
-    height: 30px;
+    width: 32px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid #30363d;
-    border-radius: 6px;
-    background: #0d1117;
+    border: none;
+    border-left: 1px solid #30363d;
+    background: transparent;
     color: #c9d1d9;
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     line-height: 1;
     cursor: pointer;
 }
 .developer-db-sortdir:hover {
     background: rgba(110, 118, 129, 0.22);
+    color: #f0f6fc;
 }
 .developer-db-search:focus {
     outline: none;
@@ -2198,6 +2237,33 @@ body.forest-mode   .developer-db-tab.active { border-color: #b5c89a; border-bott
 .developer-db-table-inner td.developer-db-key::before {
     content: "";
     margin: 0;
+}
+/* Desktop: keep a long key on one line. A uid runs ~28 characters and wrapped
+   to a second line, making every card taller for no gain. Clipped with an
+   ellipsis — the full value is still on the cell's title (hover) and in the {}
+   JSON editor. Phones keep wrapping, where truncating would leave too little
+   of the key to recognise. min-width:0 lets the card shrink to its grid track
+   instead of being widened by the un-wrappable key. */
+@media (min-width: 601px) {
+    /* Desktop toolbar: the search fills the rest of its row and the sort group
+       takes a full row of its own, so both rows start and end on the same
+       edges as the buttons above them. Without lifting the search's cap the
+       two rows would end at different x positions and look misaligned. */
+    .developer-db-search {
+        max-width: none;
+    }
+    .developer-db-sortgroup {
+        flex: 1 1 100%;
+        max-width: none;
+    }
+    .developer-db-table-inner tbody tr {
+        min-width: 0;
+    }
+    .developer-db-table-inner td.developer-db-key {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
 }
 /* Action buttons row at the bottom of each card. */
 .developer-db-table-inner td.developer-db-actions {

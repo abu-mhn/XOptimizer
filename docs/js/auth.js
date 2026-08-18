@@ -1507,11 +1507,12 @@
         <button type="button" id="developer-db-refresh" class="btn btn-sm">Refresh</button>
         <input type="search" id="developer-db-search" class="developer-db-search"
                placeholder="Search this table…" autocomplete="off" spellcheck="false">
-        <label class="developer-db-sortwrap">Sort
+        <div class="developer-db-sortgroup">
+          <label class="developer-db-sortlabel" for="developer-db-sort">Sort</label>
           <select id="developer-db-sort" class="developer-db-sort" title="Order the cards by any field"><option value=" key">Key</option></select>
-        </label>
-        <button type="button" id="developer-db-sortdir" class="developer-db-sortdir"
-                data-dir="asc" title="Ascending — tap to reverse" aria-label="Toggle sort direction">&#8593;</button>
+          <button type="button" id="developer-db-sortdir" class="developer-db-sortdir"
+                  data-dir="asc" title="Ascending — tap to reverse" aria-label="Toggle sort direction">&#8593;</button>
+        </div>
       </div>
       <p class="swiss-join-status" id="developer-db-status"></p>
       <div class="developer-db-table-wrap"><div id="developer-db-table"></div></div>
