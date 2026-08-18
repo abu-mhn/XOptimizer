@@ -81,6 +81,35 @@ function pushDecksToCloudIfSignedIn(state) {
   try { payload = JSON.parse(JSON.stringify(state || {})); }
   catch (e) { return; }
   deckCloudRef.set(payload).catch(e => console.warn("Deck cloud push failed:", e));
+  publishStarredDeckToProfile(state);
+}
+
+// Mirror ONLY the starred (pinned) deck onto the public profile index, so a
+// host adding this player as a guest can pre-fill it — `userDecks/{uid}` is
+// readable by its owner alone, so a host's device has no other way to see it.
+// Every other saved deck stays private; only the one the player pinned as
+// "this is what I bring" is published.
+//
+// Cleared when nothing is pinned, so unpinning genuinely un-publishes.
+function publishStarredDeckToProfile(state) {
+  const uname = (window.getCurrentUsername && window.getCurrentUsername()) || "";
+  const key = uname.trim().toLowerCase().replace(/[.#$/[\]]/g, "_");
+  if (!key) return;
+  let db;
+  try { db = firebase.database(); } catch (e) { return; }
+  if (!db) return;
+  let deck = null;
+  try {
+    deck = (typeof window.getDefaultRegistrationDeck === "function")
+      ? window.getDefaultRegistrationDeck()
+      : null;
+  } catch (e) { deck = null; }
+  // getDefaultRegistrationDeck already returns null for "nothing pinned" and
+  // for a pinned deck with no built slots, which is exactly what shouldn't be
+  // published — an empty deck would just overwrite a good one with blanks.
+  db.ref("profiles/" + key + "/starredDeck")
+    .set(deck ? JSON.parse(JSON.stringify(deck)) : null)
+    .catch(e => console.warn("Starred deck publish failed:", e));
 }
 
 function attachDeckCloudSync(uid) {

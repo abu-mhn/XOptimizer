@@ -27,6 +27,7 @@ let swissLiveMatchId = null; // which match (if any) this device is currently li
 let swissScrollPositions = []; // horizontal scrollLeft of each rounds-scroll strip (groups then bracket)
 let swissSetupWasVisible = false; // tracks setup-form visibility so we only re-fetch open rooms on the hidden→visible edge
 let swissSubHosts = {};      // room's designated sub-host usernames { lowercaseKey: casedName }
+let swissRoomMeta = {};      // room-only fields (subHosts, coHostUids) that stripRoomMetadata keeps out of local state
 let swissHostNameCache = {};     // hostUid -> resolved username (rooms with no stored hostName)
 let swissHostNameResolving = {}; // hostUid -> in-flight resolve guard
 let swissSessionRole = null;     // this session's role: "host" | "co-host" | "participant" | "view"
@@ -119,6 +120,7 @@ function disconnectSwissRoom() {
   swissIsHost = false;
   swissCanEdit = false;
   swissSubHosts = {};
+  swissRoomMeta = {};
   swissLiveMatchId = null;
   swissCoHostUidWritten = false;
   swissCoHostUidReady = Promise.resolve();
@@ -139,6 +141,46 @@ function stripRoomMetadata(remote) {
   if (!remote) return remote;
   const { viewCode, subHosts, coHostUids, ...state } = remote;
   return state;
+}
+
+// Build the payload for a whole-room push.
+//
+// A root set() REPLACES the room node, and local state deliberately doesn't
+// carry the room-only fields — stripRoomMetadata drops viewCode, subHosts and
+// coHostUids before caching, so they never round-trip through localStorage.
+// Pushing raw local state therefore deletes them: the host's sub-host list
+// vanishes, and worse, so does coHostUids — the map the database rules read to
+// grant co-hosts write access, which locks every co-host out of the room
+// mid-tournament. Re-attach all three from the last remote snapshot.
+function swissRoomPayload(state) {
+  const payload = { ...state };
+  if (swissViewCode) payload.viewCode = swissViewCode;
+  if (swissRoomMeta && swissRoomMeta.subHosts) payload.subHosts = swissRoomMeta.subHosts;
+  if (swissRoomMeta && swissRoomMeta.coHostUids) payload.coHostUids = swissRoomMeta.coHostUids;
+  return payload;
+}
+
+// The starred deck a registered account published to its public profile, in
+// Bey Check shape — or null when the name isn't a registered account, that
+// account hasn't pinned a deck, or the read fails.
+//
+// A player's decks live at userDecks/{uid}, readable only by that account, so
+// a host's device can't reach them. The Deck tab mirrors just the PINNED deck
+// onto profiles/{usernameKey}/starredDeck (public) for exactly this lookup —
+// see publishStarredDeckToProfile in deck.js.
+//
+// Always resolves; never rejects. A guest with no published deck is a normal
+// outcome, not an error, and must not break a bulk add.
+function fetchStarredDeckForName(name) {
+  const key = subHostKey(name || "");
+  const db = key ? initFirebase() : null;
+  if (!db) return Promise.resolve(null);
+  return db.ref("profiles/" + key + "/starredDeck").once("value")
+    .then(snap => {
+      const deck = normalizeBeyCheckDeck(snap.val());
+      return isBeyCheckDeckEmpty(deck) ? null : deck;
+    })
+    .catch(() => null);
 }
 
 // Normalise a username to a Firebase-safe key for the sub-host map.
@@ -328,6 +370,13 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit, roleHint) {
       // Pick up the room's sub-host list and (re)grant co-host access to any
       // signed-in user whose username the host listed.
       swissSubHosts = remote.subHosts || {};
+      // Remember the room-only fields too. stripRoomMetadata drops them before
+      // caching, so any code that pushes local state back with a root set()
+      // has no other way to reconstruct them — see swissRoomPayload.
+      swissRoomMeta = {
+        subHosts: remote.subHosts || null,
+        coHostUids: remote.coHostUids || null
+      };
       recomputeSwissCanEdit();
       renderSwiss();
       syncTournamentRankingAwards(remote);
@@ -4210,13 +4259,21 @@ function openCallingMonitor() {
   if (ok) updateCallingMonitor();
 }
 
-// The toolbar action row is a single nowrap line with a hidden scrollbar, so
-// on desktop it has no scroll affordance of its own. Give it both: a vertical
-// mouse wheel pans it sideways, and it can be grabbed and dragged. Called from
-// every branch of renderSwiss that paints a toolbar (the registering view and
-// the running view each render their own).
+// Rows that sit on a single nowrap line with the scrollbar hidden. They scroll
+// fine by touch, but on desktop a hidden scrollbar leaves no affordance at all
+// and a mouse wheel only scrolls the page. Give each one both: a vertical wheel
+// pans it sideways, and it can be grabbed and dragged.
+//
+// Called from every branch of renderSwiss that paints one of these (the
+// registering view and the running view each render their own).
+const SWISS_SCROLL_ROWS = [
+  ".swiss-toolbar-actions",  // Share / Monitor / Add / Remove / Reset …
+  ".swiss-toolbar-pills",    // Registration open / Closed / Join code
+  ".swiss-reg-format",       // format chips (both views — .swiss-toolbar-format reuses it)
+  ".swiss-reg-paidfilter"    // All / No Deck / Banned Parts / … filter chips
+];
 function bindSwissToolbarScroll(root) {
-  root.querySelectorAll(".swiss-toolbar-actions").forEach(el => {
+  root.querySelectorAll(SWISS_SCROLL_ROWS.join(",")).forEach(el => {
     if (typeof enableHorizontalWheelScroll === "function") enableHorizontalWheelScroll(el);
     if (typeof enableHorizontalDragScroll === "function") enableHorizontalDragScroll(el);
   });
@@ -4683,6 +4740,12 @@ function renderSwissRegisteringMarkup(state) {
       : []
   );
 
+  // Tally each filter's population as the rows are built, so the chips can
+  // show how many players sit behind each status without walking the list a
+  // second time. Counts cover every registrant, not just those matching the
+  // search box — the chips describe the field, the search narrows what's shown.
+  const regCounts = { all: registrants.length, none: 0, banned: 0, partial: 0, ok: 0, paid: 0, unpaid: 0 };
+
   const registrantRows = registrants.length
     ? registrants.map((r, i) => {
         const isMyRow = myRegIdSet.has(r.id);
@@ -4719,6 +4782,8 @@ function renderSwissRegisteringMarkup(state) {
           deckStatus = "ok";
           deckBadge = `<span class="swiss-reg-deck-badge">Deck ✓</span>`;
         }
+        regCounts[deckStatus]++;
+        regCounts[r.paid ? "paid" : "unpaid"]++;
         // Hosts and co-hosts can tap any registrant's name to edit it.
         // Participants can tap their OWN row to re-open the edit popup
         // (canEditRow). Everyone else gets the profile dropdown on
@@ -4871,13 +4936,15 @@ function renderSwissRegisteringMarkup(state) {
       ${canEdit && registrants.length > 1
         ? `<div class="swiss-reg-paidfilter" role="group" aria-label="Filter registrants">
              ${[
-               { v: "all", label: "All" },
-               { v: "no-deck", label: "No Deck" },
-               { v: "banned", label: "Banned Parts" },
-               { v: "incomplete", label: "Incomplete" },
-               { v: "deck", label: "Deck" },
-               ...(isKeeperHere ? [{ v: "paid", label: "Paid" }, { v: "unpaid", label: "Unpaid" }] : [])
-             ].map(o => `<button type="button" class="swiss-reg-paidfilter-btn${regFilter === o.v ? " is-active" : ""}" data-regfilter="${o.v}">${o.label}</button>`).join("")}
+               { v: "all", label: "All", n: regCounts.all },
+               { v: "no-deck", label: "No Deck", n: regCounts.none },
+               { v: "banned", label: "Banned Parts", n: regCounts.banned },
+               { v: "incomplete", label: "Incomplete", n: regCounts.partial },
+               { v: "deck", label: "Deck", n: regCounts.ok },
+               ...(isKeeperHere
+                 ? [{ v: "paid", label: "Paid", n: regCounts.paid }, { v: "unpaid", label: "Unpaid", n: regCounts.unpaid }]
+                 : [])
+             ].map(o => `<button type="button" class="swiss-reg-paidfilter-btn${regFilter === o.v ? " is-active" : ""}${o.n === 0 ? " is-empty" : ""}" data-regfilter="${o.v}">${o.label}<span class="swiss-reg-filter-count">${o.n}</span></button>`).join("")}
            </div>`
         : ""}
       <ul class="swiss-reg-list">${registrantRows}<li class="swiss-reg-noresults hidden">No participants match your search.</li></ul>
@@ -6136,15 +6203,20 @@ function bulkAddGuests(editCode, names, setStatus, onSuccess, onFail) {
     const emptyDeck = emptyBeyCheckDeck();
     const updates = {};
     const newIds = [];
-    for (const name of toAdd) {
-      const id = generateRegistrantId();
-      const entry = { name, deck: emptyDeck, isGuest: true };
-      if (writerUid) entry.createdBy = writerUid;
-      updates[`registrants/${id}`] = entry;
-      newIds.push(id);
-    }
-
-    return roomRef.update(updates).then(() => {
+    // A pasted name that matches a registered account gets that account's
+    // published starred deck, so the judge isn't building it from scratch at
+    // match time. Resolved in parallel; anyone without a published deck simply
+    // stays deck-less, exactly as before.
+    return Promise.all(toAdd.map(fetchStarredDeckForName)).then(starred => {
+      toAdd.forEach((name, i) => {
+        const id = generateRegistrantId();
+        const entry = { name, deck: starred[i] || emptyDeck, isGuest: true };
+        if (writerUid) entry.createdBy = writerUid;
+        updates[`registrants/${id}`] = entry;
+        newIds.push(id);
+      });
+      return roomRef.update(updates);
+    }).then(() => {
       // Remember every entry created in this batch so the user can self-
       // cancel via Leave Room. Critical for unauthed guests (no createdBy).
       rememberDeviceOwnedRegIds(editCode, newIds);
@@ -8639,8 +8711,7 @@ function moveParticipantBetweenGroups(name, fromGi, toGi) {
   });
   persistSwiss(s);
   if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
-    const payload = { ...s };
-    if (swissViewCode) payload.viewCode = swissViewCode;
+    const payload = swissRoomPayload(s);
     swissRoomRef.set(payload).catch(e => console.warn("Move participant push failed:", e));
   }
   return true;
@@ -8763,8 +8834,7 @@ function removeRunningParticipantByRegen(name) {
   });
   persistSwiss(next);
   if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
-    const payload = { ...next };
-    if (swissViewCode) payload.viewCode = swissViewCode;
+    const payload = swissRoomPayload(next);
     swissRoomRef.set(payload).catch(e => console.warn("Remove participant push failed:", e));
   }
   return true;
@@ -8808,8 +8878,7 @@ function reshuffleTournament() {
   };
   persistSwiss(next);
   if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
-    const payload = { ...next };
-    if (swissViewCode) payload.viewCode = swissViewCode;
+    const payload = swissRoomPayload(next);
     swissRoomRef.set(payload).catch(e => console.warn("Reshuffle push failed:", e));
   }
   renderSwiss();
@@ -8971,8 +9040,7 @@ Charlie" style="width:100%; min-height:140px; resize:vertical;"></textarea>
     }
     persistSwiss(next);
     if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
-      const payload = { ...next };
-      if (swissViewCode) payload.viewCode = swissViewCode;
+      const payload = swissRoomPayload(next);
       swissRoomRef.set(payload).catch(e => console.warn("Bulk add participants push failed:", e));
     }
     renderSwiss();
@@ -9127,8 +9195,7 @@ function showAddParticipantPopup() {
     next.registrants[generateRegistrantId()] = { name, deck };
     persistSwiss(next);
     if (swissRoomRef && swissCanEdit && !swissApplyingRemote) {
-      const payload = { ...next };
-      if (swissViewCode) payload.viewCode = swissViewCode;
+      const payload = swissRoomPayload(next);
       swissRoomRef.set(payload).catch(e => console.warn("Add participant push failed:", e));
     }
     renderSwiss();
@@ -11450,6 +11517,9 @@ function showRegistrationPopup(room, options = {}) {
     else deck = emptyBeyCheckDeck();
   }
 
+  // Set once the user builds or edits a slot by hand, so the name lookup below
+  // never overwrites something they entered themselves.
+  let deckTouched = false;
   const renderSlots = () => {
     if (!slotsHost) return;
     slotsHost.innerHTML = deck.map((s, i) => renderBeyCheckSlot(i, s)).join("");
@@ -11458,12 +11528,34 @@ function showRegistrationPopup(room, options = {}) {
         const slotIdx = Number(el.dataset.slot);
         showBeyCheckSlotPopup(slotIdx, deck[slotIdx], deck, (next) => {
           deck[slotIdx] = next;
+          deckTouched = true;
           renderSlots();
         });
       });
     });
   };
   renderSlots();
+
+  // Joining as a guest under a name that belongs to a registered account picks
+  // up that account's published starred deck, so a regular player entering as
+  // a guest doesn't rebuild what they already saved. Only fires on a still-
+  // empty, untouched deck, and only when the name isn't locked — a locked name
+  // is self-registration, which already loaded the local pinned deck above.
+  if (nameInput && !lockName) {
+    nameInput.addEventListener("change", () => {
+      const typed = (nameInput.value || "").trim();
+      if (!typed || deckTouched || !isBeyCheckDeckEmpty(deck)) return;
+      fetchStarredDeckForName(typed).then(found => {
+        // Re-check on arrival — the user may have typed on, or started
+        // building a slot, while the lookup was in flight.
+        if (!found || deckTouched || !isBeyCheckDeckEmpty(deck)) return;
+        if ((nameInput.value || "").trim() !== typed) return;
+        deck = found;
+        renderSlots();
+        setStatus(`Loaded ${typed}'s saved deck — tap a slot to change it.`, "ok");
+      });
+    });
+  }
   if (usedPinnedDeck) setStatus("Loaded your pinned deck — review it before registering.", "ok");
 
   popup.classList.remove("hidden");
@@ -12095,14 +12187,23 @@ function tournamentIsDecided(state) {
 
 // Returns { name: points } for every participant, applying the points scheme:
 //   1st = 5, 2nd = 4, 3rd = 3, top 8 (4th–8th) = 2, anyone else = 1.
-function computeTournamentRankingAwards(state) {
+// `accountNames` is a lowercased Set of guest names that belong to a registered
+// account (see fetchRegisteredNameSet). Those guests score normally; a guest
+// with no account still earns nothing, which is what keeps walk-ins off the
+// global leaderboard.
+function computeTournamentRankingAwards(state, accountNames) {
   const matches = state?.matches || {};
   const registrants = state?.registrants || {};
-  // Guests play the bracket like normal participants but never earn ranking
-  // points — collect their names so set() can short-circuit on them.
+  const known = accountNames || new Set();
+  // Guests play the bracket like normal participants but don't earn ranking
+  // points — unless their name resolves to a registered account. Collect the
+  // ones that don't, so set() can short-circuit on them.
   const guestNames = new Set();
   Object.values(registrants).forEach(r => {
-    if (r && r.isGuest && typeof r.name === "string") guestNames.add(r.name);
+    if (r && r.isGuest && typeof r.name === "string"
+        && !known.has(r.name.trim().toLowerCase())) {
+      guestNames.add(r.name);
+    }
   });
   const matchResult = m => {
     if (!m || m.scoreA == null || m.scoreB == null || m.scoreA === m.scoreB) return null;
@@ -12196,7 +12297,12 @@ function computeTournamentRankingAwards(state) {
   // scheme so the club leaderboard stays comparable with past events.
   const doubledNames = new Set();
   Object.values(registrants).forEach(r => {
-    if (!r || r.isGuest === true || typeof r.name !== "string") return;
+    if (!r || typeof r.name !== "string") return;
+    // A guest counts only when their name resolves to a registered account —
+    // the same rule that let them score at all. Anyone scoring should be able
+    // to earn the deck bonus; excluding them here would award the points but
+    // silently withhold the multiplier.
+    if (r.isGuest === true && !known.has(r.name.trim().toLowerCase())) return;
     const deck = normalizeBeyCheckDeck(r.deck);
     if (isBeyCheckDeckEmpty(deck)) return;
     if (incompleteBeyCheckDeckSlotNumbers(deck).length) return;
@@ -12208,12 +12314,42 @@ function computeTournamentRankingAwards(state) {
   return awards;
 }
 
+// Which of these names belong to a registered account, as a lowercased Set.
+// Reads the public per-key `usernames/{key}` index — one leaf read per name,
+// and only for the handful of guest entries we actually need to check.
+//
+// Always resolves; a failed lookup yields an empty set, which is the safe
+// direction: an unresolved guest simply doesn't score, rather than everyone
+// scoring on a bad read.
+function fetchRegisteredNameSet(names) {
+  const db = initFirebase();
+  const unique = Array.from(new Set((names || [])
+    .map(n => String(n || "").trim())
+    .filter(Boolean)));
+  if (!db || !unique.length) return Promise.resolve(new Set());
+  return Promise.all(unique.map(n =>
+    db.ref("usernames/" + subHostKey(n) + "/uid").once("value")
+      .then(s => (s.val() ? n.toLowerCase() : null))
+      .catch(() => null)
+  )).then(hits => new Set(hits.filter(Boolean)));
+}
+
 function syncTournamentRankingAwards(state) {
   if (!swissCanEdit || !swissRoomRef) return;
   if (state?.ranked !== true) return; // unranked tournament → skip ranking writes
   if (!tournamentIsDecided(state)) return; // wait until final + 3rd-place are settled
-  const awards = computeTournamentRankingAwards(state);
-  Object.entries(awards).forEach(([name, points]) => awardPlayerIfNew(name, points));
+  // Guests normally stay off the global leaderboard, but a guest entry whose
+  // name matches a REGISTERED account is that player — bulk-added by the host,
+  // or joining as a guest under their own username — so they earn their points.
+  // Resolve which guest names map to an account before scoring; a walk-in with
+  // no account still earns nothing.
+  const guestNames = Object.values(state?.registrants || {})
+    .filter(r => r && r.isGuest && typeof r.name === "string")
+    .map(r => r.name);
+  fetchRegisteredNameSet(guestNames).then(accountNames => {
+    const awards = computeTournamentRankingAwards(state, accountNames);
+    Object.entries(awards).forEach(([name, points]) => awardPlayerIfNew(name, points));
+  }).catch(e => console.warn("Ranking award lookup failed:", e));
   // Any participant whose account is tagged "Revox Member" or "Revox Admin"
   // (looked up via the public `revoxAccounts` index — see auth.js
   // PUBLIC_TAG_INDEXES) who played gets a Revox ranking entry: 1st/2nd/3rd
@@ -12254,19 +12390,22 @@ function fetchRevoxAccountNameSet() {
 // in the knockout bracket). Guests and test registrants are excluded.
 function computeTournamentRevoxPlacings(state) {
   const matches = state?.matches || {};
-  const registrants = state?.registrants || {};
-  const guestNames = new Set();
-  Object.values(registrants).forEach(r => {
-    if (r && r.isGuest && typeof r.name === "string") guestNames.add(r.name);
-  });
   const matchResult = m => {
     if (!m || m.scoreA == null || m.scoreB == null || m.scoreA === m.scoreB) return null;
     const aWon = m.scoreA > m.scoreB;
     return { winner: aWon ? m.a : m.b, loser: aWon ? m.b : m.a };
   };
   const placings = {};
+  // Guests are NOT filtered out here, unlike the global ranking. A Revox
+  // Member who gets added as a guest — bulk-added by the host, or joining as a
+  // guest under their own username — still earns their club points. Eligibility
+  // is decided by name against the public revoxAccounts index in
+  // awardRevoxIfNew, so a guest who isn't a Revox Member is still rejected
+  // there; filtering them here as well would only strip the members too.
+  //
+  // Test registrants stay excluded: they're synthetic and never a real person.
   const set = (name, p) => {
-    if (!name || guestNames.has(name) || isTestRegistrant(name)) return;
+    if (!name || isTestRegistrant(name)) return;
     if (placings[name] == null || p < placings[name]) placings[name] = p;
   };
   const f = matchResult(matches["bracket-f-0"]);

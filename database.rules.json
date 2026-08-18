@@ -414,6 +414,24 @@
         "photoPos":    { ".validate": "newData.isString() && newData.val().length <= 16" },
         "bannerPos":   { ".validate": "newData.isString() && newData.val().length <= 16" },
         "tags":        { "$tag": { ".validate": "newData.isBoolean()" } },
+        "starredDeck": {
+          "$slot": {
+            ".validate": "$slot.matches(/^[0-2]$/) && newData.hasChild('mode')",
+            "mode":  { ".validate": "newData.isString() && (newData.val() === 'standard' || newData.val() === 'cx' || newData.val() === 'cxExpand')" },
+            "parts": {
+              "blade":       { ".validate": "newData.isString() && newData.val().length <= 60" },
+              "lockChip":    { ".validate": "newData.isString() && newData.val().length <= 30" },
+              "mainBlade":   { ".validate": "newData.isString() && newData.val().length <= 60" },
+              "metalBlade":  { ".validate": "newData.isString() && newData.val().length <= 60" },
+              "overBlade":   { ".validate": "newData.isString() && newData.val().length <= 60" },
+              "assistBlade": { ".validate": "newData.isString() && newData.val().length <= 60" },
+              "ratchet":     { ".validate": "newData.isString() && newData.val().length <= 30" },
+              "bit":         { ".validate": "newData.isString() && newData.val().length <= 60" },
+              "$other":      { ".validate": false }
+            },
+            "$other": { ".validate": false }
+          }
+        },
         "$other":      { ".validate": false }
       }
     },

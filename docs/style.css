@@ -9677,6 +9677,27 @@ body.forest-mode   .swiss-banned-chip { color: #b42d2d; }
     color: #fff;
     background: rgba(88, 166, 255, 0.25);
 }
+/* Count badge inside each filter pill. Dimmer than the label so the pill still
+   reads as its name first, with the number as supporting detail. */
+.swiss-reg-filter-count {
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(110, 118, 129, 0.28);
+    font-size: 0.72rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: #c9d1d9;
+}
+.swiss-reg-paidfilter-btn.is-active .swiss-reg-filter-count {
+    background: rgba(255, 255, 255, 0.22);
+    color: #fff;
+}
+/* A filter with nobody in it stays visible (so the set of statuses is stable
+   as decks change) but recedes — there's nothing to look at behind it. */
+.swiss-reg-paidfilter-btn.is-empty {
+    opacity: 0.45;
+}
 .swiss-reg-num {
     color: #8b949e;
     font-variant-numeric: tabular-nums;
