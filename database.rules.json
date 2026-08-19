@@ -311,6 +311,20 @@
       }
     },
 
+    "bestParts": {
+      ".read": true,
+      "$month": {
+        ".write": "auth != null",
+        "$field": {
+          "$partKey": {
+            "name":   { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
+            "count":  { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000" },
+            "$other": { ".validate": false }
+          }
+        }
+      }
+    },
+
     "winRates": {
       ".read": true,
       "$key": {

@@ -359,6 +359,14 @@ h1 {
     display: none;
 }
 
+/* Right-hand rail, mirroring .side-profile. Every page but the Dashboard leaves
+   the right gutter of the 640px column empty on a wide screen, so it carries a
+   compact copy of the dashboard. Hidden below 1200px along with the profile
+   card — there's no gutter to fill on a narrow screen. */
+.side-dashboard {
+    display: none;
+}
+
 @media (min-width: 1200px) {
     /* The <aside> is a zero-height STICKY rail, not the visible card. Sticky
        (not fixed) is what lets the card sit below the tab row in BOTH states:
@@ -408,6 +416,116 @@ h1 {
         max-height: calc(100vh - 100px);
         overflow: hidden auto;
     }
+
+    /* Same sticky-rail trick as .side-profile, mirrored to the right gutter:
+       a zero-height sticky rail whose absolutely-positioned child is the
+       visible panel. left:100% puts its left edge at the column's right edge. */
+    .side-dashboard {
+        display: block;
+        position: sticky;
+        top: 72px;
+        height: 0;
+    }
+
+    .side-dashboard-inner {
+        position: absolute;
+        left: 100%;
+        top: 12px;
+        margin-left: 16px;
+        width: 240px;
+        z-index: 40;              /* above page content, below the tab row (50) */
+        border: 1px solid #30363d;
+        border-radius: 10px;
+        background: #161b22;
+        padding: 8px;
+        max-height: calc(100vh - 100px);
+        overflow: hidden auto;
+        scrollbar-width: none;
+    }
+    .side-dashboard-inner::-webkit-scrollbar { display: none; }
+
+    /* The dashboard is built for a 640px column; at rail width the cards shed
+       their page-sized padding, type and thumbnails. The part images are the
+       whole reason the rail overflowed — three 60px boxes plus gaps and labels
+       don't fit 240px, and the cards then ran past the viewport height. At 40px
+       a row of three fits comfortably and the panel needs no scrolling. */
+    .side-dashboard .dashboard-date {
+        font-size: 0.72rem;
+        margin: 0 0 6px;
+    }
+    .side-dashboard .dashboard-card,
+    .side-dashboard .dashboard-parts-card {
+        padding: 8px;
+    }
+    .side-dashboard .dashboard-combo-name {
+        font-size: 0.82rem;
+        word-break: break-word;
+    }
+    .side-dashboard .result-part-img-box {
+        width: 40px;
+        height: 40px;
+        border-radius: 6px;
+    }
+    /* A CX / CX Expand combo renders as one assembled tile: several absolutely
+       positioned layers at fixed pixel sizes AND fixed pixel offsets, sized by
+       .result-part-img-box-combined (79x60) rather than the plain box above.
+       Shrinking only the plain box left this tile at full size next to 40px
+       ratchet / bit tiles — that's the mismatch.
+       Scale it as a unit instead of re-deriving every layer size and offset:
+       `zoom` shrinks the composed tile AND the space it occupies, where
+       `transform: scale()` would shrink it visually but still reserve the
+       original 79x60 and leave a gap beside it. 40/60 keeps it exactly in step
+       with the plain tiles. */
+    .side-dashboard .result-part-img-box-combined {
+        zoom: 0.667;
+        /* Restore the tile's natural dimensions before zoom scales them. The
+           40px rule above is a two-class selector, so it outranks the single
+           -combined / -x4 width rules and was squashing this tile to 40px wide
+           — clipping the assembled image, which then got shrunk again by zoom.
+           zoom does the shrinking here; the box just needs its true size. */
+        width: 79px;
+        height: 60px;
+        min-height: 60px;
+        max-height: 60px;
+    }
+    .side-dashboard .result-part-img-box-x4 {
+        width: 115px;
+    }
+    .side-dashboard .result-part-img {
+        max-width: 34px;
+        max-height: 34px;
+    }
+    /* Names reserve up to 80px each on the page; three of those plus 10px gaps
+       came to ~260px against a ~225px rail, which is what forced the row to
+       scroll. 62px + 4px gaps fits with room to spare, and the names wrap onto
+       a second line rather than being cut off. */
+    .side-dashboard .result-part-name {
+        font-size: 0.62rem;
+        line-height: 1.2;
+        max-width: 62px;
+        word-break: break-word;
+    }
+    .side-dashboard .result-parts {
+        gap: 4px;
+        margin: 8px 0;
+        padding-bottom: 0;
+    }
+    /* A combined tile's label is nowrap on the page (it's a long CX name on a
+       wide tile); in the rail that would push the row back into scrolling. */
+    .side-dashboard .result-part-combined .result-part-name {
+        white-space: normal;
+        max-width: 62px;
+    }
+    /* With the panel now sized to fit, the internal scroll is a fallback for a
+       short window rather than the normal state. */
+    .side-dashboard-inner {
+        padding: 6px;
+    }
+
+    body.light-mode    .side-dashboard-inner,
+    body.tropical-mode .side-dashboard-inner,
+    body.love-mode     .side-dashboard-inner,
+    body.forest-mode   .side-dashboard-inner { background: #ffffff; border-color: #d1d9e0; }
 
     .side-profile-cover {
         position: relative;

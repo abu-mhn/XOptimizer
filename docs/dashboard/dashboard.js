@@ -215,91 +215,85 @@ const DASHBOARD_PART_TYPE_LABEL = {
   bit: "Bit"
 };
 
-// Snapshot the parts usage at the moment a tournament FINISHES, so the
-// dashboard's Best Parts panel keeps showing that finished result while
-// the next tournament is registering / running — and survives a reset.
-// Live (in-progress) tournaments don't update the snapshot.
-const DASHBOARD_BEST_PARTS_KEY = "dashboard_best_parts_snapshot";
+// Best Parts has no local cache. It reads the shared monthly tally in the
+// database and nothing else — see dashboardLoadMonthlyBestParts below. The
+// previous localStorage snapshot (and the "most recent finished tournament on
+// this device" computation behind it) is gone: both were per-device answers to
+// a community-wide question, and both would have outlived the monthly reset.
 
-function dashboardSaveBestPartsSnapshot(groups) {
-  try { localStorage.setItem(DASHBOARD_BEST_PARTS_KEY, JSON.stringify(groups)); } catch (e) {}
+
+// ===== Shared monthly Best Parts =====
+// Best Parts reads a community-wide tally at bestParts/{YYYY-MM} that every
+// host contributes to as their tournament finishes, rather than whatever the
+// last tournament on THIS device happened to use. The month is the node key,
+// so each new month starts empty — that's the reset, with no scheduled job.
+//
+// The read is async and the dashboard renders synchronously, so the first
+// paint falls back to the local snapshot and repaints once the tally arrives.
+let dashboardMonthlyParts = null;      // groups for the current month (null = none recorded)
+let dashboardMonthlyPartsTried = false; // a read has been started
+let dashboardMonthlyLoaded = false;     // a read came back — the DB is now authoritative
+
+function dashboardMonthKey() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
 }
 
-function dashboardLoadBestPartsSnapshot() {
-  try {
-    const raw = localStorage.getItem(DASHBOARD_BEST_PARTS_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length ? parsed : null;
-  } catch (e) { return null; }
-}
-
-// Resolve "the most recently finished tournament" the same way the
-// Tournament History popup picks its top entry, but only counting
-// entries whose cached state actually reads as complete:
-//   1. If the LIVE Swiss state is itself complete (host just finished
-//      a match and hasn't reset yet), use that.
-//   2. Otherwise walk `loadTournamentHistory()` newest-first and grab
-//      the first entry with a `cachedState` that completes.
-//   3. If nothing qualifies, return null — caller falls back to the
-//      stored snapshot (or "No tournament data yet" if even that's
-//      empty).
-function dashboardMostRecentCompletedState() {
-  const isCompleteFn = typeof window.isTournamentComplete === "function"
-    ? window.isTournamentComplete
-    : null;
-  if (!isCompleteFn) return null;
-  if (typeof loadSwiss === "function") {
-    try {
-      const live = loadSwiss();
-      if (live && isCompleteFn(live)) return live;
-    } catch (e) { /* fall through to history walk */ }
-  }
-  if (typeof loadTournamentHistory === "function") {
-    let list = [];
-    try { list = loadTournamentHistory(); } catch (e) { list = []; }
-    for (const entry of list) {
-      const cached = entry && entry.cachedState;
-      if (cached && isCompleteFn(cached)) return cached;
+function dashboardLoadMonthlyBestParts() {
+  if (dashboardMonthlyPartsTried) return;   // one read per page load
+  dashboardMonthlyPartsTried = true;
+  let db;
+  try { db = firebase.database(); } catch (e) { return; }
+  if (!db) return;
+  db.ref("bestParts/" + dashboardMonthKey()).once("value").then(snap => {
+    // The read answered, so the shared tally is now the source of truth even
+    // when it's EMPTY. A fresh month has nothing in it, and falling back to
+    // this device's last tournament there would quietly undo the monthly
+    // reset — showing last month's parts under a new month's heading.
+    dashboardMonthlyLoaded = true;
+    const val = snap.val();
+    if (!val) {
+      // Repaint so the card drops last month's data rather than leaving the
+      // pre-read fallback on screen.
+      if (typeof renderDashboard === "function") renderDashboard();
+      if (typeof renderSideDashboard === "function") renderSideDashboard();
+      return;
     }
-  }
-  return null;
+    const fieldOrder = typeof BEY_CHECK_FIELD_ORDER !== "undefined"
+      ? BEY_CHECK_FIELD_ORDER
+      : DASHBOARD_TOP_FIELD_ORDER;
+    const groups = [];
+    for (const field of fieldOrder) {
+      const bucket = val[field];
+      if (!bucket) continue;
+      const parts = Object.keys(bucket)
+        .map(k => bucket[k])
+        .filter(r => r && r.name)
+        .map(r => ({ name: r.name, count: Number(r.count) || 0 }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+        .slice(0, 3);
+      if (parts.length) groups.push({ field, parts });
+    }
+    if (!groups.length) return;
+    dashboardMonthlyParts = groups;
+    // Repaint whichever surface is on screen. Safe from looping: the cache is
+    // set, so the rebuild below returns it without starting another read.
+    if (typeof renderDashboard === "function") renderDashboard();
+    if (typeof renderSideDashboard === "function") renderSideDashboard();
+  }).catch(() => { /* offline / rules not deployed — local snapshot stands */ });
 }
 
 function dashboardBuildTopParts(limit) {
-  if (typeof loadSwiss !== "function" || typeof aggregatePartUsage !== "function") {
-    return dashboardLoadBestPartsSnapshot();
-  }
-
-  // Best Parts mirrors the top entry in Tournament History — the most
-  // recently FINISHED tournament — across every format (Swiss, Round
-  // Robin, Single Elimination). In-progress tournaments don't change
-  // it, and the live room being reset doesn't either (history keeps
-  // the cached state).
-  const state = dashboardMostRecentCompletedState();
-  if (!state) return dashboardLoadBestPartsSnapshot();
-
-  const usage = aggregatePartUsage(state);
-  const fieldOrder = typeof BEY_CHECK_FIELD_ORDER !== "undefined"
-    ? BEY_CHECK_FIELD_ORDER
-    : DASHBOARD_TOP_FIELD_ORDER;
-  const max = limit || 3;
-
-  const groups = [];
-  for (const field of fieldOrder) {
-    const counts = usage[field];
-    if (!counts) continue;
-    const parts = Object.entries(counts)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, max);
-    if (parts.length) groups.push({ field, parts });
-  }
-  if (groups.length) {
-    dashboardSaveBestPartsSnapshot(groups);
-    return groups;
-  }
-  return dashboardLoadBestPartsSnapshot();
+  // The shared monthly tally in the database is the ONLY source: no localStorage
+  // snapshot, and no fall-back to this device's last tournament. Best Parts is a
+  // community figure, so a per-device cache would show a different answer on
+  // every phone in the room, and a local fallback would survive the monthly
+  // reset — showing last month's parts under a new month's heading.
+  //
+  // Returns null until the read lands, and whenever the month is empty — the
+  // card renders "No tournament data yet" for both, which is honest.
+  dashboardLoadMonthlyBestParts();
+  return dashboardMonthlyParts;
 }
 
 const DASHBOARD_RANK_TEXT = ["1st", "2nd", "3rd"];
@@ -640,8 +634,10 @@ function setupDashboardCarousel(carouselEl) {
   }, 4000));
 }
 
-function renderDashboard() {
-  const root = document.getElementById("dashboard-content");
+// `rootEl` lets the same dashboard render into the desktop side rail as well as
+// the Dashboard page itself — see renderSideDashboard below.
+function renderDashboard(rootEl) {
+  const root = rootEl || document.getElementById("dashboard-content");
   if (!root) return;
   if (typeof DATA === "undefined" || !DATA.blades) {
     root.innerHTML = `<p class="dashboard-empty">Data isn't loaded yet.</p>`;
@@ -675,3 +671,56 @@ function renderDashboard() {
   root.querySelectorAll(".dashboard-carousel").forEach(setupDashboardCarousel);
   bindDashboardImagePopup(root);
 }
+
+// ===== Desktop side rail =====
+// Every page but the Dashboard leaves a wide empty gutter to the RIGHT of the
+// 640px column — the left gutter already holds the sticky profile card. Mirror
+// it with the same dashboard so that space earns its keep.
+//
+// The rail is injected rather than added to all 16 page templates: one place to
+// change, and no risk of the copies drifting apart.
+function ensureSideDashboardHost() {
+  // On the Dashboard page the real thing is already on screen, so no rail.
+  //
+  // Test the SECTION's visibility, not the presence of #dashboard-content:
+  // every page ships the whole shell, so that element exists everywhere and
+  // only the active page's section has `hidden` removed. Checking for the
+  // element instead short-circuited on every page and built no rail at all.
+  const section = document.getElementById("form-dashboard");
+  if (section && !section.classList.contains("hidden")) return null;
+  const container = document.querySelector(".container");
+  if (!container) return null;
+  let aside = document.getElementById("side-dashboard");
+  if (!aside) {
+    aside = document.createElement("aside");
+    aside.id = "side-dashboard";
+    aside.className = "side-dashboard";
+    aside.setAttribute("aria-label", "Dashboard summary");
+    aside.innerHTML =
+      '<div class="side-dashboard-inner"><div id="side-dashboard-content" class="dashboard-content"></div></div>';
+    // Sticky only tracks from where the element sits in flow, so it goes at the
+    // TOP of the column (right after the profile rail) rather than appended at
+    // the end, where it would stick only once you'd scrolled past everything.
+    const profileRail = document.getElementById("side-profile");
+    if (profileRail && profileRail.parentNode === container) {
+      container.insertBefore(aside, profileRail.nextSibling);
+    } else {
+      container.insertBefore(aside, container.firstChild);
+    }
+  }
+  return document.getElementById("side-dashboard-content");
+}
+
+function renderSideDashboard() {
+  // Data lives in data.js and every page loads it, but a slow/failed load would
+  // otherwise paint "Data isn't loaded yet" into the rail on every page.
+  if (typeof DATA === "undefined" || !DATA.blades) return;
+  const host = ensureSideDashboardHost();
+  if (host) renderDashboard(host);
+}
+
+// The rail is a desktop-only affordance (CSS hides it below 1200px, same
+// breakpoint as the profile card), but it's cheap to build once on load. The
+// Dashboard page short-circuits inside ensureSideDashboardHost.
+document.addEventListener("DOMContentLoaded", renderSideDashboard);
+if (document.readyState !== "loading") renderSideDashboard();

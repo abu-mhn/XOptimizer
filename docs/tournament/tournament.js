@@ -7487,33 +7487,69 @@ function computeDoubleElimPlacements(state) {
   return out.filter(p => p.name && p.place <= depth);
 }
 
-// Write the Best Parts panel snapshot the Dashboard reads, using the
-// finished tournament's parts usage. The storage key MUST match the
-// one in dashboard.js (which already owns its own
-// `const DASHBOARD_BEST_PARTS_KEY = "dashboard_best_parts_snapshot"`
-// at script scope; declaring it again here would collide and throw a
-// SyntaxError on every page that loads both files). Sort/slice mirrors
-// dashboardBuildTopParts (top 3 per field, by raw count desc). Safe to
-// call from any renderSwiss tick — only writes when there's at least
-// one non-empty group.
+// Contribute this finished tournament's parts usage to the Dashboard's Best
+// Parts panel. That panel is now backed solely by the shared monthly tally in
+// the database, so there's nothing to write locally — the old localStorage
+// snapshot was a per-device answer to a community-wide question and would have
+// outlived the monthly reset.
+//
+// Safe to call from any renderSwiss tick: publishBestPartsUsage claims the
+// room once before it counts anything.
 function snapshotBestPartsForDashboard(state) {
-  try {
-    const usage = aggregatePartUsage(state);
-    const fieldOrder = typeof BEY_CHECK_FIELD_ORDER !== "undefined"
-      ? BEY_CHECK_FIELD_ORDER
-      : ["lockChip", "blade", "mainBlade", "metalBlade", "overBlade", "assistBlade", "ratchet", "bit"];
-    const groups = [];
-    for (const field of fieldOrder) {
-      const counts = usage[field];
-      if (!counts) continue;
-      const parts = Object.entries(counts)
-        .map(([name, count]) => ({ name, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 3);
-      if (parts.length) groups.push({ field, parts });
+  publishBestPartsUsage(state);
+}
+
+// Month bucket for the shared Best Parts tally, as YYYY-MM in local time.
+function bestPartsMonthKey() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+}
+
+// Fold this tournament's part usage into the SHARED monthly tally, so Best
+// Parts reflects what the whole community actually brought rather than
+// whatever the last tournament on this device happened to use.
+//
+// The month is the node key, so a new month simply starts empty — that's the
+// monthly reset, with no scheduled job to run and nothing to go wrong if
+// nobody opens the app on the 1st. Past months stay readable.
+//
+// Claimed once per room through awarded/bestParts (the same guard the ranking
+// and Revox awards use), because the completion render fires on every repaint
+// and would otherwise add the same decks again on each one.
+function publishBestPartsUsage(state) {
+  const db = initFirebase();
+  if (!db || !swissRoomRef || !swissCanEdit) return;
+  let usage;
+  try { usage = aggregatePartUsage(state); } catch (e) { return; }
+  const fields = Object.keys(usage || {});
+  if (!fields.length) return;
+  swissRoomRef.child("awarded/bestParts").transaction(
+    prev => (prev != null ? undefined : true),
+    (err, committed) => {
+      if (err || !committed) return;
+      // One transaction over the whole month bucket rather than a write per
+      // part: atomic against another host finishing at the same moment, and a
+      // single round trip instead of ~20.
+      db.ref("bestParts/" + bestPartsMonthKey()).transaction(curr => {
+        const next = curr || {};
+        fields.forEach(field => {
+          const counts = usage[field] || {};
+          if (!next[field]) next[field] = {};
+          const bucket = next[field];
+          Object.keys(counts).forEach(partName => {
+            // Part names carry characters Firebase rejects in keys, so the key
+            // is sanitised and the display name stored alongside the count.
+            const key = rankingKey(partName);
+            if (!key) return;
+            if (!bucket[key]) bucket[key] = { name: partName, count: 0 };
+            bucket[key].name = partName;
+            bucket[key].count = (Number(bucket[key].count) || 0) + (Number(counts[partName]) || 0);
+          });
+        });
+        return next;
+      }).catch(e => console.warn("Best Parts publish failed:", e));
     }
-    if (groups.length) localStorage.setItem("dashboard_best_parts_snapshot", JSON.stringify(groups));
-  } catch (e) { /* non-fatal — Dashboard falls back to its prior snapshot */ }
+  );
 }
 
 function aggregatePartUsage(state) {
