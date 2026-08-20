@@ -279,6 +279,15 @@ let scoreboardSaveCallback = null;
   // is shown in portrait for this match instead of waiting on a tilt.
   let portraitOverride = false;
 
+  // True only between "the user tapped Scoreboard / Score Match while in
+  // portrait" and the board actually opening (or being dismissed). The prompt
+  // is gated on THIS, not on the board being armed: app.js sets
+  // scoreboardEnabled = true on every page load, so "armed" is always true and
+  // gating on it popped the prompt on every tilt back to portrait — including
+  // straight after tapping ✕, which releases the landscape lock and lets the
+  // phone rotate back.
+  let awaitingRotate = false;
+
   // ===== Rotate prompt (mobile, portrait) =====
   // On Android we rotate the phone ourselves. iOS Safari has no
   // screen.orientation.lock, so the board can only appear when the user tilts —
@@ -305,6 +314,7 @@ let scoreboardSaveCallback = null;
     document.body.appendChild(rotateHint);
     rotateHint.querySelector("#scoreboard-rotate-anyway").addEventListener("click", () => {
       portraitOverride = true;
+      awaitingRotate = false;
       hideRotateHint();
       overlay.classList.remove("hidden");
       overlay.classList.add("scoreboard-portrait");
@@ -373,9 +383,10 @@ let scoreboardSaveCallback = null;
     scoreboardCancelCallback = null;
     updateDisplay();
     closeBtn?.classList.add("hidden");
-    // The board is no longer armed, so neither the rotate prompt nor the
-    // portrait fallback should outlive it.
+    // The match is over, so neither the rotate prompt, the outstanding open
+    // request, nor the portrait fallback should outlive it.
     portraitOverride = false;
+    awaitingRotate = false;
     overlay?.classList.remove("scoreboard-portrait");
     hideRotateHint();
   };
@@ -415,12 +426,13 @@ let scoreboardSaveCallback = null;
         hideRotateHint();
         enterFullscreen();
       } else {
-        // Portrait: tell the judge what to do rather than showing nothing. The
-        // prompt also carries the escape hatch for a phone that can't rotate.
+        // Portrait: stay hidden and wait for the tilt. The rotate prompt is
+        // raised by openScoreboard instead — setupScoreboard also runs for
+        // armScoreboard (Battle Royale arms the board silently the moment a
+        // battle is accepted), and that must not throw a prompt at anyone.
         overlay.classList.add("hidden");
         overlay.classList.remove("scoreboard-portrait");
         portraitOverride = false;
-        showRotateHint();
       }
     }
   }
@@ -455,7 +467,15 @@ let scoreboardSaveCallback = null;
     if (isMobile) {
       // Already landscape? setupScoreboard has revealed it. Otherwise rotate
       // for them rather than waiting on a tilt.
-      if (!isLandscape()) tryLockLandscape();
+      if (!isLandscape()) {
+        tryLockLandscape();
+        // Android's lock resolves a moment later and the board opens on its
+        // own; the prompt is cleared by the landscape branch of the orientation
+        // handler when that happens. On iOS the lock isn't available at all, so
+        // this prompt is the only thing the judge has to go on.
+        awaitingRotate = true;
+        showRotateHint();
+      }
     } else {
       openScoreboardDesktopModal();
     }
@@ -531,13 +551,15 @@ let scoreboardSaveCallback = null;
         overlay.classList.add("hidden");
         overlay.classList.remove("scoreboard-portrait");
         portraitOverride = false;
+        awaitingRotate = false;
         hideRotateHint();
         exitFullscreen();
         return;
       }
       if (isLandscape()) {
-        // Rotating resolves the prompt, and drops the portrait layout in favour
-        // of the real landscape board.
+        // Rotating is what the prompt asked for, so it's done — and the real
+        // landscape board replaces the portrait layout.
+        awaitingRotate = false;
         hideRotateHint();
         portraitOverride = false;
         overlay.classList.remove("scoreboard-portrait");
@@ -548,7 +570,9 @@ let scoreboardSaveCallback = null;
         hideRotateHint();
       } else {
         overlay.classList.add("hidden");
-        showRotateHint();
+        // Only while an open request is outstanding. Tilting back to portrait
+        // after finishing or exiting a match must not re-raise it.
+        if (awaitingRotate) showRotateHint(); else hideRotateHint();
         releaseLandscape();
         // Now-in-portrait: if the user just saved a match, clear the match
         // context so the next tilt shows the default board.
