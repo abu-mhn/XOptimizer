@@ -6364,11 +6364,30 @@ body.light-mode .part-img {
     display: none;
 }
 
-/* Portrait fallback, reached via "Show anyway" on the rotate prompt. The board
-   is built for landscape — two sides filling the width — so in portrait the two
-   sides stack instead of being squeezed into half a phone-width each. */
+/* Portrait fallback, reached via "Show anyway" on the rotate prompt.
+   Render the LANDSCAPE board sideways rather than re-flowing it. Simply
+   stacking the two sides isn't enough: each side's internals (a vertical
+   column of Extreme/Burst/Over/Spin beside a huge score, plus the round /
+   VS / Reset middle) are sized for a full-height landscape half, so in a
+   short stacked strip the buttons overflow off both edges.
+   The judge has physically turned the phone sideways — iOS just refused to
+   rotate the page — so rotating the board 90° puts it upright in their hands
+   AND reuses the proven landscape layout untouched. The box is given
+   landscape proportions (width = viewport height and vice versa) before the
+   rotation, so the flex layout inside sees exactly what it expects.
+   Children are position:absolute against this overlay, so the ✕ / ✓ rotate
+   with it; taps land correctly because the browser maps input through the
+   same transform. */
 .scoreboard-overlay.scoreboard-portrait {
-    flex-direction: column;
+    inset: auto;
+    top: 50%;
+    left: 50%;
+    width: 100vh;               /* fallback for browsers without dvh */
+    height: 100vw;
+    width: 100dvh;              /* excludes Safari's address / tool bars */
+    height: 100dvw;
+    transform: translate(-50%, -50%) rotate(90deg);
+    transform-origin: center center;
 }
 
 /* Rotate prompt: shown when the board is armed but the phone is portrait. On
