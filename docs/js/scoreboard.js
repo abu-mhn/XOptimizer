@@ -275,6 +275,51 @@ let scoreboardSaveCallback = null;
   // True while we're holding the screen in landscape ourselves.
   let orientationLocked = false;
 
+  // Set when the user chooses "Show anyway" from the rotate prompt: the board
+  // is shown in portrait for this match instead of waiting on a tilt.
+  let portraitOverride = false;
+
+  // ===== Rotate prompt (mobile, portrait) =====
+  // On Android we rotate the phone ourselves. iOS Safari has no
+  // screen.orientation.lock, so the board can only appear when the user tilts —
+  // and if they have iOS Portrait Orientation Lock switched on, tilting rotates
+  // nothing, fires no orientation event, and the board never appears. Before
+  // this prompt existed, tapping Score Match on such a phone looked like it did
+  // nothing at all, with no way through and nothing on screen to explain it.
+  //
+  // Injected rather than added to all 16 page templates: one copy to maintain.
+  let rotateHint = null;
+  function ensureRotateHint() {
+    if (rotateHint) return rotateHint;
+    rotateHint = document.createElement("div");
+    rotateHint.id = "scoreboard-rotate-hint";
+    rotateHint.className = "scoreboard-rotate-hint hidden";
+    rotateHint.innerHTML =
+      '<div class="scoreboard-rotate-card">' +
+        '<div class="scoreboard-rotate-icon" aria-hidden="true">&#x21BB;</div>' +
+        '<p class="scoreboard-rotate-title">Turn your phone sideways</p>' +
+        '<p class="scoreboard-rotate-sub">Nothing happening? Your phone’s rotation lock is on — ' +
+          'swipe into Control Centre and switch it off, or show the board as it is.</p>' +
+        '<button type="button" class="btn" id="scoreboard-rotate-anyway">Show anyway</button>' +
+      '</div>';
+    document.body.appendChild(rotateHint);
+    rotateHint.querySelector("#scoreboard-rotate-anyway").addEventListener("click", () => {
+      portraitOverride = true;
+      hideRotateHint();
+      overlay.classList.remove("hidden");
+      overlay.classList.add("scoreboard-portrait");
+      // No tilt back to portrait to dismiss with, so offer the exit button.
+      exitBtn?.classList.remove("hidden");
+    });
+    return rotateHint;
+  }
+  function showRotateHint() {
+    ensureRotateHint().classList.remove("hidden");
+  }
+  function hideRotateHint() {
+    if (rotateHint) rotateHint.classList.add("hidden");
+  }
+
   // Rotate the phone to landscape on tap instead of making the judge tilt it.
   // The Screen Orientation API only allows a lock while fullscreen, so the two
   // are chained — and both need the user gesture that got us here, which is why
@@ -328,6 +373,11 @@ let scoreboardSaveCallback = null;
     scoreboardCancelCallback = null;
     updateDisplay();
     closeBtn?.classList.add("hidden");
+    // The board is no longer armed, so neither the rotate prompt nor the
+    // portrait fallback should outlive it.
+    portraitOverride = false;
+    overlay?.classList.remove("scoreboard-portrait");
+    hideRotateHint();
   };
 
   // Load names/scores + save callback onto the board, revealing it if already
@@ -359,8 +409,19 @@ let scoreboardSaveCallback = null;
     // the orientation handler shows it on the next tilt. Desktop has no tilt —
     // openScoreboard reveals the board as a modal popup itself (below).
     if (isMobile) {
-      if (isLandscape()) { overlay.classList.remove("hidden"); enterFullscreen(); }
-      else { overlay.classList.add("hidden"); }
+      if (isLandscape()) {
+        overlay.classList.remove("hidden");
+        overlay.classList.remove("scoreboard-portrait");
+        hideRotateHint();
+        enterFullscreen();
+      } else {
+        // Portrait: tell the judge what to do rather than showing nothing. The
+        // prompt also carries the escape hatch for a phone that can't rotate.
+        overlay.classList.add("hidden");
+        overlay.classList.remove("scoreboard-portrait");
+        portraitOverride = false;
+        showRotateHint();
+      }
     }
   }
 
@@ -466,10 +527,28 @@ let scoreboardSaveCallback = null;
   if (isMobile) {
     const handleOrientation = () => {
       const armed = scoreboardEnabled || !!scoreboardSaveCallback;
-      if (!armed) { overlay.classList.add("hidden"); exitFullscreen(); return; }
-      if (isLandscape()) { overlay.classList.remove("hidden"); enterFullscreen(); }
-      else {
+      if (!armed) {
         overlay.classList.add("hidden");
+        overlay.classList.remove("scoreboard-portrait");
+        portraitOverride = false;
+        hideRotateHint();
+        exitFullscreen();
+        return;
+      }
+      if (isLandscape()) {
+        // Rotating resolves the prompt, and drops the portrait layout in favour
+        // of the real landscape board.
+        hideRotateHint();
+        portraitOverride = false;
+        overlay.classList.remove("scoreboard-portrait");
+        overlay.classList.remove("hidden");
+        enterFullscreen();
+      } else if (portraitOverride) {
+        // They chose to score in portrait — leave the board up on a tilt back.
+        hideRotateHint();
+      } else {
+        overlay.classList.add("hidden");
+        showRotateHint();
         releaseLandscape();
         // Now-in-portrait: if the user just saved a match, clear the match
         // context so the next tilt shows the default board.

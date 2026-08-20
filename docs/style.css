@@ -6364,6 +6364,57 @@ body.light-mode .part-img {
     display: none;
 }
 
+/* Portrait fallback, reached via "Show anyway" on the rotate prompt. The board
+   is built for landscape — two sides filling the width — so in portrait the two
+   sides stack instead of being squeezed into half a phone-width each. */
+.scoreboard-overlay.scoreboard-portrait {
+    flex-direction: column;
+}
+
+/* Rotate prompt: shown when the board is armed but the phone is portrait. On
+   iOS the app cannot rotate the screen itself (no screen.orientation.lock), and
+   with iOS rotation lock on, tilting fires no orientation event at all — so
+   without this the judge taps Score Match and sees nothing happen. */
+.scoreboard-rotate-hint {
+    position: fixed;
+    inset: 0;
+    z-index: 10001;           /* above the board overlay (10000) */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(13, 17, 23, 0.92);
+}
+.scoreboard-rotate-hint.hidden {
+    display: none;
+}
+.scoreboard-rotate-card {
+    max-width: 320px;
+    text-align: center;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    background: #161b22;
+    padding: 22px 20px;
+}
+.scoreboard-rotate-icon {
+    font-size: 2.4rem;
+    line-height: 1;
+    margin-bottom: 10px;
+    color: #58a6ff;
+}
+.scoreboard-rotate-title {
+    margin: 0 0 8px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #f0f6fc;
+}
+.scoreboard-rotate-sub {
+    margin: 0 0 16px;
+    font-size: 0.85rem;
+    line-height: 1.45;
+    color: #8b949e;
+}
+
 .scoreboard-side {
     flex: 1;
     display: flex;
