@@ -6433,6 +6433,16 @@ body.light-mode .part-img {
     line-height: 1.45;
     color: #8b949e;
 }
+/* The shared .btn is `display: flex; flex: 1`, i.e. a BLOCK-level flex box
+   built to stretch inside a flex toolbar. The card's text-align:center can't
+   touch a block-level box, so it sat hard left. inline-flex makes it an
+   inline-level box the centring applies to, and flex:0 0 auto drops the
+   stretch it inherited for a layout it isn't in. */
+.scoreboard-rotate-card .btn {
+    display: inline-flex;
+    flex: 0 0 auto;
+    padding: 12px 24px;
+}
 
 .scoreboard-side {
     flex: 1;
