@@ -146,7 +146,7 @@ const DATA = {
     { atk: 10, def: 10, sta: 29, weight: 27.4, spindirection: "R", name: "Rage", codename: "RAGE" },
     { atk: 15, def: 15, sta: 10, weight: 27.8, spindirection: "R", name: "Delta", codename: "DELTA", meta: true },
     { atk: 4, def: 10, sta: 16, weight: 28.0, spindirection: "R", name: "Whip", codename: "WHIP", meta: true },
-    { atk: 4, def: 17, sta: 5, weight: 0, spindirection: "R", name: "Tread", codename: "TREAD" },
+    { atk: 4, def: 17, sta: 5, weight: 28.0, spindirection: "R", name: "Tread", codename: "TREAD" },
   ],
 
   overBlades: [
@@ -155,7 +155,7 @@ const DATA = {
     { atk: 5, def: 5, sta: 10, weight: 3.7, spindirection: "R", name: "Flow", codename: "F" },
     { atk: 8, def: 7, sta: 5, weight: 3.5, spindirection: "R", name: "Peak", codename: "P" },
     { atk: 4, def: 10, sta: 16, weight: 3.6, spindirection: "R", name: "Outer", codename: "O" },
-    { atk: 4, def: 17, sta: 4, weight: 0, spindirection: "R", name: "Tough", codename: "T" },
+    { atk: 4, def: 17, sta: 4, weight: 4.3, spindirection: "R", name: "Tough", codename: "T" },
   ],
 
   assistBlades: [
@@ -187,7 +187,7 @@ const DATA = {
     { atk: 30, def: 5, sta: 5, weight: 4.9, height: 50, spindirection: "R", name: "Knuckle", codename: "K" },
     { atk: 17, def: 10, sta: 13, weight: 4.5, height: 70, spindirection: "R", name: "Odd", codename: "O" },
     { atk: 37, def: 9, sta: 4, weight: 11.6, height: 90, spindirection: "R", name: "Gravity", codename: "G" },
-    { atk: 7, def: 33, sta: 9, weight: 0, height: 0, spindirection: "R", name: "Quell", codename: "Q" },
+    { atk: 7, def: 33, sta: 9, weight: 4.5, height: 0, spindirection: "R", name: "Quell", codename: "Q" },
   ],
 
   ratchets: [
