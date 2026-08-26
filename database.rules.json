@@ -240,6 +240,7 @@
         "photo":       { ".validate": "newData.isString() && newData.val().length <= 500000" },
         "banner":      { ".validate": "newData.isString() && newData.val().length <= 1000000" },
         "smallBanner": { ".validate": "newData.isString() && newData.val().length <= 200000" },
+        "thumb":       { ".validate": "newData.isString() && newData.val().length <= 60000" },
         "bio":         { ".validate": "newData.isString() && newData.val().length <= 300" },
         "photoPos":    { ".validate": "newData.isString() && newData.val().length <= 16" },
         "bannerPos":   { ".validate": "newData.isString() && newData.val().length <= 16" },
@@ -305,9 +306,21 @@
         "points":     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
         "date":       { ".validate": "newData.isString() && newData.val().length <= 10" },
         "photo":      { ".validate": "newData.isString() && newData.val().length <= 500000" },
+        "hasPhoto":   { ".validate": "newData.isBoolean()" },
         "uid":        { ".validate": "newData.isString() && newData.val() === auth.uid" },
         "createdAt":  { ".validate": "newData.isString() && newData.val().length <= 32" },
         "$other":     { ".validate": false }
+      }
+    },
+
+    "revoxPendingPhotos": {
+      "$id": {
+        ".read": "auth != null",
+        ".write": "auth != null && ( (!data.exists() && newData.exists() && root.child('revoxPending').child($id).child('uid').val() === auth.uid) || (data.exists() && !newData.exists() && (root.child('revoxPending').child($id).child('uid').val() === auth.uid || root.child('users').child(auth.uid).child('tags').child('Revox Admin').val() === true || root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Revox Admin' || root.child('users').child(auth.uid).child('tag').val() === 'Developer')) )",
+        ".validate": "newData.hasChildren(['full'])",
+        "thumb":  { ".validate": "newData.isString() && newData.val().length <= 60000" },
+        "full":   { ".validate": "newData.isString() && newData.val().length <= 500000" },
+        "$other": { ".validate": false }
       }
     },
 
@@ -424,6 +437,7 @@
         "photo":       { ".validate": "newData.isString() && newData.val().length <= 500000" },
         "banner":      { ".validate": "newData.isString() && newData.val().length <= 1000000" },
         "smallBanner": { ".validate": "newData.isString() && newData.val().length <= 200000" },
+        "thumb":       { ".validate": "newData.isString() && newData.val().length <= 60000" },
         "bio":         { ".validate": "newData.isString() && newData.val().length <= 300" },
         "photoPos":    { ".validate": "newData.isString() && newData.val().length <= 16" },
         "bannerPos":   { ".validate": "newData.isString() && newData.val().length <= 16" },

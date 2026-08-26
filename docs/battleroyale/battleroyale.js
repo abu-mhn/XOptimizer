@@ -96,10 +96,15 @@
   // ---- profile pictures / banners (shared with the Friends tab look) ----
   const BR_AVATAR_PH = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='24' r='12' fill='%23484f58'/%3E%3Cpath d='M11 57c0-12 10-20 21-20s21 8 21 20z' fill='%23484f58'/%3E%3C/svg%3E";
   const brProfileCache = {}; // profileKey -> {photo, banner, smallBanner, ...} | null
+  // Shared ProfileCache first — it serves the small `thumb` / `smallBanner`
+  // from localStorage instead of pulling each player's full-size photo and
+  // banner out of the database on every visit. See js/profile-cache.js.
   function fetchBrProfile(key) {
+    if (!key) return Promise.resolve(null);
+    if (window.ProfileCache) return window.ProfileCache.row(key);
     if (key in brProfileCache) return Promise.resolve(brProfileCache[key]);
     const database = db();
-    if (!database || !key) return Promise.resolve(null);
+    if (!database) return Promise.resolve(null);
     return database.ref("profiles/" + key).once("value")
       .then(s => (brProfileCache[key] = s.val() || null))
       .catch(() => (brProfileCache[key] = null));

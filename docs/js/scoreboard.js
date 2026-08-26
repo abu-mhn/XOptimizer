@@ -8,8 +8,22 @@ let scoreboardSaveCallback = null;
   let scoreB = 0;
   // Round indicator. Each scoring button press counts; every 3 presses
   // (across both sides combined) advances the displayed round.
+  //
+  // The same counter drives the bey indicator: a round is fought with three
+  // beys, so the press count within the current round IS the bey in play.
+  // Press 1st Bey → 2nd → 3rd, and rolling into the next round puts the 1st
+  // bey back up.
   let scorePresses = 0;
   const PRESSES_PER_ROUND = 3;
+  const BEYS_PER_ROUND = PRESSES_PER_ROUND;
+
+  // Undo history, one stack per side. Every scoring press records the points
+  // it actually applied, so a swipe-down can put the score back exactly as it
+  // was before that tap — undoing a Burst returns 2 points, not 1.
+  let pressHistory = { a: [], b: [] };
+  function clearPressHistory() {
+    pressHistory = { a: [], b: [] };
+  }
   // Optional callback fired on every score change (re-keyed to the original
   // A/B order), so the running score can be pushed to the room and shown live
   // on the tournament Calling Monitor.
@@ -28,6 +42,7 @@ let scoreboardSaveCallback = null;
   const leftSide = document.getElementById("scoreboard-left");
   const rightSide = document.getElementById("scoreboard-right");
   const roundEl = document.getElementById("scoreboard-round");
+  const beyEl = document.getElementById("scoreboard-bey");
 
   if (!overlay) return;
 
@@ -68,10 +83,32 @@ let scoreboardSaveCallback = null;
     return Math.floor(scorePresses / PRESSES_PER_ROUND) + 1;
   }
 
+  // Which bey is up: 1–3, restarting at 1 on every new round.
+  function currentBey() {
+    return (scorePresses % BEYS_PER_ROUND) + 1;
+  }
+
+  // Revert the most recent scoring press on `side`, restoring the score to
+  // what it was before that tap. The shared press counter steps back too, so
+  // the bey chip and the round counter rewind with it — undoing the 1st bey of
+  // a new round drops back to the 3rd bey of the round before. Does nothing
+  // when that side has nothing left to undo, so the score can't fall below
+  // whatever it was loaded with.
+  function undoLastPress(side) {
+    const stack = pressHistory[side];
+    if (!stack || !stack.length) return;
+    const delta = stack.pop();
+    if (side === "a") scoreA = Math.max(0, scoreA - delta);
+    else scoreB = Math.max(0, scoreB - delta);
+    scorePresses = Math.max(0, scorePresses - 1);
+    updateDisplay();
+  }
+
   function updateDisplay() {
     scoreAEl.textContent = scoreA;
     scoreBEl.textContent = scoreB;
     if (roundEl) roundEl.textContent = `${ordinal(currentRound())} Round`;
+    if (beyEl) beyEl.textContent = `${ordinal(currentBey())} Bey`;
     if (typeof scoreboardScoreChange === "function") {
       // `swapped` (declared below) flips the visible sides — re-key so the
       // callback always receives scores in the original m.a / m.b order.
@@ -100,8 +137,11 @@ let scoreboardSaveCallback = null;
         onChange(dy > 0 ? 1 : -1);
       });
     };
-    addSwipe(leftSide, d => { if (d < 0) { scoreA = Math.max(0, scoreA + d); updateDisplay(); } });
-    addSwipe(rightSide, d => { if (d < 0) { scoreB = Math.max(0, scoreB + d); updateDisplay(); } });
+    // Swipe down on a side = undo that side's last scoring tap. It used to be a
+    // flat -1, which couldn't take back a Burst or an Extreme and left the bey
+    // and round counters where they were.
+    addSwipe(leftSide, d => { if (d < 0) undoLastPress("a"); });
+    addSwipe(rightSide, d => { if (d < 0) undoLastPress("b"); });
   }
 
   const finishSounds = {
@@ -186,10 +226,14 @@ let scoreboardSaveCallback = null;
   overlay.querySelectorAll(".sb-btn").forEach(btn => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const side = btn.dataset.side;
+      const side = btn.dataset.side === "a" ? "a" : "b";
       const delta = parseInt(btn.dataset.delta, 10);
-      if (side === "a") { scoreA = Math.max(0, scoreA + delta); }
-      else { scoreB = Math.max(0, scoreB + delta); }
+      // Record what the press actually changed (not the nominal delta), so an
+      // undo is exact even if the score was clamped at 0.
+      const before = side === "a" ? scoreA : scoreB;
+      const after = Math.max(0, before + delta);
+      if (side === "a") scoreA = after; else scoreB = after;
+      pressHistory[side].push(after - before);
       scorePresses += 1;
       updateDisplay();
       const sound = finishSounds[btn.textContent.trim()];
@@ -204,6 +248,7 @@ let scoreboardSaveCallback = null;
     scoreA = 0;
     scoreB = 0;
     scorePresses = 0;
+    clearPressHistory();
     updateDisplay();
   });
 
@@ -217,6 +262,11 @@ let scoreboardSaveCallback = null;
     const tmpScore = scoreA;
     scoreA = scoreB;
     scoreB = tmpScore;
+    // The undo stacks follow their scores across, or a swipe-down would take
+    // points off the player who didn't earn them.
+    const tmpHist = pressHistory.a;
+    pressHistory.a = pressHistory.b;
+    pressHistory.b = tmpHist;
     if (labelA && labelB) {
       // Swap the FULL label (avatar + name), not just text — `.textContent`
       // dropped the avatar <img>, so the profile pic vanished on swap.
@@ -378,6 +428,7 @@ let scoreboardSaveCallback = null;
     scoreA = 0;
     scoreB = 0;
     scorePresses = 0;
+    clearPressHistory();
     swapped = false;
     scoreboardScoreChange = null;
     scoreboardCancelCallback = null;
@@ -408,6 +459,9 @@ let scoreboardSaveCallback = null;
     scoreA = typeof initialA === "number" ? initialA : 0;
     scoreB = typeof initialB === "number" ? initialB : 0;
     scorePresses = 0;
+    // A freshly loaded match has no taps to take back — an undo must never
+    // eat into the score it was opened with.
+    clearPressHistory();
     swapped = false;
     // Set the live-score hook BEFORE the first updateDisplay so the opening
     // 0–0 is pushed immediately (the monitor shows the score the moment the

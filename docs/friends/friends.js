@@ -205,10 +205,17 @@
   const FR_AVATAR_PH = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='24' r='12' fill='%23484f58'/%3E%3Cpath d='M11 57c0-12 10-20 21-20s21 8 21 20z' fill='%23484f58'/%3E%3C/svg%3E";
   const profileInfoCache = {}; // profileKey -> {photo, banner, smallBanner, ...} | null
 
+  // Row avatars go through the shared ProfileCache, which fetches the small
+  // `thumb` / `smallBanner` fields and persists them in localStorage. Reading
+  // the whole `profiles/{key}` node here (as this used to) pulled down the
+  // full-size photo AND banner for every friend on every visit — see
+  // js/profile-cache.js.
   function fetchProfileInfo(key) {
+    if (!key) return Promise.resolve(null);
+    if (window.ProfileCache) return window.ProfileCache.row(key);
     if (key in profileInfoCache) return Promise.resolve(profileInfoCache[key]);
     const database = db();
-    if (!database || !key) return Promise.resolve(null);
+    if (!database) return Promise.resolve(null);
     return database.ref("profiles/" + key).once("value")
       .then(s => (profileInfoCache[key] = s.val() || null))
       .catch(() => (profileInfoCache[key] = null));

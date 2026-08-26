@@ -428,9 +428,21 @@
         currentProfile = {
           username: v.username || "", photo: v.photo || "",
           banner: v.banner || "", bio: v.bio || "",
+          // photoPos / bannerPos are carried so a later saveUserProfile that
+          // omits them (a username-only edit) doesn't reset the user's crop
+          // back to centre.
+          photoPos: v.photoPos || "", bannerPos: v.bannerPos || "",
+          thumb: v.thumb || "", smallBanner: v.smallBanner || "",
           tags: tags
         };
+        primeOwnAvatarCache(currentProfile);
         window.dispatchEvent(new Event("userprofilechange"));
+        // Profiles saved before thumbnails existed have no `thumb` /
+        // `smallBanner`, so every list row still pays for their full-size
+        // images. Rebuild them here — the owner is the only account the rules
+        // let write this node, so their next sign-in is the one chance to
+        // heal it.
+        backfillProfileThumbs(u, currentProfile);
         // Background pass: read /achievements/{usernameKey} and mirror any
         // awarded achievements onto the user's tags. Lets a player who
         // crossed 100 wins in a tournament see the matching title + theme
@@ -585,6 +597,89 @@
   }
   window.migrateRevoxAccountsToUidKeys = migrateRevoxAccountsToUidKeys;
 
+  // Row-sized derivatives of a profile's images. List rows (tournament
+  // ranking, friends, battle royale) read these instead of the full-size
+  // originals, which is what keeps a 100-row leaderboard from costing tens of
+  // megabytes of Realtime Database download per view — see js/profile-cache.js.
+  //
+  // Never rejects. A failed shrink yields "", and readers fall back to the
+  // full-size original, so the worst case is the old (expensive) behaviour
+  // rather than a broken avatar.
+  const THUMB_MAX_CHARS = 60000;
+  const SMALL_BANNER_MAX_CHARS = 200000;   // matches the database rule
+  function deriveProfileThumbs(photo, banner) {
+    const pc = window.ProfileCache;
+    if (!pc) return Promise.resolve({ thumb: "", smallBanner: "" });
+    const cap = (s, max) => (typeof s === "string" && s.length <= max ? s : "");
+    return Promise.all([
+      photo ? pc.makeThumb(photo) : Promise.resolve(""),
+      banner ? pc.makeSmallBanner(banner) : Promise.resolve("")
+    ]).then(v => ({
+      thumb: cap(v[0], THUMB_MAX_CHARS),
+      smallBanner: cap(v[1], SMALL_BANNER_MAX_CHARS)
+    })).catch(() => ({ thumb: "", smallBanner: "" }));
+  }
+
+  // Write the derived images to both the private record and the public mirror.
+  // Deliberately a SEPARATE, failure-tolerant write: if the `thumb` rule
+  // hasn't been deployed yet, the profile save itself must still succeed and
+  // simply skip the optimisation.
+  function writeProfileThumbs(db, uid, key, derived) {
+    if (!derived || (!derived.thumb && !derived.smallBanner)) return Promise.resolve();
+    const patch = { thumb: derived.thumb, smallBanner: derived.smallBanner };
+    const jobs = [];
+    const ref = profileDbRef(uid);
+    if (ref) jobs.push(ref.update(patch).catch(() => {}));
+    if (db && key) jobs.push(db.ref("profiles/" + key).update(patch).catch(() => {}));
+    return Promise.all(jobs).then(() => {});
+  }
+
+  // Seed the shared avatar cache with the signed-in user's own images so
+  // their rows in any list render without a database read.
+  function primeOwnAvatarCache(profile) {
+    if (!window.ProfileCache || !profile || !profile.username) return;
+    const key = usernameKey(profile.username);
+    if (!key) return;
+    const thumb = profile.thumb || "";
+    const small = profile.smallBanner || "";
+    window.ProfileCache.prime(key, {
+      photo: thumb || profile.photo || "",
+      banner: small || profile.banner || "",
+      photoPos: profile.photoPos || "",
+      bannerPos: profile.bannerPos || "",
+      // Without derivatives these are the full-size originals — too big to
+      // persist, so mark them so the cache keeps them in memory only.
+      legacy: !thumb && !small
+    });
+  }
+
+  // One-time repair for profiles saved before thumbnails existed: derive the
+  // missing `thumb` / `smallBanner` and write them. No-op once both are
+  // present, or when there are no images to shrink.
+  function backfillProfileThumbs(user, profile) {
+    if (!user || !profile || !profile.username || !window.ProfileCache) return;
+    const needThumb = !!profile.photo && !profile.thumb;
+    const needBanner = !!profile.banner && !profile.smallBanner;
+    if (!needThumb && !needBanner) return;
+    let db;
+    try { db = firebase.database(); } catch (e) { db = null; }
+    const key = usernameKey(profile.username);
+    deriveProfileThumbs(needThumb ? profile.photo : "", needBanner ? profile.banner : "")
+      .then(derived => {
+        // Keep whatever already existed for the half that didn't need work.
+        const patch = {
+          thumb: needThumb ? derived.thumb : (profile.thumb || ""),
+          smallBanner: needBanner ? derived.smallBanner : (profile.smallBanner || "")
+        };
+        if (!patch.thumb && !patch.smallBanner) return;
+        return writeProfileThumbs(db, user.uid, key, patch).then(() => {
+          currentProfile = Object.assign({}, currentProfile, patch);
+          primeOwnAvatarCache(currentProfile);
+        });
+      })
+      .catch(() => { /* non-fatal — readers fall back to the originals */ });
+  }
+
   // Persist the signed-in user's profile. `username` is trimmed/capped and
   // must be unique across accounts; `photo` is a (downscaled) data-URL or "".
   // Rejects if the username is already taken by someone else.
@@ -655,7 +750,33 @@
         }).catch(() => {});
       }
     }).then(() => {
-      currentProfile = Object.assign({}, currentProfile, clean);
+      // Regenerate the row-sized thumbnails from whatever was just saved.
+      // Best-effort: a failure here leaves readers on the full-size fallback.
+      return deriveProfileThumbs(clean.photo, clean.banner)
+        .then(derived => writeProfileThumbs(db, u.uid, usernameKey(clean.username), derived)
+          .then(() => derived))
+        .catch(() => ({ thumb: "", smallBanner: "" }));
+    }).then(derived => {
+      currentProfile = Object.assign({}, currentProfile, clean, {
+        thumb: derived.thumb, smallBanner: derived.smallBanner
+      });
+      // Seed the shared avatar cache so this user's own rows render without a
+      // read, and drop the stale entry left behind by a rename.
+      if (window.ProfileCache) {
+        const oldKey = usernameKey(prevUsername);
+        const newKey = usernameKey(clean.username);
+        if (oldKey && oldKey !== newKey) window.ProfileCache.invalidate(oldKey);
+        if (newKey) {
+          window.ProfileCache.invalidate(newKey);
+          window.ProfileCache.prime(newKey, {
+            photo: derived.thumb || clean.photo,
+            banner: derived.smallBanner || clean.banner,
+            photoPos: clean.photoPos,
+            bannerPos: clean.bannerPos,
+            legacy: !derived.thumb && !derived.smallBanner
+          });
+        }
+      }
       window.dispatchEvent(new Event("userprofilechange"));
       return currentProfile;
     });
@@ -1146,6 +1267,51 @@
 
   let developerUsers = [];
 
+  // Backfill `thumb` / `smallBanner` for every account that has images but no
+  // derivatives yet. A Developer is the only role the rules let write another
+  // account's record, so this tab is the only place a dormant account — one
+  // whose owner hasn't signed in since thumbnails were introduced — can be
+  // healed. Until it is, every list row showing that member still pays for
+  // their full-size photo and banner.
+  //
+  // Sequential on purpose: a canvas resize per account, run all at once across
+  // a large member list, would lock the page up.
+  function sweepMissingThumbs(db, users, setStatus) {
+    if (!db || !window.ProfileCache || !Array.isArray(users)) return Promise.resolve(0);
+    const todo = users.filter(u =>
+      u && u.uid && ((u._photo && !u._thumb) || (u._banner && !u._smallBanner)));
+    if (!todo.length) return Promise.resolve(0);
+    let done = 0;
+    const step = (i) => {
+      if (i >= todo.length) {
+        if (setStatus) setStatus(done ? ("Generated thumbnails for " + done + " account(s).") : "");
+        return Promise.resolve(done);
+      }
+      const u = todo[i];
+      if (setStatus) setStatus("Generating thumbnails… " + (i + 1) + "/" + todo.length);
+      const needThumb = !!u._photo && !u._thumb;
+      const needBanner = !!u._banner && !u._smallBanner;
+      return deriveProfileThumbs(needThumb ? u._photo : "", needBanner ? u._banner : "")
+        .then(derived => {
+          const patch = {
+            thumb: needThumb ? derived.thumb : (u._thumb || ""),
+            smallBanner: needBanner ? derived.smallBanner : (u._smallBanner || "")
+          };
+          if (!patch.thumb && !patch.smallBanner) return null;
+          // Mutated in place so the profiles backfill in the same pass, and
+          // any later re-render, see the new values.
+          u._thumb = patch.thumb;
+          u._smallBanner = patch.smallBanner;
+          done++;
+          if (window.ProfileCache) window.ProfileCache.invalidate(usernameKey(u.username));
+          return writeProfileThumbs(db, u.uid, usernameKey(u.username), patch);
+        })
+        .catch(() => null)
+        .then(() => step(i + 1));
+    };
+    return step(0);
+  }
+
   // Load every registered user from the usernames index, plus each user's
   // current tags, into developerUsers.
   function loadDeveloperUsers() {
@@ -1168,10 +1334,12 @@
       })).filter(u => u.uid);
       developerUsers.sort((a, b) => a.username.localeCompare(b.username));
       if (countEl) countEl.textContent = "Registered users: " + developerUsers.length;
-      // Pull each user's tag map + profile photo (the Developer read rule
-      // covers users/*). The photo is a 128px JPEG (a few KB), so sweeping
-      // it in is cheap — and it lets the profiles backfill below publish
-      // avatars without waiting for each member to re-save their profile.
+      // Pull each user's full record (the Developer read rule covers users/*).
+      // This is the single most expensive read in the app — every account's
+      // photo AND banner — but it's Developer-only, manual, and it's what lets
+      // the thumbnail backfill below heal accounts whose owners haven't signed
+      // in since thumbnails were introduced. One sweep makes every public list
+      // cheap for everyone.
       return Promise.all(developerUsers.map(u =>
         db.ref("users/" + u.uid).once("value")
           .then(s => s.val() || {})
@@ -1185,7 +1353,13 @@
         u._photo = (typeof rec.photo === "string") ? rec.photo : "";
         u._banner = (typeof rec.banner === "string") ? rec.banner : "";
         u._bio = (typeof rec.bio === "string") ? rec.bio : "";
+        u._thumb = (typeof rec.thumb === "string") ? rec.thumb : "";
+        u._smallBanner = (typeof rec.smallBanner === "string") ? rec.smallBanner : "";
       });
+      // Generate the missing row-sized thumbnails for every account that has
+      // images but no derivatives yet. Runs one at a time so a large member
+      // list doesn't lock up the page on canvas work, and reports progress.
+      sweepMissingThumbs(db, developerUsers, setStatus);
       // Sync every public tag-index node (judges, revoxAccounts, …) with
       // whatever the users tree says — each visit by a Developer brings
       // the indexes back in line (covers users whose tags predate any
@@ -1231,13 +1405,19 @@
         if (!key) return;
         const tagMap = {};
         (u.tags || []).forEach(t => { if (t) tagMap[t] = true; });
-        db.ref("profiles/" + key).update({
+        const patch = {
           username: u.username,
           photo: u._photo || "",
           banner: u._banner || "",
           bio: u._bio || "",
           tags: Object.keys(tagMap).length ? tagMap : null
-        }).catch(() => {});
+        };
+        // Only publish derivatives that actually exist. Writing "" here would
+        // race sweepMissingThumbs (running concurrently) and could blank a
+        // thumbnail it had just generated.
+        if (u._thumb) patch.thumb = u._thumb;
+        if (u._smallBanner) patch.smallBanner = u._smallBanner;
+        db.ref("profiles/" + key).update(patch).catch(() => {});
       });
       setStatus("");
       const search = document.getElementById("developer-search");

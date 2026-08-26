@@ -3955,9 +3955,16 @@ function showProfileByUsername(username, anchorEl) {
   // Read the public `profiles/{usernameKey}` mirror FIRST — the dropdown
   // opens only if a profile is found. No profile (or a denied/failed
   // read) → nothing pops up.
-  db.ref("profiles/" + subHostKey(username)).once("value").then(snap => {
+  //
+  // The card's images are small on screen (56px avatar, 78px-tall banner), so
+  // this pulls the cached thumbnails rather than the full-size originals — a
+  // hover used to cost up to ~750 KB of database download.
+  const key = subHostKey(username);
+  const lookup = window.ProfileCache
+    ? window.ProfileCache.card(key)
+    : db.ref("profiles/" + key).once("value").then(snap => snap.val());
+  lookup.then(p => {
     if (reqId !== profileDropdownRequestId) return; // superseded by a newer hover/click
-    const p = snap.val();
     if (!p) return;                                 // no profile → don't open
     fill(p);
     reveal();
@@ -5130,21 +5137,29 @@ function bindSwissRegisteringHandlers(view, state) {
 // Value is the photo data-URL, or "" when the name has no public profile
 // (free-form Register Others / Test names, or accounts that haven't saved
 // a profile yet) — caching the empty result avoids re-querying every render.
+// Only used on the fallback path now; js/profile-cache.js is the primary
+// cache and survives page navigation.
 const swissRegistrantPhotoCache = Object.create(null);
 
 // Resolve a player name to a profile photo data-URL (""=no photo / no
 // account). The signed-in user's own photo comes straight from the
 // in-memory profile (instant, no Firebase read, works before the public
-// mirror is populated); everyone else's from the public
-// `profiles/{usernameKey}` index, cached per session. Exposed on window
-// so the scoreboard overlay (a separate file) can reuse it.
+// mirror is populated); everyone else's through ProfileCache, which serves
+// the small `thumb` from localStorage where it can. Exposed on window so the
+// scoreboard overlay (a separate file) can reuse it.
 function resolveProfilePhoto(name) {
   const key = subHostKey(name || "");
   if (!key) return Promise.resolve("");
   const myKey = subHostKey((window.getCurrentUsername && window.getCurrentUsername()) || "");
   if (myKey && key === myKey) {
+    // Prefer the user's own thumbnail — these are avatar-sized slots, and it
+    // keeps the row consistent with how everyone else's is rendered.
+    const mine = (window.getCurrentProfile && window.getCurrentProfile()) || null;
+    if (mine && mine.thumb) return Promise.resolve(mine.thumb);
     return Promise.resolve((window.getCurrentUserPhoto && window.getCurrentUserPhoto()) || "");
   }
+  if (window.ProfileCache) return window.ProfileCache.photo(key);
+  // profile-cache.js missing on this page — fall back to the direct read.
   if (key in swissRegistrantPhotoCache) return Promise.resolve(swissRegistrantPhotoCache[key]);
   const db = initFirebase();
   if (!db) return Promise.resolve("");
@@ -5170,8 +5185,11 @@ function resolveProfileBanner(name) {
   const myKey = subHostKey((window.getCurrentUsername && window.getCurrentUsername()) || "");
   if (myKey && key === myKey) {
     const mine = (window.getCurrentProfile && window.getCurrentProfile()) || null;
-    return Promise.resolve((mine && mine.banner) || "");
+    // Row backgrounds are ~40px tall — the small banner is all they need.
+    return Promise.resolve((mine && (mine.smallBanner || mine.banner)) || "");
   }
+  if (window.ProfileCache) return window.ProfileCache.banner(key);
+  // profile-cache.js missing on this page — fall back to the direct read.
   if (key in swissRegistrantBannerCache) return Promise.resolve(swissRegistrantBannerCache[key]);
   const db = initFirebase();
   if (!db) return Promise.resolve("");
@@ -12647,12 +12665,100 @@ function submitRevoxPending(name, points, tournament, placing, date, photo) {
     placing: Number(placing) || 0,
     points: Number(points) || 0,
     date: String(date || "").trim().slice(0, 10),
-    photo: String(photo || "").slice(0, 500000),
     uid: user.uid,
     createdAt: new Date().toISOString()
   };
   if (!entry.name) return Promise.reject(new Error("bad name"));
-  return db.ref("revoxPending").push(entry);
+  const full = String(photo || "").slice(0, 500000);
+  entry.hasPhoto = !!full;
+  // NO image data goes in the entry — neither the full photo nor a thumbnail.
+  // `revoxPending` is under a live value listener in two places: the review
+  // panel, and the Revox tab's count badge, which runs on EVERY page for
+  // every admin. An inline 500 KB image meant that badge re-downloaded the
+  // whole queue's photos on every single page load. The entry now carries
+  // only `hasPhoto`; both image sizes live under revoxPendingPhotos/{id} and
+  // are read on the Revox page only.
+  const thumbFor = (!full || !window.ProfileCache)
+    ? Promise.resolve("")
+    : window.ProfileCache.shrink(full, 256, 256, 0.7)
+        .then(t => (t && t.length <= 60000) ? t : "")
+        .catch(() => "");
+  return thumbFor.then(thumb => {
+    const ref = db.ref("revoxPending").push();
+    return ref.set(entry).then(() => {
+      if (!full) return ref;
+      // Best-effort: a submission whose image write fails still appears in
+      // the queue, and the admin can ask the member to resend.
+      return db.ref("revoxPendingPhotos/" + ref.key).set({ thumb: thumb, full: full })
+        .catch(() => {})
+        .then(() => ref);
+    });
+  });
+}
+
+// Neutral grey tile shown in an evidence slot until its thumbnail arrives.
+const REVOX_EVIDENCE_PH = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 42 42'%3E%3Crect width='42' height='42' fill='%2321262d'/%3E%3C/svg%3E";
+
+// Per-session cache of fetched evidence images, keyed by submission id, so
+// re-rendering the panel (which happens on every queue change) doesn't re-read
+// the same thumbnails.
+const revoxEvidenceCache = Object.create(null);
+const revoxEvidenceInflight = Object.create(null);
+
+function loadRevoxEvidence(id) {
+  if (!id) return Promise.resolve(null);
+  if (id in revoxEvidenceCache) return Promise.resolve(revoxEvidenceCache[id]);
+  if (id in revoxEvidenceInflight) return revoxEvidenceInflight[id];
+  const db = initFirebase();
+  if (!db) return Promise.resolve(null);
+  const p = db.ref("revoxPendingPhotos/" + id).once("value")
+    .then(s => {
+      const v = s.val();
+      const rec = (v && typeof v === "object")
+        ? { thumb: v.thumb || "", full: v.full || "" }
+        : null;
+      // Only a hit is cached. A miss means the image write hasn't landed yet
+      // (the entry is created first) or it failed — caching that would pin the
+      // row to a placeholder for the rest of the session, so let it retry on
+      // the next render instead.
+      if (rec) revoxEvidenceCache[id] = rec;
+      delete revoxEvidenceInflight[id];
+      return rec;
+    })
+    .catch(() => {
+      delete revoxEvidenceInflight[id];
+      return null;
+    });
+  revoxEvidenceInflight[id] = p;
+  return p;
+}
+
+// Row-sized evidence image. Legacy entries still carry the full photo inline,
+// so use that rather than issuing a read that would find nothing.
+function loadRevoxEvidenceThumb(id, entry) {
+  if (entry && entry.photo) return Promise.resolve(entry.photo);
+  return loadRevoxEvidence(id).then(r => (r && (r.thumb || r.full)) || "");
+}
+
+// Full-size evidence image, fetched only when someone opens the lightbox.
+function loadRevoxEvidencePhoto(id, entry) {
+  if (entry && entry.photo) return Promise.resolve(entry.photo);
+  return loadRevoxEvidence(id).then(r => (r && (r.full || r.thumb)) || "");
+}
+
+// Drop a submission and its split-out evidence photo together, so an approved
+// or rejected entry never leaves an orphaned image occupying storage.
+//
+// Photo first, deliberately: the rule that authorises deleting it reads the
+// submitter's uid off `revoxPending/{id}`, so removing the entry first would
+// strip away the very proof the rule checks and orphan the image.
+function removeRevoxPending(id) {
+  const db = initFirebase();
+  if (!db || !id) return Promise.reject(new Error("bad input"));
+  delete revoxEvidenceCache[id];
+  delete revoxEvidenceInflight[id];
+  return db.ref("revoxPendingPhotos/" + id).remove().catch(() => {})
+    .then(() => db.ref("revoxPending/" + id).remove());
 }
 
 // Approve a pending submission: fold it into the member's ranking, then drop
@@ -12664,14 +12770,12 @@ function approveRevoxPending(id, data) {
   // so approve by uid rather than re-resolving the name — a member who renamed
   // while the submission sat in the queue would otherwise fork a new row.
   return addRevoxEntry(data.name, data.points, data.tournament, data.placing, data.date, data.uid)
-    .then(() => db.ref("revoxPending/" + id).remove());
+    .then(() => removeRevoxPending(id));
 }
 
 // Reject / cancel a pending submission — just remove it.
 function rejectRevoxPending(id) {
-  const db = initFirebase();
-  if (!db || !id) return Promise.reject(new Error("bad input"));
-  return db.ref("revoxPending/" + id).remove();
+  return removeRevoxPending(id);
 }
 
 // Live listener on the pending queue so the panel updates the moment an admin
@@ -12720,8 +12824,12 @@ function renderRevoxPendingFrom(data) {
          <button type="button" class="revox-pending-btn revox-pending-reject" data-revox-reject="${escapeHtml(e.id)}">Reject</button>`
       : `<button type="button" class="revox-pending-btn revox-pending-reject" data-revox-reject="${escapeHtml(e.id)}" title="Cancel this submission">Cancel</button>`;
     const tag = isAdmin ? "" : `<span class="revox-pending-tag">Awaiting approval</span>`;
-    const evi = e.photo
-      ? `<img class="revox-pending-evidence" src="${e.photo}" alt="Reference" data-revox-evidence="${escapeHtml(e.id)}" title="Tap to view reference photo">`
+    // The entry no longer carries image data — `hasPhoto` says whether one
+    // exists, and the thumbnail is hydrated in below. Legacy entries still
+    // have the photo inline, so treat those as having one too.
+    const hasEvidence = e.hasPhoto || !!e.photo;
+    const evi = hasEvidence
+      ? `<img class="revox-pending-evidence" src="${e.photo || REVOX_EVIDENCE_PH}" alt="Reference" data-revox-evidence="${escapeHtml(e.id)}" title="Tap to view reference photo">`
       : `<span class="revox-pending-evidence revox-pending-evidence-none" title="No reference photo attached">?</span>`;
     return `<div class="revox-pending-row">
       <div class="revox-pending-main">
@@ -12731,10 +12839,32 @@ function renderRevoxPendingFrom(data) {
       <div class="revox-pending-actions">${actions}</div>
     </div>`;
   }).join("");
+  // Hydrate each row's thumbnail from revoxPendingPhotos — one small read per
+  // submission, and only on the Revox page. The count badge's listener on
+  // `revoxPending` never touches these.
   container.querySelectorAll("[data-revox-evidence]").forEach(img => {
+    const id = img.dataset.revoxEvidence;
+    const e = data[id];
+    if (!e) return;
+    if (!e.photo) {
+      loadRevoxEvidenceThumb(id, e).then(src => {
+        if (src && img.isConnected) img.src = src;
+      }).catch(() => {});
+    }
     img.addEventListener("click", () => {
-      const e = data[img.dataset.revoxEvidence];
-      if (e && e.photo) showRevoxEvidence(e.photo);
+      if (img.dataset.loading === "1") return;
+      img.dataset.loading = "1";
+      // Open on whatever's already on screen so the lightbox never flashes
+      // empty, then swap in the full-size image once its read lands.
+      const box = showRevoxEvidence(img.src || REVOX_EVIDENCE_PH);
+      loadRevoxEvidencePhoto(id, e)
+        .then(full => {
+          img.dataset.loading = "";
+          if (!full || !box || !box.isConnected) return;
+          const target = box.querySelector("img");
+          if (target) target.src = full;
+        })
+        .catch(() => { img.dataset.loading = ""; });
     });
   });
   container.querySelectorAll("[data-revox-approve]").forEach(btn => {
@@ -12759,9 +12889,11 @@ function renderRevoxPendingFrom(data) {
   });
 }
 
-// Full-screen preview of an evidence image; click / Esc to dismiss.
+// Full-screen preview of an evidence image; click / Esc to dismiss. Returns
+// the lightbox element so the caller can swap in a higher-resolution source
+// once its on-demand read completes.
 function showRevoxEvidence(src) {
-  if (!src) return;
+  if (!src) return null;
   const existing = document.getElementById("revox-evidence-lightbox");
   if (existing) existing.remove();
   const box = document.createElement("div");
@@ -12774,6 +12906,7 @@ function showRevoxEvidence(src) {
     if (e.key === "Escape") { close(); document.removeEventListener("keydown", esc); }
   });
   document.body.appendChild(box);
+  return box;
 }
 
 // Sum every More-menu item's own count badge (.tab-count) into the collapsed
@@ -13414,9 +13547,13 @@ function loadRevoxHeaderProfile(name, uid) {
   const db = initFirebase();
   if (!db || (!name && !uid)) return;
   const key = rankingKey(name || "");
-  const fromProfiles = key
-    ? db.ref("profiles/" + key).once("value").then(s => s.val()).catch(() => null)
-    : Promise.resolve(null);
+  // Header images are small on screen (52px photo, 72px-tall banner), so take
+  // the cached thumbnails rather than the full-size originals.
+  const fromProfiles = !key
+    ? Promise.resolve(null)
+    : (window.ProfileCache
+        ? window.ProfileCache.card(key)
+        : db.ref("profiles/" + key).once("value").then(s => s.val()).catch(() => null));
   fromProfiles.then(p => {
     if (p && (p.photo || p.banner || p.bio || p.tags)) return p;
     if (!uid) return null;

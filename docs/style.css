@@ -6529,6 +6529,15 @@ body.light-mode .part-img {
     line-height: 1;
 }
 
+/* Round counter and the bey-in-play chip travel together, so they sit in
+   their own tight column rather than picking up the divider's 14px gap. */
+.scoreboard-round-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
 .scoreboard-round {
     line-height: 1;
     font-size: 0.8rem;
@@ -6537,6 +6546,22 @@ body.light-mode .part-img {
     color: #c9d1d9;
     text-transform: uppercase;
     white-space: nowrap;
+}
+
+/* Which of the three beys is up this round. Inherits the divider's themed
+   colour (and draws its border from currentColor), so every theme picks it
+   up without a per-theme override. */
+.scoreboard-bey {
+    line-height: 1;
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: inherit;
+    text-transform: uppercase;
+    white-space: nowrap;
+    padding: 3px 8px;
+    border: 1px solid currentColor;
+    border-radius: 999px;
 }
 
 .scoreboard-reset {
