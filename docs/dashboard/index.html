@@ -6,6 +6,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
   <base href="../">
 
+  <script>
+    // On desktop the Dashboard has no tab — the side panel carries this
+    // content on every other page (see the .side-dashboard rules). Anyone
+    // arriving here on a wide screen came from an old bookmark or a stale
+    // link, so send them to the Calculator rather than leaving them on a tab
+    // that isn't in the bar.
+    //
+    // Runs immediately after <base> so the relative target resolves from
+    // /docs/, and before anything paints. replace() rather than assign() so
+    // Back doesn't bounce them straight back here. Load-time only: resizing a
+    // window that is already here should not yank the page away mid-read.
+    (function redirectDashboardOnDesktop() {
+      try {
+        if (window.matchMedia && window.matchMedia("(min-width: 1200px)").matches) {
+          location.replace(new URL("calculator/", document.baseURI).href);
+        }
+      } catch (e) { /* no matchMedia — leave the page as it is */ }
+    })();
+  </script>
+
   <!-- ================= FAVICON ================= -->
   <link id="app-favicon" rel="icon" type="image/png" href="assets/icons/M.webp">
   <link id="app-apple-icon" rel="apple-touch-icon" href="assets/icons/M.webp">
@@ -312,36 +332,48 @@
 
     <!-- ================= LIBRARY ================= -->
     <section id="form-library" class="calc-form hidden">
-      <fieldset>
-        <legend>Library Search</legend>
+      <div class="library-sub-tabs" id="library-sub-tabs">
+        <button type="button" class="library-sub-tab active" data-library-view="search"><span class="sub-tab-ico" style="--sub-ico:url('assets/icons/book1.webp')" aria-hidden="true"></span><span>Search</span></button>
+        <button type="button" class="library-sub-tab" data-library-view="tier"><span class="sub-tab-ico" style="--sub-ico:url('assets/icons/ranking.png')" aria-hidden="true"></span><span>Tier</span></button>
+      </div>
+      <div id="library-panel-search" class="library-panel">
+        <fieldset>
+          <legend>Library Search</legend>
 
-        <div class="library-search-row">
-          <input type="text" id="library-search" placeholder="Search Beyblade parts..." autocomplete="off" />
-        </div>
+          <div class="library-search-row">
+            <input type="text" id="library-search" placeholder="Search Beyblade parts..." autocomplete="off" />
+          </div>
 
-        <div id="library-filter" class="library-filter">
-          <button type="button" class="filter-btn" data-getall="blades">Blades</button>
-          <button type="button" class="filter-btn" data-getall="bits">Bits</button>
-          <button type="button" class="filter-btn" data-getall="ratchets">Ratchets</button>
-          <button type="button" class="filter-btn" data-getall="assistBlades">Assist Blades</button>
-          <button type="button" class="filter-btn" data-getall="mainBlades">Main Blades</button>
-          <button type="button" class="filter-btn" data-getall="metalBlades">Metal Blades</button>
-          <button type="button" class="filter-btn" data-getall="overBlades">Over Blades</button>
-          <button type="button" class="filter-btn" data-getall="lockChips">Lock Chips</button>
-        </div>
+          <div id="library-filter" class="library-filter">
+            <button type="button" class="filter-btn" data-getall="blades">Blades</button>
+            <button type="button" class="filter-btn" data-getall="bits">Bits</button>
+            <button type="button" class="filter-btn" data-getall="ratchets">Ratchets</button>
+            <button type="button" class="filter-btn" data-getall="assistBlades">Assist Blades</button>
+            <button type="button" class="filter-btn" data-getall="mainBlades">Main Blades</button>
+            <button type="button" class="filter-btn" data-getall="metalBlades">Metal Blades</button>
+            <button type="button" class="filter-btn" data-getall="overBlades">Over Blades</button>
+            <button type="button" class="filter-btn" data-getall="lockChips">Lock Chips</button>
+          </div>
 
-        <div id="library-sort" class="library-sort hidden">
-          <span class="sort-label">Sort:</span>
-          <button type="button" class="sort-btn active" data-sort="name" data-dir="asc">Name ▲</button>
-          <button type="button" class="sort-btn" data-sort="atk">ATK</button>
-          <button type="button" class="sort-btn" data-sort="def">DEF</button>
-          <button type="button" class="sort-btn" data-sort="sta">STA</button>
-          <button type="button" class="sort-btn" data-sort="weight">Weight</button>
-          <button type="button" class="sort-btn" data-sort="height">Height</button>
-        </div>
+          <div id="library-sort" class="library-sort hidden">
+            <span class="sort-label">Sort:</span>
+            <button type="button" class="sort-btn active" data-sort="name" data-dir="asc">Name ▲</button>
+            <button type="button" class="sort-btn" data-sort="atk">ATK</button>
+            <button type="button" class="sort-btn" data-sort="def">DEF</button>
+            <button type="button" class="sort-btn" data-sort="sta">STA</button>
+            <button type="button" class="sort-btn" data-sort="weight">Weight</button>
+            <button type="button" class="sort-btn" data-sort="height">Height</button>
+          </div>
 
-        <div id="library-results" class="search-results"></div>
-      </fieldset>
+          <div id="library-results" class="search-results"></div>
+        </fieldset>
+      </div>
+      <div id="library-panel-tier" class="library-panel hidden">
+        <fieldset>
+          <legend>Tier List</legend>
+          <div id="library-tier"></div>
+        </fieldset>
+      </div>
     </section>
 
     <!-- ================= IMAGE POPUP ================= -->
@@ -662,6 +694,20 @@
             </div>
           </div>
         </div>
+        <div class="setting-item">
+          <span class="setting-label-text">Side panel</span>
+          <div class="setting-dropdown" id="setting-side-panel">
+            <button type="button" class="setting-dropdown-btn" data-value="normal">
+              <span class="setting-dropdown-text">Normal</span>
+              <span class="setting-dropdown-arrow">&#9662;</span>
+            </button>
+            <div class="setting-dropdown-menu hidden">
+              <div class="setting-dropdown-option active" data-value="normal">Normal</div>
+              <div class="setting-dropdown-option" data-value="tier">Tier</div>
+            </div>
+          </div>
+        </div>
+        <p class="setting-hint">What the desktop side panel shows: the combo and Best Parts carousels, or just the tier list. Hidden on narrow screens.</p>
       </fieldset>
     </section>
 

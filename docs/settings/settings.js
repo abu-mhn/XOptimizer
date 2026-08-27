@@ -15,6 +15,11 @@ Dashboard
 - Best Parts reads the database and nothing else. There's no local snapshot and no fall-back to this device's last tournament: both were per-device answers to a community-wide question, and a local copy would have outlived the monthly reset — showing last month's parts under a new month's heading. The card reads "No tournament data yet" before the read lands, when the month is empty, and when the database is unreachable
 - Respects calculator constraints: ratchet-less "expandCX" blades (Bullet Griffon, Glory Valkyrie) build with a blade + bit only and no ratchet slot, Clock Mirage's -5 ratchet requirement
 - Combo of the Day is seeded by today's date — every visitor sees the same combo until local midnight
+- Tier List (Most Played): the same monthly tally as Best Parts, but ranking the WHOLE field instead of a podium — every part of the chosen type dropped into S / A / B / C / D / F by how often it was actually brought. S means most played, not strongest on paper, so this and the Library's tier list will disagree; that's the point of having both. Chips switch part type, and only types with data this month get one
+- Only parts that were played appear at all. A part nobody brought has no entry in the tally, so it's absent rather than sitting in F — F is the least played of what WAS played. A remembered part type with no data this month falls back to one that has some, rather than showing an empty card for a type picked weeks ago
+- Desktop side panel: on screens 1200px and wider, every tab EXCEPT the Dashboard shows the dashboard in a sticky panel to the right of the page column, so that empty gutter earns its keep. Settings picks what it holds — the carousels, or just the tier list (see Settings > Side panel). In the panel the tier list is a mini version: smaller tiles, no part names, and the play count as a badge on the tile, so all six rows fit at once
+- Because the side panel already shows the dashboard on every other tab, the Dashboard TAB is hidden at that same width, and the app opens on the Calculator instead. Below 1200px there's no panel, so the tab is there and the app opens on the Dashboard as before. The tab and the panel share one breakpoint, so the dashboard can never be unreachable
+- On a phone the tier lists switch to a compact layout — smaller tiles, the count as a badge on the tile, and part names held to two lines — which takes a row from about 100px to 70px so six rows aren't twice the height of the screen
 
 Calculator
 - Three combo modes: Standard, CX (Custom), CX Expand
@@ -31,10 +36,18 @@ Calculator
 - Share the result as an image — Web Share on mobile, download fallback on desktop
 
 Library
+- Two sub-tabs: Search (find a part and read its stats) and Tier (rank a whole part type S to F)
 - Search Beyblade X parts by name
 - Filter by part type: Blades, Bits, Ratchets, Assist Blades, Main Blades, Metal Blades, Over Blades, Lock Chips
 - Sort by Name, ATK, DEF, STA, Weight, Height
 - Tap any part image for a larger preview
+- Tier sub-tab: pick a part type (Blade, Ratchet, Bit, Main / Metal / Over / Assist Blade) and a basis (ATK, DEF, STA or Weight), and every part of that type is dropped into S / A / B / C / D / F rows. Tap any tile for the usual image popup; your choice is remembered
+- The ranking is PURELY the numbers printed on the part — no votes, no usage counts (that's the Dashboard's Most Played list) — so any placement can be checked against the part itself. Parts flagged "meta" carry a star rather than being pushed up a tier: that flag is a curated opinion, and folding it into a stat-derived score would make the tiers unexplainable
+- One basis at a time, deliberately: there is no combined "overall" score. Beyblade X gives every part in a class the same stat budget — 63 of the 78 blades total exactly 100, and 35 of the 37 ratchets total 30 — so ranking on ATK + DEF + STA puts nearly every part on the same number and collapses the whole list into one tier
+- Each tier takes a fixed share of the pool, so the shape stays put and the parts fall into it rather than the rows being sized by wherever the numbers happen to cluster. Parts with identical scores always share a tier, so two parts with the same number can never straddle a cut-off and sit a tier apart
+- A part that switches mode (Hells Nether, Scorpio Spear, Lightning L-Drago, Eclipse, Turn, Dual, Turbo, Operate) is ranked once PER MODE, each with its own image and score — Hells Nether is 50 ATK in Normal and 70 in Low, so it sits in two different tiers at once. The mode name shows under the part name
+- Ratchet-bits (Turbo, Operate) are ranked with the bits, since that's the slot they fill. The footer notes that the ratchet is built into them, which is why they head the Weight tier at 12.7g / 14.1g against 2-4g for a plain bit
+- Lock chips are the one type with no tier list — they carry no ATK / DEF / STA at all
 
 Deck (3 Slots)
 - Multiple named decks with an active selector
@@ -233,6 +246,7 @@ Settings
 - Developer theme preview: accounts tagged "Developer" see every locked theme entry in the menu (Revox, all three Medal themes, all Achievement themes) regardless of whether they hold the matching tag. The demote-on-revoke logic is also bypassed for Developers, so picking a preview theme sticks until they switch manually. Useful for QA and screenshots; non-Developer accounts still follow the normal tag-gate
 - Stat display: Bar or Radar
 - Additional button mode picker (Random / Meta)
+- Side panel picker (Normal / Tier): what the desktop side panel shows — Normal keeps the combo / stat carousel and Best Parts, Tier gives the whole panel to the Most Played tier list. Desktop-only in effect; below 1200px there is no panel and the setting does nothing. The Dashboard tab itself always shows everything, since the setting is about the strip of screen the other tabs lend it
 - Account: sign up / sign in with username or email + password, forgot-password reset, sign out
 - Match Alerts: per-device toggle for tournament match-start notifications — shows the current state (unsupported on this browser / blocked by browser / off / on) with a single button to turn alerts on (prompts for Notification permission) or mute them. Works alongside the in-app toast: muting only silences the system-level OS notification
 - Show Features (this list)

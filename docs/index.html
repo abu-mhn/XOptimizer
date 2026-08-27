@@ -25,17 +25,18 @@
     <header class="updates-header">
       <h1 class="updates-title">What's New</h1>
       <p class="updates-subtitle">Recent changes to X Optimizer.</p>
-      <p class="updates-version">Version <span class="updates-version-num">v1.18.0</span></p>
+      <p class="updates-version">Version <span class="updates-version-num">v1.19.0</span></p>
     </header>
 
     <!-- Bump data-version when the list below changes so the splash flags
          it as fresh for returning users. Keep this attribute in sync with
          the visible version number above. -->
-    <article class="updates-card" data-version="v1.18.0">
+    <article class="updates-card" data-version="v1.19.0">
       <ul class="popup-list">
-        <li><strong>Which bey is up.</strong> The scoreboard now shows 1st, 2nd or 3rd Bey, and goes back to the 1st every new round.</li>
-        <li><strong>Undo a wrong tap.</strong> Swipe down on a player's side to take back their last score. The points, bey and round all go back to how they were.</li>
-        <li><strong>Faster, lighter.</strong> Profile pictures and banners are much smaller now and are remembered between pages, so lists open quicker and use far less data.</li>
+        <li><strong>Tier lists.</strong> Library has a new Tier tab that ranks every part S to F by ATK, DEF, STA or weight. Parts that switch mode are listed once per mode.</li>
+        <li><strong>Most played.</strong> The Dashboard has its own tier list built from what everyone actually brought to tournaments this month.</li>
+        <li><strong>Side panel choice.</strong> On a wide screen, Settings lets you pick what the panel on the right shows: the usual cards, or just the tier list.</li>
+        <li><strong>Opens where it should.</strong> On a computer the app now starts on the Calculator, since the side panel already shows the Dashboard. On a phone it still starts on the Dashboard.</li>
       </ul>
     </article>
 
@@ -43,5 +44,28 @@
       <a class="btn updates-enter" href="dashboard/">Open the app</a>
     </nav>
   </main>
+  <script>
+    // Where "Open the app" lands depends on the width, because the Dashboard
+    // tab only exists on narrow screens. On desktop the side panel already
+    // shows the dashboard on every other tab, so the tab is hidden there and
+    // the app opens on the Calculator instead. 1200px is the same breakpoint
+    // the side panel and the hidden tab use — keep the three in step.
+    //
+    // The href starts as dashboard/, so a browser with JS disabled still gets
+    // a working link.
+    (function pickEntryTab() {
+      var link = document.querySelector(".updates-enter");
+      if (!link || !window.matchMedia) return;
+      var wide = window.matchMedia("(min-width: 1200px)");
+      var apply = function () {
+        link.setAttribute("href", wide.matches ? "calculator/" : "dashboard/");
+      };
+      apply();
+      // Resizing the window before clicking should still land in the right
+      // place. addListener is the old spelling, kept for older WebKit.
+      if (wide.addEventListener) wide.addEventListener("change", apply);
+      else if (wide.addListener) wide.addListener(apply);
+    })();
+  </script>
 </body>
 </html>

@@ -230,7 +230,8 @@ const DASHBOARD_PART_TYPE_LABEL = {
 //
 // The read is async and the dashboard renders synchronously, so the first
 // paint falls back to the local snapshot and repaints once the tally arrives.
-let dashboardMonthlyParts = null;      // groups for the current month (null = none recorded)
+let dashboardMonthlyParts = null;      // top-3 groups for the current month (null = none recorded)
+let dashboardMonthlyAll = null;        // the same tally, untrimmed, for the usage tier list
 let dashboardMonthlyPartsTried = false; // a read has been started
 let dashboardMonthlyLoaded = false;     // a read came back — the DB is now authoritative
 
@@ -263,19 +264,24 @@ function dashboardLoadMonthlyBestParts() {
       ? BEY_CHECK_FIELD_ORDER
       : DASHBOARD_TOP_FIELD_ORDER;
     const groups = [];
+    const full = [];
     for (const field of fieldOrder) {
       const bucket = val[field];
       if (!bucket) continue;
-      const parts = Object.keys(bucket)
+      const ranked = Object.keys(bucket)
         .map(k => bucket[k])
         .filter(r => r && r.name)
         .map(r => ({ name: r.name, count: Number(r.count) || 0 }))
-        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-        .slice(0, 3);
-      if (parts.length) groups.push({ field, parts });
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+      if (!ranked.length) continue;
+      // The carousel shows a podium; the usage tier list below ranks the whole
+      // field, so keep both rather than throwing the tail away here.
+      groups.push({ field, parts: ranked.slice(0, 3) });
+      full.push({ field, parts: ranked });
     }
     if (!groups.length) return;
     dashboardMonthlyParts = groups;
+    dashboardMonthlyAll = full;
     // Repaint whichever surface is on screen. Safe from looping: the cache is
     // set, so the rebuild below returns it without starting another read.
     if (typeof renderDashboard === "function") renderDashboard();
@@ -335,6 +341,126 @@ function dashboardRenderTopPartsCarousel(groups) {
     <div class="dashboard-carousel-track">${cards}</div>
     <div class="dashboard-carousel-dots"></div>
   </div>`;
+}
+
+// ===== Usage tier list =====
+// Ranks parts by how often the community actually brought them this month,
+// straight off the same bestParts/{YYYY-MM} tally the Best Parts carousel
+// reads. This is the counterpart to the Library's tier list, which ranks on
+// the numbers printed on the part — here S means "most played", not "best on
+// paper", and the two will disagree. That's the point of having both.
+//
+// Only parts that were played appear at all: a part nobody brought has no
+// entry in the tally, so it's absent rather than sitting in F. F is the least
+// played of what WAS played.
+const DASHBOARD_USAGE_STORE_KEY = "dashboardUsageField";
+
+let dashboardUsageField = null;   // null = follow the first field with data
+(function restoreDashboardUsageField() {
+  try {
+    const saved = localStorage.getItem(DASHBOARD_USAGE_STORE_KEY);
+    if (saved && DASHBOARD_TOP_FIELD_ORDER.indexOf(saved) >= 0) dashboardUsageField = saved;
+  } catch (e) { /* unreadable / disabled store — fall back to the first field */ }
+})();
+
+function saveDashboardUsageField() {
+  try {
+    localStorage.setItem(DASHBOARD_USAGE_STORE_KEY, dashboardUsageField || "");
+  } catch (e) { /* private mode — the choice just won't outlive the page */ }
+}
+
+// Returns { field, rows, total, plays } for the chosen part type, or null when
+// the month's tally has nothing in it yet.
+function dashboardBuildUsageTier(fieldKey) {
+  dashboardLoadMonthlyBestParts();
+  const all = dashboardMonthlyAll;
+  if (!all || !all.length) return null;
+  // A remembered field with no data this month (nobody played a Metal Blade)
+  // falls back to the first field that has some, rather than showing an empty
+  // card for a type the user picked weeks ago.
+  const group = all.find(g => g.field === fieldKey) || all[0];
+  const entries = group.parts.map(p => ({ name: p.name, score: p.count }));
+  if (!entries.length) return null;
+  return {
+    field: group.field,
+    rows: buildTierRows(entries),
+    total: entries.length,
+    plays: entries.reduce((n, e) => n + e.score, 0)
+  };
+}
+
+function dashboardRenderUsageTierInner() {
+  const built = dashboardBuildUsageTier(dashboardUsageField);
+  if (!built) {
+    // Same wording as the Best Parts card: before the read lands, and for a
+    // month nobody has finished a tournament in yet.
+    return `<div class="dashboard-card-empty">No tournament data yet.</div>`;
+  }
+  const chips = (dashboardMonthlyAll || []).map(g => {
+    const label = DASHBOARD_PART_TYPE_LABEL[g.field] || g.field;
+    const active = g.field === built.field ? " is-active" : "";
+    return `<button type="button" class="tier-chip${active}" data-usage-field="${escapeHtml(g.field)}">${escapeHtml(label)}</button>`;
+  }).join("");
+
+  const rowsHtml = built.rows.map(row => {
+    const items = row.parts.map(p => {
+      const src = dashboardResolvePartImg(built.field, p.name);
+      // The count is a SIBLING of the name, not nested inside it, so the
+      // desktop rail's mini variant can hide the name and keep the count.
+      // `title` is what names the part there, since the label is gone.
+      return `<div class="result-part tier-part">
+        <div class="result-part-img-box">
+          <img src="${src}" alt="${escapeHtml(p.name)}" title="${escapeHtml(p.name)}"
+               class="result-part-img dashboard-part-img"
+               data-part-name="${escapeHtml(p.name)}"
+               onerror="this.style.display='none'">
+        </div>
+        <span class="result-part-name">${escapeHtml(p.name)}</span>
+        <span class="tier-score">${p.score}&times;</span>
+      </div>`;
+    }).join("");
+    return `<div class="tier-row">
+      <div class="tier-label tier-${row.tier}">${row.tier}</div>
+      <div class="tier-items">${items || `<span class="tier-none">&mdash;</span>`}</div>
+    </div>`;
+  }).join("");
+
+  const label = (DASHBOARD_PART_TYPE_LABEL[built.field] || built.field).toLowerCase();
+  return `<div class="tier-controls"><div class="tier-chips">${chips}</div></div>
+    <div class="tier-rows">${rowsHtml}</div>
+    <div class="tier-foot">${built.total} ${escapeHtml(label)}s played ${built.plays} time${built.plays === 1 ? "" : "s"} this month. Ranked by how often each was brought, so S is the most played &mdash; not the strongest on paper.</div>`;
+}
+
+function dashboardRenderUsageTier() {
+  return `<div class="dashboard-card dashboard-usage-tier" data-usage-tier>
+    <div class="dashboard-card-header"><h3>Tier List (Most Played)</h3></div>
+    ${dashboardRenderUsageTierInner()}
+  </div>`;
+}
+
+// Chip clicks repaint only this card — a full renderDashboard would restart
+// the carousels above it and snap them back to their first slide.
+function bindDashboardUsageTier(root) {
+  if (!root) return;
+  root.querySelectorAll("[data-usage-tier] .tier-items, [data-usage-tier] .tier-chips")
+    .forEach(rail => {
+      if (typeof enableHorizontalWheelScroll === "function") enableHorizontalWheelScroll(rail);
+      if (typeof enableHorizontalDragScroll === "function") enableHorizontalDragScroll(rail);
+    });
+  if (root.dataset.usageTierBound === "1") return;
+  root.dataset.usageTierBound = "1";
+  root.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-usage-field]");
+    if (!btn) return;
+    e.stopPropagation();
+    dashboardUsageField = btn.dataset.usageField;
+    saveDashboardUsageField();
+    const card = root.querySelector("[data-usage-tier]");
+    if (!card) return;
+    const header = card.querySelector(".dashboard-card-header");
+    card.innerHTML = (header ? header.outerHTML : "") + dashboardRenderUsageTierInner();
+    bindDashboardUsageTier(root);
+  });
 }
 
 function dashboardBuildComboOfTheDay() {
@@ -634,6 +760,27 @@ function setupDashboardCarousel(carouselEl) {
   }, 4000));
 }
 
+// ===== Side panel mode (Settings → Side panel) =====
+// Governs the DESKTOP RAIL only. The Dashboard page itself always shows
+// everything — it's the dashboard, and the setting is about the strip of
+// screen the other tabs lend it.
+//
+//   normal → the combo / stat carousel and Best Parts (the original rail)
+//   tier   → the usage tier list on its own
+//
+// Read straight from localStorage rather than waiting on the dropdown: the
+// rail is built on DOMContentLoaded and the dropdown is wired at the same
+// time, so relying on initSettingDropdown's callback would paint the wrong
+// panel first and correct it a tick later.
+const DASHBOARD_SIDE_PANEL_KEY = "sidePanelMode";
+let dashboardSidePanelMode = "normal";
+(function restoreDashboardSidePanelMode() {
+  try {
+    const saved = localStorage.getItem(DASHBOARD_SIDE_PANEL_KEY);
+    if (saved === "tier" || saved === "normal") dashboardSidePanelMode = saved;
+  } catch (e) { /* unreadable / disabled store — Normal stands */ }
+})();
+
 // `rootEl` lets the same dashboard render into the desktop side rail as well as
 // the Dashboard page itself — see renderSideDashboard below.
 function renderDashboard(rootEl) {
@@ -653,7 +800,11 @@ function renderDashboard(rootEl) {
   const dateLabel = today.toLocaleDateString(undefined, {
     weekday: "long", year: "numeric", month: "long", day: "numeric"
   });
-  root.innerHTML = `
+  // In the rail the Settings choice picks ONE of the two; on the Dashboard
+  // page both are always shown.
+  const isRail = root.id === "side-dashboard-content";
+  const tierOnly = isRail && dashboardSidePanelMode === "tier";
+  const carousels = tierOnly ? "" : `
     <p class="dashboard-date">${escapeHtml(dateLabel)}</p>
     <div class="dashboard-carousel">
       <div class="dashboard-carousel-track">
@@ -665,11 +816,15 @@ function renderDashboard(rootEl) {
       </div>
       <div class="dashboard-carousel-dots"></div>
     </div>
-    ${dashboardRenderTopPartsCarousel(topParts)}
+    ${dashboardRenderTopPartsCarousel(topParts)}`;
+  const tier = (isRail && !tierOnly) ? "" : dashboardRenderUsageTier();
+  root.innerHTML = `${carousels}
+    ${tier}
   `;
   clearDashboardCarouselTimers();
   root.querySelectorAll(".dashboard-carousel").forEach(setupDashboardCarousel);
   bindDashboardImagePopup(root);
+  bindDashboardUsageTier(root);
 }
 
 // ===== Desktop side rail =====
@@ -719,8 +874,29 @@ function renderSideDashboard() {
   if (host) renderDashboard(host);
 }
 
+// Wire Settings → Side panel. Guarded because initSettingDropdown assumes the
+// element exists and would throw on a page that ever ships without it.
+function initDashboardSidePanelSetting() {
+  if (typeof initSettingDropdown !== "function") return;
+  if (!document.getElementById("setting-side-panel")) return;
+  initSettingDropdown("setting-side-panel", DASHBOARD_SIDE_PANEL_KEY, "normal", (val) => {
+    dashboardSidePanelMode = val;
+    // Repaint the rail in place so the choice takes effect without a reload.
+    // renderDashboard clears the carousel timers itself; clearing them here
+    // would kill the Dashboard page's own carousels on the one path where
+    // renderSideDashboard early-returns and rebuilds nothing.
+    renderSideDashboard();
+  });
+}
+
 // The rail is a desktop-only affordance (CSS hides it below 1200px, same
 // breakpoint as the profile card), but it's cheap to build once on load. The
 // Dashboard page short-circuits inside ensureSideDashboardHost.
-document.addEventListener("DOMContentLoaded", renderSideDashboard);
-if (document.readyState !== "loading") renderSideDashboard();
+document.addEventListener("DOMContentLoaded", () => {
+  renderSideDashboard();
+  initDashboardSidePanelSetting();
+});
+if (document.readyState !== "loading") {
+  renderSideDashboard();
+  initDashboardSidePanelSetting();
+}

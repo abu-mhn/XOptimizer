@@ -643,6 +643,17 @@ h1 {
     position: relative;
 }
 
+/* The Dashboard tab is hidden on desktop, at exactly the width where the side
+   panel appears (see .side-dashboard). The panel carries the dashboard on
+   every other tab there, so the tab would only duplicate it — and the two
+   can never both be missing, because they share this one breakpoint.
+   Below 1200px there is no panel, so the tab stays. */
+@media (min-width: 1200px) {
+    .mode-tabs .tab[data-mode="dashboard"] {
+        display: none;
+    }
+}
+
 /* "!" alert badge on a nav tab — e.g. the Tournament tab when the signed-in
    user has been added as a co-host to an open tournament. Pinned to the tab's
    top-right corner; the ring separates it from the tab's own background. */
@@ -5953,6 +5964,7 @@ body.light-mode {
 
 body.light-mode .mode-tabs,
 body.light-mode .sub-tabs,
+body.light-mode .library-sub-tabs,
 body.light-mode .history-sub-tabs,
 body.light-mode .tournament-sub-tabs ,
 body.light-mode .br-sub-tabs,
@@ -6747,6 +6759,7 @@ body.space-mode {
 
 body.space-mode .mode-tabs,
 body.space-mode .sub-tabs,
+body.space-mode .library-sub-tabs,
 body.space-mode .history-sub-tabs,
 body.space-mode .tournament-sub-tabs ,
 body.space-mode .br-sub-tabs,
@@ -7054,6 +7067,7 @@ body.revox-mode .app-header {
 
 body.revox-mode .mode-tabs,
 body.revox-mode .sub-tabs,
+body.revox-mode .library-sub-tabs,
 body.revox-mode .history-sub-tabs,
 body.revox-mode .tournament-sub-tabs ,
 body.revox-mode .br-sub-tabs,
@@ -7067,6 +7081,7 @@ body.revox-mode .tab,
 body.revox-mode .sub-tab,
 body.revox-mode .tournament-sub-tab,
 body.revox-mode .br-sub-tab,
+body.revox-mode .library-sub-tab,
 body.revox-mode .history-sub-tab,
 body.revox-mode .reel-sub-tab,
 body.revox-mode .bey-check-mode-tab {
@@ -7078,6 +7093,7 @@ body.revox-mode .bey-check-mode-tab {
 body.revox-mode .tab.active,
 body.revox-mode .tournament-sub-tab.active,
 body.revox-mode .br-sub-tab.active,
+body.revox-mode .library-sub-tab.active,
 body.revox-mode .history-sub-tab.active,
 body.revox-mode .reel-sub-tab.active {
     background: linear-gradient(135deg, #e8402e, #b8301f);
@@ -7102,7 +7118,9 @@ body.revox-mode .tournament-sub-tab:hover:not(.active),
 body.revox-mode .br-sub-tab:hover:not(.active),
 body.revox-mode .tournament-sub-tab:focus-visible,
 body.revox-mode .br-sub-tab:focus-visible,
+body.revox-mode .library-sub-tab:hover:not(.active),
 body.revox-mode .history-sub-tab:hover:not(.active),
+body.revox-mode .library-sub-tab:focus-visible,
 body.revox-mode .history-sub-tab:focus-visible,
 body.revox-mode .reel-sub-tab:hover:not(.active),
 body.revox-mode .reel-sub-tab:focus-visible,
@@ -7402,6 +7420,7 @@ body.tropical-mode {
 
 body.tropical-mode .mode-tabs,
 body.tropical-mode .sub-tabs,
+body.tropical-mode .library-sub-tabs,
 body.tropical-mode .history-sub-tabs,
 body.tropical-mode .tournament-sub-tabs ,
 body.tropical-mode .br-sub-tabs,
@@ -7840,6 +7859,7 @@ body.stormy-mode {
 
 body.stormy-mode .mode-tabs,
 body.stormy-mode .sub-tabs,
+body.stormy-mode .library-sub-tabs,
 body.stormy-mode .history-sub-tabs,
 body.stormy-mode .tournament-sub-tabs ,
 body.stormy-mode .br-sub-tabs,
@@ -8140,6 +8160,7 @@ body.mono-mode {
 
 body.mono-mode .mode-tabs,
 body.mono-mode .sub-tabs,
+body.mono-mode .library-sub-tabs,
 body.mono-mode .history-sub-tabs,
 body.mono-mode .tournament-sub-tabs ,
 body.mono-mode .br-sub-tabs,
@@ -10609,6 +10630,7 @@ button.swiss-reg-paid:hover {
     text-align: center;
 }
 
+.library-sub-tabs,
 .history-sub-tabs,
 .tournament-sub-tabs ,
 .br-sub-tabs {
@@ -10636,6 +10658,7 @@ button.swiss-reg-paid:hover {
 }
 
 
+.library-sub-tab,
 .history-sub-tab,
 .tournament-sub-tab ,
 .br-sub-tab {
@@ -10658,6 +10681,7 @@ button.swiss-reg-paid:hover {
 .tournament-sub-tab img,
 
 .br-sub-tab img,
+.library-sub-tab img,
 .history-sub-tab img {
     width: 16px;
     height: 16px;
@@ -10674,25 +10698,32 @@ button.swiss-reg-paid:hover {
    icon needs flipping there. */
 body.light-mode .tournament-sub-tab:not(.active) img,
 body.light-mode .br-sub-tab:not(.active) img,
+body.light-mode .library-sub-tab:not(.active) img,
 body.light-mode .history-sub-tab:not(.active) img,
 body.tropical-mode .tournament-sub-tab:not(.active) img,
 body.tropical-mode .br-sub-tab:not(.active) img,
+body.tropical-mode .library-sub-tab:not(.active) img,
 body.tropical-mode .history-sub-tab:not(.active) img,
 body.love-mode .tournament-sub-tab:not(.active) img,
 body.love-mode .br-sub-tab:not(.active) img,
+body.love-mode .library-sub-tab:not(.active) img,
 body.love-mode .history-sub-tab:not(.active) img,
 body.forest-mode .tournament-sub-tab:not(.active) img,
 body.forest-mode .br-sub-tab:not(.active) img,
+body.forest-mode .library-sub-tab:not(.active) img,
 body.forest-mode .history-sub-tab:not(.active) img {
     filter: brightness(0);
 }
 body.mono-mode .tournament-sub-tab.active img,
 body.mono-mode .br-sub-tab.active img,
+body.mono-mode .library-sub-tab.active img,
 body.mono-mode .history-sub-tab.active img {
     filter: brightness(0);
 }
 
+.library-sub-tab:hover:not(.active),
 .history-sub-tab:hover:not(.active),
+.library-sub-tab:focus-visible,
 .history-sub-tab:focus-visible,
 .tournament-sub-tab:hover:not(.active),
 .br-sub-tab:hover:not(.active),
@@ -10704,6 +10735,7 @@ body.mono-mode .history-sub-tab.active img {
     outline: none;
 }
 
+.library-sub-tab.active,
 .history-sub-tab.active,
 .tournament-sub-tab.active ,
 .br-sub-tab.active {
@@ -10714,6 +10746,7 @@ body.mono-mode .history-sub-tab.active img {
 }
 
 .history-panel.hidden,
+.library-panel.hidden,
 .tournament-panel.hidden {
     display: none;
 }
@@ -12693,6 +12726,7 @@ body.mono-mode .scoreboard-close:hover {
 ======================= */
 
 /* ----- LIGHT ----- */
+body.light-mode .library-sub-tab,
 body.light-mode .history-sub-tab,
 body.light-mode .reel-sub-tab,
 body.light-mode .tournament-sub-tab ,
@@ -12702,7 +12736,9 @@ body.light-mode .br-sub-tab {
     color: #656d76;
 }
 
+body.light-mode .library-sub-tab:hover:not(.active),
 body.light-mode .history-sub-tab:hover:not(.active),
+body.light-mode .library-sub-tab:focus-visible,
 body.light-mode .history-sub-tab:focus-visible,
 body.light-mode .reel-sub-tab:hover:not(.active),
 body.light-mode .reel-sub-tab:focus-visible,
@@ -12715,6 +12751,7 @@ body.light-mode .br-sub-tab:focus-visible {
     color: #1f2328;
 }
 
+body.light-mode .library-sub-tab.active,
 body.light-mode .history-sub-tab.active,
 body.light-mode .reel-sub-tab.active,
 body.light-mode .tournament-sub-tab.active ,
@@ -12774,6 +12811,7 @@ body.light-mode .tournament-mode-name {
 }
 
 /* ----- SPACE ----- */
+body.space-mode .library-sub-tab,
 body.space-mode .history-sub-tab,
 body.space-mode .reel-sub-tab,
 body.space-mode .tournament-sub-tab ,
@@ -12783,7 +12821,9 @@ body.space-mode .br-sub-tab {
     color: #7b8cad;
 }
 
+body.space-mode .library-sub-tab:hover:not(.active),
 body.space-mode .history-sub-tab:hover:not(.active),
+body.space-mode .library-sub-tab:focus-visible,
 body.space-mode .history-sub-tab:focus-visible,
 body.space-mode .reel-sub-tab:hover:not(.active),
 body.space-mode .reel-sub-tab:focus-visible,
@@ -12796,6 +12836,7 @@ body.space-mode .br-sub-tab:focus-visible {
     color: #c8d6e5;
 }
 
+body.space-mode .library-sub-tab.active,
 body.space-mode .history-sub-tab.active,
 body.space-mode .reel-sub-tab.active,
 body.space-mode .tournament-sub-tab.active ,
@@ -12855,6 +12896,7 @@ body.space-mode .tournament-mode-name {
 }
 
 /* ----- TROPICAL ----- */
+body.tropical-mode .library-sub-tab,
 body.tropical-mode .history-sub-tab,
 body.tropical-mode .reel-sub-tab,
 body.tropical-mode .tournament-sub-tab ,
@@ -12864,7 +12906,9 @@ body.tropical-mode .br-sub-tab {
     color: #8a6d3b;
 }
 
+body.tropical-mode .library-sub-tab:hover:not(.active),
 body.tropical-mode .history-sub-tab:hover:not(.active),
+body.tropical-mode .library-sub-tab:focus-visible,
 body.tropical-mode .history-sub-tab:focus-visible,
 body.tropical-mode .reel-sub-tab:hover:not(.active),
 body.tropical-mode .reel-sub-tab:focus-visible,
@@ -12877,6 +12921,7 @@ body.tropical-mode .br-sub-tab:focus-visible {
     color: #2d3a3a;
 }
 
+body.tropical-mode .library-sub-tab.active,
 body.tropical-mode .history-sub-tab.active,
 body.tropical-mode .reel-sub-tab.active,
 body.tropical-mode .tournament-sub-tab.active ,
@@ -12936,6 +12981,7 @@ body.tropical-mode .tournament-mode-name {
 }
 
 /* ----- STORMY ----- */
+body.stormy-mode .library-sub-tab,
 body.stormy-mode .history-sub-tab,
 body.stormy-mode .reel-sub-tab,
 body.stormy-mode .tournament-sub-tab ,
@@ -12945,7 +12991,9 @@ body.stormy-mode .br-sub-tab {
     color: #9098a8;
 }
 
+body.stormy-mode .library-sub-tab:hover:not(.active),
 body.stormy-mode .history-sub-tab:hover:not(.active),
+body.stormy-mode .library-sub-tab:focus-visible,
 body.stormy-mode .history-sub-tab:focus-visible,
 body.stormy-mode .reel-sub-tab:hover:not(.active),
 body.stormy-mode .reel-sub-tab:focus-visible,
@@ -12958,6 +13006,7 @@ body.stormy-mode .br-sub-tab:focus-visible {
     color: #d5dae4;
 }
 
+body.stormy-mode .library-sub-tab.active,
 body.stormy-mode .history-sub-tab.active,
 body.stormy-mode .reel-sub-tab.active,
 body.stormy-mode .tournament-sub-tab.active ,
@@ -13017,6 +13066,7 @@ body.stormy-mode .tournament-mode-name {
 }
 
 /* ----- MONO ----- */
+body.mono-mode .library-sub-tab,
 body.mono-mode .history-sub-tab,
 body.mono-mode .reel-sub-tab,
 body.mono-mode .tournament-sub-tab ,
@@ -13026,7 +13076,9 @@ body.mono-mode .br-sub-tab {
     color: #bdbdbd;
 }
 
+body.mono-mode .library-sub-tab:hover:not(.active),
 body.mono-mode .history-sub-tab:hover:not(.active),
+body.mono-mode .library-sub-tab:focus-visible,
 body.mono-mode .history-sub-tab:focus-visible,
 body.mono-mode .reel-sub-tab:hover:not(.active),
 body.mono-mode .reel-sub-tab:focus-visible,
@@ -13039,6 +13091,7 @@ body.mono-mode .br-sub-tab:focus-visible {
     color: #ffffff;
 }
 
+body.mono-mode .library-sub-tab.active,
 body.mono-mode .history-sub-tab.active,
 body.mono-mode .reel-sub-tab.active,
 body.mono-mode .tournament-sub-tab.active ,
@@ -13294,6 +13347,7 @@ body.love-mode  {
 }
 body.love-mode .mode-tabs,
 body.love-mode .sub-tabs,
+body.love-mode .library-sub-tabs,
 body.love-mode .history-sub-tabs,
 body.love-mode .tournament-sub-tabs  ,
 body.love-mode .br-sub-tabs,
@@ -13629,6 +13683,7 @@ body.love-mode .scoreboard-player-label  {
 body.love-mode .setting-dropdown-arrow  {
     color: #9c4a5e;
 }
+body.love-mode .library-sub-tab,
 body.love-mode .history-sub-tab,
 body.love-mode .reel-sub-tab,
 body.love-mode .tournament-sub-tab  ,
@@ -13637,7 +13692,9 @@ body.love-mode .br-sub-tab  {
     background: #ffffff;
     color: #9c4a5e;
 }
+body.love-mode .library-sub-tab:hover:not(.active),
 body.love-mode .history-sub-tab:hover:not(.active),
+body.love-mode .library-sub-tab:focus-visible,
 body.love-mode .history-sub-tab:focus-visible,
 body.love-mode .reel-sub-tab:hover:not(.active),
 body.love-mode .reel-sub-tab:focus-visible,
@@ -13649,6 +13706,7 @@ body.love-mode .br-sub-tab:focus-visible  {
     border-color: #f0a0bc;
     color: #4a1d2a;
 }
+body.love-mode .library-sub-tab.active,
 body.love-mode .history-sub-tab.active,
 body.love-mode .reel-sub-tab.active,
 body.love-mode .tournament-sub-tab.active  ,
@@ -13782,6 +13840,7 @@ body.forest-mode  {
 }
 body.forest-mode .mode-tabs,
 body.forest-mode .sub-tabs,
+body.forest-mode .library-sub-tabs,
 body.forest-mode .history-sub-tabs,
 body.forest-mode .tournament-sub-tabs  ,
 body.forest-mode .br-sub-tabs,
@@ -14123,6 +14182,7 @@ body.forest-mode .deck-name-input  {
     color: #2d3e1f;
 }
 body.forest-mode .deck-name-input:focus  { border-color: #386641; }
+body.forest-mode .library-sub-tab,
 body.forest-mode .history-sub-tab,
 body.forest-mode .reel-sub-tab,
 body.forest-mode .tournament-sub-tab  ,
@@ -14131,7 +14191,9 @@ body.forest-mode .br-sub-tab  {
     background: #ffffff;
     color: #5a6a4b;
 }
+body.forest-mode .library-sub-tab:hover:not(.active),
 body.forest-mode .history-sub-tab:hover:not(.active),
+body.forest-mode .library-sub-tab:focus-visible,
 body.forest-mode .history-sub-tab:focus-visible,
 body.forest-mode .reel-sub-tab:hover:not(.active),
 body.forest-mode .reel-sub-tab:focus-visible,
@@ -14143,6 +14205,7 @@ body.forest-mode .br-sub-tab:focus-visible  {
     border-color: #d4a673;
     color: #2d3e1f;
 }
+body.forest-mode .library-sub-tab.active,
 body.forest-mode .history-sub-tab.active,
 body.forest-mode .reel-sub-tab.active,
 body.forest-mode .tournament-sub-tab.active  ,
@@ -14392,6 +14455,372 @@ body.forest-mode .dashboard-carousel-dot.active {
   opacity: 0.7;
   font-size: 13px;
 }
+
+/* ===== Library: Tier sub-tab ===== */
+.tier-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+/* Both chip rows scroll sideways rather than wrapping — the part-type row has
+   seven entries and would otherwise eat three lines in the 240px side rail. */
+.tier-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE / old Edge */
+  padding-bottom: 2px;
+}
+.tier-chips::-webkit-scrollbar {
+  display: none;                /* Chrome / Safari / new Edge */
+}
+.tier-chip {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #30363d;
+  background: transparent;
+  color: #8b949e;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tier-chip:hover {
+  color: #c9d1d9;
+  border-color: #484f58;
+}
+.tier-chip.is-active {
+  background: #21262d;
+  border-color: #8b949e;
+  color: #e6edf3;
+}
+.tier-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #30363d;   /* shows through the 2px gaps as row separators */
+}
+.tier-row {
+  display: flex;
+  align-items: stretch;
+  min-height: 56px;
+  background: #161b22;
+}
+/* Fixed-width colour block, like a classic tier template. flex:0 0 keeps it
+   from shrinking as the items row scrolls. */
+.tier-label {
+  flex: 0 0 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 800;
+  color: #1a1a1a;          /* dark text on every tier colour, as in the template */
+  text-shadow: none;
+}
+.tier-S { background: #ff7f7f; }
+.tier-A { background: #ffbf7f; }
+.tier-B { background: #ffdf7f; }
+.tier-C { background: #ffff7f; }
+.tier-D { background: #bfff7f; }
+.tier-F { background: #7fff7f; }
+.tier-items {
+  flex: 1 1 auto;
+  min-width: 0;            /* lets the row scroll instead of stretching the card */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  /* Hide the scrollbar across browsers — the row still scrolls by swipe,
+     wheel or drag, just without a visible track eating a row's height.
+     Six stacked rows meant six tracks. */
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE / old Edge */
+}
+.tier-items::-webkit-scrollbar {
+  display: none;                /* Chrome / Safari / new Edge */
+}
+/* While a row is being dragged sideways with a mouse: show the grabbing
+   cursor and stop the drag from selecting the part names instead. Matches
+   .swiss-toolbar-actions, the app's other hidden-scrollbar drag rail. */
+.tier-items.is-drag-scrolling,
+.tier-items.is-drag-scrolling *,
+.tier-chips.is-drag-scrolling,
+.tier-chips.is-drag-scrolling * {
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.tier-part .result-part-img-box {
+  width: 44px;
+  height: 44px;
+}
+.tier-part .result-part-img {
+  max-width: 38px;
+  max-height: 38px;
+}
+.tier-part .result-part-name {
+  font-size: 0.58rem;
+  max-width: 60px;
+}
+.tier-score {
+  display: block;
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+}
+/* Mode name for a part that switches (Turbo Low / High, Hells Nether
+   Normal / Low). Each mode is its own tile, so this is what tells two
+   otherwise-identical tiles apart. */
+.tier-mode {
+  display: block;
+  font-size: 0.92em;
+  opacity: 0.8;
+  font-style: italic;
+}
+.tier-meta {
+  color: #f1cf6e;
+  margin-left: 2px;
+}
+.tier-none {
+  font-size: 12px;
+  opacity: 0.4;
+}
+.tier-foot {
+  margin-top: 8px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+/* The usage tier list sits inside a .dashboard-card rather than a fieldset,
+   so it supplies its own spacing above the chip rail. */
+.dashboard-usage-tier {
+  margin-top: 10px;
+}
+.dashboard-usage-tier .tier-controls {
+  margin-bottom: 10px;
+}
+
+/* ===== Compact tier list on phones =====
+   At full size a tile stacks three things under the image: a name that wraps
+   to two lines, and the count on a line of its own. That makes a row ~100px,
+   so six rows run twice the height of a phone screen.
+
+   Here the count moves onto the tile as a corner badge and the image and text
+   shrink, taking a row to ~70px without dropping anything the row says. The
+   name is clamped to two lines so one long part can't stretch every row in
+   the list; tapping a tile still opens the popup with the full name.
+
+   Disjoint from the >=1200px rail rules below, so the two never fight. */
+@media (max-width: 700px) {
+    .tier-label {
+        flex: 0 0 34px;
+        font-size: 16px;
+    }
+    .tier-row {
+        min-height: 0;
+    }
+    .tier-items {
+        gap: 6px;
+        padding: 5px 6px;
+    }
+    .tier-part {
+        position: relative;
+        gap: 3px;
+    }
+    .tier-part .result-part-img-box {
+        width: 36px;
+        height: 36px;
+        border-radius: 7px;
+    }
+    .tier-part .result-part-img {
+        max-width: 32px;
+        max-height: 32px;
+    }
+    .tier-part .result-part-name {
+        max-width: 60px;
+        font-size: 0.55rem;
+        line-height: 1.15;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    /* Pinned to the IMAGE's top-right, not the tile's. The name below can be
+       wider than the 36px image, and .result-part centres its children, so a
+       plain right:0 would float the badge out beside the image rather than on
+       it. The image spans 50% +/- 18px, so its right edge is calc(50% - 18px)
+       in from the tile's right. Stays inside the tile either way, which
+       matters because .tier-items clips overflow-y. */
+    .tier-part .tier-score {
+        position: absolute;
+        top: 0;
+        right: calc(50% - 18px);
+        z-index: 1;
+        font-size: 8px;
+        line-height: 1;
+        padding: 1px 3px;
+        border-radius: 5px;
+        background: rgba(13, 17, 23, 0.88);
+        border: 1px solid #30363d;
+        color: #e6edf3;
+        opacity: 1;
+    }
+    .tier-chip {
+        font-size: 10px;
+        padding: 3px 8px;
+    }
+    .tier-foot {
+        font-size: 10px;
+    }
+}
+
+/* Count badge on the compact tier list, light-family themes. */
+@media (max-width: 700px) {
+    body.light-mode    .tier-part .tier-score,
+    body.tropical-mode .tier-part .tier-score,
+    body.love-mode     .tier-part .tier-score,
+    body.forest-mode   .tier-part .tier-score {
+        background: rgba(255, 255, 255, 0.92);
+        border-color: #d1d9e0;
+        color: #1f2328;
+    }
+}
+
+/* ===== Mini tier list: desktop side rail only =====
+   The rail is 240px wide. At full size the tiles overflow it and a two-line
+   part name ("Cobalt Dragoon") makes every row twice as tall as it needs to
+   be, so six rows push the card past the fold. In the rail the tiles drop
+   their names and keep image + count; hovering a tile still names it (the
+   img carries a title), and clicking still opens the popup.
+
+   Same breakpoint the rail itself uses — below it the rail is display:none,
+   so these rules can never reach the phone layout. */
+@media (min-width: 1200px) {
+    .side-dashboard .dashboard-usage-tier {
+        margin-top: 8px;
+    }
+    .side-dashboard .dashboard-usage-tier .dashboard-card-header {
+        margin-bottom: 8px;
+    }
+    .side-dashboard .dashboard-usage-tier .dashboard-card-header h3 {
+        font-size: 13px;
+    }
+    .side-dashboard .dashboard-usage-tier .tier-controls {
+        margin-bottom: 8px;
+    }
+    .side-dashboard .tier-chip {
+        font-size: 10px;
+        padding: 3px 7px;
+    }
+    /* Not 0: an empty row (an F nobody reached) still needs to read as a
+       row rather than a thin coloured strip. */
+    .side-dashboard .tier-row {
+        min-height: 26px;
+    }
+    .side-dashboard .tier-label {
+        flex: 0 0 22px;
+        font-size: 11px;
+    }
+    .side-dashboard .tier-items {
+        gap: 4px;
+        padding: 4px;
+    }
+    /* The count is a sibling of the name, so hiding the name keeps it. */
+    .side-dashboard .tier-part .result-part-name {
+        display: none;
+    }
+    /* With the name gone the tile is just the image, and the count rides on
+       top of it as a corner badge instead of taking a line of its own. That
+       is what gets all six rows into the rail at once: a row is now the
+       image plus 8px of padding rather than image + gap + a text line. */
+    .side-dashboard .tier-part {
+        position: relative;
+        gap: 0;
+    }
+    .side-dashboard .tier-part .result-part-img-box {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+    }
+    .side-dashboard .tier-part .result-part-img {
+        max-width: 24px;
+        max-height: 24px;
+    }
+    /* Kept inside the tile's own bounds — .tier-items clips overflow-y, so a
+       badge hanging off the edge would be cut in half. */
+    .side-dashboard .tier-score {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        z-index: 1;
+        font-size: 8px;
+        line-height: 1;
+        padding: 1px 3px;
+        border-radius: 5px;
+        background: rgba(13, 17, 23, 0.88);
+        border: 1px solid #30363d;
+        color: #e6edf3;
+        opacity: 1;
+    }
+    .side-dashboard .tier-foot {
+        margin-top: 5px;
+        font-size: 9px;
+        line-height: 1.35;
+    }
+}
+/* Light-family themes: the tier colours stay as they are (they're the point),
+   but the surrounding chrome follows the theme. */
+body.light-mode .tier-rows,
+body.tropical-mode .tier-rows,
+body.love-mode .tier-rows,
+body.forest-mode .tier-rows {
+  border-color: #d1d9e0;
+  background: #d1d9e0;
+}
+body.light-mode .tier-row,
+body.tropical-mode .tier-row,
+body.love-mode .tier-row,
+body.forest-mode .tier-row {
+  background: #ffffff;
+}
+body.light-mode .tier-chip,
+body.tropical-mode .tier-chip,
+body.love-mode .tier-chip,
+body.forest-mode .tier-chip {
+  border-color: #d1d9e0;
+  color: #656d76;
+}
+body.light-mode .tier-chip.is-active,
+body.tropical-mode .tier-chip.is-active,
+body.love-mode .tier-chip.is-active,
+body.forest-mode .tier-chip.is-active {
+  background: #eaeef2;
+  border-color: #656d76;
+  color: #1f2328;
+}
+
+/* Count badge on the mini tier list, light-family themes. */
+@media (min-width: 1200px) {
+    body.light-mode    .side-dashboard .tier-score,
+    body.tropical-mode .side-dashboard .tier-score,
+    body.love-mode     .side-dashboard .tier-score,
+    body.forest-mode   .side-dashboard .tier-score {
+        background: rgba(255, 255, 255, 0.92);
+        border-color: #d1d9e0;
+        color: #1f2328;
+    }
+}
+
 body.light-mode .dashboard-card,
 body.tropical-mode .dashboard-card,
 body.love-mode .dashboard-card,
@@ -15432,6 +15861,7 @@ body.gold-mode {
 
 body.gold-mode .mode-tabs,
 body.gold-mode .sub-tabs,
+body.gold-mode .library-sub-tabs,
 body.gold-mode .history-sub-tabs,
 body.gold-mode .tournament-sub-tabs ,
 body.gold-mode .br-sub-tabs,
@@ -15758,6 +16188,7 @@ body.gold-mode .btn-small:hover {
     border-color: rgba(255, 255, 255, 0.55);
 }
 
+body.gold-mode .library-sub-tab,
 body.gold-mode .history-sub-tab,
 body.gold-mode .reel-sub-tab,
 body.gold-mode .tournament-sub-tab ,
@@ -15767,7 +16198,9 @@ body.gold-mode .br-sub-tab {
     color: #b8a878;
 }
 
+body.gold-mode .library-sub-tab:hover:not(.active),
 body.gold-mode .history-sub-tab:hover:not(.active),
+body.gold-mode .library-sub-tab:focus-visible,
 body.gold-mode .history-sub-tab:focus-visible,
 body.gold-mode .reel-sub-tab:hover:not(.active),
 body.gold-mode .reel-sub-tab:focus-visible,
@@ -15780,6 +16213,7 @@ body.gold-mode .br-sub-tab:focus-visible {
     color: #f0e6cf;
 }
 
+body.gold-mode .library-sub-tab.active,
 body.gold-mode .history-sub-tab.active,
 body.gold-mode .reel-sub-tab.active,
 body.gold-mode .tournament-sub-tab.active ,
@@ -15990,6 +16424,7 @@ body.silver-mode {
 
 body.silver-mode .mode-tabs,
 body.silver-mode .sub-tabs,
+body.silver-mode .library-sub-tabs,
 body.silver-mode .history-sub-tabs,
 body.silver-mode .tournament-sub-tabs ,
 body.silver-mode .br-sub-tabs,
@@ -16301,6 +16736,7 @@ body.silver-mode .btn-small:hover {
     border-color: rgba(255, 255, 255, 0.55);
 }
 
+body.silver-mode .library-sub-tab,
 body.silver-mode .history-sub-tab,
 body.silver-mode .reel-sub-tab,
 body.silver-mode .tournament-sub-tab ,
@@ -16310,7 +16746,9 @@ body.silver-mode .br-sub-tab {
     color: #9aa3ad;
 }
 
+body.silver-mode .library-sub-tab:hover:not(.active),
 body.silver-mode .history-sub-tab:hover:not(.active),
+body.silver-mode .library-sub-tab:focus-visible,
 body.silver-mode .history-sub-tab:focus-visible,
 body.silver-mode .reel-sub-tab:hover:not(.active),
 body.silver-mode .reel-sub-tab:focus-visible,
@@ -16323,6 +16761,7 @@ body.silver-mode .br-sub-tab:focus-visible {
     color: #e8ecf0;
 }
 
+body.silver-mode .library-sub-tab.active,
 body.silver-mode .history-sub-tab.active,
 body.silver-mode .reel-sub-tab.active,
 body.silver-mode .tournament-sub-tab.active ,
@@ -16533,6 +16972,7 @@ body.bronze-mode {
 
 body.bronze-mode .mode-tabs,
 body.bronze-mode .sub-tabs,
+body.bronze-mode .library-sub-tabs,
 body.bronze-mode .history-sub-tabs,
 body.bronze-mode .tournament-sub-tabs ,
 body.bronze-mode .br-sub-tabs,
@@ -16844,6 +17284,7 @@ body.bronze-mode .btn-small:hover {
     border-color: rgba(255, 255, 255, 0.55);
 }
 
+body.bronze-mode .library-sub-tab,
 body.bronze-mode .history-sub-tab,
 body.bronze-mode .reel-sub-tab,
 body.bronze-mode .tournament-sub-tab ,
@@ -16853,7 +17294,9 @@ body.bronze-mode .br-sub-tab {
     color: #b89878;
 }
 
+body.bronze-mode .library-sub-tab:hover:not(.active),
 body.bronze-mode .history-sub-tab:hover:not(.active),
+body.bronze-mode .library-sub-tab:focus-visible,
 body.bronze-mode .history-sub-tab:focus-visible,
 body.bronze-mode .reel-sub-tab:hover:not(.active),
 body.bronze-mode .reel-sub-tab:focus-visible,
@@ -16866,6 +17309,7 @@ body.bronze-mode .br-sub-tab:focus-visible {
     color: #f0e2d2;
 }
 
+body.bronze-mode .library-sub-tab.active,
 body.bronze-mode .history-sub-tab.active,
 body.bronze-mode .reel-sub-tab.active,
 body.bronze-mode .tournament-sub-tab.active ,
@@ -17020,6 +17464,7 @@ body.dragontamer-mode {
 }
 body.dragontamer-mode .mode-tabs,
 body.dragontamer-mode .sub-tabs,
+body.dragontamer-mode .library-sub-tabs,
 body.dragontamer-mode .history-sub-tabs,
 body.dragontamer-mode .tournament-sub-tabs ,
 body.dragontamer-mode .br-sub-tabs,
@@ -17061,6 +17506,7 @@ body.dragonslayer-mode {
 }
 body.dragonslayer-mode .mode-tabs,
 body.dragonslayer-mode .sub-tabs,
+body.dragonslayer-mode .library-sub-tabs,
 body.dragonslayer-mode .history-sub-tabs,
 body.dragonslayer-mode .tournament-sub-tabs ,
 body.dragonslayer-mode .br-sub-tabs,
@@ -17102,6 +17548,7 @@ body.lonewolf-mode {
 }
 body.lonewolf-mode .mode-tabs,
 body.lonewolf-mode .sub-tabs,
+body.lonewolf-mode .library-sub-tabs,
 body.lonewolf-mode .history-sub-tabs,
 body.lonewolf-mode .tournament-sub-tabs ,
 body.lonewolf-mode .br-sub-tabs,
@@ -17144,6 +17591,7 @@ body.rushhour-mode {
 }
 body.rushhour-mode .mode-tabs,
 body.rushhour-mode .sub-tabs,
+body.rushhour-mode .library-sub-tabs,
 body.rushhour-mode .history-sub-tabs,
 body.rushhour-mode .tournament-sub-tabs ,
 body.rushhour-mode .br-sub-tabs,
@@ -17186,6 +17634,7 @@ body.kingofjungle-mode {
 }
 body.kingofjungle-mode .mode-tabs,
 body.kingofjungle-mode .sub-tabs,
+body.kingofjungle-mode .library-sub-tabs,
 body.kingofjungle-mode .history-sub-tabs,
 body.kingofjungle-mode .tournament-sub-tabs ,
 body.kingofjungle-mode .br-sub-tabs,
@@ -17228,6 +17677,7 @@ body.sharknado-mode {
 }
 body.sharknado-mode .mode-tabs,
 body.sharknado-mode .sub-tabs,
+body.sharknado-mode .library-sub-tabs,
 body.sharknado-mode .history-sub-tabs,
 body.sharknado-mode .tournament-sub-tabs ,
 body.sharknado-mode .br-sub-tabs,
@@ -17271,6 +17721,7 @@ body.sorcerersupreme-mode {
 }
 body.sorcerersupreme-mode .mode-tabs,
 body.sorcerersupreme-mode .sub-tabs,
+body.sorcerersupreme-mode .library-sub-tabs,
 body.sorcerersupreme-mode .history-sub-tabs,
 body.sorcerersupreme-mode .tournament-sub-tabs ,
 body.sorcerersupreme-mode .br-sub-tabs,
@@ -17314,6 +17765,7 @@ body.paleonerd-mode {
 }
 body.paleonerd-mode .mode-tabs,
 body.paleonerd-mode .sub-tabs,
+body.paleonerd-mode .library-sub-tabs,
 body.paleonerd-mode .history-sub-tabs,
 body.paleonerd-mode .tournament-sub-tabs ,
 body.paleonerd-mode .br-sub-tabs,
@@ -17357,6 +17809,7 @@ body.kingofalltypes-mode {
 }
 body.kingofalltypes-mode .mode-tabs,
 body.kingofalltypes-mode .sub-tabs,
+body.kingofalltypes-mode .library-sub-tabs,
 body.kingofalltypes-mode .history-sub-tabs,
 body.kingofalltypes-mode .tournament-sub-tabs ,
 body.kingofalltypes-mode .br-sub-tabs,

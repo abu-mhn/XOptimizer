@@ -722,6 +722,56 @@ document.querySelectorAll(".sub-tab").forEach(tab => {
 // end of <body>, the .mode-tabs element is already parsed and we can set
 // scrollLeft before the first paint, so there's no visible "reset then snap"
 // jump on each tab click.
+// --- Tier bucketing ---
+// Shared by the Library's stat tier list and the Dashboard's usage tier list,
+// so the two can't drift into ranking things differently.
+//
+// Each tier takes a fixed share of the pool: the shape stays put and the parts
+// fall into it, rather than the rows being sized by wherever the raw numbers
+// happen to cluster. A tier list that renders as one enormous C row tells you
+// nothing.
+const TIER_KEYS = ["S", "A", "B", "C", "D", "F"];
+const TIER_SHARES = [0.08, 0.15, 0.20, 0.22, 0.20, 0.15];
+
+// `entries` must already be sorted best-first, each carrying a numeric
+// `score`. Returns one row per tier, always all six, in TIER_KEYS order.
+function buildTierRows(entries) {
+  const rows = TIER_KEYS.map(t => ({ tier: t, parts: [] }));
+  const list = entries || [];
+  const n = list.length;
+  if (!n) return rows;
+
+  // Turn each share into a cumulative cut-off index. S is forced to hold at
+  // least one entry so the top row is never empty on a small pool, and every
+  // boundary is clamped monotonic so a rounding step can't run backwards.
+  const bounds = [];
+  let cum = 0, prev = 0;
+  TIER_SHARES.forEach((share, i) => {
+    cum += share;
+    let b = Math.round(cum * n);
+    if (i === 0) b = Math.max(1, b);
+    if (i === TIER_SHARES.length - 1) b = n;
+    b = Math.max(prev, Math.min(n, b));
+    bounds.push(b);
+    prev = b;
+  });
+  const tierAt = (idx) => {
+    for (let i = 0; i < bounds.length; i++) if (idx < bounds[i]) return i;
+    return bounds.length - 1;
+  };
+
+  // Entries with identical scores must land in the same tier — otherwise two
+  // parts carrying the same number could straddle a cut-off and sit a tier
+  // apart, which reads as a bug. Each score takes the tier of its highest-
+  // ranked holder, so a run of ties can push a row past its nominal share.
+  const tierForScore = new Map();
+  list.forEach((e, idx) => {
+    if (!tierForScore.has(e.score)) tierForScore.set(e.score, tierAt(idx));
+    rows[tierForScore.get(e.score)].parts.push(e);
+  });
+  return rows;
+}
+
 // Lets a vertical mouse wheel scroll a horizontal-only row sideways. A
 // horizontal wheel / trackpad swipe already scrolls it natively, so that's
 // left alone, and the page wheel is only hijacked when the row can scroll.
