@@ -10176,7 +10176,7 @@ subscribeRankingMedals();
 
 // The monthly BR rollover needs the Judge tag, which loads after auth resolves;
 // retry the check whenever the profile (and its tags) lands.
-window.addEventListener("userprofilechange", maybeRunBattleRoyaleMonthlyRollover);
+window.addEventListener("userprofilechange", maybeRunBattleRoyaleSeasonRollover);
 
 (function initTournamentSubTabs() {
   const tabs = document.querySelectorAll(".tournament-sub-tab");
@@ -10349,10 +10349,10 @@ window.addEventListener("userprofilechange", maybeRunBattleRoyaleMonthlyRollover
     onAuthChange(user => {
       refreshMyTournaments();
       paintCreateTournamentBtn();
-      // Settle last month's ranking into Battle Royale if the month has turned.
+      // Settle last season's ranking into Battle Royale if the quarter has turned.
       // Runs only for Judges; harmless no-op otherwise. Also retried on
       // userprofilechange below, since the Judge tag loads after auth resolves.
-      maybeRunBattleRoyaleMonthlyRollover();
+      maybeRunBattleRoyaleSeasonRollover();
       // Hosting / co-hosting requires a signed-in account. On sign-out, drop
       // the local room state unconditionally — even when this page's runtime
       // didn't have an active swissRoomRef (sign-out can come from another
@@ -12116,27 +12116,42 @@ function bumpGlobalRanking(name, points) {
   }));
 }
 
-// ===================== BATTLE ROYALE MONTHLY ROLLOVER =====================
-// BR points are no longer minted per-tournament. Instead, at the turn of each
-// month the global /ranking leaderboard is "settled": every player's accumulated
-// ranking total is converted into Battle Royale points (credited to the matching
-// account's BR balance), then /ranking is wiped so the new month starts at zero.
+// ==================== BATTLE ROYALE SEASONAL ROLLOVER ====================
+// The tournament ranking runs in SEASONS of one calendar quarter — four a
+// year, turning over on 1 Jan / 1 Apr / 1 Jul / 1 Oct. At the turn of each
+// season the global /ranking leaderboard is "settled": every player's
+// accumulated ranking total is converted into Battle Royale points (credited
+// to the matching account's BR balance), then /ranking is cleared so the new
+// season starts at zero.
 //
-// There's no server cron, so this runs lazily on the client — the first eligible
-// visitor after the month changes performs the settlement. Eligible = a Judge,
-// because the DB rules require the Judge tag to write another player's BR points;
-// a non-Judge would clear the ranking without crediting anyone. A claimed month
-// marker at battleRoyale/meta/lastRolloverMonth makes it run at most once a month.
+// There's no server cron, so this runs lazily on the client — the first
+// eligible visitor after the season changes performs the settlement. Eligible
+// = a Judge, because the DB rules require the Judge tag to write another
+// player's BR points; a non-Judge would clear the ranking without crediting
+// anyone. A claimed season marker at battleRoyale/meta/lastRolloverMonth makes
+// it run at most once a season.
+//
+// The marker key still reads "lastRolloverMonth" because renaming it would
+// need a rules change (battleRoyale/meta rejects unknown children). Its VALUE
+// is now a season key, and both formats fit the rule's 7-character cap.
 
-// Current accrual month as "YYYY-MM" (local time).
-function currentRolloverMonth() {
+// Current accrual season as "YYYY-Qn" (local time). Months 1-3 are Q1, 4-6
+// Q2, and so on, so the season turns on the 1st of January, April, July and
+// October.
+function currentRolloverSeason() {
   const d = new Date();
-  const m = d.getMonth() + 1;
-  return d.getFullYear() + "-" + (m < 10 ? "0" + m : "" + m);
+  const q = Math.floor(d.getMonth() / 3) + 1;
+  return d.getFullYear() + "-Q" + q;
+}
+
+// True for a marker written by the old monthly scheme ("2026-09"). Those are
+// migrated to the current season WITHOUT settling — see the note below.
+function isLegacyMonthMarker(v) {
+  return typeof v === "string" && /^\d{4}-\d{2}$/.test(v);
 }
 
 let brRolloverChecked = false;
-function maybeRunBattleRoyaleMonthlyRollover() {
+function maybeRunBattleRoyaleSeasonRollover() {
   if (brRolloverChecked) return;
   if (!firebaseReady()) return;
   // Only a Judge can write other players' BR points, so only a Judge runs the
@@ -12147,44 +12162,70 @@ function maybeRunBattleRoyaleMonthlyRollover() {
   if (!db) return;
   brRolloverChecked = true; // Judge confirmed — run the check at most once per load.
 
-  const month = currentRolloverMonth();
+  const season = currentRolloverSeason();
   const markerRef = db.ref("battleRoyale/meta/lastRolloverMonth");
   markerRef.once("value").then(snap => {
     const prev = snap.val();
-    if (prev === month) return; // already settled for the current month
-    // Claim the new month atomically so two clients can't both settle it.
+    if (prev === season) return; // already settled for the current season
+    // Claim the new season atomically so two clients can't both settle it.
     markerRef.transaction(
-      cur => (cur === month ? undefined : month),
+      cur => (cur === season ? undefined : season),
       (err, committed) => {
         if (err || !committed) return; // another client claimed it first
-        // First run ever (no prior marker): just establish the baseline month.
-        // The existing ranking pre-dates this system, so don't credit/reset it.
-        if (prev == null) return;
-        settleRankingIntoBattleRoyale(db);
+        // Two cases establish a baseline and stop there, crediting nothing and
+        // clearing nothing:
+        //   - no marker at all: first run ever.
+        //   - a monthly marker: the switch from monthly to seasonal. Under the
+        //     monthly scheme the credit half of the settlement succeeded while
+        //     the clear was denied by the rules (see settleRankingIntoBattleRoyale),
+        //     so those totals have ALREADY been paid into BR — repeatedly. Paying
+        //     them once more on the way in would compound that.
+        // Either way the first real settlement is the next season boundary.
+        if (prev == null || isLegacyMonthMarker(prev)) return;
+        settleRankingIntoBattleRoyale(db, markerRef, prev);
       }
     );
   }).catch(() => {});
 }
 
 // Read the leaderboard + username index once, credit each matched account's BR
-// balance with its ranking total, then wipe /ranking. Names with no matching
+// balance with its ranking total, then clear /ranking. Names with no matching
 // account (guests / unregistered) are dropped — they can't hold BR points.
-function settleRankingIntoBattleRoyale(db) {
-  Promise.all([
-    db.ref("ranking").once("value"),
-    db.ref("usernames").once("value")
-  ]).then(([rankSnap, userSnap]) => {
+//
+// `markerRef` / `prevMarker` let a failure hand the season back: the marker is
+// claimed BEFORE this runs (it's the single-flight guard against two Judges
+// settling at once), so without a rollback one failed clear would burn the
+// whole season and the board would never reset.
+function settleRankingIntoBattleRoyale(db, markerRef, prevMarker) {
+  const releaseSeason = () => {
+    if (markerRef && prevMarker != null) markerRef.set(prevMarker).catch(() => {});
+  };
+  db.ref("ranking").once("value").then(rankSnap => {
     const ranking = rankSnap.val() || {};
-    const usernames = userSnap.val() || {};
+    // Resolve each scoring name to an account ONE KEY AT A TIME, rather than
+    // reading the whole /usernames node. That node carries every user's email
+    // and its parent read is gated to Developer / Revox Admin — a plain Judge
+    // reading it is denied, which would fail the settlement for everyone but
+    // an admin. Per-key reads (usernames/$key) are public, so this needs no
+    // extra permission, and it only looks up names that can actually score.
+    const scoring = Object.entries(ranking)
+      .map(([key, v]) => ({
+        key,
+        name: (v && v.name) || key,
+        points: (v && Number(v.points)) || 0
+      }))
+      .filter(e => e.points > 0 && !isTestRegistrant(e.name));
+    return Promise.all(scoring.map(e =>
+      db.ref("usernames/" + e.key + "/uid").once("value")
+        .then(s => Object.assign({}, e, { uid: typeof s.val() === "string" ? s.val() : "" }))
+        .catch(() => Object.assign({}, e, { uid: "" }))
+    )).then(resolved => ({ ranking, resolved }));
+  }).then(({ ranking, resolved }) => {
     const credit = {}; // uid -> { points, name }
-    Object.entries(ranking).forEach(([key, v]) => {
-      const pts = (v && Number(v.points)) || 0;
-      const name = (v && v.name) || key;
-      if (pts <= 0 || isTestRegistrant(name)) return;
-      const uid = usernames[key] && usernames[key].uid;
-      if (!uid) return; // guest / unregistered -> dropped on reset
-      if (!credit[uid]) credit[uid] = { points: 0, name };
-      credit[uid].points += pts;
+    resolved.forEach(e => {
+      if (!e.uid) return; // guest / unregistered -> dropped on reset
+      if (!credit[e.uid]) credit[e.uid] = { points: 0, name: e.name };
+      credit[e.uid].points += e.points;
     });
     const writes = Object.entries(credit).map(([uid, info]) =>
       new Promise(resolve => {
@@ -12198,12 +12239,25 @@ function settleRankingIntoBattleRoyale(db) {
         );
       })
     );
-    // Wipe the leaderboard only once every credit has landed, so a mid-way
-    // failure never clears ranking without writing the matching BR points.
-    Promise.all(writes).then(() => {
-      db.ref("ranking").set(null).catch(() => {});
-    }).catch(() => {});
-  }).catch(() => {});
+    // Clear the leaderboard only once every credit has landed, so a mid-way
+    // failure never empties ranking without writing the matching BR points.
+    return Promise.all(writes).then(() => clearRankingBoard(db, ranking));
+  }).catch(() => releaseSeason());
+}
+
+// Empty /ranking one child at a time, via a single multi-path update.
+//
+// NOT `ref("ranking").set(null)`: that is a write at the PARENT, and the rules
+// only grant `.write` on `ranking/$name`. RTDB permissions cascade downward,
+// never up, so the parent write is denied — which is exactly why the board has
+// never actually cleared. A multi-path update is checked per child path, so
+// the same rule that lets a tournament award points also lets it remove them.
+function clearRankingBoard(db, ranking) {
+  const keys = Object.keys(ranking || {});
+  if (!keys.length) return Promise.resolve();
+  const updates = {};
+  keys.forEach(k => { updates[k] = null; });
+  return db.ref("ranking").update(updates);
 }
 
 // Claim the per-room per-player slot via transaction so concurrent hosts
@@ -12224,7 +12278,7 @@ function awardPlayerIfNew(name, points) {
       bumpGlobalRanking(cleanName, points);
       // Battle Royale points are NOT minted per-tournament anymore. The global
       // ranking accumulates through the month and is converted into BR points
-      // at the monthly rollover (see maybeRunBattleRoyaleMonthlyRollover).
+      // at the seasonal rollover (see maybeRunBattleRoyaleSeasonRollover).
     }
   );
 }
