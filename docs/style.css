@@ -6372,6 +6372,227 @@ body.light-mode .part-img {
     touch-action: none;
 }
 
+/* ===== Scoreboard pre-start gate =====
+   Both sides tap Ready, a 3-2-1-Go-Shoot countdown plays, then the board
+   fades in. The gate is a layer inside the overlay, so it rides on top of
+   whatever already revealed the board — tilt, desktop modal or "Show
+   anyway" — without any of those paths needing to know about it. */
+.sb-prestart {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    align-items: stretch;
+}
+/* Gone once the countdown finishes, so it can't eat taps on the live board. */
+.scoreboard-overlay:not(.sb-prestarting) .sb-prestart {
+    display: none;
+}
+
+/* The board underneath: held back while the gate is up, then eased in. The
+   transition runs in both directions, so simply dropping .sb-prestarting IS
+   the reveal animation — no separate keyframe to keep in sync. */
+.scoreboard-overlay .scoreboard-side,
+.scoreboard-overlay .scoreboard-divider {
+    transition: opacity 0.38s ease, transform 0.38s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+.scoreboard-overlay.sb-prestarting .scoreboard-side {
+    opacity: 0;
+    transform: scale(0.94);
+    pointer-events: none;
+}
+.scoreboard-overlay.sb-prestarting .scoreboard-divider {
+    opacity: 0;
+    pointer-events: none;
+}
+/* The save check is meaningless before the match starts; the exit X stays so
+   there is always a way back out of the gate. */
+.scoreboard-overlay.sb-prestarting .scoreboard-close {
+    display: none;
+}
+
+/* One Ready panel per side, matching the board's left/right split. */
+.sb-ready {
+    flex: 1 1 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    min-width: 0;
+    padding: 16px;
+    transition: background 0.3s ease;
+}
+.sb-ready-a { background: rgba(56, 139, 253, 0.06); }
+.sb-ready-b { background: rgba(248, 81, 73, 0.06); }
+.sb-ready-a.is-ready { background: rgba(63, 185, 80, 0.14); }
+.sb-ready-b.is-ready { background: rgba(63, 185, 80, 0.14); }
+
+.sb-ready-name {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #c9d1d9;
+    text-align: center;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    animation: sbReadyIn 0.4s ease backwards;
+}
+.sb-ready-btn {
+    font: inherit;
+    font-size: 1.15rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #e6edf3;
+    background: #21262d;
+    border: 2px solid #30363d;
+    border-radius: 999px;
+    padding: 14px 40px;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+    animation: sbReadyIn 0.4s 0.06s ease backwards;
+    /* Nudges the eye before either side has tapped. */
+    box-shadow: 0 0 0 0 rgba(88, 166, 255, 0.5);
+}
+.sb-ready-btn:hover:not(.is-ready) {
+    background: #30363d;
+    border-color: #58a6ff;
+    transform: translateY(-1px);
+}
+.sb-ready-btn:active:not(.is-ready) { transform: translateY(1px); }
+.sb-ready-btn.is-ready {
+    background: #238636;
+    border-color: #3fb950;
+    color: #fff;
+    cursor: default;
+    animation: sbReadyPop 0.36s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+@keyframes sbReadyIn {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes sbReadyPop {
+    0%   { transform: scale(1); }
+    45%  { transform: scale(1.12); }
+    100% { transform: scale(1); }
+}
+
+/* A middle column between the two panels, mirroring the board's own
+   .scoreboard-divider — same 50px width, same dark strip, same centred
+   stack. The gate and the board therefore share one spine, so when the
+   board fades in behind it nothing shifts sideways.
+
+   The swap lives here rather than floating over a panel: it belongs to
+   neither side, and a mis-seated match is best fixed BEFORE it starts. */
+.sb-divider {
+    flex: 0 0 50px;
+    width: 50px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    position: relative;
+    z-index: 2;
+    background: #0d1117;
+}
+
+/* Matches .scoreboard-reset / .scoreboard-swap, the buttons that sit in the
+   board's divider, so the control reads as the same thing in both states. */
+.sb-swap {
+    background: #21262d;
+    color: #8b949e;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 1rem;
+    line-height: 1;
+    font-weight: 400;
+    letter-spacing: normal;
+    white-space: nowrap;
+    cursor: pointer;
+    position: relative;
+    z-index: 3;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+    animation: sbReadyIn 0.4s 0.12s ease backwards;
+}
+.sb-swap:hover {
+    color: #e6edf3;
+    background: #30363d;
+    border-color: #58a6ff;
+}
+.sb-swap:active { transform: scale(0.92); }
+/* Hidden once the countdown starts — the match is under way by then. */
+.sb-prestart.sb-counting .sb-swap {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+
+/* The countdown word sits over both panels. Hidden until the second Ready
+   lands, then each word replays the pop animation. */
+.sb-count {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    font-size: clamp(4rem, 22vh, 11rem);
+    font-weight: 900;
+    letter-spacing: 2px;
+    color: #fff;
+    text-shadow: 0 6px 30px rgba(0, 0, 0, 0.6);
+    opacity: 0;
+    /* Above .sb-divider (2) and its swap button (3). The divider is an opaque
+       50px strip dead centre — exactly where the word lands — so without this
+       it paints straight over the digits. */
+    z-index: 4;
+}
+.sb-prestart.sb-counting { background: rgba(13, 17, 23, 0.86); }
+/* The panels and the divider step aside so the number owns the screen. */
+.sb-prestart.sb-counting .sb-ready,
+.sb-prestart.sb-counting .sb-divider {
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    pointer-events: none;
+}
+.sb-count.is-pop {
+    animation: sbCountPop 0.62s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+@keyframes sbCountPop {
+    0%   { opacity: 0; transform: scale(0.35); }
+    30%  { opacity: 1; transform: scale(1.1); }
+    62%  { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.4); }
+}
+
+/* No portrait override on purpose. The "Show anyway" fallback does NOT stack
+   the board — it rotates the whole overlay 90deg and swaps its width/height
+   (see .scoreboard-overlay.scoreboard-portrait below), so inside that frame
+   everything is still laid out landscape. Forcing the gate to a column here
+   stacked it while the board underneath stayed a row, so the two disagreed
+   and the layout flipped the moment the countdown finished. */
+
+/* Respect a reduced-motion preference: the sequence still runs and still
+   gates the board, it just stops moving. */
+@media (prefers-reduced-motion: reduce) {
+    .sb-ready-name,
+    .sb-ready-btn,
+    .sb-ready-btn.is-ready,
+    .sb-swap,
+    .sb-count.is-pop {
+        animation-duration: 0.01ms;
+        animation-iteration-count: 1;
+    }
+    .sb-count.is-pop { opacity: 1; animation: none; }
+    .scoreboard-overlay .scoreboard-side,
+    .scoreboard-overlay .scoreboard-divider { transition: none; }
+}
+
 .scoreboard-overlay.hidden {
     display: none;
 }
@@ -6602,37 +6823,6 @@ body.light-mode .part-img {
     color: #e6edf3;
 }
 
-.scoreboard-play {
-    background: #21262d;
-    color: #e6edf3;
-    border: 1px solid #30363d;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1rem;
-    line-height: 1;
-    cursor: pointer;
-    position: relative;
-    z-index: 3;
-    transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
-}
-
-.scoreboard-play:hover {
-    background: #30363d;
-    border-color: #484f58;
-}
-
-.scoreboard-play.is-playing {
-    background: #1f6feb;
-    border-color: #1f6feb;
-    color: #fff;
-    transform: scale(1.05);
-    cursor: default;
-}
-
 /* Advanced scoreboard buttons */
 .scoreboard-score-row {
     display: flex;
@@ -6717,24 +6907,7 @@ body.light-mode .scoreboard-player-label {
 }
 
 body.light-mode .scoreboard-reset,
-body.light-mode .scoreboard-play {
-    background: #ffffff;
-    color: #656d76;
-    border-color: #d1d9e0;
-}
-
 body.light-mode .scoreboard-reset:hover,
-body.light-mode .scoreboard-play:hover {
-    background: #f3f4f6;
-    color: #1f2328;
-}
-
-body.light-mode .scoreboard-play.is-playing {
-    background: #0969da;
-    border-color: #0969da;
-    color: #ffffff;
-}
-
 /* =======================
    SPACE THEME
 ======================= */
@@ -7033,18 +7206,6 @@ body.space-mode .sb-btn:active {
 }
 
 body.space-mode .scoreboard-reset,
-body.space-mode .scoreboard-play {
-    background: rgba(15, 18, 40, 0.8);
-    border-color: #1a1f3d;
-    color: #c8d6e5;
-}
-
-body.space-mode .scoreboard-play.is-playing {
-    background: linear-gradient(135deg, #1a237e, #311b92);
-    border-color: #5c6bc0;
-    color: #fff;
-}
-
 /* =======================
    REVOX THEME
    Team Revox brand palette — Night Black background, Balistic Red primary
@@ -7184,12 +7345,6 @@ body.revox-mode .sort-btn,
 body.revox-mode .filter-btn,
 body.revox-mode .sb-btn,
 body.revox-mode .scoreboard-reset,
-body.revox-mode .scoreboard-play {
-    background: #1f1f27;
-    border-color: #34343f;
-    color: #e4e4ea;
-}
-
 body.revox-mode #library-search:focus,
 body.revox-mode .deck-name-input:focus,
 body.revox-mode .tournament-name-input:focus {
@@ -7370,12 +7525,6 @@ body.revox-mode .scoreboard-close {
 }
 
 body.revox-mode .scoreboard-close:hover {
-    color: #fff;
-}
-
-body.revox-mode .scoreboard-play.is-playing {
-    background: linear-gradient(135deg, #e8402e, #b8301f);
-    border-color: #e8402e;
     color: #fff;
 }
 
@@ -7805,18 +7954,6 @@ body.tropical-mode .sb-btn:active {
 }
 
 body.tropical-mode .scoreboard-reset,
-body.tropical-mode .scoreboard-play {
-    background: #ff7e67;
-    border-color: #ff5e4a;
-    color: #fff;
-}
-
-body.tropical-mode .scoreboard-play.is-playing {
-    background: linear-gradient(135deg, #00b8a9, #0d8a80);
-    border-color: #00b8a9;
-    color: #fff;
-}
-
 body.tropical-mode .stat-bar-label {
     color: #8a6d3b;
 }
@@ -8137,18 +8274,6 @@ body.stormy-mode .sb-btn:active {
 }
 
 body.stormy-mode .scoreboard-reset,
-body.stormy-mode .scoreboard-play {
-    background: rgba(42, 48, 64, 0.8);
-    border-color: #3a4054;
-    color: #d5dae4;
-}
-
-body.stormy-mode .scoreboard-play.is-playing {
-    background: linear-gradient(135deg, #2c4a7a, #3a6fb0);
-    border-color: #4a90e2;
-    color: #fff;
-}
-
 /* =======================
    MONOCHROME THEME
    Palette: pure black base, greyscale surfaces, white accents
@@ -8432,24 +8557,7 @@ body.mono-mode .sb-btn:active {
 }
 
 body.mono-mode .scoreboard-reset,
-body.mono-mode .scoreboard-play {
-    background: #111111;
-    border-color: #2a2a2a;
-    color: #e6e6e6;
-}
-
 body.mono-mode .scoreboard-reset:hover,
-body.mono-mode .scoreboard-play:hover {
-    background: #1f1f1f;
-    color: #ffffff;
-}
-
-body.mono-mode .scoreboard-play.is-playing {
-    background: #ffffff;
-    border-color: #ffffff;
-    color: #000000;
-}
-
 body.mono-mode .tab[data-mode="deck"] img,
 body.mono-mode .tab[data-mode="swiss"] img {
     filter: brightness(0) invert(1);
@@ -13654,16 +13762,6 @@ body.love-mode .sb-btn:active  {
     background: #fce4ec;
 }
 body.love-mode .scoreboard-reset,
-body.love-mode .scoreboard-play  {
-    background: #ff6b8a;
-    border-color: #ff4d6d;
-    color: #fff;
-}
-body.love-mode .scoreboard-play.is-playing  {
-    background: linear-gradient(135deg, #e63978, #c0245f);
-    border-color: #e63978;
-    color: #fff;
-}
 body.love-mode .stat-bar-label  {
     color: #9c4a5e;
 }
@@ -14147,16 +14245,6 @@ body.forest-mode .sb-btn:active  {
     background: #d4e3c4;
 }
 body.forest-mode .scoreboard-reset,
-body.forest-mode .scoreboard-play  {
-    background: #c97f55;
-    border-color: #c46b3a;
-    color: #fff;
-}
-body.forest-mode .scoreboard-play.is-playing  {
-    background: linear-gradient(135deg, #386641, #2d4f33);
-    border-color: #386641;
-    color: #fff;
-}
 body.forest-mode .stat-bar-label  {
     color: #5a6a4b;
 }
@@ -16154,18 +16242,6 @@ body.gold-mode .sb-btn:active {
 }
 
 body.gold-mode .scoreboard-reset,
-body.gold-mode .scoreboard-play {
-    background: rgba(54, 44, 18, 0.8);
-    border-color: #4a3c18;
-    color: #f0e6cf;
-}
-
-body.gold-mode .scoreboard-play.is-playing {
-    background: linear-gradient(135deg, #a87f1e, #c89a2e);
-    border-color: #e3b341;
-    color: #fff;
-}
-
 body.gold-mode .deck-name-input {
     background: #241c0c;
     border-color: #4a3c18;
@@ -16702,18 +16778,6 @@ body.silver-mode .sb-btn:active {
 }
 
 body.silver-mode .scoreboard-reset,
-body.silver-mode .scoreboard-play {
-    background: rgba(46, 52, 60, 0.8);
-    border-color: #383f47;
-    color: #e8ecf0;
-}
-
-body.silver-mode .scoreboard-play.is-playing {
-    background: linear-gradient(135deg, #7c848d, #969ea7);
-    border-color: #aeb6bf;
-    color: #fff;
-}
-
 body.silver-mode .deck-name-input {
     background: #20242a;
     border-color: #383f47;
@@ -17250,18 +17314,6 @@ body.bronze-mode .sb-btn:active {
 }
 
 body.bronze-mode .scoreboard-reset,
-body.bronze-mode .scoreboard-play {
-    background: rgba(58, 40, 24, 0.8);
-    border-color: #4a3320;
-    color: #f0e2d2;
-}
-
-body.bronze-mode .scoreboard-play.is-playing {
-    background: linear-gradient(135deg, #8a5424, #a96a34);
-    border-color: #c68044;
-    color: #fff;
-}
-
 body.bronze-mode .deck-name-input {
     background: #251a10;
     border-color: #4a3320;

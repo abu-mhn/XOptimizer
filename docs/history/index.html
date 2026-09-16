@@ -41,7 +41,7 @@
   <meta name="theme-color" content="#0a4797">
 
   <title>History — X Optimizer</title>
-  <link rel="stylesheet" href="style.css?v=20260819k">
+  <link rel="stylesheet" href="style.css?v=de6da44c">
 </head>
 
 <body>
@@ -1184,6 +1184,23 @@
 
   <!-- ================= SCOREBOARD OVERLAY ================= -->
   <div id="scoreboard-overlay" class="scoreboard-overlay hidden">
+    <!-- Pre-start gate: both sides tap Ready, then a 3-2-1-Go-Shoot
+         countdown plays, then the board itself fades in. Sits first so it
+         layers over the board without disturbing any of the reveal paths. -->
+    <div class="sb-prestart" id="sb-prestart">
+      <div class="sb-ready sb-ready-a">
+        <span class="sb-ready-name" id="sb-ready-name-a">A</span>
+        <button type="button" class="sb-ready-btn" data-ready-side="a">Ready</button>
+      </div>
+      <div class="sb-divider">
+        <button type="button" class="sb-swap" id="sb-swap" title="Swap sides" aria-label="Swap player sides">&#8646;</button>
+      </div>
+      <div class="sb-ready sb-ready-b">
+        <span class="sb-ready-name" id="sb-ready-name-b">B</span>
+        <button type="button" class="sb-ready-btn" data-ready-side="b">Ready</button>
+      </div>
+      <div class="sb-count" id="sb-count" aria-live="assertive"></div>
+    </div>
     <button class="scoreboard-close hidden" id="scoreboard-close" title="Save &amp; Close">&#x2713;</button>
     <button class="scoreboard-exit hidden" id="scoreboard-exit" title="Exit without saving" aria-label="Exit without saving">&#x2715;</button>
     <div class="scoreboard-side scoreboard-left" id="scoreboard-left">
@@ -1204,7 +1221,6 @@
         <span class="scoreboard-bey" id="scoreboard-bey">1st Bey</span>
       </div>
       <span class="scoreboard-vs">VS</span>
-      <button type="button" class="scoreboard-play" id="scoreboard-play" title="3 · 2 · 1 · Go Shoot!" aria-label="Play countdown">▶</button>
       <button type="button" class="scoreboard-reset scoreboard-swap" id="scoreboard-swap" title="Swap sides" aria-label="Swap player sides">&#8646;</button>
       <button class="scoreboard-reset" id="scoreboard-reset" title="Reset Scoreboard">Reset</button>
     </div>
@@ -1225,25 +1241,25 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
-  <script src="firebase-config.js?v=20260819k"></script>
+  <script src="firebase-config.js?v=c078736e"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="data.js?v=20260819k"></script>
-  <script src="js/core.js?v=20260819k"></script>
-  <script src="js/profile-cache.js?v=20260819k"></script>
-  <script src="js/auth.js?v=20260819k"></script>
-  <script src="js/achievements.js?v=20260819k"></script>
-  <script src="js/scoreboard.js?v=20260819k"></script>
-  <script src="calculator/calculator.js?v=20260819k"></script>
-  <script src="deck/deck.js?v=20260819k"></script>
-  <script src="library/library.js?v=20260819k"></script>
-  <script src="tournament/tournament.js?v=20260819k"></script>
-  <script src="history/history.js?v=20260819k"></script>
-  <script src="reel/reel.js?v=20260819k"></script>
-  <script type="module" src="battlepass/battlepass-tab.js?v=20260819k"></script>
-  <script src="dashboard/dashboard.js?v=20260819k"></script>
-  <script src="battleroyale/battleroyale.js?v=20260819k"></script>
-  <script src="friends/friends.js?v=20260819k"></script>
-  <script src="app.js?v=20260819k"></script>
+  <script src="data.js?v=8e9b413b"></script>
+  <script src="js/core.js?v=ad26c74e"></script>
+  <script src="js/profile-cache.js?v=f342d422"></script>
+  <script src="js/auth.js?v=8e071c1a"></script>
+  <script src="js/achievements.js?v=9f8c35b9"></script>
+  <script src="js/scoreboard.js?v=68072819"></script>
+  <script src="calculator/calculator.js?v=ca8084a6"></script>
+  <script src="deck/deck.js?v=4e8a1d0b"></script>
+  <script src="library/library.js?v=255e4e57"></script>
+  <script src="tournament/tournament.js?v=9d53ca84"></script>
+  <script src="history/history.js?v=ab309ef3"></script>
+  <script src="reel/reel.js?v=01742c97"></script>
+  <script type="module" src="battlepass/battlepass-tab.js?v=2d8a341c"></script>
+  <script src="dashboard/dashboard.js?v=76679be4"></script>
+  <script src="battleroyale/battleroyale.js?v=6eb68b68"></script>
+  <script src="friends/friends.js?v=3f84afb9"></script>
+  <script src="app.js?v=9aefb7fd"></script>
 </body>
 
 </html>

@@ -182,45 +182,157 @@ let scoreboardSaveCallback = null;
     } catch (e) { audioCtx = null; }
   }
 
-  const playBtn = document.getElementById("scoreboard-play");
   // Time between the START of consecutive countdown clips. Tight enough to
   // feel like the real "Three! Two! One! Let it Rip!" cadence even when the
   // wav files have trailing silence.
+  //
+  // There used to be a ▶ button in the divider that replayed this on demand.
+  // The pre-start gate now runs the countdown itself, before the board is even
+  // on screen, so the button had nothing left to do.
   const COUNTDOWN_STEP_MS = 850;
-  let countdownPlaying = false;
-  let countdownTimers = [];
-  function clearCountdownTimers() {
-    countdownTimers.forEach(t => clearTimeout(t));
-    countdownTimers = [];
+
+  // ===== Pre-start gate =====
+  // The board doesn't go straight to 0-0. Both sides tap Ready, then a
+  // 3 - 2 - 1 - Go - Shoot countdown plays, then the board fades in. The gate
+  // is a layer INSIDE the overlay rather than a separate screen, so every
+  // existing reveal path (tilt, desktop modal, "Show anyway") is untouched:
+  // whatever reveals the overlay now reveals the gate, and the board waits
+  // underneath it.
+  const prestartEl = document.getElementById("sb-prestart");
+  const countEl = document.getElementById("sb-count");
+  const readyNameA = document.getElementById("sb-ready-name-a");
+  const readyNameB = document.getElementById("sb-ready-name-b");
+
+  // Each step's `ms` is how long until the NEXT one. 3 / 2 / 1 sit on the clip
+  // cadence; "Go" and "Shoot" are the two halves of the single goShoot clip,
+  // so they run tighter and only the first of them plays audio.
+  const PRESTART_STEPS = [
+    { text: "3",     ms: COUNTDOWN_STEP_MS, clip: 0 },
+    { text: "2",     ms: COUNTDOWN_STEP_MS, clip: 1 },
+    { text: "1",     ms: COUNTDOWN_STEP_MS, clip: 2 },
+    { text: "Go",    ms: 430,               clip: 3 },
+    { text: "Shoot", ms: 620,               clip: null }
+  ];
+
+  let readySides = { a: false, b: false };
+  let prestartTimers = [];
+  function clearPrestartTimers() {
+    prestartTimers.forEach(t => clearTimeout(t));
+    prestartTimers = [];
   }
-  function playCountdown() {
-    if (countdownPlaying) return;
-    countdownPlaying = true;
-    if (playBtn) playBtn.classList.add("is-playing");
-    countdownClips.forEach((clip, i) => {
-      const t = setTimeout(() => {
-        clip.currentTime = 0;
-        clip.play().catch(() => {});
-        if (i === countdownClips.length - 1) {
-          // Release the button shortly after the last clip starts so rapid
-          // re-tapping is allowed once the sequence is fully kicked off.
-          const release = setTimeout(() => {
-            countdownPlaying = false;
-            if (playBtn) playBtn.classList.remove("is-playing");
-          }, COUNTDOWN_STEP_MS);
-          countdownTimers.push(release);
-        }
-      }, i * COUNTDOWN_STEP_MS);
-      countdownTimers.push(t);
+
+  // Put the gate back up: both sides un-ready, no countdown, board hidden.
+  // Called whenever a board is loaded or reset, so every match starts here.
+  function armPrestart() {
+    clearPrestartTimers();
+    readySides = { a: false, b: false };
+    overlay.classList.add("sb-prestarting");
+    prestartEl?.classList.remove("sb-counting");
+    if (countEl) { countEl.textContent = ""; countEl.classList.remove("is-pop"); }
+    paintReadyButtons();
+    syncPrestartNames();
+  }
+
+  // Render both Ready buttons from `readySides`. Driven off state rather than
+  // toggled in place, so a side swap can just move the flags and repaint.
+  function paintReadyButtons() {
+    overlay.querySelectorAll(".sb-ready-btn").forEach(btn => {
+      const side = btn.dataset.readySide === "a" ? "a" : "b";
+      const on = !!readySides[side];
+      btn.classList.toggle("is-ready", on);
+      btn.disabled = on;
+      btn.textContent = on ? "Ready ✓" : "Ready";
+      btn.closest(".sb-ready")?.classList.toggle("is-ready", on);
     });
   }
-  playBtn?.addEventListener("click", (e) => {
-    e.stopPropagation();
+
+  // Mirror the board's player names onto the gate, so each Ready button says
+  // who it belongs to. Reads the rendered labels rather than taking the names
+  // again, which keeps it correct after a side swap.
+  function syncPrestartNames() {
+    // The page SHIPS the label as bare text — <div class="...-label">A</div>.
+    // The inner .scoreboard-player-name span only exists once
+    // setScoreboardLabel has run, which happens when a match is loaded. On the
+    // standalone board that never happens, so reading only the span found
+    // nothing, fell back to the hard-coded "A" / "B", and a swap looked like
+    // it did nothing even though the labels underneath had swapped.
+    const nameOf = (labelEl) => {
+      if (!labelEl) return "";
+      const span = labelEl.querySelector(".scoreboard-player-name");
+      return ((span ? span.textContent : labelEl.textContent) || "").trim();
+    };
+    if (readyNameA) readyNameA.textContent = nameOf(labelA) || "A";
+    if (readyNameB) readyNameB.textContent = nameOf(labelB) || "B";
+  }
+
+  // Show one countdown word, restarting the pop animation each time. Removing
+  // the class and forcing a reflow is what makes it replay — without the
+  // reflow the browser coalesces the remove/add and nothing animates.
+  function showCountWord(text) {
+    if (!countEl) return;
+    countEl.classList.remove("is-pop");
+    void countEl.offsetWidth;
+    countEl.textContent = text;
+    countEl.classList.add("is-pop");
+  }
+
+  function runPrestartCountdown() {
+    clearPrestartTimers();
+    prestartEl?.classList.add("sb-counting");
+    // The Ready tap is the user gesture, so this is the moment iOS / Safari
+    // will let the audio context start.
     ensureCountdownAmplifier();
-    if (audioCtx && audioCtx.state === "suspended") {
-      audioCtx.resume().catch(() => {});
-    }
-    playCountdown();
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+
+    let at = 0;
+    PRESTART_STEPS.forEach(step => {
+      const fire = () => {
+        showCountWord(step.text);
+        const clip = step.clip == null ? null : countdownClips[step.clip];
+        if (clip) { clip.currentTime = 0; clip.play().catch(() => {}); }
+      };
+      // The first word runs synchronously off the Ready tap. Through a 0ms
+      // timer it would land a frame late, so the panels would fade out to a
+      // blank screen before the "3" arrived.
+      if (at === 0) fire();
+      else prestartTimers.push(setTimeout(fire, at));
+      at += step.ms;
+    });
+    // `at` is now the end of the last word — reveal the board there.
+    prestartTimers.push(setTimeout(revealBoard, at));
+  }
+
+  function revealBoard() {
+    clearPrestartTimers();
+    overlay.classList.remove("sb-prestarting");
+    prestartEl?.classList.remove("sb-counting");
+    if (countEl) { countEl.textContent = ""; countEl.classList.remove("is-pop"); }
+  }
+
+  // Arm once at load, not only when a match is loaded. The STANDALONE board
+  // (no match, sides still "A" / "B") is revealed straight from the
+  // orientation handler whenever scoreboardEnabled is true — app.js sets that
+  // on every page — so it never passes through setupScoreboard. Without this
+  // the gate simply never appeared for anyone who just tilted their phone.
+  armPrestart();
+
+  // Sides can be put right before the match starts. Ignored once the
+  // countdown is running — at that point the match is already under way.
+  document.getElementById("sb-swap")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (prestartEl?.classList.contains("sb-counting")) return;
+    swapSides();
+  });
+
+  overlay.querySelectorAll(".sb-ready-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const side = btn.dataset.readySide === "a" ? "a" : "b";
+      if (readySides[side]) return;      // already in, no un-readying mid-gate
+      readySides[side] = true;
+      paintReadyButtons();
+      if (readySides.a && readySides.b) runPrestartCountdown();
+    });
   });
 
   overlay.querySelectorAll(".sb-btn").forEach(btn => {
@@ -244,21 +356,31 @@ let scoreboardSaveCallback = null;
     });
   });
 
-  resetBtn.addEventListener("click", () => {
+  // Back to 0-0, 1st Round, 1st Bey, with nothing left to undo. Shared by the
+  // Reset button and the untilt restart so the two can't drift apart.
+  //
+  // `swapped` is deliberately left alone: it records that the visible sides
+  // are flipped from the original m.a / m.b order, and the save callback is
+  // re-keyed through it. Clearing it without also swapping the labels back
+  // would hand the match's scores to the wrong players.
+  function clearScores() {
     scoreA = 0;
     scoreB = 0;
     scorePresses = 0;
     clearPressHistory();
     updateDisplay();
-  });
+  }
+
+  resetBtn.addEventListener("click", clearScores);
 
   // True when the visible left/right have been swapped from the original
   // m.a/m.b. We re-swap on save so the callback receives scores keyed to the
   // ORIGINAL player order (avoids mis-attributing scores after a visual flip).
   let swapped = false;
   const swapBtn = document.getElementById("scoreboard-swap");
-  swapBtn?.addEventListener("click", (e) => {
-    e.stopPropagation();
+  // Shared by the divider's swap button and the one on the pre-start gate, so
+  // sides can be put right BEFORE the match starts as well as during it.
+  function swapSides() {
     const tmpScore = scoreA;
     scoreA = scoreB;
     scoreB = tmpScore;
@@ -267,6 +389,12 @@ let scoreboardSaveCallback = null;
     const tmpHist = pressHistory.a;
     pressHistory.a = pressHistory.b;
     pressHistory.b = tmpHist;
+    // Ready state belongs to the PLAYER, not the side, so it travels with
+    // them — swapping must not make someone who already tapped Ready tap
+    // again, nor mark the other player ready on their behalf.
+    const tmpReady = readySides.a;
+    readySides.a = readySides.b;
+    readySides.b = tmpReady;
     if (labelA && labelB) {
       // Swap the FULL label (avatar + name), not just text — `.textContent`
       // dropped the avatar <img>, so the profile pic vanished on swap.
@@ -276,7 +404,14 @@ let scoreboardSaveCallback = null;
       labelB.innerHTML = tmpLabel;
     }
     swapped = !swapped;
+    syncPrestartNames();
+    paintReadyButtons();
     updateDisplay();
+  }
+
+  swapBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    swapSides();
   });
 
   // Set when the user taps check to save — the scoreboard keeps the just-
@@ -307,13 +442,21 @@ let scoreboardSaveCallback = null;
   });
 
   const isLandscape = () => screen.orientation ? screen.orientation.type.startsWith("landscape") : window.innerWidth > window.innerHeight;
+  // Both guard on the call RETURNING a promise, not just on the method
+  // existing. The old `(... || (() => {})).call(el).catch(...)` threw outright
+  // on any browser without the Fullscreen API, because the no-op fallback
+  // returns undefined and undefined has no .catch — taking the whole tilt
+  // flow down with it. Older implementations return undefined too.
   const enterFullscreen = () => {
     const el = document.documentElement;
-    (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el).catch(() => {});
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (!req) return;
+    try { const p = req.call(el); if (p && p.catch) p.catch(() => {}); } catch (e) { /* refused */ }
   };
   const exitFullscreen = () => {
     const fn = document.exitFullscreen || document.webkitExitFullscreen;
-    if (fn && (document.fullscreenElement || document.webkitFullscreenElement)) fn.call(document).catch(() => {});
+    if (!fn || !(document.fullscreenElement || document.webkitFullscreenElement)) return;
+    try { const p = fn.call(document); if (p && p.catch) p.catch(() => {}); } catch (e) { /* refused */ }
   };
 
   // Release a landscape lock so the phone follows its physical position again.
@@ -434,6 +577,7 @@ let scoreboardSaveCallback = null;
     scoreboardCancelCallback = null;
     updateDisplay();
     closeBtn?.classList.add("hidden");
+    armPrestart();
     // The match is over, so neither the rotate prompt, the outstanding open
     // request, nor the portrait fallback should outlive it.
     portraitOverride = false;
@@ -470,6 +614,8 @@ let scoreboardSaveCallback = null;
     updateDisplay();
     scoreboardSaveCallback = typeof onSave === "function" ? onSave : null;
     closeBtn?.classList.toggle("hidden", !scoreboardSaveCallback);
+    // Every match opens on the Ready gate, whichever surface reveals it.
+    armPrestart();
     // Mobile is tilt-driven: reveal now only if already landscape, otherwise
     // the orientation handler shows it on the next tilt. Desktop has no tilt —
     // openScoreboard reveals the board as a modal popup itself (below).
@@ -548,6 +694,7 @@ let scoreboardSaveCallback = null;
     }
     scoreboardSaveCallback = null;
     scoreboardScoreChange = null; // stop pushing a live score for an abandoned board
+    clearPrestartTimers();
     fireScoreboardCancel();
     closeScoreboardDesktopModal();
   }
@@ -569,6 +716,7 @@ let scoreboardSaveCallback = null;
     }
     scoreboardSaveCallback = null;
     scoreboardScoreChange = null;
+    clearPrestartTimers();
     fireScoreboardCancel();
     releaseLandscape();
     overlay.classList.add("hidden");
@@ -628,6 +776,17 @@ let scoreboardSaveCallback = null;
         // after finishing or exiting a match must not re-raise it.
         if (awaitingRotate) showRotateHint(); else hideRotateHint();
         releaseLandscape();
+        // Tilting away ends the match. The gate goes back up so the next tilt
+        // starts at Ready with a fresh countdown rather than dropping onto a
+        // live board — and a countdown that was running when the phone turned
+        // can't fire against a hidden board.
+        //
+        // The score goes back to 0-0 with it: turning away is treated as
+        // abandoning the attempt, not pausing it, so the board that comes
+        // back is a clean one. The match context (names, save target) is
+        // kept — it's the same fixture, started again.
+        armPrestart();
+        clearScores();
         // Now-in-portrait: if the user just saved a match, clear the match
         // context so the next tilt shows the default board.
         if (pendingResetOnPortrait) {
