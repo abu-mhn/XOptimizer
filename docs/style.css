@@ -6370,6 +6370,13 @@ body.light-mode .part-img {
     align-items: stretch;
     user-select: none;
     touch-action: none;
+    /* Kill the browser's own tap highlight across the whole board. It is a
+       translucent blue fill that IGNORES border-radius, so tapping the pill-
+       shaped Ready button flashed a hard rectangle around it — and on the
+       scoring buttons it fought the finish-sound feedback. Every button here
+       already has its own :hover / :active / .is-ready state, so the default
+       adds nothing but noise. Inherited, so it covers the gate too. */
+    -webkit-tap-highlight-color: transparent;
 }
 
 /* ===== Scoreboard pre-start gate =====
@@ -6405,11 +6412,10 @@ body.light-mode .part-img {
     opacity: 0;
     pointer-events: none;
 }
-/* The save check is meaningless before the match starts; the exit X stays so
-   there is always a way back out of the gate. */
-.scoreboard-overlay.sb-prestarting .scoreboard-close {
-    display: none;
-}
+/* The save check stays visible on the gate. It used to be hidden here on the
+   grounds that there is nothing to save before a match starts — but the gate
+   now returns after EVERY score, so hiding it would strand a finished match
+   with no way to record it. */
 
 /* One Ready panel per side, matching the board's left/right split. */
 .sb-ready {
@@ -6437,7 +6443,6 @@ body.light-mode .part-img {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    animation: sbReadyIn 0.4s ease backwards;
 }
 .sb-ready-btn {
     font: inherit;
@@ -6452,7 +6457,6 @@ body.light-mode .part-img {
     padding: 14px 40px;
     cursor: pointer;
     transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
-    animation: sbReadyIn 0.4s 0.06s ease backwards;
     /* Nudges the eye before either side has tapped. */
     box-shadow: 0 0 0 0 rgba(88, 166, 255, 0.5);
 }
@@ -6517,7 +6521,6 @@ body.light-mode .part-img {
     position: relative;
     z-index: 3;
     transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
-    animation: sbReadyIn 0.4s 0.12s ease backwards;
 }
 .sb-swap:hover {
     color: #e6edf3;
@@ -6530,6 +6533,31 @@ body.light-mode .part-img {
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.25s ease;
+}
+
+/* ===== Gate entrance =====
+   Replayed every time the gate returns — after a score, on a new match, on an
+   untilt. The class is re-added around a forced reflow in armPrestart(),
+   because the element is never recreated and a CSS animation only restarts
+   when the class genuinely leaves and comes back.
+
+   backwards, not both: `both` would pin the end-state transform and override
+   the hover lift on the Ready buttons. */
+.sb-prestart.sb-gate-in {
+    animation: sbGateIn 0.3s ease backwards;
+}
+.sb-gate-in .sb-ready-name {
+    animation: sbReadyIn 0.4s ease backwards;
+}
+.sb-gate-in .sb-ready-btn {
+    animation: sbReadyIn 0.4s 0.06s ease backwards;
+}
+.sb-gate-in .sb-swap {
+    animation: sbReadyIn 0.4s 0.12s ease backwards;
+}
+@keyframes sbGateIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
 }
 
 /* The countdown word sits over both panels. Hidden until the second Ready
@@ -6547,10 +6575,12 @@ body.light-mode .part-img {
     color: #fff;
     text-shadow: 0 6px 30px rgba(0, 0, 0, 0.6);
     opacity: 0;
-    /* Above .sb-divider (2) and its swap button (3). The divider is an opaque
-       50px strip dead centre — exactly where the word lands — so without this
-       it paints straight over the digits. */
-    z-index: 4;
+    /* The word now lives OUTSIDE the gate layer, because the Countdown button
+       plays it over the LIVE board too, where the gate is display:none. So it
+       has to clear everything: the gate's divider (2) and swap (3), the
+       board's own divider (2) and its buttons (3), and the save / exit
+       corners (10). */
+    z-index: 20;
 }
 .sb-prestart.sb-counting { background: rgba(13, 17, 23, 0.86); }
 /* The panels and the divider step aside so the number owns the screen. */
@@ -6560,6 +6590,37 @@ body.light-mode .part-img {
     transition: opacity 0.25s ease;
     pointer-events: none;
 }
+/* ===== Focus rings on the scoreboard's buttons =====
+   These had no focus handling, so they fell back to the browser's default
+   ring and lit up after a plain mouse click.
+
+   :focus-visible rather than hiding the outline outright — the browser only
+   matches it for KEYBOARD focus, so a mouse or touch tap stays clean while
+   someone tabbing through still gets a clear ring. Hiding :focus altogether
+   would leave keyboard users with no idea where they are.
+
+   .scoreboard-reset covers the divider's Reset, swap and Countdown, which all
+   share that class. */
+.scoreboard-overlay button,
+.sb-ready-btn,
+.sb-swap,
+.scoreboard-reset,
+.sb-btn {
+    -webkit-tap-highlight-color: transparent;
+}
+
+.sb-ready-btn:focus,
+.sb-swap:focus,
+.scoreboard-reset:focus {
+    outline: none;
+}
+.sb-ready-btn:focus-visible,
+.sb-swap:focus-visible,
+.scoreboard-reset:focus-visible {
+    outline: 2px solid #58a6ff;
+    outline-offset: 2px;
+}
+
 .sb-count.is-pop {
     animation: sbCountPop 0.62s cubic-bezier(0.2, 0.8, 0.3, 1) both;
 }
@@ -6817,6 +6878,7 @@ body.light-mode .part-img {
     font-size: 1rem;
     line-height: 1;
 }
+
 
 .scoreboard-reset:hover {
     background: #30363d;

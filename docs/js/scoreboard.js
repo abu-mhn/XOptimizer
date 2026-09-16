@@ -142,6 +142,13 @@ let scoreboardSaveCallback = null;
     // and round counters where they were.
     addSwipe(leftSide, d => { if (d < 0) undoLastPress("a"); });
     addSwipe(rightSide, d => { if (d < 0) undoLastPress("b"); });
+    // The gate sits over the board after every score, so the same gesture has
+    // to work on its panels — otherwise undo is unreachable for the whole of
+    // the match except the opening bey.
+    const gateA = overlay.querySelector(".sb-ready-a");
+    const gateB = overlay.querySelector(".sb-ready-b");
+    if (gateA) addSwipe(gateA, d => { if (d < 0) undoLastPress("a"); });
+    if (gateB) addSwipe(gateB, d => { if (d < 0) undoLastPress("b"); });
   }
 
   const finishSounds = {
@@ -225,12 +232,21 @@ let scoreboardSaveCallback = null;
   // Called whenever a board is loaded or reset, so every match starts here.
   function armPrestart() {
     clearPrestartTimers();
+    countdownRunning = false;
     readySides = { a: false, b: false };
     overlay.classList.add("sb-prestarting");
     prestartEl?.classList.remove("sb-counting");
     if (countEl) { countEl.textContent = ""; countEl.classList.remove("is-pop"); }
     paintReadyButtons();
     syncPrestartNames();
+    // Restart the entrance animation. The element is never recreated, so the
+    // class has to be dropped and re-added around a forced reflow or the
+    // browser coalesces the two and nothing replays.
+    if (prestartEl) {
+      prestartEl.classList.remove("sb-gate-in");
+      void prestartEl.offsetWidth;
+      prestartEl.classList.add("sb-gate-in");
+    }
   }
 
   // Render both Ready buttons from `readySides`. Driven off state rather than
@@ -276,11 +292,19 @@ let scoreboardSaveCallback = null;
     countEl.classList.add("is-pop");
   }
 
-  function runPrestartCountdown() {
+  // Run 3 - 2 - 1 - Go - Shoot, then call `onDone`. Shared by the pre-start
+  // gate (where it ends by revealing the board) and the divider's Countdown
+  // button (where it just plays over the live board). The word element lives
+  // OUTSIDE the gate layer, so it paints over either one.
+  //
+  // True while a sequence is in flight, so a second trigger can't interleave
+  // two sets of words.
+  let countdownRunning = false;
+  function playCountdownWords(onDone) {
     clearPrestartTimers();
-    prestartEl?.classList.add("sb-counting");
-    // The Ready tap is the user gesture, so this is the moment iOS / Safari
-    // will let the audio context start.
+    countdownRunning = true;
+    // The tap that got us here is the user gesture, so this is the moment
+    // iOS / Safari will let the audio context start.
     ensureCountdownAmplifier();
     if (audioCtx && audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
 
@@ -291,19 +315,29 @@ let scoreboardSaveCallback = null;
         const clip = step.clip == null ? null : countdownClips[step.clip];
         if (clip) { clip.currentTime = 0; clip.play().catch(() => {}); }
       };
-      // The first word runs synchronously off the Ready tap. Through a 0ms
-      // timer it would land a frame late, so the panels would fade out to a
-      // blank screen before the "3" arrived.
+      // The first word runs synchronously off the tap. Through a 0ms timer it
+      // would land a frame late, so the panels would fade out to a blank
+      // screen before the "3" arrived.
       if (at === 0) fire();
       else prestartTimers.push(setTimeout(fire, at));
       at += step.ms;
     });
-    // `at` is now the end of the last word — reveal the board there.
-    prestartTimers.push(setTimeout(revealBoard, at));
+    // `at` is now the end of the last word.
+    prestartTimers.push(setTimeout(() => {
+      countdownRunning = false;
+      if (countEl) { countEl.textContent = ""; countEl.classList.remove("is-pop"); }
+      if (onDone) onDone();
+    }, at));
+  }
+
+  function runPrestartCountdown() {
+    prestartEl?.classList.add("sb-counting");
+    playCountdownWords(revealBoard);
   }
 
   function revealBoard() {
     clearPrestartTimers();
+    countdownRunning = false;
     overlay.classList.remove("sb-prestarting");
     prestartEl?.classList.remove("sb-counting");
     if (countEl) { countEl.textContent = ""; countEl.classList.remove("is-pop"); }
@@ -353,6 +387,10 @@ let scoreboardSaveCallback = null;
         sound.currentTime = 0;
         sound.play().catch(() => {});
       }
+      // A finish ends that bey, so hand straight back to the Ready gate for
+      // the next one: both sides confirm, the countdown runs, the board comes
+      // back. The SCORE is kept — only the launch repeats.
+      armPrestart();
     });
   });
 
