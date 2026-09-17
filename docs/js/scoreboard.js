@@ -159,6 +159,8 @@ let scoreboardSaveCallback = null;
   };
 
   const countdownClips = [
+    new Audio("assets/voices/ready.wav"),
+    new Audio("assets/voices/set.wav"),
     new Audio("assets/voices/3.wav"),
     new Audio("assets/voices/2.wav"),
     new Audio("assets/voices/1.wav"),
@@ -213,11 +215,28 @@ let scoreboardSaveCallback = null;
   // Each step's `ms` is how long until the NEXT one. 3 / 2 / 1 sit on the clip
   // cadence; "Go" and "Shoot" are the two halves of the single goShoot clip,
   // so they run tighter and only the first of them plays audio.
+  // "Ready, Set" is a spoken phrase, so it runs at speaking pace and leads
+  // straight into the digits. It started as a 7-second window meant to give
+  // players time to load and aim, but that made "Set" hang on screen for five
+  // seconds before "3" — it read as the sequence having stalled rather than as
+  // time to get ready. Players load during the gate, before anyone taps Ready,
+  // so the phrase does not need to buy them any.
+  //
+  // "Set" stays a little longer than "Ready" to hold the beat going into "3".
+  //
+  // `hold` keeps the word on screen for its whole step instead of popping back
+  // out. The digits pop in and out because each is replaced 850ms later, but a
+  // held-then-faded long step leaves the screen blank, which is what the gap
+  // between Ready and Set used to be.
+  const READY_MS = 900;
+  const SET_MS = 1100;                      // 900 + 1100 = 2s, then 3, 2, 1
   const PRESTART_STEPS = [
-    { text: "3",     ms: COUNTDOWN_STEP_MS, clip: 0 },
-    { text: "2",     ms: COUNTDOWN_STEP_MS, clip: 1 },
-    { text: "1",     ms: COUNTDOWN_STEP_MS, clip: 2 },
-    { text: "Go",    ms: 430,               clip: 3 },
+    { text: "Ready", ms: READY_MS,          clip: 0, hold: true },
+    { text: "Set",   ms: SET_MS,            clip: 1, hold: true },
+    { text: "3",     ms: COUNTDOWN_STEP_MS, clip: 2 },
+    { text: "2",     ms: COUNTDOWN_STEP_MS, clip: 3 },
+    { text: "1",     ms: COUNTDOWN_STEP_MS, clip: 4 },
+    { text: "Go",    ms: 430,               clip: 5 },
     { text: "Shoot", ms: 620,               clip: null }
   ];
 
@@ -236,7 +255,7 @@ let scoreboardSaveCallback = null;
     readySides = { a: false, b: false };
     overlay.classList.add("sb-prestarting");
     prestartEl?.classList.remove("sb-counting");
-    if (countEl) { countEl.textContent = ""; countEl.classList.remove("is-pop"); }
+    if (countEl) { countEl.textContent = ""; countEl.classList.remove("is-pop", "is-hold"); }
     paintReadyButtons();
     syncPrestartNames();
     // Restart the entrance animation. The element is never recreated, so the
@@ -284,12 +303,12 @@ let scoreboardSaveCallback = null;
   // Show one countdown word, restarting the pop animation each time. Removing
   // the class and forcing a reflow is what makes it replay — without the
   // reflow the browser coalesces the remove/add and nothing animates.
-  function showCountWord(text) {
+  function showCountWord(text, hold) {
     if (!countEl) return;
-    countEl.classList.remove("is-pop");
+    countEl.classList.remove("is-pop", "is-hold");
     void countEl.offsetWidth;
     countEl.textContent = text;
-    countEl.classList.add("is-pop");
+    countEl.classList.add(hold ? "is-hold" : "is-pop");
   }
 
   // Run 3 - 2 - 1 - Go - Shoot, then call `onDone`. Shared by the pre-start
@@ -311,7 +330,7 @@ let scoreboardSaveCallback = null;
     let at = 0;
     PRESTART_STEPS.forEach(step => {
       const fire = () => {
-        showCountWord(step.text);
+        showCountWord(step.text, step.hold);
         const clip = step.clip == null ? null : countdownClips[step.clip];
         if (clip) { clip.currentTime = 0; clip.play().catch(() => {}); }
       };
@@ -325,7 +344,7 @@ let scoreboardSaveCallback = null;
     // `at` is now the end of the last word.
     prestartTimers.push(setTimeout(() => {
       countdownRunning = false;
-      if (countEl) { countEl.textContent = ""; countEl.classList.remove("is-pop"); }
+      if (countEl) { countEl.textContent = ""; countEl.classList.remove("is-pop", "is-hold"); }
       if (onDone) onDone();
     }, at));
   }
@@ -340,7 +359,7 @@ let scoreboardSaveCallback = null;
     countdownRunning = false;
     overlay.classList.remove("sb-prestarting");
     prestartEl?.classList.remove("sb-counting");
-    if (countEl) { countEl.textContent = ""; countEl.classList.remove("is-pop"); }
+    if (countEl) { countEl.textContent = ""; countEl.classList.remove("is-pop", "is-hold"); }
   }
 
   // Arm once at load, not only when a match is loaded. The STANDALONE board
@@ -394,8 +413,8 @@ let scoreboardSaveCallback = null;
     });
   });
 
-  // Back to 0-0, 1st Round, 1st Bey, with nothing left to undo. Shared by the
-  // Reset button and the untilt restart so the two can't drift apart.
+  // Back to 0-0, 1st Round, 1st Bey, with nothing left to undo. Scores only —
+  // `resetMatch` below pairs it with the gate.
   //
   // `swapped` is deliberately left alone: it records that the visible sides
   // are flipped from the original m.a / m.b order, and the save callback is
@@ -409,7 +428,16 @@ let scoreboardSaveCallback = null;
     updateDisplay();
   }
 
-  resetBtn.addEventListener("click", clearScores);
+  // Reset means "start this match over", not just "zero the numbers". Clearing
+  // the score but leaving a live board mid-match left the next bey with no
+  // launch — so it goes back to the Ready gate too, exactly as the untilt
+  // restart does. Both callers go through here so they can't drift apart.
+  function resetMatch() {
+    clearScores();
+    armPrestart();
+  }
+
+  resetBtn.addEventListener("click", resetMatch);
 
   // True when the visible left/right have been swapped from the original
   // m.a/m.b. We re-swap on save so the callback receives scores keyed to the
@@ -823,8 +851,7 @@ let scoreboardSaveCallback = null;
         // abandoning the attempt, not pausing it, so the board that comes
         // back is a clean one. The match context (names, save target) is
         // kept — it's the same fixture, started again.
-        armPrestart();
-        clearScores();
+        resetMatch();
         // Now-in-portrait: if the user just saved a match, clear the match
         // context so the next tilt shows the default board.
         if (pendingResetOnPortrait) {

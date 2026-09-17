@@ -6631,6 +6631,21 @@ body.light-mode .part-img {
     100% { opacity: 0; transform: scale(1.4); }
 }
 
+/* "Ready" and "Set" use this instead, because their steps are seconds long
+   rather than 850ms. sbCountPop fades back OUT at the end, which is right for
+   a digit that is replaced a moment later but leaves a multi-second step
+   sitting on a blank screen — that blank is what reads as a gap between the
+   two words. This pops in the same way and then STAYS, so the word is on
+   screen for its whole step and the next one replaces it directly. */
+.sb-count.is-hold {
+    animation: sbCountHold 0.42s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+@keyframes sbCountHold {
+    0%   { opacity: 0; transform: scale(0.35); }
+    55%  { opacity: 1; transform: scale(1.1); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
 /* No portrait override on purpose. The "Show anyway" fallback does NOT stack
    the board — it rotates the whole overlay 90deg and swaps its width/height
    (see .scoreboard-overlay.scoreboard-portrait below), so inside that frame
@@ -6645,11 +6660,13 @@ body.light-mode .part-img {
     .sb-ready-btn,
     .sb-ready-btn.is-ready,
     .sb-swap,
-    .sb-count.is-pop {
+    .sb-count.is-pop,
+    .sb-count.is-hold {
         animation-duration: 0.01ms;
         animation-iteration-count: 1;
     }
-    .sb-count.is-pop { opacity: 1; animation: none; }
+    .sb-count.is-pop,
+    .sb-count.is-hold { opacity: 1; animation: none; }
     .scoreboard-overlay .scoreboard-side,
     .scoreboard-overlay .scoreboard-divider { transition: none; }
 }
