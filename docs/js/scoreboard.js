@@ -158,37 +158,147 @@ let scoreboardSaveCallback = null;
     Extreme: new Audio("assets/voices/extremeFinish.wav")
   };
 
-  const countdownClips = [
-    new Audio("assets/voices/ready.wav"),
-    new Audio("assets/voices/set.wav"),
-    new Audio("assets/voices/3.wav"),
-    new Audio("assets/voices/2.wav"),
-    new Audio("assets/voices/1.wav"),
-    new Audio("assets/voices/goShoot.wav")
+  const COUNTDOWN_FILES = [
+    "assets/voices/ready.wav",
+    "assets/voices/set.wav",
+    "assets/voices/3.wav",
+    "assets/voices/2.wav",
+    "assets/voices/1.wav",
+    "assets/voices/goShoot.wav"
   ];
+  const countdownClips = COUNTDOWN_FILES.map(src => {
+    const a = new Audio(src);
+    // Ask for the bytes up front. Only the FIRST word plays off the tap; the
+    // rest fire from timers, and a clip still fetching when its timer lands
+    // arrives late or not at all.
+    try { a.preload = "auto"; } catch (e) {}
+    return a;
+  });
 
-  // Boost the countdown clips above their source volume. HTMLAudio.volume
-  // caps at 1.0, so we route them through a Web Audio GainNode set >1 to
-  // amplify. Initialised lazily on the first play tap (user gesture, so
-  // iOS/Safari will let AudioContext start).
+  // ===== Why this is not just `clip.play()` =====
+  //
+  // On iOS the countdown was silent from "3" onwards - "Ready" played and
+  // nothing after it. Two separate iOS rules cause that, and both have to be
+  // handled or the sequence is mute on iPhone:
+  //
+  // 1. Every HTMLAudioElement needs its own play() inside a user gesture
+  //    before it will EVER play. The Ready tap unlocks the clip it starts
+  //    then and there, but "set", "3", "2", "1" and "goShoot" start from
+  //    setTimeout - no gesture - so iOS rejects them. The rejection lands in
+  //    a .catch() as NotAllowedError, which is why it failed silently.
+  //
+  // 2. The ring/silent switch mutes HTML5 audio outright. Web Audio with an
+  //    audioSession of "playback" is exempt, so a phone on silent still gets
+  //    the countdown - which matters when the board is the thing calling the
+  //    launch in a room.
+  //
+  // So the clips are decoded into AudioBuffers and played as buffer sources.
+  // A buffer source has no per-element unlock: once the context is running,
+  // it can be started from a timer like anything else. The HTMLAudio objects
+  // stay as the fallback for browsers without decodeAudioData, and they get
+  // the play/pause unlock treatment so that path works on iOS too.
+  //
+  // This also replaces createMediaElementSource for the gain. That call
+  // permanently re-routes an element's output into the graph, so if the
+  // context never starts the element is silent even though play() resolves -
+  // exactly the failure mode being fixed here.
   const COUNTDOWN_GAIN = 2.0;
   let audioCtx = null;
+  let countdownGain = null;
+  const countdownBuffers = new Array(COUNTDOWN_FILES.length).fill(null);
+  let clipsUnlocked = false;
+
   function ensureCountdownAmplifier() {
     if (audioCtx) return;
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return; // unsupported — clips just play at native volume
     try {
+      // iOS 16.4+. "playback" tells the OS this is media rather than UI
+      // chirps, which exempts it from the ring/silent switch. Unknown values
+      // throw on some builds, hence the guard.
+      if (navigator.audioSession) navigator.audioSession.type = "playback";
+    } catch (e) {}
+    try {
       audioCtx = new Ctx();
-      const gain = audioCtx.createGain();
-      gain.gain.value = COUNTDOWN_GAIN;
-      gain.connect(audioCtx.destination);
-      countdownClips.forEach(clip => {
-        try {
-          const src = audioCtx.createMediaElementSource(clip);
-          src.connect(gain);
-        } catch (e) { /* already wired or CORS — skip */ }
-      });
-    } catch (e) { audioCtx = null; }
+      countdownGain = audioCtx.createGain();
+      // HTMLAudio.volume caps at 1.0, so the boost has to happen in the graph.
+      countdownGain.gain.value = COUNTDOWN_GAIN;
+      countdownGain.connect(audioCtx.destination);
+    } catch (e) { audioCtx = null; countdownGain = null; return; }
+    decodeCountdownClips();
+  }
+
+  // Fetch and decode every clip once. Same origin, so no CORS to negotiate.
+  function decodeCountdownClips() {
+    if (!audioCtx || typeof fetch !== "function") return;
+    COUNTDOWN_FILES.forEach((url, i) => {
+      if (countdownBuffers[i]) return;
+      fetch(url)
+        .then(r => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(r.status))))
+        .then(buf => new Promise((resolve, reject) => {
+          // Safari still wants the callback form of decodeAudioData; the
+          // promise form returns undefined there on older builds.
+          const out = audioCtx.decodeAudioData(buf, resolve, reject);
+          if (out && typeof out.then === "function") out.then(resolve, reject);
+        }))
+        .then(decoded => { countdownBuffers[i] = decoded; })
+        .catch(() => { /* fall back to the HTMLAudio element for this clip */ });
+    });
+  }
+
+  // Unlock the HTMLAudio fallbacks. Must run INSIDE a user gesture: a muted
+  // play/pause is enough to mark each element as user-approved, so a later
+  // timer-driven play() is allowed. Without this the fallback path is mute on
+  // iOS for every word except the one that played on the tap itself.
+  function unlockCountdownClips() {
+    if (clipsUnlocked) return;
+    clipsUnlocked = true;
+    countdownClips.forEach(clip => {
+      try {
+        const wasMuted = clip.muted;
+        clip.muted = true;
+        const settle = () => {
+          try {
+            clip.pause();
+            clip.currentTime = 0;
+            clip.muted = wasMuted;
+          } catch (e) {}
+        };
+        const p = clip.play();
+        if (p && typeof p.then === "function") p.then(settle, settle);
+        else settle();
+      } catch (e) {}
+    });
+  }
+
+  // Called on the FIRST Ready tap rather than the second, so there is a whole
+  // side's worth of thinking time to finish decoding before the words start.
+  function primeCountdownAudio() {
+    ensureCountdownAmplifier();
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+    unlockCountdownClips();
+  }
+
+  // Play one countdown clip: buffer source if it decoded, HTMLAudio if not.
+  function playCountdownClip(i) {
+    if (i == null) return;
+    const buf = countdownBuffers[i];
+    if (buf && audioCtx && countdownGain && audioCtx.state !== "suspended") {
+      try {
+        const src = audioCtx.createBufferSource();
+        src.buffer = buf;
+        src.connect(countdownGain);
+        src.start(0);
+        return;
+      } catch (e) { /* fall through to the element */ }
+    }
+    const clip = countdownClips[i];
+    if (!clip) return;
+    try {
+      clip.currentTime = 0;
+      const p = clip.play();
+      if (p && typeof p.catch === "function") p.catch(() => {});
+    } catch (e) {}
   }
 
   // Time between the START of consecutive countdown clips. Tight enough to
@@ -327,9 +437,10 @@ let scoreboardSaveCallback = null;
     clearPrestartTimers();
     countdownRunning = true;
     // The tap that got us here is the user gesture, so this is the moment
-    // iOS / Safari will let the audio context start.
-    ensureCountdownAmplifier();
-    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+    // iOS / Safari will let the audio context start. Normally the first Ready
+    // tap already did this; repeating it is harmless and covers any path that
+    // reaches the countdown without going through the gate.
+    primeCountdownAudio();
 
     // Run the setup bar for the Ready/Set window. Same remove / reflow / add
     // dance as every other replayed animation here — without the forced
@@ -349,8 +460,7 @@ let scoreboardSaveCallback = null;
         // begin — the first word that isn't held is "3".
         if (!step.hold) prestartEl?.classList.remove("sb-setup");
         showCountWord(step.text, step.hold);
-        const clip = step.clip == null ? null : countdownClips[step.clip];
-        if (clip) { clip.currentTime = 0; clip.play().catch(() => {}); }
+        playCountdownClip(step.clip);
       };
       // The first word runs synchronously off the tap. Through a 0ms timer it
       // would land a frame late, so the panels would fade out to a blank
@@ -400,6 +510,11 @@ let scoreboardSaveCallback = null;
       e.stopPropagation();
       const side = btn.dataset.readySide === "a" ? "a" : "b";
       if (readySides[side]) return;      // already in, no un-readying mid-gate
+      // This tap is a user gesture, and it is the EARLIEST one the gate is
+      // guaranteed to get. Unlocking here rather than on the second tap gives
+      // the clips the other player's thinking time to decode, and means the
+      // audio is already approved by the time the words run.
+      primeCountdownAudio();
       readySides[side] = true;
       paintReadyButtons();
       if (readySides.a && readySides.b) runPrestartCountdown();
