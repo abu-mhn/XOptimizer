@@ -6640,6 +6640,48 @@ body.light-mode .part-img {
 .sb-count.is-hold {
     animation: sbCountHold 0.42s cubic-bezier(0.2, 0.8, 0.3, 1) both;
 }
+
+/* The setup bar. "Ready" and "Set" hold for seven seconds so players can seat
+   the bey and position the launcher, and with nothing on screen moving, that
+   wait read as the countdown having frozen. The bar drains across the whole
+   window and hits empty exactly as "3" appears, so the pause is visibly
+   counting down to the launch.
+
+   ::before is the track, ::after the draining fill. Its duration comes from
+   --sb-setup-ms, which scoreboard.js sets from READY_MS + SET_MS, so the bar
+   can't fall out of step with the words it measures. The fallback matches the
+   shipped 7s in case the property never lands. */
+.sb-prestart.sb-setup::before,
+.sb-prestart.sb-setup::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 14%;
+    height: 6px;
+    border-radius: 999px;
+    /* Over the dimmed panels, under the word itself (.sb-count is 20). */
+    z-index: 19;
+    pointer-events: none;
+}
+.sb-prestart.sb-setup::before {
+    width: min(46vw, 420px);
+    transform: translateX(-50%);
+    background: rgba(255, 255, 255, 0.16);
+}
+.sb-prestart.sb-setup::after {
+    width: min(46vw, 420px);
+    /* Drain from the middle outwards-in: the bar shrinks around its own
+       centre, so it stays centred under the word as it empties. */
+    transform: translateX(-50%) scaleX(1);
+    transform-origin: center;
+    background: linear-gradient(90deg, #58a6ff, #a371f7);
+    box-shadow: 0 0 18px rgba(88, 166, 255, 0.45);
+    animation: sbSetupDrain var(--sb-setup-ms, 7000ms) linear both;
+}
+@keyframes sbSetupDrain {
+    from { transform: translateX(-50%) scaleX(1); }
+    to   { transform: translateX(-50%) scaleX(0); }
+}
 @keyframes sbCountHold {
     0%   { opacity: 0; transform: scale(0.35); }
     55%  { opacity: 1; transform: scale(1.1); }
@@ -6667,6 +6709,10 @@ body.light-mode .part-img {
     }
     .sb-count.is-pop,
     .sb-count.is-hold { opacity: 1; animation: none; }
+    /* The setup bar is deliberately NOT stilled here. It isn't decoration —
+       it's the only thing telling a player how much of the 7-second setup
+       window is left, and freezing it would take that away. A single linear
+       drain is about as calm as motion gets. */
     .scoreboard-overlay .scoreboard-side,
     .scoreboard-overlay .scoreboard-divider { transition: none; }
 }

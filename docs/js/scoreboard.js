@@ -215,21 +215,25 @@ let scoreboardSaveCallback = null;
   // Each step's `ms` is how long until the NEXT one. 3 / 2 / 1 sit on the clip
   // cadence; "Go" and "Shoot" are the two halves of the single goShoot clip,
   // so they run tighter and only the first of them plays audio.
-  // "Ready, Set" is a spoken phrase, so it runs at speaking pace and leads
-  // straight into the digits. It started as a 7-second window meant to give
-  // players time to load and aim, but that made "Set" hang on screen for five
-  // seconds before "3" — it read as the sequence having stalled rather than as
-  // time to get ready. Players load during the gate, before anyone taps Ready,
-  // so the phrase does not need to buy them any.
+  // "Ready" and "Set" are a 7-second window on purpose: that is the time it
+  // takes to seat the bey on the launcher and get the launcher positioned. It
+  // is NOT dead air to be trimmed — cutting it to speaking pace (which this
+  // briefly did) leaves players still setting up when "3" lands.
   //
-  // "Set" stays a little longer than "Ready" to hold the beat going into "3".
+  // What made 7 seconds feel wrong before was that nothing moved during it, so
+  // it read as the sequence having stalled. The fix is the `sb-setup` progress
+  // bar below, not a shorter window: the bar drains across both words and hits
+  // empty exactly as "3" appears, so the wait is visibly a countdown to launch
+  // rather than a hang. Change these two and the bar follows automatically —
+  // its duration is handed to CSS as a custom property.
   //
   // `hold` keeps the word on screen for its whole step instead of popping back
   // out. The digits pop in and out because each is replaced 850ms later, but a
-  // held-then-faded long step leaves the screen blank, which is what the gap
-  // between Ready and Set used to be.
-  const READY_MS = 900;
-  const SET_MS = 1100;                      // 900 + 1100 = 2s, then 3, 2, 1
+  // held-then-faded long step leaves the screen blank, and THAT blank is what
+  // used to read as a gap between "Ready" and "Set".
+  const READY_MS = 2500;
+  const SET_MS = 4500;
+  const SETUP_MS = READY_MS + SET_MS;       // the 7s setup window
   const PRESTART_STEPS = [
     { text: "Ready", ms: READY_MS,          clip: 0, hold: true },
     { text: "Set",   ms: SET_MS,            clip: 1, hold: true },
@@ -254,7 +258,7 @@ let scoreboardSaveCallback = null;
     countdownRunning = false;
     readySides = { a: false, b: false };
     overlay.classList.add("sb-prestarting");
-    prestartEl?.classList.remove("sb-counting");
+    prestartEl?.classList.remove("sb-counting", "sb-setup");
     if (countEl) { countEl.textContent = ""; countEl.classList.remove("is-pop", "is-hold"); }
     paintReadyButtons();
     syncPrestartNames();
@@ -327,9 +331,23 @@ let scoreboardSaveCallback = null;
     ensureCountdownAmplifier();
     if (audioCtx && audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
 
+    // Run the setup bar for the Ready/Set window. Same remove / reflow / add
+    // dance as every other replayed animation here — without the forced
+    // reflow the browser coalesces the two and the bar never restarts on the
+    // second bey.
+    if (prestartEl) {
+      prestartEl.style.setProperty("--sb-setup-ms", SETUP_MS + "ms");
+      prestartEl.classList.remove("sb-setup");
+      void prestartEl.offsetWidth;
+      prestartEl.classList.add("sb-setup");
+    }
+
     let at = 0;
     PRESTART_STEPS.forEach(step => {
       const fire = () => {
+        // The bar measures the setup window, so it ends where the digits
+        // begin — the first word that isn't held is "3".
+        if (!step.hold) prestartEl?.classList.remove("sb-setup");
         showCountWord(step.text, step.hold);
         const clip = step.clip == null ? null : countdownClips[step.clip];
         if (clip) { clip.currentTime = 0; clip.play().catch(() => {}); }
