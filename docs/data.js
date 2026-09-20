@@ -94,7 +94,8 @@ const DATA = {
     { atk: 27, def: 35, sta: 38, weight: 31.1, spindirection: "R", name: "Megatron", codename: "MEGATRON" },
     { atk: 22, def: 55, sta: 23, weight: 33.3, spindirection: "R", name: "Optimus Prime", codename: "OPTIMUSPRIME" },
     { atk: 18, def: 27, sta: 55, weight: 29.5, spindirection: "R", name: "Star Scream", codename: "STARSCREAM" },
-    { atk: 60, def: 27, sta: 13, weight: 35.7, spindirection: "R", name: "Optimus Primal", codename: "OPTIMUSPRIMAL" }
+    { atk: 60, def: 27, sta: 13, weight: 35.7, spindirection: "R", name: "Optimus Primal", codename: "OPTIMUSPRIMAL" },
+    { atk: 75, def: 15, sta: 10, weight: 0, spindirection: "R", name: "Luster Dragoon", codename: "LUSTERDRAGOON" }
   ],
 
   lockChips: [
@@ -279,7 +280,8 @@ const DATA = {
     { atk: 40, def: 15, sta: 15, dash: 30, burstRes: 80, weight: 2.3, name: "Free Flat", codename: "FF", meta: true },
     { atk: 30, def: 20, sta: 20, dash: 30, burstRes: 80, weight: 2.3, name: "Gear Unite", codename: "GU" },
     { atk: 15, def: 20, sta: 60, dash: 5, burstRes: 30, weight: 1.9, name: "Narrow", codename: "Nr", meta: true },
-    { atk: 5, def: 55, sta: 40, dash: 10, burstRes: 20, weight: 3.1, name: "Disk Spike", codename: "DS" }
+    { atk: 5, def: 55, sta: 40, dash: 10, burstRes: 20, weight: 3.1, name: "Disk Spike", codename: "DS" },
+    { atk: 45, def: 5, sta: 5, dash: 45, burstRes: 80, weight: 0, name: "Low Cyclone", codename: "LC" }
   ],
 
   ratchetBits: [
