@@ -752,7 +752,7 @@
         return `
         <li class="br-player" data-pkey="${esc(winKeyFor(p.username) || "")}">
           ${brAvatarHtml(p.username)}
-          <span class="br-player-name fr-profile-trigger" data-profile-username="${esc(p.username || "")}" title="View profile">${esc(p.username || "(unnamed)")} <span class="br-tier br-tier-${t.key}">${t.short}</span>${uidIsJudge(p.uid) ? ` <span class="br-judge-tag">Judge</span>` : ""}</span>
+          <span class="br-player-name fr-profile-trigger" data-profile-username="${esc(p.username || "")}" title="View profile"><span class="br-player-nametext">${esc(p.username || "(unnamed)")}</span><span class="br-tier br-tier-${t.key}">${t.short}</span>${uidIsJudge(p.uid) ? `<span class="br-judge-tag">Judge</span>` : ""}</span>
           <span class="br-player-points">${winRatePctForPlayer(p)}% WR · ${num(p.points)} pts</span>
           <button type="button" class="br-btn br-btn-challenge" data-challenge="${esc(p.uid)}">Challenge</button>
         </li>`;

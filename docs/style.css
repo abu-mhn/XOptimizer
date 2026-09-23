@@ -18212,8 +18212,52 @@ body.kingofalltypes-mode .btn-lucky img {
 .br-player .br-player-name,
 .br-player .br-player-points,
 .br-player .br-btn { position: relative; z-index: 1; }
-.br-player-name { flex: 1 1 auto; min-width: 0; color: #f0f6fc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The ellipsis moved off this element and onto the name TEXT inside it. When
+   the whole span truncated, the tier chip and JUDGE badge sat past the cut and
+   were the first things thrown away — so on a phone you lost the one piece of
+   information that now decides who you may challenge, and the name was still
+   clipped to "RvX…" anyway. */
+.br-player-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    color: #f0f6fc;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+/* min-width: 0 is what actually lets this shrink — a flex item defaults to
+   min-width: auto and refuses to go below its content, so the ellipsis would
+   never engage and the row would overflow instead. */
+.br-player-nametext {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* Badges keep their size; only the name gives way. */
+.br-player-name .br-tier,
+.br-player-name .br-judge-tag { flex: 0 0 auto; margin-left: 0; }
 .br-player-points { flex: 0 0 auto; color: #8b949e; font-size: 0.85rem; }
+
+/* On a phone the row ran avatar + name + stats + button on ONE line, so the
+   name got whatever few pixels were left after three fixed-width things —
+   about four characters. Stacking gives the name the full width and drops the
+   stats and the button onto a second line.
+
+   The break is a zero-height flex item rather than a wrapper element, so the
+   markup stays one flat row and desktop is untouched. */
+@media (max-width: 600px) {
+    .br-player { flex-wrap: wrap; row-gap: 6px; }
+    .br-player-name { order: 1; }
+    .br-player::after {
+        content: "";
+        flex-basis: 100%;
+        height: 0;
+        order: 2;
+    }
+    .br-player-points { order: 3; flex: 1 1 auto; }
+    .br-player .br-btn-challenge { order: 4; }
+}
 .br-btn {
     flex: 0 0 auto;
     padding: 5px 12px;
