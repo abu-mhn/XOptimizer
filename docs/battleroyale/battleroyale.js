@@ -61,6 +61,54 @@
     return key ? (winRatesCache[key] || null) : null;
   }
   function tierForPlayer(p) { return brTierForRecord(recordForPlayer(p)); }
+
+  // BR_TIERS is ordered best-first, so the INDEX is the rank: 0 = S, 3 = C.
+  // A bigger index means a lower tier.
+  function tierRank(t) {
+    const i = BR_TIERS.findIndex(x => x.key === (t && t.key));
+    return i === -1 ? BR_TIERS.length - 1 : i;
+  }
+  function rankForPlayer(p) { return tierRank(tierForPlayer(p)); }
+
+  // "A-Tier, B-Tier and C-Tier" — the tiers within reach of this one.
+  function tierReachLabel(t) {
+    const i = tierRank(t);
+    const names = BR_TIERS
+      .filter((_, j) => Math.abs(j - i) <= 1)
+      .map(x => x.short);
+    if (names.length === 1) return names[0];
+    return names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+  }
+
+  // You may challenge your own tier and the one either side of it — S plays A,
+  // A plays S and B, and so on. Two steps apart (S vs B) is out of range.
+  const BR_TIER_REACH = 1;
+  function tiersCanMeet(a, b) {
+    return Math.abs(rankForPlayer(a) - rankForPlayer(b)) <= BR_TIER_REACH;
+  }
+
+  // What the winner is paid, as a multiple of the wager. Beating someone from a
+  // HIGHER tier doubles it; every other result pays the wager straight.
+  const BR_UPSET_MULTIPLIER = 2;
+  function payoutMultiplier(winner, loser) {
+    return rankForPlayer(winner) > rankForPlayer(loser) ? BR_UPSET_MULTIPLIER : 1;
+  }
+
+  // The most that can be staked between two players.
+  //
+  // Both must be able to pay what losing would cost them, and those costs are
+  // no longer equal: the higher-tier player pays DOUBLE if they lose, because
+  // that loss is the upset. Capping on the plain balance would let a battle be
+  // agreed that the favourite cannot actually settle — the transfer would then
+  // clamp at their balance and the underdog would quietly be short-changed.
+  function maxWagerBetween(a, b) {
+    const aPts = num(a && a.points), bPts = num(b && b.points);
+    if (rankForPlayer(a) === rankForPlayer(b)) return Math.min(aPts, bPts);
+    const hiIsA = rankForPlayer(a) < rankForPlayer(b);   // smaller rank = higher tier
+    const hiPts = hiIsA ? aPts : bPts;
+    const loPts = hiIsA ? bPts : aPts;
+    return Math.min(loPts, Math.floor(hiPts / BR_UPSET_MULTIPLIER));
+  }
   function winRatePctForPlayer(p) {
     const rec = recordForPlayer(p);
     const games = num(rec && rec.wins) + num(rec && rec.losses) + num(rec && rec.ties);
@@ -239,6 +287,62 @@
   // registration can run before the profile (and its Judge tag) has loaded, so
   // the flag lands as false; this corrects it once — without it, OTHER players
   // couldn't pick this user as a Judge. Writes only on a real mismatch.
+  // ===== Who actually holds the Judge tag =====
+  //
+  // There were two answers to this and they disagreed. The challenge list drew
+  // its JUDGE badge from `isJudge` on battleRoyale/players/{uid} — a MIRROR of
+  // the tag, written only when that person opens Battle Royale (registerSelf)
+  // or by syncJudgeFlag, which heals the signed-in user's own flag and nobody
+  // else's. So a judge tagged after their last visit had no badge, and no one
+  // could fix it for them. Meanwhile the judge PICKER read the public `judges`
+  // index and verified the tag itself, so the same person was pickable as a
+  // judge while showing no badge in the list above.
+  //
+  // Both now read this. The index is the authoritative source; the mirror is
+  // kept only as an instant answer before the read lands.
+  //
+  // Cached for the life of the page: resolving it costs two reads per judge
+  // (uid + tag), and render() runs on every players/challenges/winRates
+  // update, so re-reading per render would be a lot of traffic for a list
+  // that changes when a Developer edits a tag.
+  let judgeUidCache = null;        // uid -> username, once resolved
+  let judgeIndexPromise = null;    // in flight, so concurrent callers share one
+
+  function loadJudgeIndex() {
+    if (judgeIndexPromise) return judgeIndexPromise;
+    const database = db();
+    if (!database) return Promise.resolve({});
+    judgeIndexPromise = database.ref("judges").once("value").then(snap => {
+      const idx = snap.val() || {};
+      const out = {};
+      return Promise.all(Object.keys(idx).map(key => Promise.all([
+        database.ref("usernames/" + key + "/uid").once("value").then(s => s.val()).catch(() => null),
+        database.ref("profiles/" + key + "/tags/Judge").once("value").then(s => s.val()).catch(() => null)
+      ]).then(([juid, hasJudge]) => {
+        // The tag is re-checked rather than trusted from the index, so an
+        // entry left behind by a removed tag doesn't make someone a judge.
+        if (juid && hasJudge === true) out[juid] = idx[key] || "";
+      }))).then(() => {
+        judgeUidCache = out;
+        return out;
+      });
+    }).catch(() => {
+      // A failed read must not cache an empty answer as though it were true —
+      // that would strip every badge until the page reloads.
+      judgeIndexPromise = null;
+      return {};
+    });
+    return judgeIndexPromise;
+  }
+
+  // True when this uid holds the Judge tag. Falls back to the mirrored flag
+  // while the index is still loading, so a badge that IS correct shows at once
+  // rather than flickering in a moment later.
+  function uidIsJudge(pid) {
+    if (judgeUidCache) return !!judgeUidCache[pid] || !!(playersCache[pid] || {}).isJudge;
+    return !!(playersCache[pid] || {}).isJudge;
+  }
+
   function syncJudgeFlag() {
     const uid = myUid();
     const database = db();
@@ -371,8 +475,28 @@
     if (winnerUid !== c.challengerUid && winnerUid !== c.opponentUid) return;
     const loserUid = winnerUid === c.challengerUid ? c.opponentUid : c.challengerUid;
     const wager = num(c.wager);
-    database.ref(PLAYERS_REF + "/" + winnerUid + "/points").transaction(p => num(p) + wager).catch(() => {});
-    database.ref(PLAYERS_REF + "/" + loserUid + "/points").transaction(p => Math.max(0, num(p) - wager)).catch(() => {});
+    // An upset — a lower tier beating a higher one — pays double.
+    //
+    // Tiers are read now rather than snapshotted on the challenge, because the
+    // rules reject unknown children on a challenge node, so storing them would
+    // need a rules deploy to go with this. Tiers move only when a tournament is
+    // scored, so the two differ only if that happens mid-battle.
+    const want = wager * payoutMultiplier(playersCache[winnerUid], playersCache[loserUid]);
+
+    // Debit FIRST and credit exactly what came out. Running both sides
+    // independently let the loser's side clamp at zero while the winner was
+    // credited in full, minting points out of nothing — and doubling the
+    // payout would have doubled that leak too. Points only ever move here.
+    let moved = 0;
+    database.ref(PLAYERS_REF + "/" + loserUid + "/points").transaction(pts => {
+      const cur = num(pts);
+      moved = Math.min(want, cur);
+      return cur - moved;
+    }).then(() => {
+      if (moved <= 0) return null;
+      return database.ref(PLAYERS_REF + "/" + winnerUid + "/points").transaction(pts => num(pts) + moved);
+    }).catch(() => {});
+
     database.ref(CHALLENGES_REF + "/" + cid).update({
       status: "resolved", winnerUid, resolvedAt: new Date().toISOString()
     }).catch(e => alert("Couldn't record the result: " + ((e && e.message) || e)));
@@ -545,7 +669,11 @@
     const targets = Object.keys(playersCache)
       .filter(pid => pid !== uid && !busyUids.has(pid) &&
         num(playersCache[pid].points) >= 1 &&
-        (anyTier || tierForPlayer(playersCache[pid]).key === myTier.key))
+        // Adjacent tiers, not just your own. Also drop anyone the wager cap
+        // leaves nothing to play for — a cross-tier battle needs the favourite
+        // to cover double, so a 1-point favourite has no legal stake.
+        maxWagerBetween(me, playersCache[pid]) >= 1 &&
+        (anyTier || tiersCanMeet(me, playersCache[pid])))
       .map(pid => Object.assign({ uid: pid }, playersCache[pid]))
       .sort((a, b) => num(b.points) - num(a.points) || (a.username || "").localeCompare(b.username || ""));
 
@@ -553,7 +681,7 @@
     const myWr = winRatePctForPlayer(me);
     let html = `<div class="br-points">Your tier: <strong class="br-tier br-tier-${myTier.key}">${myTier.short}</strong> <span class="br-tier-name">${myTier.name}</span>${amJudge() ? ` <span class="br-judge-tag">Judge</span>` : ""}</div>`;
     html += `<div class="br-points br-points-sub">Win rate: <strong>${myWr}%</strong> over ${myGames} battle${myGames === 1 ? "" : "s"} · Points: <strong>${myPoints}</strong></div>`;
-    html += `<p class="br-hint">Your tier comes from your tournament win rate <em>and</em> how many battles you've played (a small record can't reach the top). You can only challenge players in your own tier — both stake an equal points wager and the Judge declares the winner, who takes the pot.</p>`;
+    html += `<p class="br-hint">Your tier comes from your tournament win rate <em>and</em> how many battles you've played (a small record can't reach the top). You can challenge your own tier and the one either side of it — ${esc(myTier.short)} can meet ${esc(tierReachLabel(myTier))}. Both stake an equal wager and the Judge declares the winner, who takes the pot. Beat someone from a higher tier and you take <strong>double</strong>.</p>`;
 
     if (judging.length) {
       html += `<div class="br-section"><h3 class="br-h">To judge (${judging.length})</h3>` +
@@ -613,18 +741,18 @@
     }
 
     const anyTierScope = amDeveloper();
-    html += `<div class="br-section"><h3 class="br-h">Challenge a player <span class="br-sub">(${anyTierScope ? "any tier" : myTier.short + " only"})</span></h3>`;
+    html += `<div class="br-section"><h3 class="br-h">Challenge a player <span class="br-sub">(${anyTierScope ? "any tier" : esc(tierReachLabel(myTier))})</span></h3>`;
     if (myPoints < 1) {
-      html += `<p class="br-empty">You have no points to wager yet. Battle Royale points are awarded at the end of each month from your tournament ranking total — place in tournaments this month, then you can challenge ${anyTierScope ? "any player" : `players in your tier (${myTier.short})`}.</p>`;
+      html += `<p class="br-empty">You have no points to wager yet. Battle Royale points are awarded at the end of each month from your tournament ranking total — place in tournaments this month, then you can challenge ${anyTierScope ? "any player" : `players in ${esc(tierReachLabel(myTier))}`}.</p>`;
     } else if (!targets.length) {
-      html += `<p class="br-empty">No one to challenge right now — ${anyTierScope ? "no players" : `you can only challenge players in your tier (${myTier.short})`} who have at least 1 point to stake. Check back as others play.</p>`;
+      html += `<p class="br-empty">No one to challenge right now — ${anyTierScope ? "no players" : `you can challenge ${esc(tierReachLabel(myTier))}`} with enough points to stake. A battle across tiers needs the higher-tier player to cover double, since that is what an upset pays. Check back as others play.</p>`;
     } else {
       html += `<ul class="br-players">` + targets.map(p => {
         const t = tierForPlayer(p);
         return `
         <li class="br-player" data-pkey="${esc(winKeyFor(p.username) || "")}">
           ${brAvatarHtml(p.username)}
-          <span class="br-player-name fr-profile-trigger" data-profile-username="${esc(p.username || "")}" title="View profile">${esc(p.username || "(unnamed)")} <span class="br-tier br-tier-${t.key}">${t.short}</span>${p.isJudge ? ` <span class="br-judge-tag">Judge</span>` : ""}</span>
+          <span class="br-player-name fr-profile-trigger" data-profile-username="${esc(p.username || "")}" title="View profile">${esc(p.username || "(unnamed)")} <span class="br-tier br-tier-${t.key}">${t.short}</span>${uidIsJudge(p.uid) ? ` <span class="br-judge-tag">Judge</span>` : ""}</span>
           <span class="br-player-points">${winRatePctForPlayer(p)}% WR · ${num(p.points)} pts</span>
           <button type="button" class="br-btn br-btn-challenge" data-challenge="${esc(p.uid)}">Challenge</button>
         </li>`;
@@ -752,17 +880,16 @@
       }
     });
     if (!database) return Promise.resolve(Object.values(out));
-    return database.ref("judges").once("value").then(snap => {
-      const idx = snap.val() || {};
-      return Promise.all(Object.keys(idx).map(key => Promise.all([
-        database.ref("usernames/" + key + "/uid").once("value").then(s => s.val()).catch(() => null),
-        database.ref("profiles/" + key + "/tags/Judge").once("value").then(s => s.val()).catch(() => null)
-      ]).then(([juid, hasJudge]) => {
-        if (juid && hasJudge === true && juid !== opponentUid && !out[juid]) {
-          out[juid] = { uid: juid, username: idx[key] || "" };
+    // Same index the badges use, so the picker and the list can never disagree
+    // — and opening the dialog re-uses the read instead of repeating it.
+    return loadJudgeIndex().then(idx => {
+      Object.keys(idx).forEach(juid => {
+        if (juid !== opponentUid && !out[juid]) {
+          out[juid] = { uid: juid, username: idx[juid] || "" };
         }
-      })));
-    }).then(() => Object.values(out)).catch(() => Object.values(out));
+      });
+      return Object.values(out);
+    }).catch(() => Object.values(out));
   }
 
   // ---- challenge popup (pick wager + judge) ----
@@ -771,8 +898,15 @@
     const me = playersCache[uid], opp = playersCache[opponentUid];
     if (!me || !opp) return;
     document.getElementById("br-challenge-popup")?.remove();
-    // Equal wager → bounded by the lower (opponent's) balance.
-    const maxW = Math.min(num(me.points), num(opp.points));
+    // Equal wager, but NOT an equal risk once the tiers differ: the favourite
+    // owes double if they lose, so the cap has to leave them able to pay it.
+    const maxW = maxWagerBetween(me, opp);
+    const myRank = rankForPlayer(me), oppRank = rankForPlayer(opp);
+    const upsetNote = myRank === oppRank
+      ? ""
+      : (myRank > oppRank
+          ? `<p class="popup-subtitle br-upset-note">${esc(opp.username || "They")} is a tier above you — win and you take <strong>double</strong> your wager.</p>`
+          : `<p class="popup-subtitle br-upset-note">${esc(opp.username || "They")} is a tier below you — if they win, they take <strong>double</strong>.</p>`);
     const overlay = document.createElement("div");
     overlay.id = "br-challenge-popup";
     overlay.className = "popup-overlay";
@@ -780,6 +914,7 @@
       <div class="popup-card">
         <h2 class="popup-title">Challenge ${esc(opp.username || "player")}</h2>
         <p class="popup-subtitle">Both stake the same wager. The Judge declares the winner, who takes the pot.</p>
+        ${upsetNote}
         <label class="tournament-name-label" for="br-wager">Wager (1–${maxW})</label>
         <input type="number" id="br-wager" class="tournament-name-input" min="1" max="${maxW}" step="1" value="${Math.min(10, maxW)}">
         <label class="tournament-name-label" for="br-judge-search">Judge</label>
@@ -1133,6 +1268,11 @@
     // scored — including the rotate prompt, if the phone is still upright.
     armJudgeScoreboard();
     render();
+    // Resolve who really holds the Judge tag, then repaint the badges. Only
+    // the first call does any reading; every later render uses the cache.
+    if (!judgeUidCache) {
+      loadJudgeIndex().then(() => { if (brTabVisible()) render(); });
+    }
     renderShop();
     renderBrDeck();
   };
