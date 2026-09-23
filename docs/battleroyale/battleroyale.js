@@ -406,7 +406,16 @@
       }
       return;
     }
-    if (brArmedCid === target.cid) return;          // already armed — leave scores alone
+    if (brArmedCid === target.cid) {
+      // Already armed, so don't re-arm — that would wipe a score in progress.
+      // But if the Judge has only just arrived on this tab, they have never
+      // been told to rotate, and on a rotation-locked iPhone the board will
+      // never appear on its own.
+      if (brTabVisible() && typeof window.promptScoreboardRotate === "function") {
+        window.promptScoreboardRotate();
+      }
+      return;
+    }
     if (typeof window.armScoreboard !== "function") return;
     brArmedCid = target.cid;
     window.armScoreboard(
@@ -421,7 +430,13 @@
         }
         resolveChallenge(target.cid, scoreA > scoreB ? target.challengerUid : target.opponentUid);
       },
-      0, 0
+      0, 0,
+      null,
+      // Prompt to rotate only while the Judge is actually on Battle Royale.
+      // This runs off a challenges update on every page, so prompting
+      // unconditionally would throw a full-screen overlay over whatever they
+      // were doing elsewhere in the app.
+      { promptRotate: brTabVisible() }
     );
   }
 
@@ -767,11 +782,13 @@
         <p class="popup-subtitle">Both stake the same wager. The Judge declares the winner, who takes the pot.</p>
         <label class="tournament-name-label" for="br-wager">Wager (1–${maxW})</label>
         <input type="number" id="br-wager" class="tournament-name-input" min="1" max="${maxW}" step="1" value="${Math.min(10, maxW)}">
-        <label class="tournament-name-label">Judge</label>
+        <label class="tournament-name-label" for="br-judge-search">Judge</label>
+        <input type="text" id="br-judge-search" class="tournament-name-input hidden"
+               placeholder="Search judges" autocomplete="off" spellcheck="false">
         <div id="br-judge-section"></div>
         <div id="br-challenge-status" class="swiss-join-status"></div>
         <div class="popup-actions">
-          <button type="button" id="br-challenge-send" class="btn">Send challenge</button>
+          <button type="button" id="br-challenge-send" class="btn" disabled>Send challenge</button>
           <button type="button" id="br-challenge-cancel" class="btn popup-cancel">Cancel</button>
         </div>
       </div>`;
@@ -780,25 +797,52 @@
     overlay.querySelector("#br-challenge-cancel").onclick = close;
     overlay.addEventListener("click", e => { if (e.target === overlay) close(); });
 
-    // Selected judge persists across repaints (the list fills in async).
+    // Nothing is pre-selected. This used to default to `list[0]`, which meant a
+    // judge you never chose was already highlighted when the dialog opened —
+    // and WHICH one was effectively arbitrary, because the list paints twice
+    // (cached judges first, then everyone) and the pick was made from whichever
+    // partial list arrived first. On a points wager, sending to the wrong judge
+    // because you didn't notice one was chosen for you is a real cost, so the
+    // choice is now deliberate and Send stays disabled until it is made.
     let selectedJudge = null; // { uid, username }
+    // The full list, kept separately from what the search box is showing: a
+    // judge filtered out of view is still a valid selection, and must not be
+    // cleared just because you typed something that hides them.
+    let allJudges = [];
+    let judgeFilter = "";
     const sendBtn = overlay.querySelector("#br-challenge-send");
-    function paintJudges(list) {
+    const searchInput = overlay.querySelector("#br-judge-search");
+
+    function matchesFilter(j) {
+      if (!judgeFilter) return true;
+      return (j.username || "").toLowerCase().indexOf(judgeFilter) !== -1;
+    }
+
+    function renderJudgeList() {
       const section = overlay.querySelector("#br-judge-section");
       if (!section) return;
-      list = list.slice().sort((a, b) => (a.username || "").localeCompare(b.username || ""));
-      if (!list.length) {
+      if (!allJudges.length) {
         section.innerHTML = `<p class="br-empty">No Judges are available yet. Ask a user with the "Judge" tag to sign in.</p>`;
-        selectedJudge = null;
+        searchInput?.classList.add("hidden");
         if (sendBtn) sendBtn.disabled = true;
         return;
       }
-      if (!selectedJudge || !list.some(j => j.uid === selectedJudge.uid)) selectedJudge = list[0];
-      section.innerHTML = `<div class="br-judge-picker" role="listbox" aria-label="Judge">${list.map(j => {
-        const on = j.uid === selectedJudge.uid;
-        return `<button type="button" class="br-judge-option${on ? " selected" : ""}" data-judge="${esc(j.uid)}" data-name="${esc(j.username || "")}" role="option" aria-selected="${on ? "true" : "false"}">${esc(j.username || "(unnamed)")}${j.uid === uid ? " (you)" : ""}</button>`;
-      }).join("")}</div>`;
-      if (sendBtn) sendBtn.disabled = false;
+      searchInput?.classList.remove("hidden");
+      const shown = allJudges.filter(matchesFilter);
+      if (!shown.length) {
+        section.innerHTML = `<p class="br-empty">No judge matches “${esc(judgeFilter)}”.</p>`;
+      } else {
+        section.innerHTML = `<div class="br-judge-picker" role="listbox" aria-label="Judge">${shown.map(j => {
+          const on = !!selectedJudge && j.uid === selectedJudge.uid;
+          return `<button type="button" class="br-judge-option${on ? " selected" : ""}" data-judge="${esc(j.uid)}" data-name="${esc(j.username || "")}" role="option" aria-selected="${on ? "true" : "false"}">${esc(j.username || "(unnamed)")}${j.uid === uid ? " (you)" : ""}</button>`;
+        }).join("")}</div>`;
+      }
+      // Say who is picked when the search has scrolled them out of sight —
+      // otherwise an enabled Send button with nothing highlighted looks broken.
+      if (selectedJudge && !shown.some(j => j.uid === selectedJudge.uid)) {
+        section.innerHTML += `<p class="br-judge-chosen">Judge: <strong>${esc(selectedJudge.username || "(unnamed)")}</strong></p>`;
+      }
+      if (sendBtn) sendBtn.disabled = !selectedJudge;
       section.querySelectorAll(".br-judge-option").forEach(btn => {
         btn.addEventListener("click", () => {
           selectedJudge = { uid: btn.dataset.judge, username: btn.dataset.name || "" };
@@ -807,7 +851,28 @@
             b.classList.toggle("selected", sel);
             b.setAttribute("aria-selected", sel ? "true" : "false");
           });
+          if (sendBtn) sendBtn.disabled = false;
         });
+      });
+    }
+
+    // Called on each data arrival: the cached judges first, then the full set.
+    function paintJudges(list) {
+      allJudges = list.slice().sort((a, b) => (a.username || "").localeCompare(b.username || ""));
+      // Only drop the selection if that judge is genuinely gone from the data,
+      // never because the search box is hiding them.
+      if (selectedJudge && !allJudges.some(j => j.uid === selectedJudge.uid)) selectedJudge = null;
+      renderJudgeList();
+    }
+
+    if (searchInput) {
+      searchInput.addEventListener("input", () => {
+        judgeFilter = searchInput.value.trim().toLowerCase();
+        renderJudgeList();
+      });
+      // Enter would otherwise do nothing visible; treat it as "done typing".
+      searchInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") e.preventDefault();
       });
     }
 
@@ -1064,6 +1129,9 @@
   window.renderBattleRoyale = function renderBattleRoyale() {
     if (!selfRegistered) registerSelf();
     bindListeners();
+    // Arriving on the tab is the moment to surface a battle waiting to be
+    // scored — including the rotate prompt, if the phone is still upright.
+    armJudgeScoreboard();
     render();
     renderShop();
     renderBrDeck();

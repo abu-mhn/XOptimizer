@@ -940,9 +940,45 @@ let scoreboardSaveCallback = null;
   // armScoreboard is the silent (auto) entry — used by Battle Royale to arm the
   // board the moment a battle is accepted, so the Judge just tilts to score.
   // No desktop alert (nothing to do on a device that can't tilt).
-  window.armScoreboard = function (nameA, nameB, onSave, initialA, initialB, onScoreChange) {
+  //
+  // `opts.promptRotate` raises the same "Turn your phone sideways" prompt that
+  // the tournament's Score Match button gets. Battle Royale needs it for the
+  // identical reason: on an iPhone with Portrait Orientation Lock on, tilting
+  // rotates nothing and fires no orientation event, so the board never appears
+  // and nothing on screen says why. The Judge is left with a battle they
+  // simply cannot score.
+  //
+  // It is opt-in rather than automatic because this entry fires on its own,
+  // off a database update, possibly while the user is on another tab — a
+  // full-screen prompt appearing unbidden would be an ambush. The caller
+  // passes it only when the user is actually looking at Battle Royale.
+  window.armScoreboard = function (nameA, nameB, onSave, initialA, initialB, onScoreChange, opts) {
     if (!isMobile) return;
     setupScoreboard(nameA, nameB, onSave, initialA, initialB, onScoreChange);
+    // Already sideways? setupScoreboard has revealed the board; there is
+    // nothing to prompt for.
+    if (opts && opts.promptRotate && !isLandscape() && !portraitOverride) {
+      awaitingRotate = true;
+      showRotateHint();
+    }
+  };
+
+  // Raise the rotate prompt for a board that is already armed. Battle Royale
+  // arms the Judge's board from a database update, which can land while they
+  // are on another tab — armScoreboard deliberately stays quiet then. When the
+  // Judge later opens Battle Royale, the board is armed but nothing has ever
+  // explained why the screen is blank, so the tab asks for the prompt here.
+  //
+  // Gated on scoreboardSaveCallback, NOT on scoreboardEnabled: app.js sets
+  // scoreboardEnabled = true on every page load, so it is always true and
+  // would pop this prompt with no match loaded at all.
+  window.promptScoreboardRotate = function () {
+    if (!isMobile) return false;
+    if (!scoreboardSaveCallback) return false;   // nothing armed to score
+    if (isLandscape() || portraitOverride) return false;
+    awaitingRotate = true;
+    showRotateHint();
+    return true;
   };
 
   if (isMobile) {

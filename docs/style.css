@@ -6819,11 +6819,18 @@ body.light-mode .part-img {
 }
 
 .scoreboard-player-label {
-    font-size: 1.2rem;
+    /* Was a flat 1.2rem, which is 19px of uppercase with 2px of tracking on
+       every screen — enough to truncate an ordinary username on a phone.
+       vmin rather than vw or vh because the board is used in both
+       orientations AND inside a 90deg-rotated fallback, where vw and vh swap
+       meaning; vmin is the short edge either way. The clamp's upper bound is
+       the old size, so desktop is unchanged and only small screens shrink. */
+    font-size: clamp(0.78rem, 3vmin, 1.2rem);
     font-weight: 700;
     color: #8b949e;
     text-transform: uppercase;
-    letter-spacing: 2px;
+    /* em, so the tracking shrinks with the text instead of eating the gain. */
+    letter-spacing: 0.08em;
     margin-bottom: 8px;
     display: flex;
     flex-direction: column;
@@ -6850,6 +6857,17 @@ body.light-mode .part-img {
     text-overflow: ellipsis;
     white-space: nowrap;
     text-align: center;
+}
+/* The "Show anyway" fallback rotates the whole overlay 90deg and gives it
+   landscape proportions — its width is 100dvh, not 100vw. But vw does NOT
+   rotate with the element, so a 42vw cap here measures the phone's SHORT edge
+   while the name actually runs along the long one. On a 465x834 phone that
+   truncated at ~195px with ~350px of room going spare, which is why the name
+   was clipped in portrait but not in real landscape.
+   dvh first for correctness, plain vh underneath for browsers without it. */
+.scoreboard-overlay.scoreboard-portrait .scoreboard-player-name {
+    max-width: 42vh;
+    max-width: 42dvh;
 }
 
 .scoreboard-score {
@@ -18130,6 +18148,19 @@ body.kingofalltypes-mode .btn-lucky img {
 .br-judge-picker::-webkit-scrollbar {
     display: none;
 }
+/* Shown under the picker when the search box is hiding the judge you picked,
+   so an enabled Send button always has a visible reason. */
+.br-judge-chosen {
+    margin: 6px 0 0;
+    font-size: 0.8rem;
+    color: #8b949e;
+}
+.br-judge-chosen strong { color: #e6edf3; }
+
+#br-judge-search {
+    margin-bottom: 6px;
+}
+
 .br-judge-option {
     flex: 0 0 auto;                 /* don't shrink — scroll instead */
     padding: 7px 14px;
