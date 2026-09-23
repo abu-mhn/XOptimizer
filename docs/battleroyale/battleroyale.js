@@ -135,6 +135,26 @@
   // Active challenges this player can't be double-booked into.
   function isActive(c) { return c && (c.status === "pending" || c.status === "accepted"); }
 
+  // ===== Cards, Deck and Shop: OFF =====
+  //
+  // Battle Royale is running as a plain challenge ladder for now: challenge a
+  // player, both stake points, the Judge declares the winner. The ability-card
+  // layer (draw a hand, equip one card per combo, buy more in the Shop) is
+  // switched off rather than deleted — every bit of it below still works, and
+  // the whole feature comes back by flipping this to true.
+  //
+  // What the flag gates, all in one place so nothing is left half-on:
+  //   - the Deck and Shop sub-tabs (and the sub-tab row itself, since only
+  //     Battle would be left)
+  //   - the "Draw cards" buttons and the rotate-to-draw hints on challenges
+  //   - the battle-prep overlay, including its tilt-to-open on mobile
+  //   - the "cards in play" line on a battle card
+  //
+  // Not gated, on purpose: cards already OWNED stay in the database untouched,
+  // and a battle that already has cards attached keeps them. Turning this back
+  // on should restore what players had, not hand them a fresh start.
+  const BR_CARDS_ENABLED = false;
+
   // ---- Ability cards ----
   // Shop cards are bought with Battle Royale points (BP). Starter cards are
   // granted free to every player (see STARTER_DECK / registerSelf) and shown in
@@ -168,6 +188,7 @@
   }
   // "🃏 Challenger: Attack Rulez · Opponent: …" — cards played in a challenge.
   function cardsInPlayLine(c) {
+    if (!BR_CARDS_ENABLED) return "";
     const cardsObj = (c && c.cards) || {};
     const parts = [];
     [["challengerUid", "challengerName"], ["opponentUid", "opponentName"]].forEach(([uidKey, nameKey]) => {
@@ -609,6 +630,7 @@
 
   // ---- Shop tab ----
   function renderShop() {
+    if (!BR_CARDS_ENABLED) return;
     const panel = document.getElementById("br-panel-shop");
     if (!panel) return;
     const uid = myUid();
@@ -663,6 +685,7 @@
 
   // ---- Deck tab: build your deck of ability cards (max DECK_MAX) ----
   function renderBrDeck() {
+    if (!BR_CARDS_ENABLED) return;
     const panel = document.getElementById("br-panel-deck");
     if (!panel) return;
     const uid = myUid();
@@ -831,6 +854,11 @@
   // My battle that still needs my equipped cards: I'm the challenger of a
   // pending/accepted battle, or the opponent of one I've already accepted.
   function myBattleNeedingEquip() {
+    // Must follow the flag as well. armJudgeScoreboard() refuses to arm the
+    // board while a loadout is owed, and with cards off every battle looks
+    // unequipped forever — so a Judge who is also a player in the battle
+    // (self-judge) could never score it at all.
+    if (!BR_CARDS_ENABLED) return null;
     const uid = myUid();
     if (!uid) return null;
     return Object.keys(challengesCache)
@@ -936,7 +964,7 @@
       }).join("");
       return `<div class="brp-card brp-card-ability${assigned ? " brp-card-on" : ""}">
         <div class="brp-card-top"><span class="brp-card-name">${esc(card.name)}</span><span class="br-type-chip br-type-ability">Ability</span></div>
-        <div class="brp-card-equip"><span class="brp-equip-label">Equip on combo:</span>${comboBtns || `<span class="brp-note">star a deck</span>`}</div>
+        <div class="brp-card-equip"><span class="brp-equip-label">Equip on combo:</span>${comboBtns ? `<span class="brp-combo-btns">${comboBtns}</span>` : `<span class="brp-note">star a deck</span>`}</div>
       </div>`;
     }).join("");
     const filled = brFilledCombos();
@@ -983,6 +1011,7 @@
   // on mobile the tilt handler does the same). Draws a fresh hand only when
   // switching to a different battle.
   function openBattlePrep(cid) {
+    if (!BR_CARDS_ENABLED) return;
     const c = challengesCache[cid];
     if (!c) return;
     if (brPrepCid !== cid) {
@@ -996,6 +1025,7 @@
 
   // True when I'm a player in this battle and haven't set my loadout yet.
   function iAmUnequipped(c) {
+    if (!BR_CARDS_ENABLED) return false;
     const uid = myUid();
     return !!(uid && (c.challengerUid === uid || c.opponentUid === uid)
       && !(c.cards && c.cards[uid] && Object.keys(c.cards[uid]).some(k => c.cards[uid][k])));
@@ -1005,6 +1035,9 @@
   // to landscape; hide it otherwise. Draws a fresh hand only on a new battle.
   function handleBrPrepOrientation() {
     const overlay = document.getElementById("br-battle-overlay");
+    // With cards off there is no loadout to set, so a tilt must not put an
+    // overlay over the board the Judge is about to score on.
+    if (!BR_CARDS_ENABLED) { if (overlay) overlay.classList.add("hidden"); return; }
     const target = myBattleNeedingEquip();
     if (brIsLandscape() && target) {
       if (brPrepCid !== target.cid) {
@@ -1042,6 +1075,18 @@
   function setupBrSubTabs() {
     const tabs = document.querySelectorAll(".br-sub-tab");
     if (!tabs.length) return;
+    if (!BR_CARDS_ENABLED) {
+      // Only Battle is left, so a one-item tab row is just noise. Hide the row
+      // and force Battle on, in case a previous session left Deck or Shop
+      // selected and its panel is the visible one.
+      const row = document.getElementById("br-sub-tabs");
+      if (row) row.classList.add("hidden");
+      tabs.forEach(t => t.classList.toggle("active", t.dataset.brView === "battle"));
+      document.querySelectorAll(".br-panel").forEach(panel => {
+        panel.classList.toggle("hidden", panel.id !== "br-panel-battle");
+      });
+      return;
+    }
     tabs.forEach(tab => {
       tab.addEventListener("click", () => {
         const view = tab.dataset.brView;

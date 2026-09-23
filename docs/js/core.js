@@ -1052,9 +1052,78 @@ function enableHorizontalDragScroll(el) {
   update();
 })();
 
-// Library filter chips + sort row: vertical wheel scrolls them horizontally.
-enableHorizontalWheelScroll(document.querySelector(".library-filter"));
-enableHorizontalWheelScroll(document.querySelector(".library-sort"));
+// ===== Rows that scroll sideways with no visible scrollbar =====
+//
+// These rows all hide their scrollbar (scrollbar-width: none and friends) so a
+// phone gets a clean strip it can swipe. On desktop that leaves NO affordance
+// at all: no scrollbar to drag, and a vertical wheel scrolls the page instead
+// of the row, so anything past the right edge is simply unreachable. The Judge
+// picker in a Battle Royale challenge was the case that showed it — with four
+// judges the last one sat off-screen with no way to get to it.
+//
+// Each row was previously wired up (or not) at its own call site, which is why
+// some worked and most didn't. Listing them in one place means a new row only
+// has to match the pattern to behave.
+//
+// Deliberately NOT included:
+//   .dashboard-carousel-track  — runs its own pointer drag and snap; a second
+//                                drag handler would fight it.
+//   .calling-monitor-overlay   — a full-screen projector view, not a chip row.
+const HIDDEN_SCROLLER_SELECTOR = [
+  ".account-tags",
+  ".bey-check-slot-parts",
+  ".br-judge-picker",
+  ".deck-slot-stats",
+  ".deck-toolbar",
+  ".developer-db-tabs",
+  ".developer-user-tags",
+  ".library-filter",
+  ".library-sort",
+  ".mode-tabs",
+  ".profile-view-tags",
+  ".revox-history-tags",
+  ".swiss-banned-section",
+  ".swiss-reg-format",
+  ".swiss-reg-host-actions",
+  ".swiss-reg-paidfilter",
+  ".swiss-room-badges",
+  ".swiss-rooms-actions",
+  ".swiss-toolbar-actions",
+  ".swiss-toolbar-pills",
+  ".tier-chips",
+  ".tier-items",
+].join(",");
+
+// Both helpers are no-ops on a row already bound, and both bail when the row
+// has nothing to scroll, so calling this repeatedly is free.
+function bindHiddenScrollers(root) {
+  const node = root || document;
+  try {
+    if (node.matches && node.matches(HIDDEN_SCROLLER_SELECTOR)) {
+      enableHorizontalWheelScroll(node);
+      enableHorizontalDragScroll(node);
+    }
+    if (node.querySelectorAll) {
+      node.querySelectorAll(HIDDEN_SCROLLER_SELECTOR).forEach(el => {
+        enableHorizontalWheelScroll(el);
+        enableHorizontalDragScroll(el);
+      });
+    }
+  } catch (e) { /* a selector a very old browser can't parse — skip */ }
+}
+
+bindHiddenScrollers(document);
+
+// Most of these rows are rendered long after load — popups, tab repaints, the
+// Judge list that fills in from an async fetch. Binding once at load would
+// miss every one of them, so new subtrees get picked up as they arrive.
+if (window.MutationObserver) {
+  new MutationObserver(records => {
+    records.forEach(rec => {
+      rec.addedNodes.forEach(n => { if (n.nodeType === 1) bindHiddenScrollers(n); });
+    });
+  }).observe(document.documentElement, { childList: true, subtree: true });
+}
 
 document.addEventListener("DOMContentLoaded", function initActiveTabRender() {
   // Skip the "More" trigger: on the pages it stands in for (Battle Royale /

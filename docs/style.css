@@ -1094,9 +1094,9 @@ select {
     background: #e3a72a;
 }
 
-.hidden {
-    display: none;
-}
+/* .hidden lives at the END of this file — see the note there. Moving it out of
+   here is deliberate: a utility that has to beat other rules cannot sit above
+   them when it has no more specificity than they do. */
 
 /* =======================
    RESULT
@@ -10890,6 +10890,17 @@ button.swiss-reg-paid:hover {
     grid-template-columns: repeat(3, 1fr);
 }
 
+/* .hidden is declared near the top of this file as a plain `.hidden`, so it has
+   the same specificity as `.br-sub-tabs` above and LOSES to it on source order
+   alone — adding the class did nothing and the row stayed on screen. Two
+   classes beats one, so this re-asserts it.
+   Only needed where a single-class rule sets `display` after .hidden;
+   .br-panel has no display rule of its own, which is why the panels hid
+   correctly while the row they sit under did not. */
+.br-sub-tabs.hidden {
+    display: none;
+}
+
 
 .library-sub-tab,
 .history-sub-tab,
@@ -18329,7 +18340,17 @@ body.kingofalltypes-mode .btn-lucky img {
 .brp-combo-parts { min-width: 0; }
 .brp-note { font-size: 0.85rem; color: #8b949e; font-style: italic; margin: 4px 0; }
 .brp-combo-cards { display: block; margin-top: 3px; font-size: 0.78rem; color: #d2a8ff; }
-.brp-hand { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+/* Cards were 150px minimum, which at the popup's 760px max-width produced four
+   ~175px columns — too narrow for their own contents. A two-word card name
+   ("Balance Rule") wrapped to a second line, which made that card taller than
+   its neighbours, and the equip row could only fit one of the three combo
+   buttons beside its label, so the other two dropped to a line below.
+
+   220px gives three roomier columns instead. Names fit on one line, the equip
+   row fits inline, and five cards land 3 + 2 rather than 4 + 1. auto-fit (not
+   auto-fill) so a narrow viewport collapses cleanly to fewer columns without
+   leaving empty tracks behind. */
+.brp-hand { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
 .brp-card {
     display: flex;
     flex-direction: column;
@@ -18341,11 +18362,23 @@ body.kingofalltypes-mode .btn-lucky img {
     color: #f0f6fc;
     transition: border-color 0.12s, background 0.12s;
 }
-.brp-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.brp-card-name { font-weight: 700; font-size: 0.9rem; }
+/* flex-start, not center: if a long name does wrap, the type chip should stay
+   level with the first line rather than drifting to the middle of the block. */
+.brp-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+/* min-width: 0 lets the name shrink inside the flex row instead of forcing the
+   chip to squash — a flex item's default min-width: auto refuses to go below
+   its content, which is what pushed the chip narrow before it let the name
+   wrap. */
+.brp-card-name { font-weight: 700; font-size: 0.9rem; min-width: 0; }
+.brp-card-top .br-type-chip { flex: 0 0 auto; }
 .brp-card-on { border-color: #2ea043; background: rgba(46, 160, 67, 0.14); }
 .brp-card-stadium.brp-card-on { border-color: #1f6feb; background: rgba(31, 111, 235, 0.14); }
 .brp-card-equip { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+/* The three combo buttons are one unit. Without this they are three separate
+   flex items, so a row too narrow for all of them breaks BETWEEN them and you
+   get "1" beside the label with "2 3" stranded underneath. Grouped, they wrap
+   together or not at all. */
+.brp-combo-btns { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
 .brp-equip-label { font-size: 0.75rem; color: #8b949e; }
 .brp-combo-btn {
     width: 28px; height: 28px;
@@ -18815,4 +18848,31 @@ body.forest-mode .fr-msg-theirs .fr-msg-bubble {
     color: #8b949e;
     cursor: default;
     border-color: #30363d;
+}
+
+
+/* ===================================================================
+   .hidden — LAST RULE IN THE FILE, ON PURPOSE. DO NOT MOVE IT UP.
+   ===================================================================
+   `.hidden` is one class, so it has exactly the same specificity as any other
+   single-class rule. When it sat near the top, every later `.something {
+   display: flex }` beat it on source order alone — the element got the class,
+   and nothing happened. It fails silently and looks like a JS bug, which is
+   what made it expensive: the Battle Royale sub-tab row stayed on screen with
+   `hidden` sitting right there in the DOM.
+
+   That had been worked around about thirty times already, one `.x.hidden`
+   rule at a time (.popup-overlay.hidden, .reel-panel.hidden, .account-pane
+   .hidden and so on). Those still work and are left alone; this just means the
+   next one isn't needed.
+
+   Verified behaviour-preserving when moved: of the 1,324 elements in this
+   project that carry .hidden, every one was already hidden by a more specific
+   rule, so nothing changed appearance. It only affects elements that .hidden
+   was failing to hide — which was always a bug.
+
+   Anything that genuinely needs to show while carrying .hidden must out-rank
+   this by specificity (two classes, or an id), not by position. */
+.hidden {
+    display: none;
 }
