@@ -35,21 +35,12 @@
   // Win-rate tiers (a pyramid: higher tiers need BOTH a strong win rate AND
   // enough battles, so e.g. a 1–0 record can't reach the top). Win rate is the
   // player's tournament record (wins / total games). Ordered highest first.
-  const BR_TIERS = [
-    { key: "S", short: "S-Tier", name: "Grand Sovereign Tier", minGames: 30, minWinRate: 70 },
-    { key: "A", short: "A-Tier", name: "Vanguard Tier",        minGames: 15, minWinRate: 60 },
-    { key: "B", short: "B-Tier", name: "Circuit Tier",         minGames: 5,  minWinRate: 50 },
-    { key: "C", short: "C-Tier", name: "Challenger Tier",      minGames: 0,  minWinRate: 0 },
-  ];
-  function brTierForRecord(rec) {
-    const wins = num(rec && rec.wins), losses = num(rec && rec.losses), ties = num(rec && rec.ties);
-    const games = wins + losses + ties;
-    const wr = games ? (wins / games) * 100 : 0;
-    for (const t of BR_TIERS) {
-      if (games >= t.minGames && wr >= t.minWinRate) return t;
-    }
-    return BR_TIERS[BR_TIERS.length - 1]; // C-Tier — the default floor
-  }
+  // The tier table now lives in core.js, which every page loads before this
+  // file, because the Profile tab and the sidebar card show a tier too. One
+  // table, one set of thresholds — a second copy here could drift from it, and
+  // this one decides who may challenge whom.
+  const BR_TIERS = window.BR_TIERS;
+  const brTierForRecord = window.brTierForRecord;
   function winKeyFor(username) {
     if (!username) return null;
     if (window.usernameKey) return window.usernameKey(username);
@@ -1283,18 +1274,20 @@
   function setupBrSubTabs() {
     const tabs = document.querySelectorAll(".br-sub-tab");
     if (!tabs.length) return;
+    const row = document.getElementById("br-sub-tabs");
     if (!BR_CARDS_ENABLED) {
-      // Only Battle is left, so a one-item tab row is just noise. Hide the row
-      // and force Battle on, in case a previous session left Deck or Shop
+      // The row ships hidden, so there is nothing to take away here — only the
+      // panels to settle, in case a previous session left Deck or Shop
       // selected and its panel is the visible one.
-      const row = document.getElementById("br-sub-tabs");
-      if (row) row.classList.add("hidden");
+      if (row) row.classList.add("hidden");   // belt and braces if the markup drifts
       tabs.forEach(t => t.classList.toggle("active", t.dataset.brView === "battle"));
       document.querySelectorAll(".br-panel").forEach(panel => {
         panel.classList.toggle("hidden", panel.id !== "br-panel-battle");
       });
       return;
     }
+    // Cards are on, so the row is wanted: reveal what the markup ships hidden.
+    if (row) row.classList.remove("hidden");
     tabs.forEach(tab => {
       tab.addEventListener("click", () => {
         const view = tab.dataset.brView;
@@ -1314,5 +1307,14 @@
     boot();
     if (brTabVisible()) window.renderBattleRoyale();
   });
+  // "load" waits for every image and font on the page; the sub-tabs only need
+  // the DOM. Running at DOMContentLoaded settles them before first paint has
+  // anything to flash, and the "load" call stays as a backstop for a script
+  // that somehow arrives after the document is already parsed.
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", setupBrSubTabs);
+  } else {
+    setupBrSubTabs();
+  }
   window.addEventListener("load", () => { boot(); setupBrSubTabs(); });
 })();

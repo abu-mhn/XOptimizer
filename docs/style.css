@@ -1652,6 +1652,27 @@ body.light-mode .result-part-name {
 /* Win-rate row on the account card. Hidden until /winRates/{key} resolves
    (no data → no row). Color inherits so it picks up the active theme;
    the email and edit-hint per-theme overrides below also touch this. */
+/* The tier chip sat slightly high against the win-rate text. `.br-tier` is an
+   inline-block with `vertical-align: middle`, which aligns its centre to the
+   parent's BASELINE plus half an x-height — not to the middle of the text. With
+   the chip's padding and border making its box taller than the 0.85rem text
+   beside it, that offset is visible.
+
+   Centring the line as a flex row lines the two boxes up by their actual
+   middles, which is what "aligned" looks like. `gap` spaces them, so the chip
+   no longer depends on a literal space in the markup.
+
+   Class selectors, deliberately: these elements are hidden with `.hidden` when
+   a player has no record, and an id selector setting `display` here would
+   out-rank it and force the row visible with nothing in it. */
+.account-win-rate,
+.side-profile-winrate {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
 .account-win-rate {
     font-size: 0.85rem;
     font-weight: 600;

@@ -772,6 +772,47 @@ function buildTierRows(entries) {
   return rows;
 }
 
+// ===== Battle Royale tiers =====
+//
+// Lives here, not in battleroyale.js, because more than one page needs it: the
+// Profile tab and the desktop sidebar card both show a player's tier beside
+// their win rate, and core.js is the only file all of them already load (and
+// it loads first). battleroyale.js reads these same two names rather than
+// keeping its own copy — two tier tables that could drift apart would be a
+// nasty bug, since the table decides who may challenge whom.
+//
+// Ordered best-first, so the INDEX is the rank: 0 = S, 3 = C.
+window.BR_TIERS = [
+  { key: "S", short: "S-Tier", name: "Grand Sovereign Tier", minGames: 30, minWinRate: 70 },
+  { key: "A", short: "A-Tier", name: "Vanguard Tier",        minGames: 15, minWinRate: 60 },
+  { key: "B", short: "B-Tier", name: "Circuit Tier",         minGames: 5,  minWinRate: 50 },
+  { key: "C", short: "C-Tier", name: "Challenger Tier",      minGames: 0,  minWinRate: 0 },
+];
+
+// A tier needs BOTH a win rate and a number of games — a 100% record over two
+// matches is not S-Tier. Falls through to C, the floor.
+window.brTierForRecord = function brTierForRecord(rec) {
+  const n = (v) => (typeof v === "number" && isFinite(v) ? v : Number(v) || 0);
+  const wins = n(rec && rec.wins), losses = n(rec && rec.losses), ties = n(rec && rec.ties);
+  const games = wins + losses + ties;
+  const wr = games ? (wins / games) * 100 : 0;
+  for (const t of window.BR_TIERS) {
+    if (games >= t.minGames && wr >= t.minWinRate) return t;
+  }
+  return window.BR_TIERS[window.BR_TIERS.length - 1];
+};
+
+// The chip markup used beside a win rate. Returns "" for a player with no
+// record at all, so a new account shows nothing rather than a bottom-tier
+// badge it has not earned.
+window.brTierChipHtml = function brTierChipHtml(rec) {
+  const n = (v) => Number(v) || 0;
+  const games = n(rec && rec.wins) + n(rec && rec.losses) + n(rec && rec.ties);
+  if (!games) return "";
+  const t = window.brTierForRecord(rec);
+  return `<span class="br-tier br-tier-${t.key}" title="${t.name}">${t.short}</span>`;
+};
+
 // Lets a vertical mouse wheel scroll a horizontal-only row sideways. A
 // horizontal wheel / trackpad swipe already scrolls it natively, so that's
 // left alone, and the page wheel is only hijacked when the row can scroll.

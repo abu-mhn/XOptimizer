@@ -995,7 +995,12 @@
       if (total === 0) return;                    // never scored → stay hidden
       const pct = Math.round((wins / total) * 100);
       const tieBit = ties > 0 ? ` · ${ties}T` : "";
-      el.textContent = `Win rate ${pct}% — ${wins}W / ${losses}L${tieBit}`;
+      // Same line, same source as the Profile tab — the two cards show the
+      // same person and would look broken disagreeing.
+      const chip = (typeof window.brTierChipHtml === "function")
+        ? window.brTierChipHtml(v) : "";
+      el.innerHTML =
+        `Win rate ${pct}% — ${wins}W / ${losses}L${tieBit}` + (chip ? " " + chip : "");
       el.classList.remove("hidden");
     }).catch(() => { /* read failed → stay hidden */ });
   }

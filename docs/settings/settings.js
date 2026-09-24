@@ -588,7 +588,13 @@ if ("serviceWorker" in navigator) {
         if (total === 0) return; // no data → leave hidden
         const pct = Math.round((wins / total) * 100);
         const tieBit = ties > 0 ? ` · ${ties}T` : "";
-        winRateEl.textContent = `Win rate ${pct}% — ${wins}W / ${losses}L${tieBit}`;
+        // The Battle Royale tier is derived from exactly these numbers, so it
+        // belongs on the same line rather than being something you have to open
+        // another tab to find out.
+        const chip = (typeof window.brTierChipHtml === "function")
+          ? window.brTierChipHtml(v) : "";
+        winRateEl.innerHTML =
+          `Win rate ${pct}% — ${wins}W / ${losses}L${tieBit}` + (chip ? " " + chip : "");
         winRateEl.classList.remove("hidden");
       }).catch(() => { /* read failed → leave hidden */ });
     };
