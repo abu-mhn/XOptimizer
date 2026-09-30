@@ -1218,6 +1218,7 @@ document.addEventListener("DOMContentLoaded", function initActiveTabRender() {
   if (mode === "friends") {
     if (typeof renderFriends === "function") renderFriends();
   }
+
 });
 
 function escapeHtml(s) {

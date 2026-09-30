@@ -164,7 +164,7 @@ let scoreboardSaveCallback = null;
     "assets/voices/3.wav",
     "assets/voices/2.wav",
     "assets/voices/1.wav",
-    "assets/voices/goShoot.wav"
+    "assets/voices/gooShoot.wav"
   ];
   const countdownClips = COUNTDOWN_FILES.map(src => {
     const a = new Audio(src);
@@ -183,7 +183,7 @@ let scoreboardSaveCallback = null;
   //
   // 1. Every HTMLAudioElement needs its own play() inside a user gesture
   //    before it will EVER play. The Ready tap unlocks the clip it starts
-  //    then and there, but "set", "3", "2", "1" and "goShoot" start from
+  //    then and there, but "set", "3", "2", "1" and "gooShoot" start from
   //    setTimeout - no gesture - so iOS rejects them. The rejection lands in
   //    a .catch() as NotAllowedError, which is why it failed silently.
   //
@@ -227,6 +227,13 @@ let scoreboardSaveCallback = null;
     } catch (e) { audioCtx = null; countdownGain = null; return; }
     decodeCountdownClips();
   }
+
+  // "Gooo Shoot!" is one recording, played as it is. It used to be a brisk
+  // "Go Shoot!" that the code stretched at runtime — repeating a slice of the
+  // vowel with crossfades to hold the "oo" — because the call was over before
+  // the words had finished being read. A recording that is already drawn out
+  // does that job properly, so all of it is gone: no slicing, no crossfades,
+  // no rebuilt buffer, nothing that can fall out of step with the file.
 
   // Fetch and decode every clip once. Same origin, so no CORS to negotiate.
   function decodeCountdownClips() {
@@ -323,8 +330,8 @@ let scoreboardSaveCallback = null;
   const readyNameB = document.getElementById("sb-ready-name-b");
 
   // Each step's `ms` is how long until the NEXT one. 3 / 2 / 1 sit on the clip
-  // cadence; "Go" and "Shoot" are the two halves of the single goShoot clip,
-  // so they run tighter and only the first of them plays audio.
+  // cadence; "Go" and "Shoot" are one continuous call from the single
+  // gooShoot clip, so only the first of them plays audio.
   // "Ready" and "Set" are a 7-second window on purpose: that is the time it
   // takes to seat the bey on the launcher and get the launcher positioned. It
   // is NOT dead air to be trimmed — cutting it to speaking pace (which this
@@ -344,14 +351,30 @@ let scoreboardSaveCallback = null;
   const READY_MS = 2500;
   const SET_MS = 4500;
   const SETUP_MS = READY_MS + SET_MS;       // the 7s setup window
+
+  // Both measured from gooShoot.wav rather than chosen. Its envelope, read
+  // as peak level per 10ms frame, runs: quiet until 100ms, "Gooo" from 100 to
+  // 555, a gap, "Shoot" from 620 to 725, then tail silence out to 917.
+  //
+  // So the word on screen changes at 600ms — inside the gap, just before
+  // "Shoot" is heard. Any earlier or later and the screen visibly disagrees
+  // with the voice.
+  //
+  // SHOOT_MS then holds the board back until the call has finished and had a
+  // beat to land: 600 + 620 = 1220ms against 917ms of audio.
+  //
+  // Re-record the clip and both need re-measuring against the new envelope.
+  const GO_MS = 600;
+  const SHOOT_MS = 620;
+
   const PRESTART_STEPS = [
     { text: "Ready", ms: READY_MS,          clip: 0, hold: true },
     { text: "Set",   ms: SET_MS,            clip: 1, hold: true },
     { text: "3",     ms: COUNTDOWN_STEP_MS, clip: 2 },
     { text: "2",     ms: COUNTDOWN_STEP_MS, clip: 3 },
     { text: "1",     ms: COUNTDOWN_STEP_MS, clip: 4 },
-    { text: "Go",    ms: 430,               clip: 5 },
-    { text: "Shoot", ms: 620,               clip: null }
+    { text: "Go",    ms: GO_MS,            clip: 5 },
+    { text: "Shoot", ms: SHOOT_MS,          clip: null }
   ];
 
   let readySides = { a: false, b: false };

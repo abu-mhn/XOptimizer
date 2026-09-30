@@ -1665,6 +1665,71 @@ body.light-mode .result-part-name {
    Class selectors, deliberately: these elements are hidden with `.hidden` when
    a player has no record, and an id selector setting `display` here would
    out-rank it and force the row visible with nothing in it. */
+/* ===== Game: the stadium diagram =====
+   One inline SVG on the reference's own 500x500 space, scaled to fit its
+   container, so there is nothing width-specific to maintain.
+
+   The colours and stroke widths are the StadiumDrawer reference's, converted
+   from its Color(r, g, b) triples — kept here rather than inline so the
+   stylesheet stays in charge of appearance, and so the two can be compared
+   value by value.
+
+   The stadium keeps this palette rather than following the app theme: it
+   stands for a physical object, and one that changed colour with the theme
+   would read as a UI panel instead of a thing on a table. */
+.game-stadium {
+    display: block;
+    width: 100%;
+    max-width: 460px;
+    height: auto;
+    margin: 4px auto;
+}
+/* Color(242, 243, 245) on Color(17, 17, 17), 4px */
+.game-stadium-frame {
+    fill: #f2f3f5;
+    stroke: #111111;
+    stroke-width: 4;
+    stroke-linejoin: round;
+}
+/* Color(158, 162, 167) on Color(102, 102, 102), 2px */
+.game-stadium-front {
+    fill: #9ea2a7;
+    stroke: #666666;
+    stroke-width: 2;
+}
+/* Color(125, 129, 133) on Color(68, 68, 68), 2px */
+.game-zone-over {
+    fill: #7d8185;
+    stroke: #444444;
+    stroke-width: 2;
+}
+/* Color(242, 243, 245) on Color(68, 68, 68), 2px — same light tone as the
+   frame, which is what makes the lanes read as cut through the deck. */
+.game-stadium-lane {
+    fill: #f2f3f5;
+    stroke: #444444;
+    stroke-width: 2;
+}
+/* The bowl is three stroked rings with NO fill, so the deck shows through
+   where they cross it. Filling them would turn the recess into a disc. */
+.game-stadium-ring-outer,
+.game-stadium-ring-mid,
+.game-stadium-ring-inner { fill: none; }
+.game-stadium-ring-outer { stroke: #909499; stroke-width: 4; }
+.game-stadium-ring-mid   { stroke: #b8bcc2; stroke-width: 2.5; }
+.game-stadium-ring-inner { stroke: #d5d8dc; stroke-width: 2; }
+/* Color(35, 36, 38) */
+.game-stadium-bumper { fill: #232426; }
+
+/* Game tab placeholder. Matches the tone of the other empty states rather
+   than looking like a rendering failure. */
+.game-empty {
+    font-size: 0.9rem;
+    font-style: italic;
+    color: #8b949e;
+    margin: 4px 0;
+}
+
 .account-win-rate,
 .side-profile-winrate {
     display: flex;
