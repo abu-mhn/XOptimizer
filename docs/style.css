@@ -5206,7 +5206,6 @@ body.forest-mode .image-popup-dot.active {
 }
 
 .deck-slot-empty {
-    opacity: 0.6;
     border-style: dashed;
 }
 
@@ -5233,6 +5232,47 @@ body.forest-mode .image-popup-dot.active {
     border-radius: 2px;
     background: #1f6feb;
     vertical-align: -1px;
+}
+
+/* An empty slot is now the button that fills it. The button carries the
+   whole slot so the tap target is the card, not a word inside it — and it is
+   a real button, so it is reachable by keyboard and announced as pressable.
+
+   The dashed, faded look stays: it still reads as a gap in the deck, just one
+   you can do something about. The opacity lifts on hover so it is clear the
+   card responds. */
+.deck-slot-empty { opacity: 0.6; transition: opacity 0.12s; }
+.deck-slot-empty:hover,
+.deck-slot-empty:focus-within { opacity: 0.95; }
+.deck-slot-empty-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    width: 100%;
+    padding: 0;
+    background: none;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+.deck-slot-empty-btn:focus { outline: none; }
+.deck-slot-empty-btn:focus-visible {
+    outline: 2px solid #58a6ff;
+    outline-offset: 3px;
+    border-radius: 6px;
+}
+/* The prompt. Quiet until the card is hovered, so a full deck of empty slots
+   isn't three bright calls to action. */
+.deck-slot-empty-cta {
+    margin-top: 2px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #58a6ff;
+    opacity: 0.85;
 }
 
 .deck-slot-empty-text {
@@ -16058,6 +16098,22 @@ body.mono-mode     .swiss-reg-format-editable { border-color: #4a4a4a; }
     background: #1f6feb;
     color: #fff;
     border: 1px solid #58a6ff;
+}
+
+/* A tournament that has finished but is still in the lobby until midnight.
+   Green rather than the amber of "In progress": the distinction between
+   still-playing and done is the whole point of showing it. */
+.swiss-room-finished-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    vertical-align: middle;
+    background: rgba(63, 185, 80, 0.16);
+    color: #3fb950;
+    border: 1px solid rgba(63, 185, 80, 0.4);
 }
 
 .swiss-room-running-badge {

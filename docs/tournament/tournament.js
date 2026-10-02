@@ -480,6 +480,54 @@ function publishOpenRoomIndex(editCode, state) {
     .catch(e => console.warn("Open room index push failed:", e));
 }
 
+// ===== Closing a finished tournament on its own =====
+//
+// Hosts forget. A tournament reaches its final placements and then sits in the
+// Open Tournaments lobby for days, still badged "In progress", because nothing
+// takes it down until someone presses Reset.
+//
+// So a finished tournament leaves the lobby at the first midnight Malaysian
+// time after it finished. It gets the rest of its own day — results stay up
+// for the people who were there — and is gone the next morning.
+//
+// WHEN it finished is read from `pastTournaments/{code}/archivedAt`, which is
+// already written the moment a complete tournament is first rendered, and is
+// world-readable. Nothing new is stored. That matters: the lobby entry has a
+// field whitelist in the database rules ($other: validate false), so an extra
+// `completedAt` there would simply be rejected, and a field on the room itself
+// could only be written by the host — the one person we cannot rely on.
+//
+// There is no server to run this on. The close happens when any signed-in
+// device next refreshes the lobby, which the rules allow (openTournaments is
+// writable by any authenticated user — the same permission the existing
+// stale-room prune already relies on). In practice that is within minutes of
+// someone opening the app the next day.
+//
+// Midnight means midnight in MALAYSIA, not on whoever's phone happens to open
+// the lobby. Using the viewer's own midnight would have the same tournament
+// closing at different moments for different people — a host in KL could see
+// it gone while a player abroad still had it listed, or the reverse.
+//
+// Malaysia is UTC+8 all year with no daylight saving, so a fixed offset is
+// exact rather than an approximation. Deliberately no local-time methods
+// (getFullYear, getDate and friends) anywhere below: those read the device's
+// timezone, which is the thing being designed out.
+const MYT_OFFSET_MS = 8 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function finishedBeforeToday(archivedAt) {
+  if (!archivedAt) return false;              // never completed, or never archived
+  const done = new Date(archivedAt);
+  if (isNaN(done.getTime())) return false;    // unparseable — leave it alone
+  // Shift into Malaysian reckoning, floor to the start of that day, step on
+  // one day, shift back. The result is the instant of the next Malaysian
+  // midnight, expressed as a plain epoch time that any device compares the
+  // same way.
+  const shifted = done.getTime() + MYT_OFFSET_MS;
+  const closesAt = Math.floor(shifted / DAY_MS) * DAY_MS + DAY_MS - MYT_OFFSET_MS;
+  return Date.now() >= closesAt;
+}
+
 function removeOpenRoomIndex(editCode) {
   const db = initFirebase();
   if (!db || !editCode) return;
@@ -10656,16 +10704,33 @@ function refreshOpenTournamentRooms() {
         const visP = db.ref("swissRooms/" + r.editCode + "/visibility").once("value")
           .then(s => s.val())
           .catch(() => null);
-        return Promise.all([phaseP, regP, pairP, subP, nameP, capP, visP]).then(([phase, count, pairing, subHosts, liveName, maxParticipants, visibility]) => ({
-          room: r, phase, count, pairing, subHosts, liveName, maxParticipants, visibility
+        // When the tournament finished, if it has. Written once when a
+        // complete tournament is first rendered; absent while it is still
+        // being played.
+        const doneP = db.ref("pastTournaments/" + r.editCode + "/archivedAt").once("value")
+          .then(s => s.val())
+          .catch(() => null);
+        return Promise.all([phaseP, regP, pairP, subP, nameP, capP, visP, doneP]).then(([phase, count, pairing, subHosts, liveName, maxParticipants, visibility, archivedAt]) => ({
+          room: r, phase, count, pairing, subHosts, liveName, maxParticipants, visibility, archivedAt
         }));
       })).then(results => {
         const live = [];
-        results.forEach(({ room, phase, count, pairing, subHosts, liveName, maxParticipants, visibility }) => {
+        results.forEach(({ room, phase, count, pairing, subHosts, liveName, maxParticipants, visibility, archivedAt }) => {
+          // A tournament that finished on an earlier day closes itself. The
+          // room and its archive are untouched — only the lobby entry goes,
+          // which is exactly what Reset would have removed.
+          if (finishedBeforeToday(archivedAt)) {
+            db.ref("openTournaments/" + room.editCode).set(null).catch(() => {});
+            return;
+          }
           // Registering AND running rooms stay listed — running ones just
           // can't take new registrations. Only a vanished room (phase is
           // null because the host reset/deleted it) gets pruned.
           if (phase === "registering" || phase === "running") {
+            // Finished today: still listed, but it must not keep claiming to
+            // be in progress. That badge is half the reason these get left
+            // up — nothing on the lobby said the tournament was over.
+            room.finishedAt = archivedAt || null;
             // Refresh the cached count too so future viewers benefit.
             if (typeof count === "number" && count !== room.registrantCount) {
               db.ref("openTournaments/" + room.editCode + "/registrantCount")
@@ -10744,9 +10809,13 @@ function renderLobbyRooms(list, rooms) {
     const cohostBadge = (myKey && r.subHosts && r.subHosts[myKey])
       ? `<span class="swiss-room-cohost-badge swiss-room-cohost-alert" title="You're invited as co-host" aria-label="You're invited as co-host">!</span>`
       : "";
-    const runningBadge = isRunning
-      ? `<span class="swiss-room-running-badge">In progress</span>`
-      : "";
+    // A tournament that has finished keeps its place in the lobby until
+    // midnight, but says so. It used to go on reading "In progress" after the
+    // final was scored, which is half the reason hosts never noticed there
+    // was anything left to close.
+    const runningBadge = r.finishedAt
+      ? `<span class="swiss-room-finished-badge" title="Finished — this closes itself at midnight">Finished</span>`
+      : (isRunning ? `<span class="swiss-room-running-badge">In progress</span>` : "");
     // Closed (private) rooms are listed but locked — tapping asks for the code.
     const closedBadge = r.visibility === "closed"
       ? `<span class="swiss-room-closed-badge" title="Private — a code is required to join">Closed</span>`

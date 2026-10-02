@@ -463,8 +463,23 @@ function renderDeck() {
     const div = document.createElement("div");
     div.className = "deck-slot";
     if (!item) {
+      // An empty slot is the obvious place to tap to fill it, and until now it
+      // did nothing — a combo could only arrive from the Calculator, a paste,
+      // or an auto-build. The slot editor that the pencil opens on a filled
+      // slot already builds a combo from dropdowns, so an empty slot opens the
+      // same editor with nothing pre-filled.
+      //
+      // A real <button> rather than a div with a click handler: it has to be
+      // reachable by keyboard and announced as something you can press, and
+      // the slot is the whole target.
       div.classList.add("deck-slot-empty");
-      div.innerHTML = `<div class="deck-slot-label">Slot ${idx + 1}</div><div class="deck-slot-empty-text">Empty</div>`;
+      div.innerHTML = `
+        <button type="button" class="deck-slot-empty-btn" data-new-slot="${idx}"
+                aria-label="Create a combo in slot ${idx + 1}">
+          <span class="deck-slot-label">Slot ${idx + 1}</span>
+          <span class="deck-slot-empty-text">Empty</span>
+          <span class="deck-slot-empty-cta">+ Create combo</span>
+        </button>`;
       container.appendChild(div);
       return;
     }
@@ -573,6 +588,10 @@ function renderDeck() {
     });
   });
   // Collapsible stat-graph dropdown per slot.
+  container.querySelectorAll("[data-new-slot]").forEach(btn => {
+    btn.addEventListener("click", () => openDeckEdit(Number(btn.dataset.newSlot)));
+  });
+
   container.querySelectorAll(".deck-slot-graph-toggle").forEach(btn => {
     btn.addEventListener("click", () => {
       const graph = btn.nextElementSibling;
@@ -1212,15 +1231,17 @@ function renderDeckEditFields() {
   });
 }
 
+// Opens the slot editor. With a combo in the slot it starts from that combo;
+// on an empty slot it starts blank, which is how a combo gets built here
+// rather than only arriving from the Calculator.
 function openDeckEdit(slotIdx) {
   const deck = loadDeck();
   const slot = deck[slotIdx];
-  if (!slot) return;
 
   buildDeckEditPopup();
   deckEditSlotIdx = slotIdx;
-  deckEditMode = DECK_EDIT_FIELDS[slot.mode] ? slot.mode : "BX";
-  const parts = (slot.data && slot.data.parts) || {};
+  deckEditMode = (slot && DECK_EDIT_FIELDS[slot.mode]) ? slot.mode : "BX";
+  const parts = (slot && slot.data && slot.data.parts) || {};
 
   // Pre-fill every dropdown from the slot's current combo (name -> index).
   deckEditValues = {};
@@ -1246,11 +1267,13 @@ function openDeckEdit(slotIdx) {
 
   // Seed each multi-mode part's chosen mode from the slot's saved partModes.
   deckEditPartModes = {};
-  const savedModes = (slot.data && slot.data.partModes) || {};
+  const savedModes = (slot && slot.data && slot.data.partModes) || {};
   Object.keys(savedModes).forEach(k => {
     if (typeof savedModes[k] === "number" && savedModes[k] >= 0) deckEditPartModes[k] = savedModes[k];
   });
 
+  const titleEl = document.querySelector("#deck-edit-popup .popup-title");
+  if (titleEl) titleEl.textContent = slot ? "Edit Combo" : "New Combo";
   document.getElementById("deck-edit-subtitle").textContent = `Slot ${slotIdx + 1}`;
   renderDeckEditFields();
   document.getElementById("deck-edit-popup").classList.remove("hidden");
@@ -1259,8 +1282,9 @@ function openDeckEdit(slotIdx) {
 function saveDeckEdit() {
   if (deckEditSlotIdx < 0) return;
   const deck = loadDeck();
-  const slot = deck[deckEditSlotIdx];
-  if (!slot) { closeDeckEdit(); return; }
+  // No check that the slot is occupied: an empty one is exactly what this is
+  // for now. Everything below reads the form, not the slot, and the
+  // duplicate-part check already skips the slot being written.
   const mode = deckEditMode;
   const formId = mode === "CX" ? "form-cx" : mode === "CX_EXPAND" ? "form-cxExpand" : "form-standard";
   const form = document.getElementById(formId);
