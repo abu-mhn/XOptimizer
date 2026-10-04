@@ -1954,7 +1954,12 @@ function startSwissMatch(matchId) {
     // Closing the board with X / Escape instead of saving takes the match back
     // off LIVE — it was only live because the board was open. Edits never went
     // live, so there's nothing to undo for them.
-    isEdit ? null : (() => endSwissMatchLive(matchId)));
+    isEdit ? null : (() => endSwissMatchLive(matchId)),
+    // No Ready gate and no 3-2-1 here. A tournament match has already been
+    // called in the room and is already LIVE on the monitor; the judge opens
+    // this to score, not to start anything. Battle Royale still gets the
+    // gate — there the board opening IS the start of the battle.
+    { skipPrestart: true });
 }
 
 // Flip a match to LIVE for this device: stamps startedAt so it shows as NOW
@@ -10676,9 +10681,15 @@ function refreshOpenTournamentRooms() {
       // Stale entries (room gone or phase no longer registering) get
       // pruned from the lobby in the same pass.
       return Promise.all(rooms.map(r => {
+        // {ok, v} rather than a bare value, because the two outcomes are not
+        // the same thing and the prune below acts on the difference. A null
+        // phase means the host deleted the room; a FAILED read means we do
+        // not know. Collapsing both to null — which this did — let one
+        // viewer's dropped connection delete a live tournament from the
+        // lobby for everyone, permanently, since only the host republishes.
         const phaseP = db.ref("swissRooms/" + r.editCode + "/phase").once("value")
-          .then(s => s.val())
-          .catch(() => null);
+          .then(s => ({ ok: true, v: s.val() }))
+          .catch(() => ({ ok: false, v: null }));
         const regP = db.ref("swissRooms/" + r.editCode + "/registrants").once("value")
           .then(s => s.numChildren())
           .catch(() => null);
@@ -10710,16 +10721,39 @@ function refreshOpenTournamentRooms() {
         const doneP = db.ref("pastTournaments/" + r.editCode + "/archivedAt").once("value")
           .then(s => s.val())
           .catch(() => null);
-        return Promise.all([phaseP, regP, pairP, subP, nameP, capP, visP, doneP]).then(([phase, count, pairing, subHosts, liveName, maxParticipants, visibility, archivedAt]) => ({
-          room: r, phase, count, pairing, subHosts, liveName, maxParticipants, visibility, archivedAt
+        // ...and whether it is STILL finished. The archive outlives the run it
+        // describes: nothing deletes it, and Reopen keeps the same edit code,
+        // so a tournament that finished yesterday and was reopened today
+        // carries yesterday's archivedAt while being very much live. Closing
+        // on the archive alone pulled that live tournament off the lobby.
+        //
+        // The room's own Final is the check: decided means finished now,
+        // undecided or absent means a fresh draw is being played.
+        const finalP = db.ref("swissRooms/" + r.editCode + "/matches/bracket-f-0").once("value")
+          .then(s => ({ ok: true, v: s.val() }))
+          .catch(() => ({ ok: false, v: null }));
+        return Promise.all([phaseP, regP, pairP, subP, nameP, capP, visP, doneP, finalP]).then(([phaseRead, count, pairing, subHosts, liveName, maxParticipants, visibility, archivedAt, finalRead]) => ({
+          room: r, phaseRead, count, pairing, subHosts, liveName, maxParticipants, visibility, archivedAt, finalRead
         }));
       })).then(results => {
         const live = [];
-        results.forEach(({ room, phase, count, pairing, subHosts, liveName, maxParticipants, visibility, archivedAt }) => {
-          // A tournament that finished on an earlier day closes itself. The
-          // room and its archive are untouched — only the lobby entry goes,
-          // which is exactly what Reset would have removed.
-          if (finishedBeforeToday(archivedAt)) {
+        results.forEach(({ room, phaseRead, count, pairing, subHosts, liveName, maxParticipants, visibility, archivedAt, finalRead }) => {
+          // Could not read the room? Then we do not know anything about it.
+          // Leave it exactly as it is — listed, with its cached summary. A
+          // lobby entry is only ever removed on evidence, never on silence.
+          if (!phaseRead.ok) { live.push(room); return; }
+          const phase = phaseRead.v;
+
+          // Finished NOW — the room's own Final is decided — and finished on
+          // an earlier Malaysian day. Both halves matter: the first stops a
+          // reopened tournament being closed by its predecessor's archive,
+          // the second gives a finished event the rest of its own day.
+          const decidedFinal = !!(finalRead.ok && finalRead.v &&
+            finalRead.v.scoreA != null && finalRead.v.scoreB != null &&
+            finalRead.v.scoreA !== finalRead.v.scoreB);
+          if (decidedFinal && finishedBeforeToday(archivedAt)) {
+            // Only the lobby entry. The room and the archive stay — this is
+            // exactly what Reset would have removed and nothing more.
             db.ref("openTournaments/" + room.editCode).set(null).catch(() => {});
             return;
           }
@@ -10730,7 +10764,10 @@ function refreshOpenTournamentRooms() {
             // Finished today: still listed, but it must not keep claiming to
             // be in progress. That badge is half the reason these get left
             // up — nothing on the lobby said the tournament was over.
-            room.finishedAt = archivedAt || null;
+            //
+            // Gated on the live Final too, or a reopened tournament would be
+            // badged Finished while it is being played.
+            room.finishedAt = decidedFinal ? (archivedAt || null) : null;
             // Refresh the cached count too so future viewers benefit.
             if (typeof count === "number" && count !== room.registrantCount) {
               db.ref("openTournaments/" + room.editCode + "/registrantCount")

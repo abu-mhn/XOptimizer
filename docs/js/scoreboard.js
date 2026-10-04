@@ -386,7 +386,28 @@ let scoreboardSaveCallback = null;
 
   // Put the gate back up: both sides un-ready, no countdown, board hidden.
   // Called whenever a board is loaded or reset, so every match starts here.
+  // ===== Whether this board has a Ready gate at all =====
+  //
+  // Battle Royale and the standalone board keep it: there, the board IS the
+  // start of the battle, so both players confirming and a countdown are the
+  // point.
+  //
+  // A tournament match does not. The judge has already called the players up,
+  // the match is already LIVE on the monitor, and the countdown has been done
+  // out loud in the room — so a gate on the screen is a second start for
+  // something that already started, and three taps before anyone can score.
+  //
+  // One flag rather than a check at each of the five places the gate is
+  // raised: setupScoreboard, after every score, Reset, the untilt restart and
+  // the load-time arm. They must all agree, and they would not stay agreed if
+  // each tested the caller for itself.
+  let prestartEnabled = true;
+
   function armPrestart() {
+    // No gate on this board: there is nothing to arm, so go straight to the
+    // live board instead. Doing it here rather than at the call sites is what
+    // keeps "after a score", "after Reset" and "after a tilt" consistent.
+    if (!prestartEnabled) { revealBoard(); return; }
     clearPrestartTimers();
     countdownRunning = false;
     readySides = { a: false, b: false };
@@ -531,6 +552,7 @@ let scoreboardSaveCallback = null;
   overlay.querySelectorAll(".sb-ready-btn").forEach(btn => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (!prestartEnabled) return;      // no gate on this board
       const side = btn.dataset.readySide === "a" ? "a" : "b";
       if (readySides[side]) return;      // already in, no un-readying mid-gate
       // This tap is a user gesture, and it is the EARLIEST one the gate is
@@ -799,6 +821,9 @@ let scoreboardSaveCallback = null;
     scoreboardCancelCallback = null;
     updateDisplay();
     closeBtn?.classList.add("hidden");
+    // Back to the standalone board, which does want the gate — otherwise a
+    // tournament match would leave every later tilt gateless until reload.
+    prestartEnabled = true;
     armPrestart();
     // The match is over, so neither the rotate prompt, the outstanding open
     // request, nor the portrait fallback should outlive it.
@@ -810,7 +835,7 @@ let scoreboardSaveCallback = null;
 
   // Load names/scores + save callback onto the board, revealing it if already
   // in landscape (otherwise the orientation handler shows it on tilt).
-  function setupScoreboard(nameA, nameB, onSave, initialA, initialB, onScoreChange, onCancel) {
+  function setupScoreboard(nameA, nameB, onSave, initialA, initialB, onScoreChange, onCancel, opts) {
     // Safety net: if called for a view-only participant, drop the match
     // context and fall back to the default standalone scoreboard (no save
     // callback, no pre-filled names/scores).
@@ -836,7 +861,9 @@ let scoreboardSaveCallback = null;
     updateDisplay();
     scoreboardSaveCallback = typeof onSave === "function" ? onSave : null;
     closeBtn?.classList.toggle("hidden", !scoreboardSaveCallback);
-    // Every match opens on the Ready gate, whichever surface reveals it.
+    // Set before arming, since arming is what reads it.
+    prestartEnabled = !(opts && opts.skipPrestart);
+    // Opens on the Ready gate unless the caller said otherwise.
     armPrestart();
     // Mobile is tilt-driven: reveal now only if already landscape, otherwise
     // the orientation handler shows it on the next tilt. Desktop has no tilt —
@@ -884,8 +911,8 @@ let scoreboardSaveCallback = null;
   // Scores are entered only via the scoreboard overlay. On mobile it's revealed
   // by tilting to landscape; on desktop openScoreboard shows it as a modal
   // popup directly (no tilt / fullscreen needed).
-  window.openScoreboard = function (nameA, nameB, onSave, initialA, initialB, onScoreChange, onCancel) {
-    setupScoreboard(nameA, nameB, onSave, initialA, initialB, onScoreChange, onCancel);
+  window.openScoreboard = function (nameA, nameB, onSave, initialA, initialB, onScoreChange, onCancel, opts) {
+    setupScoreboard(nameA, nameB, onSave, initialA, initialB, onScoreChange, onCancel, opts);
     if (isMobile) {
       // Already landscape? setupScoreboard has revealed it. Otherwise rotate
       // for them rather than waiting on a tilt.
