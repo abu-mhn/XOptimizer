@@ -1062,6 +1062,18 @@ select {
     pointer-events: none;
 }
 
+/* The same button once the tournament is finished, where it no longer resets
+   anything — the results are archived and it only closes the room. Red was
+   doing the opposite of its job here: hosts read "destructive" and left
+   finished events sitting in the lobby rather than press it. Green says the
+   thing the label now says. */
+.btn-reset.is-done {
+    background: #238636;
+}
+.btn-reset.is-done:hover {
+    background: #2ea043;
+}
+
 .btn-reset {
     background: #da3633;
     flex: 0 0 auto;

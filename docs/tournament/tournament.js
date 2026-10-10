@@ -2367,6 +2367,36 @@ function assignMatchJudge(matchId, name) {
   renderSwiss();
 }
 
+// What the exit button should say right now.
+//
+// Three states, one button:
+//
+//   Leave   you are in someone else's room — always was.
+//   Leave   you are the host and the tournament is FINISHED. The results were
+//           archived to Past Tournaments the moment the final standings
+//           rendered, so there is nothing left to reset; the button only
+//           closes the live room.
+//   Reset   anything else. It really does clear the room.
+//
+// The middle case is the one that needed saying. Hosts were leaving finished
+// events sitting in the lobby for days because a red button marked "Reset"
+// reads as "your tournament will be cleared" — and the only way out of a room
+// that had auto-closed was to press the thing they were avoiding. The word is
+// most of the fix; the colour is the rest.
+//
+// `inRoom` is part of the test because the "already saved" promise depends on
+// it: the archive is keyed by the room's edit code, so a tournament with no
+// room was never written to Past Tournaments and resetting it really would
+// lose something.
+function swissExitButtonState(state, isHostHere, inRoom) {
+  if (!isHostHere) return { label: "Leave", title: "Leave Room", done: false };
+  const finished = inRoom && typeof isTournamentComplete === "function" &&
+    isTournamentComplete(state);
+  return finished
+    ? { label: "Leave", title: "Finished — close this room and leave", done: true }
+    : { label: "Reset", title: "Reset Tournament", done: false };
+}
+
 function renderSwissMatchCard(matchNum, id, m, seedA, seedB, isRoundRobin) {
   const done = m.scoreA != null && m.scoreB != null;
   const live = !done && m.startedAt != null;
@@ -3920,36 +3950,28 @@ function wireShareDropdown(root, options, initial, onPick) {
 const PROFILE_VIEW_PHOTO_PH = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='24' r='12' fill='%23484f58'/%3E%3Cpath d='M11 57c0-12 10-20 21-20s21 8 21 20z' fill='%23484f58'/%3E%3C/svg%3E";
 const PROFILE_VIEW_BANNER_PH = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
-// Render a profile's tags as coloured badge spans (Revox red, Developer
-// black-blue, Revox Admin gold-bordered); honours the legacy single `tag`.
+// Render a profile's tags as coloured badge spans; honours the legacy single
+// `tag`.
+//
+// The colours come from profileTagBadgeClass in auth.js, which is the one
+// place that knows them. This function used to carry its own copy of that
+// chain, and the copy fell behind: "Head Judge" was added to auth.js and not
+// here, so the hover card painted it in the default blue while every other
+// surface showed it black-on-white. A tag the copy has never heard of gets no
+// modifier at all and lands on that same default blue, which is exactly how
+// the drift stayed invisible — there is no error, just a wrong colour.
+//
+// auth.js loads before tournament.js on every page, so the fallback below is
+// only for a half-loaded page, and a plain badge is the right answer there.
 function revoxTagBadges(profile) {
   const tagsMap = (profile && profile.tags) || {};
   const tags = Object.keys(tagsMap).filter(t => tagsMap[t]);
   if (profile && profile.tag && tags.indexOf(profile.tag) < 0) tags.push(profile.tag);
   return tags.map(t => {
-    const lower = String(t).toLowerCase();
-    let cls = "account-tag";
-    if (lower.indexOf("revox") >= 0) {
-      cls += " account-tag-revox";
-      if (lower === "revox admin") cls += " account-tag-revox-admin";
-    } else if (lower === "developer") {
-      cls += " account-tag-developer";
-    } else if (lower === "tester") {
-      cls += " account-tag-tester";
-    } else if (lower === "guest judge") {
-      cls += " account-tag-guest-judge";
-    } else if (lower === "keeper") {
-      cls += " account-tag-keeper";
-    } else if (lower === "judge") {
-      cls += " account-tag-judge";
-    } else if (lower === "gold player") {
-      cls += " account-tag-gold";
-    } else if (lower === "silver player") {
-      cls += " account-tag-silver";
-    } else if (lower === "bronze player") {
-      cls += " account-tag-bronze";
-    }
-    return `<span class="${cls}">${escapeHtml(t)}</span>`;
+    const variant = (typeof window.profileTagBadgeClass === "function")
+      ? window.profileTagBadgeClass(t)
+      : "";
+    return `<span class="account-tag${variant}">${escapeHtml(t)}</span>`;
   }).join("");
 }
 
@@ -4708,7 +4730,8 @@ function renderSwiss() {
 
   const bracketHtml = bracketActive ? renderSwissBracket(state) : "";
   const showStartKnockoutBtn = groupStageDone && !bracketActive && canEdit;
-  const resetTitle = inRoomNonHost ? "Leave Room" : "Reset Tournament";
+  const exitBtn = swissExitButtonState(state, !inRoomNonHost, inRoom);
+  const resetTitle = exitBtn.title;
 
   // Hosts and co-hosts can rename via a popup; viewers see a static label.
   const nameValue = state.tournamentName || "";
@@ -4761,10 +4784,10 @@ function renderSwiss() {
                      onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
                 <span class="swiss-toolbar-btn-label">Back</span>
               </button>`
-            : `<button type="button" id="swiss-clear" class="btn btn-reset btn-icon-sm" title="${resetTitle}">
+            : `<button type="button" id="swiss-clear" class="btn btn-reset btn-icon-sm${exitBtn.done ? " is-done" : ""}" title="${resetTitle}">
                 <img src="assets/icons/exit-button.png" alt=""
                      onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
-                <span class="swiss-toolbar-btn-label">${inRoomNonHost ? "Leave" : "Reset"}</span>
+                <span class="swiss-toolbar-btn-label">${exitBtn.label}</span>
               </button>`}
         </div>
       </div>
@@ -5007,6 +5030,10 @@ function renderUnpaidPanel(state) {
 
 function renderSwissRegisteringMarkup(state) {
   const isHost = swissIsHost;
+  // Through the same helper as the running toolbar so the two can never drift,
+  // though a tournament still taking registrations is by definition not
+  // finished — this screen always says Reset (host) or Leave (co-host).
+  const exitB = swissExitButtonState(state, isHost, !!swissEditCode);
   // Hosts AND co-hosts can both start the tournament, remove registrants,
   // edit the name, etc. The Reset / Leave behaviour still differs by
   // role — only the original host wipes the room; co-hosts just
@@ -5274,10 +5301,10 @@ function renderSwissRegisteringMarkup(state) {
         <div class="swiss-toolbar-actions">
           ${renderSwissShareButton()}
           ${swissIsHost ? renderCoHostsButton() : ""}
-          <button type="button" id="swiss-clear" class="btn btn-reset btn-icon-sm" title="${isHost ? "Reset Tournament" : "Leave Room"}">
+          <button type="button" id="swiss-clear" class="btn btn-reset btn-icon-sm${exitB.done ? " is-done" : ""}" title="${exitB.title}">
             <img src="assets/icons/exit-button.png" alt=""
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
-            <span class="swiss-toolbar-btn-label">${isHost ? "Reset" : "Leave"}</span>
+            <span class="swiss-toolbar-btn-label">${exitB.label}</span>
           </button>
         </div>
       </div>
