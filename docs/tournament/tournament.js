@@ -2192,20 +2192,47 @@ function canAssignMatches() {
   return !!(swissIsHost && typeof window.isHeadJudge === "function" && window.isHeadJudge());
 }
 
-// The host plus everyone they have invited to co-host. Names, because that is
-// what the card shows and what `judge` already stores.
-function matchAssignCandidates() {
+// Who this match can be handed to, and who is already busy.
+//
+// Two rules, both about the host NOT keeping work for themselves:
+//
+//   * Sub-hosts only. The host is already running the tournament; the whole
+//     point of putting a judge on a match is to give it to somebody else, so
+//     the host is not in their own list even if their name also appears under
+//     subHosts (which it can, if they added themselves).
+//
+//   * One live match each. Somebody already on a match that has not been
+//     scored yet cannot be put on a second one — they would have to be in two
+//     places at once. They stay in the list, disabled, saying where they are,
+//     because a name that silently vanished would read as "they left".
+//
+// Whoever is on THIS match is never counted as busy by it, so re-opening the
+// picker shows the current choice as the choice rather than as a clash.
+function matchAssignCandidates(forMatchId) {
+  const st = loadSwiss();
+  const hostKey = subHostKey(
+    (st && st.hostName) || (window.getCurrentUsername && window.getCurrentUsername()) || "");
+
+  const busy = {};
+  const matches = (st && st.matches) || {};
+  Object.keys(matches).forEach(id => {
+    if (id === forMatchId) return;
+    const m = matches[id];
+    if (!m || !m.assignedTo) return;
+    if (m.scoreA != null && m.scoreB != null) return;   // done; they are free
+    const k = subHostKey(m.assignedTo);
+    if (k && !busy[k]) busy[k] = matchWhereLabel(m) || "another match";
+  });
+
   const out = [];
   const seen = new Set();
-  const add = (n) => {
+  Object.keys(swissSubHosts || {}).forEach(key => {
+    const n = swissSubHosts[key];
     const k = subHostKey(n || "");
-    if (!k || seen.has(k)) return;
+    if (!k || seen.has(k) || k === hostKey) return;
     seen.add(k);
-    out.push(n);
-  };
-  const st = loadSwiss();
-  add((st && st.hostName) || (window.getCurrentUsername && window.getCurrentUsername()) || "");
-  Object.keys(swissSubHosts || {}).forEach(k => add(swissSubHosts[k]));
+    out.push({ name: n, busyOn: busy[k] || "" });
+  });
   return out;
 }
 
@@ -2218,7 +2245,8 @@ function matchAssignRowHtml(id, m) {
   const who = m.assignedTo || "";
   const myName = (window.getCurrentUsername && window.getCurrentUsername()) || "";
   const mine = !!(who && myName && subHostKey(who) === subHostKey(myName));
-  const cls = "swiss-match-assign" + (mine ? " is-mine" : "");
+  const cls = "swiss-match-assign" + (mine ? " is-mine" : "") +
+    (mine && swissHeldMatchId === id ? " is-held" : "");
 
   if (!canAssignMatches()) {
     if (!who) return "";
@@ -2230,21 +2258,88 @@ function matchAssignRowHtml(id, m) {
       <button type="button" class="swiss-assign-chip swiss-assign-btn${who ? " is-set" : ""}"
               data-assign="${escapeHtml(id)}"
               aria-label="${who ? "Change who runs this match" : "Put a judge on this match"}"
-      >${who ? escapeHtml(who) : "+ judge"}</button>
+      >${who ? escapeHtml(who) : "+Judge"}</button>
     </div>`;
   }
 
-  const options = matchAssignCandidates().map(n => `
-    <button type="button" class="swiss-assign-chip swiss-assign-pick${
-      who && subHostKey(who) === subHostKey(n) ? " is-set" : ""}"
-            data-assign-to="${escapeHtml(id)}" data-assign-name="${escapeHtml(n)}"
-    >${escapeHtml(n)}</button>`).join("");
+  const candidates = matchAssignCandidates(id);
+  const options = candidates.length
+    ? candidates.map(c => `
+      <button type="button" class="swiss-assign-chip swiss-assign-pick${
+        who && subHostKey(who) === subHostKey(c.name) ? " is-set" : ""}${c.busyOn ? " is-busy" : ""}"
+              data-assign-to="${escapeHtml(id)}" data-assign-name="${escapeHtml(c.name)}"
+              ${c.busyOn ? "disabled" : ""}
+              title="${c.busyOn ? escapeHtml(c.name) + " is on " + escapeHtml(c.busyOn) : "Put " + escapeHtml(c.name) + " on this match"}"
+      >${escapeHtml(c.name)}${c.busyOn
+        ? `<span class="swiss-assign-busy">on ${escapeHtml(c.busyOn)}</span>`
+        : ""}</button>`).join("")
+    : `<span class="swiss-assign-chip swiss-assign-none">No co-hosts to hand this to</span>`;
   return `<div class="${cls} is-open">
     ${options}
     <button type="button" class="swiss-assign-chip swiss-assign-clear"
             data-assign-to="${escapeHtml(id)}" data-assign-name=""
     >${who ? "Clear" : "Cancel"}</button>
   </div>`;
+}
+
+// ===== Holding a match =====
+//
+// Being put on a match is a job, not a suggestion: while you are holding one,
+// it is the only match you can open. Finish it, or have the Head Judge take
+// you off it, and you are free again.
+//
+// WHO IS NEVER LOCKED, and why each exemption matters:
+//
+//   * The host. They hand the work out and have to be able to step in when a
+//     co-host's phone dies mid-match. They are also not assignable, so they
+//     could never be holding anything anyway.
+//   * Anyone with no assignment. This is the important one. If the lock
+//     applied to everybody, a host who assigned nothing would leave every
+//     co-host unable to score anything at all, and one forgetful host would
+//     stop the tournament dead. No assignment means business as usual.
+//   * Anyone whose assigned match is already scored. The job is done.
+//
+// Note what this does NOT do: it does not stop somebody ELSE opening a match
+// that is assigned to you. The rule is about not being in two places at once,
+// not about owning a match — and a hard reservation would strand a match the
+// moment its judge walked away.
+//
+// Recomputed once per render rather than per card: it is the same answer for
+// every card on the screen, and it reads the whole match list to find it.
+let swissHeldMatchId = "";
+
+function recomputeHeldMatch(state) {
+  swissHeldMatchId = "";
+  if (swissIsHost) return;                       // the host holds nothing
+  const me = subHostKey((window.getCurrentUsername && window.getCurrentUsername()) || "");
+  if (!me) return;
+  const matches = (state && state.matches) || {};
+  const held = Object.keys(matches).find(k => {
+    const m = matches[k];
+    if (!m || !m.assignedTo) return false;
+    if (m.scoreA != null && m.scoreB != null) return false;   // finished
+    return subHostKey(m.assignedTo) === me;
+  });
+  swissHeldMatchId = held || "";
+}
+
+// True when this device's user is holding a different match than `id`.
+function matchLockedForMe(id) {
+  return !!swissHeldMatchId && swissHeldMatchId !== id;
+}
+
+// Why the tap did nothing. Named for the match they are holding so they can
+// go and find it rather than wondering what they did wrong.
+function notifyMatchLocked() {
+  const st = loadSwiss();
+  const held = (st.matches || {})[swissHeldMatchId];
+  const where = held ? (matchWhereLabel(held) || "") : "";
+  const who = held ? `${held.a} vs ${held.b}` : "another match";
+  alert(
+    `You're on ${who}${where ? " — " + where : ""}.\n\n` +
+    "Score that match first, or ask the Head Judge to take you off it, " +
+    "and you'll be able to open the others again."
+  );
 }
 
 // Writes the assignment. `name` empty clears it.
@@ -2254,6 +2349,14 @@ function assignMatchJudge(matchId, name) {
   const s = loadSwiss();
   const m = s.matches && s.matches[matchId];
   if (!m) { renderSwiss(); return; }
+  // Clearing is always allowed. Setting has to name somebody the picker would
+  // actually have offered — a sub-host who is not the host and is not already
+  // on a live match.
+  if (name) {
+    const ok = matchAssignCandidates(matchId)
+      .some(c => !c.busyOn && subHostKey(c.name) === subHostKey(name));
+    if (!ok) { renderSwiss(); return; }
+  }
   if (name) m.assignedTo = name; else delete m.assignedTo;
   persistSwiss(s);
   if (swissRoomRef && swissCanEdit) {
@@ -2303,7 +2406,9 @@ function renderSwissMatchCard(matchNum, id, m, seedA, seedB, isRoundRobin) {
   const liveClass = live
     ? (isMine ? " swiss-match-card-live swiss-match-card-live-mine" : " swiss-match-card-live")
     : "";
-  const cardClass = "swiss-match-card swiss-match-card-play" + liveClass;
+  const locked = matchLockedForMe(id);
+  const cardClass = "swiss-match-card swiss-match-card-play" + liveClass +
+    (locked ? " swiss-match-card-locked" : "");
   const liveBadge = live
     ? `<span class="swiss-live-badge${isMine ? " swiss-live-badge-mine" : ""}" aria-label="Match in progress">LIVE</span>`
     : "";
@@ -2719,7 +2824,8 @@ function renderSwissBracketCard(label, id, m, slotHints) {
 
   const clickable = pending ? "" : ` data-match="${id}" role="button" tabindex="0" title="${hint}" aria-label="${hint}"`;
   const liveClass = live ? (isMine ? " swiss-match-card-live swiss-match-card-live-mine" : " swiss-match-card-live") : "";
-  const cardClass = "swiss-match-card swiss-match-card-bracket" + (pending ? " swiss-match-card-pending" : " swiss-match-card-play") + liveClass + (isTie ? " swiss-match-card-tie" : "");
+  const lockedB = !pending && matchLockedForMe(id);
+  const cardClass = "swiss-match-card swiss-match-card-bracket" + (pending ? " swiss-match-card-pending" : " swiss-match-card-play") + liveClass + (isTie ? " swiss-match-card-tie" : "") + (lockedB ? " swiss-match-card-locked" : "");
   const liveBadge = live ? `<span class="swiss-live-badge${isMine ? " swiss-live-badge-mine" : ""}">LIVE</span>` : "";
   const tieBadge = isTie ? `<span class="swiss-tie-badge">TIE</span>` : "";
 
@@ -4494,6 +4600,9 @@ function renderSwiss() {
   });
 
   const state = loadSwiss();
+  // Before any card is drawn: every card asks the same question and the answer
+  // costs a walk of the whole match list.
+  recomputeHeldMatch(state);
   const hasGroups = !!state.groups;
   const bracketActive = hasSwissBracket(state);
   const isRegistering = isRegisteringPhase(state);
@@ -4774,9 +4883,16 @@ function renderSwiss() {
     view.querySelectorAll(".swiss-match-card-play").forEach(el => {
       const id = el.dataset.match;
       if (!id) return;
-      el.addEventListener("click", () => showBeyCheckPopup(id));
+      // Checked here rather than by withholding the handler, so the tap can
+      // SAY why nothing happened. A card that silently ignores you is the same
+      // bug the co-host branch below already exists to avoid.
+      const open = () => {
+        if (matchLockedForMe(id)) { notifyMatchLocked(); return; }
+        showBeyCheckPopup(id);
+      };
+      el.addEventListener("click", open);
       el.addEventListener("keydown", e => {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); showBeyCheckPopup(id); }
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
       });
     });
   } else if (swissSessionRole === "co-host") {

@@ -308,11 +308,21 @@
       const out = {};
       return Promise.all(Object.keys(idx).map(key => Promise.all([
         database.ref("usernames/" + key + "/uid").once("value").then(s => s.val()).catch(() => null),
-        database.ref("profiles/" + key + "/tags/Judge").once("value").then(s => s.val()).catch(() => null)
-      ]).then(([juid, hasJudge]) => {
+        // The whole tags map rather than the single Judge leaf — same one read,
+        // and two rungs of the ladder now qualify.
+        database.ref("profiles/" + key + "/tags").once("value").then(s => s.val() || {}).catch(() => ({}))
+      ]).then(([juid, tags]) => {
         // The tag is re-checked rather than trusted from the index, so an
         // entry left behind by a removed tag doesn't make someone a judge.
-        if (juid && hasJudge === true) out[juid] = idx[key] || "";
+        //
+        // A Head Judge counts. The roles are a ladder — Guest Judge < Judge <
+        // Head Judge — and the rung above carries the one below, so a Head
+        // Judge is pickable to oversee a battle exactly like a Judge. They are
+        // also the one role granted by hand rather than by exam, so they carry
+        // tags/Head Judge and no tags/Judge at all; checking only the latter
+        // listed them in the index and then threw them out again here.
+        const judges = tags.Judge === true || tags["Head Judge"] === true;
+        if (juid && judges) out[juid] = idx[key] || "";
       }))).then(() => {
         judgeUidCache = out;
         return out;

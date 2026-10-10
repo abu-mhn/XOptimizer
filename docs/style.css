@@ -10753,46 +10753,145 @@ button.swiss-reg-name-edit:focus-visible {
 }
 
 /* ---- Approvals ---- */
+/* An applicant's card carries their banner and photo. A name alone tells a
+   Head Judge nothing about who is asking; the face they already know from the
+   tournament floor does. Both arrive after the row paints (ProfileCache is
+   async and shared), so every frame has to look deliberate while empty —
+   hence the gradient fallbacks rather than a broken-image box. */
 .judge-app {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    flex-wrap: wrap;
-    padding: 8px 12px;
+    position: relative;
+    overflow: hidden;
     border: 1px solid #30363d;
-    border-radius: 8px;
+    border-radius: 10px;
     background: #161b22;
+    isolation: isolate;
 }
 .judge-app.is-approved { border-color: rgba(63, 185, 80, 0.4); }
-.judge-app.is-rejected { border-color: rgba(248, 81, 73, 0.35); opacity: 0.75; }
+.judge-app.is-rejected { border-color: rgba(248, 81, 73, 0.35); opacity: 0.7; }
+
+/* The banner sits behind everything, dimmed hard enough that white text on it
+   is readable whatever image someone uploaded. */
+.judge-app-banner {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background-size: cover;
+    background-position: 50% 50%;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+.judge-app.has-banner .judge-app-banner { opacity: 0.38; }
+.judge-app.has-banner::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: linear-gradient(90deg, rgba(13, 17, 23, 0.92) 0%, rgba(13, 17, 23, 0.72) 55%, rgba(13, 17, 23, 0.5) 100%);
+}
+.judge-app-body {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 10px 12px;
+}
+.judge-app-avatar {
+    flex: 0 0 auto;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    border: 1px solid #30363d;
+    /* No photo yet, or none at all: a plain disc, not an empty hole. */
+    background: linear-gradient(135deg, #21262d, #161b22);
+    background-size: cover;
+    background-position: 50% 50%;
+}
+.judge-app.has-photo .judge-app-avatar { border-color: rgba(255, 255, 255, 0.22); }
 .judge-app-who {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 3px;
     min-width: 0;
+    flex: 1 1 auto;
 }
 .judge-app-name {
-    font-size: 0.92rem;
-    font-weight: 600;
+    font-size: 0.95rem;
+    font-weight: 700;
     color: #e6edf3;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 .judge-app-meta {
-    font-size: 0.74rem;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 0.72rem;
     color: #8b949e;
 }
+/* Which role the paper earned — the first thing a reviewer needs. */
+.judge-app-role {
+    padding: 1px 7px;
+    border: 1px solid rgba(56, 139, 253, 0.5);
+    border-radius: 999px;
+    background: rgba(56, 139, 253, 0.14);
+    color: #cbe3ff;
+    font-weight: 600;
+}
+.judge-app-role.is-guest {
+    border-color: rgba(210, 153, 34, 0.5);
+    background: rgba(210, 153, 34, 0.14);
+    color: #f0d39b;
+}
+.judge-app-score {
+    font-variant-numeric: tabular-nums;
+    color: #c9d1d9;
+}
+.judge-app-date { color: #6e7681; }
+
 .judge-app-actions {
     display: flex;
     gap: 6px;
     flex-shrink: 0;
+    margin-left: auto;
 }
+/* These used .btn.btn-small and .btn-ghost. There is no .btn-ghost rule in
+   this file, so Reject fell back to the plain green .btn and read as a second
+   Approve — the two most different actions on the page looked identical. */
+.judge-app-btn {
+    font: inherit;
+    font-size: 0.74rem;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid #30363d;
+    background: #21262d;
+    color: #c9d1d9;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.judge-app-btn:disabled { opacity: 0.5; cursor: default; }
+.judge-app-btn.is-approve {
+    border-color: #2ea043;
+    background: #238636;
+    color: #fff;
+}
+.judge-app-btn.is-approve:hover:not(:disabled) { background: #2ea043; }
+.judge-app-btn.is-reject:hover:not(:disabled) {
+    border-color: #f85149;
+    color: #ffb4b0;
+    background: rgba(248, 81, 73, 0.12);
+}
+.judge-app-btn:focus-visible { outline: 2px solid #58a6ff; outline-offset: 2px; }
+
 .judge-app-verdict {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     color: #8b949e;
     flex-shrink: 0;
+    margin-left: auto;
 }
 
 /* ===== Fees panel, shown while the tournament runs =====
@@ -11373,6 +11472,27 @@ button.swiss-reg-paid:hover {
     font-variant-numeric: tabular-nums;
 }
 
+/* You are holding a different match, so this one is not yours to open. Dimmed
+   and desaturated rather than hidden: it still has to be READABLE — knowing
+   what else is running is half of judging — it just cannot be tapped into. The
+   tap still fires and explains itself, so no pointer-events: none here. */
+.swiss-match-card.swiss-match-card-locked {
+    opacity: 0.45;
+    filter: saturate(0.6);
+    cursor: not-allowed;
+}
+.swiss-match-card.swiss-match-card-locked:hover {
+    border-color: #21262d;
+}
+/* ...and the one you ARE holding, so it is obvious which of the two states
+   you are looking at. */
+.swiss-match-assign.is-held .swiss-assign-chip {
+    border-color: #3fb950;
+    background: rgba(63, 185, 80, 0.22);
+    color: #e6edf3;
+    font-weight: 700;
+}
+
 /* ---- who is running this match ----
    A row of its own inside .swiss-match-wrap, which is a two-column grid
    (number | card). Column 2 puts it under the card and clear of the number
@@ -11426,6 +11546,27 @@ button.swiss-assign-chip:focus-visible {
     background: rgba(63, 185, 80, 0.14);
     color: #b7f0c2;
 }
+/* Already on a live match. Shown rather than hidden: a name that vanished
+   from the list would read as "they left the tournament" instead of "they are
+   busy right now". */
+.swiss-assign-chip.is-busy {
+    opacity: 0.55;
+    cursor: not-allowed;
+    border-style: dashed;
+}
+.swiss-assign-busy {
+    margin-left: 5px;
+    color: #6e7681;
+    font-size: 0.92em;
+}
+/* With the host out of their own list, a tournament with no co-hosts has an
+   empty picker. Say so rather than show a lone Cancel button. */
+.swiss-assign-none {
+    font-style: italic;
+    color: #6e7681;
+    border-style: dashed;
+}
+
 .swiss-assign-clear {
     color: #8b949e;
 }
@@ -11669,6 +11810,25 @@ body.mono-mode .history-sub-tab.active img {
     color: #fff;
     border-color: #1a4a8a;
     font-weight: 600;
+}
+
+/* "Somebody is waiting on you" on the Approvals sub-tab. Red against the
+   tab's own colours whether it is the active (blue) tab or not, so it reads
+   the same either way. */
+.judge-sub-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    margin-left: 6px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: #da3633;
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 800;
+    line-height: 1;
 }
 
 /* The Judge row takes the BUTTONS from the group above — every colour, hover,

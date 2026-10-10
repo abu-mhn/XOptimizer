@@ -508,6 +508,17 @@
 
   // ---- views ---------------------------------------------------------------
 
+  // How many applications are still waiting on a decision.
+  //
+  // Two sources, deliberately. Once the Approvals tab has been opened `queue`
+  // is loaded and is the fresher of the two — a decision shows in it
+  // immediately, before the database round-trip. Until then the only thing
+  // that knows is auth.js's live listener, which runs on every page.
+  function pendingCount() {
+    if (queue) return queue.filter(a => a && a.status === "pending").length;
+    return Number(window.judgePendingCount) || 0;
+  }
+
   function subTabs() {
     const tabs = [
       { id: "exam", label: "Exam" },
@@ -517,13 +528,24 @@
     // the permission — the rules are — but there is no reason to show a tab
     // that can only report that it can't read anything.
     if (amHeadJudge()) tabs.push({ id: "approve", label: "Approvals" });
+    const waiting = amHeadJudge() ? pendingCount() : 0;
     // The row is a flex strip sized to its labels, so a third tab needs no
     // help from a column count the way the grid-based rows elsewhere do.
-    return `<div class="judge-sub-tabs" role="tablist">${tabs.map(t =>
-      `<button type="button" class="judge-sub-tab${view === t.id ? " active" : ""}"
+    return `<div class="judge-sub-tabs" role="tablist">${tabs.map(t => {
+      // Somebody is waiting on a decision. Shown on the tab itself as well as
+      // on the nav badge, because once you are ON this page the nav badge is
+      // the thing you have stopped looking at.
+      const flag = (t.id === "approve" && waiting > 0)
+        ? `<span class="judge-sub-badge" aria-hidden="true">!</span>`
+        : "";
+      const label = (t.id === "approve" && waiting > 0)
+        ? `${t.label} — ${waiting} waiting`
+        : t.label;
+      return `<button type="button" class="judge-sub-tab${view === t.id ? " active" : ""}${flag ? " has-badge" : ""}"
                data-judge-view="${t.id}" role="tab"
-               aria-selected="${view === t.id ? "true" : "false"}">${t.label}</button>`
-    ).join("")}</div>`;
+               aria-selected="${view === t.id ? "true" : "false"}"
+               aria-label="${esc(label)}">${t.label}${flag}</button>`;
+    }).join("")}</div>`;
   }
 
   function renderQuestions() {
@@ -693,19 +715,35 @@
     const pending = queue.filter(a => a.status === "pending");
     const decided = queue.filter(a => a.status !== "pending").reverse();
 
-    const card = (a, showActions) => `
-      <li class="judge-app${a.status === "approved" ? " is-approved" : ""}${a.status === "rejected" ? " is-rejected" : ""}">
-        <div class="judge-app-who">
-          <span class="judge-app-name">${esc(a.username || a.uid)}</span>
-          <span class="judge-app-meta">${esc(a.role || JUDGE_TAG)} · ${esc(a.score)} / ${esc(a.total)} · ${esc(shortDate(a.at))}</span>
+    // The banner and avatar are fetched after the markup lands — see
+    // hydrateApplicantFaces. `data-face` is what pairs an empty frame with the
+    // profile that fills it.
+    const card = (a, showActions) => {
+      const key = a.key || keyFor(a.username);
+      const guest = a.role === GUEST_TAG;
+      return `
+      <li class="judge-app${a.status === "approved" ? " is-approved" : ""}${a.status === "rejected" ? " is-rejected" : ""}"
+          data-face="${esc(key)}">
+        <div class="judge-app-banner" aria-hidden="true"></div>
+        <div class="judge-app-body">
+          <span class="judge-app-avatar" aria-hidden="true"></span>
+          <div class="judge-app-who">
+            <span class="judge-app-name">${esc(a.username || a.uid)}</span>
+            <span class="judge-app-meta">
+              <span class="judge-app-role${guest ? " is-guest" : ""}">${esc(a.role || JUDGE_TAG)}</span>
+              <span class="judge-app-score">${esc(a.score)} / ${esc(a.total)}</span>
+              <span class="judge-app-date">${esc(shortDate(a.at))}</span>
+            </span>
+          </div>
+          ${showActions
+            ? `<div class="judge-app-actions">
+                 <button type="button" class="judge-app-btn is-approve" data-approve="${esc(a.uid)}" ${busy ? "disabled" : ""}>Approve</button>
+                 <button type="button" class="judge-app-btn is-reject" data-reject="${esc(a.uid)}" ${busy ? "disabled" : ""}>Reject</button>
+               </div>`
+            : `<span class="judge-app-verdict">${a.status === "approved" ? "Approved" : "Rejected"}${a.decidedBy ? " · " + esc(a.decidedBy) : ""}</span>`}
         </div>
-        ${showActions
-          ? `<div class="judge-app-actions">
-               <button type="button" class="btn btn-small" data-approve="${esc(a.uid)}" ${busy ? "disabled" : ""}>Approve</button>
-               <button type="button" class="btn btn-small btn-ghost" data-reject="${esc(a.uid)}" ${busy ? "disabled" : ""}>Reject</button>
-             </div>`
-          : `<span class="judge-app-verdict">${a.status === "approved" ? "Approved" : "Rejected"}${a.decidedBy ? " · " + esc(a.decidedBy) : ""}</span>`}
       </li>`;
+    };
 
     return `
       <p class="judge-note">Each row says which role the exam earned them — a perfect paper asks for Judge,
@@ -785,6 +823,42 @@
         if (app) decide(app, "rejected");
       });
     });
+
+    hydrateApplicantFaces(root);
+  }
+
+  // Fill in each applicant's photo and banner once the rows exist.
+  //
+  // Done after the markup rather than inside it because the images come from
+  // ProfileCache, which is asynchronous and shared — rows paint immediately
+  // and the faces arrive when they arrive. A profile with neither just keeps
+  // the plain card, which is why the frames are styled to look deliberate
+  // when empty rather than broken.
+  function hydrateApplicantFaces(root) {
+    if (!root || !window.ProfileCache) return;
+    root.querySelectorAll("[data-face]").forEach(li => {
+      const key = li.getAttribute("data-face");
+      if (!key) return;
+      window.ProfileCache.row(key).then(r => {
+        if (!r) return;
+        if (r.banner) {
+          const b = li.querySelector(".judge-app-banner");
+          if (b) {
+            b.style.backgroundImage = `url("${r.banner}")`;
+            b.style.backgroundPosition = r.bannerPos || "50% 50%";
+            li.classList.add("has-banner");
+          }
+        }
+        if (r.photo) {
+          const av = li.querySelector(".judge-app-avatar");
+          if (av) {
+            av.style.backgroundImage = `url("${r.photo}")`;
+            av.style.backgroundPosition = r.photoPos || "50% 50%";
+            li.classList.add("has-photo");
+          }
+        }
+      }).catch(() => {});
+    });
   }
 
   // Each sub-tab loads its own data the first time it is opened, so someone
@@ -814,5 +888,11 @@
     if (!tabVisible()) return;
     render();
     ensureDataFor(view);
+  });
+
+  // An application can land while the page is open — on the Exam tab, say —
+  // and the "!" has to appear without a reload.
+  window.addEventListener("judgequeuechange", () => {
+    if (tabVisible()) render();
   });
 })();

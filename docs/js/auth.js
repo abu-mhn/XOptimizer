@@ -962,7 +962,75 @@
   // Same "current page's own tab is never hidden" rule as the others, so
   // someone sitting on the page while signing out does not watch it vanish
   // under them.
+  // ===== "An application is waiting" =====
+  //
+  // A Head Judge should not have to open the tab to find out somebody is
+  // waiting on them. Same shape as the Revox pending badge: a count on the
+  // Judge item in the More menu, rolled into the More button's own alert so
+  // the two do not overwrite each other.
+  //
+  // auth.js loads on every page, so the badge is app-wide — which is the
+  // whole point. judge.js only loads on the Judge page and could never do it.
+  let judgeQueueRef = null;
+
+  // The nav badge AND the Judge page's own Approvals sub-tab both need this
+  // number, and the page has no way to get it before that tab is first opened.
+  // One writer, one event, so the two can never disagree.
+  window.judgePendingCount = 0;
+  function publishJudgePending(count) {
+    const n = Number(count) || 0;
+    const changed = window.judgePendingCount !== n;
+    window.judgePendingCount = n;
+    updateJudgeNavBadge(n);
+    if (changed) window.dispatchEvent(new Event("judgequeuechange"));
+  }
+
+  function updateJudgeNavBadge(count) {
+    document.querySelectorAll('a.tab-more-item[data-mode="judge"]').forEach(item => {
+      let cnt = item.querySelector(".tab-count");
+      if (count > 0) {
+        if (!cnt) {
+          cnt = document.createElement("span");
+          cnt.className = "tab-count";
+          item.appendChild(cnt);
+        }
+        cnt.textContent = count > 99 ? "99+" : String(count);
+        cnt.setAttribute("aria-label", `${count} judge application${count === 1 ? "" : "s"} awaiting approval`);
+      } else if (cnt) {
+        cnt.remove();
+      }
+    });
+    if (window.refreshMoreTabAlert) window.refreshMoreTabAlert();
+  }
+
+  // Attached only for an account that may actually read the queue — the rules
+  // refuse everyone else, and an attached listener that errors would just log
+  // noise on every page for every ordinary user. Re-evaluated whenever the
+  // profile changes, because the tag arrives after sign-in.
+  function watchJudgeApplications() {
+    let db = null;
+    try { db = firebase.database(); } catch (e) { db = null; }
+    if (!db) return;
+    const canReview = hasTag("Head Judge") || hasTag("Developer");
+    if (!canReview) {
+      if (judgeQueueRef) { judgeQueueRef.off(); judgeQueueRef = null; }
+      updateJudgeNavBadge(0);
+      return;
+    }
+    if (judgeQueueRef) return;        // already listening
+    judgeQueueRef = db.ref("judgeApplications");
+    judgeQueueRef.on("value",
+      snap => {
+        const all = snap.val() || {};
+        const waiting = Object.keys(all)
+          .filter(k => all[k] && all[k].status === "pending").length;
+        publishJudgePending(waiting);
+      },
+      () => publishJudgePending(0));
+  }
+
   function paintJudgeTab() {
+    watchJudgeApplications();
     const show = !!currentProfile;
     document.querySelectorAll('.tab[data-mode="judge"]').forEach(tab => {
       tab.classList.toggle("hidden", !show && !tab.classList.contains("active"));
