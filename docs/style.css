@@ -1877,6 +1877,13 @@ body.bronze-mode .account-edit-hint { color: #a8896b; }
     color: #000000;
     border-color: #000000;
 }
+/* Head Judge — approves new judges. Same monochrome family as Judge, inverted
+   so it reads as the senior one of the pair. */
+.account-tag-head-judge {
+    background: #000000;
+    color: #ffffff;
+    border-color: #ffffff;
+}
 /* Guest Judge — a limited Judge (can co-host but not create). Same monochrome
    family with a dashed border to read as the "guest" variant. */
 .account-tag-guest-judge {
@@ -6632,6 +6639,33 @@ body.light-mode .part-img {
 
 /* Matches .scoreboard-reset / .scoreboard-swap, the buttons that sit in the
    board's divider, so the control reads as the same thing in both states. */
+/* Skip the gate entirely and open the board. Sits under the swap arrows in the
+   same 50px divider column, which is already a centred flex column with a gap
+   — so it needs nothing but its own look and a width that fits 50px. */
+.sb-skip {
+    font: inherit;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #8b949e;
+    background: transparent;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 5px 7px;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.sb-skip:hover,
+.sb-skip:focus-visible {
+    color: #e6edf3;
+    border-color: #58a6ff;
+    background: #21262d;
+    outline: none;
+}
+
 .sb-swap {
     background: #21262d;
     color: #8b949e;
@@ -7512,6 +7546,7 @@ body.revox-mode .sub-tab,
 body.revox-mode .tournament-sub-tab,
 body.revox-mode .br-sub-tab,
 body.revox-mode .library-sub-tab,
+body.revox-mode .judge-sub-tab,
 body.revox-mode .history-sub-tab,
 body.revox-mode .reel-sub-tab,
 body.revox-mode .bey-check-mode-tab {
@@ -7524,6 +7559,7 @@ body.revox-mode .tab.active,
 body.revox-mode .tournament-sub-tab.active,
 body.revox-mode .br-sub-tab.active,
 body.revox-mode .library-sub-tab.active,
+body.revox-mode .judge-sub-tab.active,
 body.revox-mode .history-sub-tab.active,
 body.revox-mode .reel-sub-tab.active {
     background: linear-gradient(135deg, #e8402e, #b8301f);
@@ -7549,8 +7585,10 @@ body.revox-mode .br-sub-tab:hover:not(.active),
 body.revox-mode .tournament-sub-tab:focus-visible,
 body.revox-mode .br-sub-tab:focus-visible,
 body.revox-mode .library-sub-tab:hover:not(.active),
+body.revox-mode .judge-sub-tab:hover:not(.active),
 body.revox-mode .history-sub-tab:hover:not(.active),
 body.revox-mode .library-sub-tab:focus-visible,
+body.revox-mode .judge-sub-tab:focus-visible,
 body.revox-mode .history-sub-tab:focus-visible,
 body.revox-mode .reel-sub-tab:hover:not(.active),
 body.revox-mode .reel-sub-tab:focus-visible,
@@ -10424,6 +10462,428 @@ button.swiss-reg-name-edit:focus-visible {
 }
 /* Fee-paid status. A button for the host / Keeper (toggle), or a plain badge
    for everyone else. "Unpaid" reads amber; "Paid ✓" reads green. */
+/* ===== Judge test ===== */
+.judge-empty {
+    font-size: 0.9rem;
+    font-style: italic;
+    color: #8b949e;
+    margin: 4px 0;
+}
+.judge-status {
+    margin: 0 0 12px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #30363d;
+    background: rgba(110, 118, 129, 0.08);
+    font-size: 0.9rem;
+    color: #c9d1d9;
+}
+.judge-status.is-judge {
+    border-color: rgba(63, 185, 80, 0.4);
+    background: rgba(63, 185, 80, 0.1);
+    color: #e6edf3;
+}
+.judge-error {
+    margin: 0 0 12px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(248, 81, 73, 0.45);
+    background: rgba(248, 81, 73, 0.1);
+    color: #ff7b72;
+    font-size: 0.88rem;
+}
+.judge-result {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 0.92rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+.judge-result.is-pass {
+    border: 1px solid rgba(63, 185, 80, 0.45);
+    background: rgba(63, 185, 80, 0.12);
+    color: #e6edf3;
+}
+.judge-result.is-fail {
+    border: 1px solid rgba(210, 153, 34, 0.45);
+    background: rgba(210, 153, 34, 0.1);
+    color: #e6edf3;
+}
+.judge-quiz {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.judge-q {
+    padding: 10px 12px;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    background: #161b22;
+}
+/* Only after submitting — marking a question while it is being answered
+   would give the answer away. */
+.judge-q.is-right { border-color: rgba(63, 185, 80, 0.5); }
+.judge-q.is-wrong { border-color: rgba(248, 81, 73, 0.5); }
+.judge-q-text {
+    margin: 0 0 10px;
+    font-size: 0.93rem;
+    font-weight: 600;
+    color: #e6edf3;
+    display: flex;
+    gap: 8px;
+}
+.judge-q-n {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #21262d;
+    color: #8b949e;
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.judge-q-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.judge-opt {
+    text-align: left;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #30363d;
+    background: #0d1117;
+    color: #c9d1d9;
+    font: inherit;
+    font-size: 0.88rem;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+.judge-opt:hover:not(:disabled) { border-color: #58a6ff; }
+.judge-opt:focus { outline: none; }
+.judge-opt:focus-visible { outline: 2px solid #58a6ff; outline-offset: 2px; }
+.judge-opt.is-chosen { border-color: #58a6ff; background: rgba(88, 166, 255, 0.12); color: #e6edf3; }
+/* The right answer, revealed on submit — shown whether or not it was picked,
+   so a wrong answer teaches rather than just scolds. */
+.judge-opt.is-answer {
+    border-color: #3fb950;
+    background: rgba(63, 185, 80, 0.16);
+    color: #e6edf3;
+}
+.judge-opt:disabled { cursor: default; }
+.judge-q-why {
+    margin: 10px 0 0;
+    font-size: 0.84rem;
+    color: #8b949e;
+    font-style: italic;
+}
+.judge-actions { margin-top: 16px; }
+
+/* ---- the exam clock ----
+   Sticky, unlike the sub-tab row: this one has a reason to follow you down a
+   ten-question page, and it is the only thing on the page that does. It stays
+   inside the panel padding rather than bleeding to the edges, so it never
+   lands on the fieldset's side borders the way the shared sub-tab bar did. */
+.judge-clock-bar {
+    position: sticky;
+    top: 71px;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 14px;
+    padding: 8px 12px;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    background: rgba(13, 17, 23, 0.92);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+}
+.judge-clock-label {
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #8b949e;
+}
+.judge-clock {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #e6edf3;
+    /* Tabular figures so the row does not twitch sideways every second. */
+    font-variant-numeric: tabular-nums;
+}
+.judge-clock.is-low {
+    color: #f85149;
+}
+.judge-clock-count {
+    margin-left: auto;
+    font-size: 0.74rem;
+    color: #8b949e;
+}
+
+/* ---- the briefing before a sitting ---- */
+.judge-intro {
+    margin: 0 0 4px;
+    padding: 12px 14px;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    background: #161b22;
+}
+.judge-intro p {
+    margin: 0 0 10px;
+    font-size: 0.86rem;
+    line-height: 1.55;
+    color: #c9d1d9;
+}
+.judge-intro p:last-child { margin-bottom: 0; }
+.judge-intro-list {
+    margin: 0 0 10px;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.judge-intro-list li {
+    font-size: 0.84rem;
+    line-height: 1.5;
+    color: #c9d1d9;
+}
+.judge-intro-list strong { color: #e6edf3; }
+.judge-intro-list em {
+    font-style: normal;
+    font-weight: 600;
+    color: #58a6ff;
+}
+
+/* A finished-but-imperfect paper is neither a pass nor a fail: it earns the
+   lesser role, so it gets its own colour rather than borrowing one of theirs. */
+.judge-result.is-partial {
+    border-color: rgba(210, 153, 34, 0.45);
+    background: rgba(210, 153, 34, 0.1);
+}
+
+.judge-status.is-pending {
+    border-color: rgba(210, 153, 34, 0.45);
+    background: rgba(210, 153, 34, 0.12);
+    color: #e6edf3;
+}
+.judge-status.is-rejected {
+    border-color: rgba(248, 81, 73, 0.45);
+    background: rgba(248, 81, 73, 0.1);
+    color: #e6edf3;
+}
+.judge-note {
+    margin: 0 0 14px;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: #8b949e;
+}
+.judge-h {
+    margin: 18px 0 8px;
+    font-size: 0.74rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #8b949e;
+}
+.judge-h:first-child { margin-top: 0; }
+
+/* ---- Ranking ---- */
+.judge-rank,
+.judge-apps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.judge-rank-row {
+    display: grid;
+    grid-template-columns: 30px 1fr auto;
+    grid-template-areas:
+        "n name total"
+        "n split total";
+    align-items: center;
+    column-gap: 10px;
+    padding: 8px 12px;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    background: #161b22;
+}
+.judge-rank-row.is-me {
+    border-color: #58a6ff;
+    background: rgba(88, 166, 255, 0.08);
+}
+.judge-rank-n {
+    grid-area: n;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #8b949e;
+    text-align: center;
+}
+.judge-rank-name {
+    grid-area: name;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: #e6edf3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.judge-rank-split {
+    grid-area: split;
+    font-size: 0.74rem;
+    color: #8b949e;
+}
+.judge-rank-total {
+    grid-area: total;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #58a6ff;
+    padding-left: 8px;
+}
+
+/* ---- Approvals ---- */
+.judge-app {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    background: #161b22;
+}
+.judge-app.is-approved { border-color: rgba(63, 185, 80, 0.4); }
+.judge-app.is-rejected { border-color: rgba(248, 81, 73, 0.35); opacity: 0.75; }
+.judge-app-who {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.judge-app-name {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: #e6edf3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.judge-app-meta {
+    font-size: 0.74rem;
+    color: #8b949e;
+}
+.judge-app-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+.judge-app-verdict {
+    font-size: 0.78rem;
+    color: #8b949e;
+    flex-shrink: 0;
+}
+
+/* ===== Fees panel, shown while the tournament runs =====
+   Only the host and a Keeper ever see this, so it is deliberately quiet: a
+   collapsible strip above the groups rather than a banner. It sits between
+   the toolbar and the draw because that is where someone scanning for a name
+   will look, and it collapses to one line once nothing is outstanding. */
+.swiss-unpaid {
+    margin: 0 0 12px;
+    padding: 8px 12px;
+    border: 1px solid rgba(210, 153, 34, 0.4);
+    border-radius: 8px;
+    background: rgba(210, 153, 34, 0.08);
+}
+.swiss-unpaid-summary {
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #e6edf3;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.swiss-unpaid-summary::-webkit-details-marker { display: none; }
+/* The disclosure caret, drawn with borders rather than set as a character.
+   A glyph depends on the font stack having it, and the first attempt used
+   U+25B8, which this stack does not carry — so it rendered as a tofu box.
+   Worse, the escape itself was mangled in transit and a literal control
+   character ended up in this file. Borders draw the same triangle everywhere
+   and need no glyph and no escape sequence. */
+.swiss-unpaid-summary::before {
+    content: "";
+    flex: 0 0 auto;
+    width: 0;
+    height: 0;
+    border-left: 6px solid #8b949e;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    transition: transform 0.12s;
+}
+.swiss-unpaid[open] > .swiss-unpaid-summary::before { transform: rotate(90deg); }
+.swiss-unpaid-count {
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    background: rgba(210, 153, 34, 0.18);
+    color: #d29922;
+    border: 1px solid rgba(210, 153, 34, 0.4);
+}
+/* Nothing outstanding reads as settled, not as a warning. */
+.swiss-unpaid-clear {
+    border-color: rgba(63, 185, 80, 0.35);
+    background: rgba(63, 185, 80, 0.07);
+}
+.swiss-unpaid-count.is-clear {
+    background: rgba(63, 185, 80, 0.16);
+    color: #3fb950;
+    border-color: rgba(63, 185, 80, 0.4);
+}
+.swiss-unpaid-list {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.swiss-unpaid-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 4px 0;
+}
+.swiss-unpaid-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.9rem;
+    color: #e6edf3;
+}
+.swiss-unpaid-row .swiss-reg-paid { flex: 0 0 auto; }
+.swiss-unpaid-empty {
+    margin: 8px 0 0;
+    font-size: 0.85rem;
+    color: #8b949e;
+}
+
 .swiss-reg-paid {
     flex: 0 0 auto;
     font-size: 0.72rem;
@@ -10913,6 +11373,80 @@ button.swiss-reg-paid:hover {
     font-variant-numeric: tabular-nums;
 }
 
+/* ---- who is running this match ----
+   A row of its own inside .swiss-match-wrap, which is a two-column grid
+   (number | card). Column 2 puts it under the card and clear of the number
+   gutter. Deliberately OUTSIDE the card: the card is the tap target that takes
+   a match live, so a control inside it would start matches by accident. */
+.swiss-match-assign {
+    grid-column: 2;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin-top: -2px;
+}
+.swiss-assign-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 100%;
+    padding: 2px 8px;
+    border: 1px solid #30363d;
+    border-radius: 999px;
+    background: #0d1117;
+    color: #8b949e;
+    font: inherit;
+    font-size: 0.68rem;
+    line-height: 1.6;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+button.swiss-assign-chip {
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+button.swiss-assign-chip:hover,
+button.swiss-assign-chip:focus-visible {
+    border-color: #58a6ff;
+    color: #e6edf3;
+    outline: none;
+}
+/* Set, versus the empty "+ judge" prompt. */
+.swiss-assign-chip.is-set {
+    border-color: #388bfd;
+    background: rgba(56, 139, 253, 0.12);
+    color: #cbe3ff;
+}
+/* The one the reader is being asked to run. Everyone sees every assignment;
+   this is what makes your own stand out in a list of twenty. */
+.swiss-match-assign.is-mine .swiss-assign-chip {
+    border-color: #3fb950;
+    background: rgba(63, 185, 80, 0.14);
+    color: #b7f0c2;
+}
+.swiss-assign-clear {
+    color: #8b949e;
+}
+.swiss-assign-clear:hover,
+.swiss-assign-clear:focus-visible {
+    border-color: #f85149;
+    color: #ffb4b0;
+}
+
+/* The Calling Monitor's queue: the screen a sub-host actually watches. */
+.mon-next-judge {
+    margin-left: 8px;
+    padding: 1px 7px;
+    border: 1px solid rgba(56, 139, 253, 0.5);
+    border-radius: 999px;
+    background: rgba(56, 139, 253, 0.12);
+    color: #cbe3ff;
+    font-size: 0.78em;
+    white-space: nowrap;
+}
+
 .swiss-match-card {
     background: #0d1117;
     border: 1px solid #21262d;
@@ -11047,6 +11581,7 @@ button.swiss-reg-paid:hover {
 
 
 .library-sub-tab,
+.judge-sub-tab,
 .history-sub-tab,
 .tournament-sub-tab ,
 .br-sub-tab {
@@ -11110,8 +11645,10 @@ body.mono-mode .history-sub-tab.active img {
 }
 
 .library-sub-tab:hover:not(.active),
+.judge-sub-tab:hover:not(.active),
 .history-sub-tab:hover:not(.active),
 .library-sub-tab:focus-visible,
+.judge-sub-tab:focus-visible,
 .history-sub-tab:focus-visible,
 .tournament-sub-tab:hover:not(.active),
 .br-sub-tab:hover:not(.active),
@@ -11124,6 +11661,7 @@ body.mono-mode .history-sub-tab.active img {
 }
 
 .library-sub-tab.active,
+.judge-sub-tab.active,
 .history-sub-tab.active,
 .tournament-sub-tab.active ,
 .br-sub-tab.active {
@@ -11131,6 +11669,52 @@ body.mono-mode .history-sub-tab.active img {
     color: #fff;
     border-color: #1a4a8a;
     font-weight: 600;
+}
+
+/* The Judge row takes the BUTTONS from the group above — every colour, hover,
+   active state and theme override — and none of the bar they normally sit in.
+   That bar is built to pin a long scrolling list: it is sticky, frosted, and
+   full-bleed via `margin: 0 -16px`, which cancels the fieldset's 16px padding
+   so it runs edge to edge. Edge to edge means its blurred background lands on
+   the panel's 1px side borders and erases them for its own height — and
+   because it sticks, on a phone that gap slides down the border as you scroll.
+   The Judge panel is short and has no list to pin, so it paid the whole cost
+   of that bar for none of the benefit.
+   Here it is a plain segmented control instead: in the flow, inside the
+   padding, sized to its labels rather than stretching each tab across half the
+   panel. Every property the group sets that would bring the bar back is
+   undone explicitly, because .judge-sub-tabs is no longer in those groups. */
+.judge-sub-tabs {
+    /* Equal-width tabs, centred as a group. A grid of `1fr` tracks inside a
+       `fit-content` container is the trick that does it: fit-content shrinks
+       the row to its contents, and equal fr tracks then all resolve to the
+       WIDEST label — so Exam and Ranking match Approvals without anyone
+       hard-coding a width that a renamed tab would break.
+       `minmax(0, 1fr)` rather than plain `1fr` so the tracks may shrink below
+       their content, and `max-width: 100%` so a narrow phone falls back to
+       three equal tabs across the panel instead of overflowing it. */
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    width: fit-content;
+    max-width: 100%;
+    gap: 6px;
+    margin: 0 auto 16px;
+    padding: 0;
+    position: static;
+    background: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+}
+
+/* The grouped rule pads a tab to fill its share of a full-width row; these are
+   sized by the track above, so they only need breathing room around the label.
+   Same height, so the row still lines up with the other tabs. */
+.judge-sub-tab {
+    padding: 8px 16px;
+    white-space: nowrap;
+    min-width: 0;
 }
 
 .history-panel.hidden,
@@ -13115,6 +13699,7 @@ body.mono-mode .scoreboard-close:hover {
 
 /* ----- LIGHT ----- */
 body.light-mode .library-sub-tab,
+body.light-mode .judge-sub-tab,
 body.light-mode .history-sub-tab,
 body.light-mode .reel-sub-tab,
 body.light-mode .tournament-sub-tab ,
@@ -13125,8 +13710,10 @@ body.light-mode .br-sub-tab {
 }
 
 body.light-mode .library-sub-tab:hover:not(.active),
+body.light-mode .judge-sub-tab:hover:not(.active),
 body.light-mode .history-sub-tab:hover:not(.active),
 body.light-mode .library-sub-tab:focus-visible,
+body.light-mode .judge-sub-tab:focus-visible,
 body.light-mode .history-sub-tab:focus-visible,
 body.light-mode .reel-sub-tab:hover:not(.active),
 body.light-mode .reel-sub-tab:focus-visible,
@@ -13140,6 +13727,7 @@ body.light-mode .br-sub-tab:focus-visible {
 }
 
 body.light-mode .library-sub-tab.active,
+body.light-mode .judge-sub-tab.active,
 body.light-mode .history-sub-tab.active,
 body.light-mode .reel-sub-tab.active,
 body.light-mode .tournament-sub-tab.active ,
@@ -13200,6 +13788,7 @@ body.light-mode .tournament-mode-name {
 
 /* ----- SPACE ----- */
 body.space-mode .library-sub-tab,
+body.space-mode .judge-sub-tab,
 body.space-mode .history-sub-tab,
 body.space-mode .reel-sub-tab,
 body.space-mode .tournament-sub-tab ,
@@ -13210,8 +13799,10 @@ body.space-mode .br-sub-tab {
 }
 
 body.space-mode .library-sub-tab:hover:not(.active),
+body.space-mode .judge-sub-tab:hover:not(.active),
 body.space-mode .history-sub-tab:hover:not(.active),
 body.space-mode .library-sub-tab:focus-visible,
+body.space-mode .judge-sub-tab:focus-visible,
 body.space-mode .history-sub-tab:focus-visible,
 body.space-mode .reel-sub-tab:hover:not(.active),
 body.space-mode .reel-sub-tab:focus-visible,
@@ -13225,6 +13816,7 @@ body.space-mode .br-sub-tab:focus-visible {
 }
 
 body.space-mode .library-sub-tab.active,
+body.space-mode .judge-sub-tab.active,
 body.space-mode .history-sub-tab.active,
 body.space-mode .reel-sub-tab.active,
 body.space-mode .tournament-sub-tab.active ,
@@ -13285,6 +13877,7 @@ body.space-mode .tournament-mode-name {
 
 /* ----- TROPICAL ----- */
 body.tropical-mode .library-sub-tab,
+body.tropical-mode .judge-sub-tab,
 body.tropical-mode .history-sub-tab,
 body.tropical-mode .reel-sub-tab,
 body.tropical-mode .tournament-sub-tab ,
@@ -13295,8 +13888,10 @@ body.tropical-mode .br-sub-tab {
 }
 
 body.tropical-mode .library-sub-tab:hover:not(.active),
+body.tropical-mode .judge-sub-tab:hover:not(.active),
 body.tropical-mode .history-sub-tab:hover:not(.active),
 body.tropical-mode .library-sub-tab:focus-visible,
+body.tropical-mode .judge-sub-tab:focus-visible,
 body.tropical-mode .history-sub-tab:focus-visible,
 body.tropical-mode .reel-sub-tab:hover:not(.active),
 body.tropical-mode .reel-sub-tab:focus-visible,
@@ -13310,6 +13905,7 @@ body.tropical-mode .br-sub-tab:focus-visible {
 }
 
 body.tropical-mode .library-sub-tab.active,
+body.tropical-mode .judge-sub-tab.active,
 body.tropical-mode .history-sub-tab.active,
 body.tropical-mode .reel-sub-tab.active,
 body.tropical-mode .tournament-sub-tab.active ,
@@ -13370,6 +13966,7 @@ body.tropical-mode .tournament-mode-name {
 
 /* ----- STORMY ----- */
 body.stormy-mode .library-sub-tab,
+body.stormy-mode .judge-sub-tab,
 body.stormy-mode .history-sub-tab,
 body.stormy-mode .reel-sub-tab,
 body.stormy-mode .tournament-sub-tab ,
@@ -13380,8 +13977,10 @@ body.stormy-mode .br-sub-tab {
 }
 
 body.stormy-mode .library-sub-tab:hover:not(.active),
+body.stormy-mode .judge-sub-tab:hover:not(.active),
 body.stormy-mode .history-sub-tab:hover:not(.active),
 body.stormy-mode .library-sub-tab:focus-visible,
+body.stormy-mode .judge-sub-tab:focus-visible,
 body.stormy-mode .history-sub-tab:focus-visible,
 body.stormy-mode .reel-sub-tab:hover:not(.active),
 body.stormy-mode .reel-sub-tab:focus-visible,
@@ -13395,6 +13994,7 @@ body.stormy-mode .br-sub-tab:focus-visible {
 }
 
 body.stormy-mode .library-sub-tab.active,
+body.stormy-mode .judge-sub-tab.active,
 body.stormy-mode .history-sub-tab.active,
 body.stormy-mode .reel-sub-tab.active,
 body.stormy-mode .tournament-sub-tab.active ,
@@ -13455,6 +14055,7 @@ body.stormy-mode .tournament-mode-name {
 
 /* ----- MONO ----- */
 body.mono-mode .library-sub-tab,
+body.mono-mode .judge-sub-tab,
 body.mono-mode .history-sub-tab,
 body.mono-mode .reel-sub-tab,
 body.mono-mode .tournament-sub-tab ,
@@ -13465,8 +14066,10 @@ body.mono-mode .br-sub-tab {
 }
 
 body.mono-mode .library-sub-tab:hover:not(.active),
+body.mono-mode .judge-sub-tab:hover:not(.active),
 body.mono-mode .history-sub-tab:hover:not(.active),
 body.mono-mode .library-sub-tab:focus-visible,
+body.mono-mode .judge-sub-tab:focus-visible,
 body.mono-mode .history-sub-tab:focus-visible,
 body.mono-mode .reel-sub-tab:hover:not(.active),
 body.mono-mode .reel-sub-tab:focus-visible,
@@ -13480,6 +14083,7 @@ body.mono-mode .br-sub-tab:focus-visible {
 }
 
 body.mono-mode .library-sub-tab.active,
+body.mono-mode .judge-sub-tab.active,
 body.mono-mode .history-sub-tab.active,
 body.mono-mode .reel-sub-tab.active,
 body.mono-mode .tournament-sub-tab.active ,
@@ -14062,6 +14666,7 @@ body.love-mode .setting-dropdown-arrow  {
     color: #9c4a5e;
 }
 body.love-mode .library-sub-tab,
+body.love-mode .judge-sub-tab,
 body.love-mode .history-sub-tab,
 body.love-mode .reel-sub-tab,
 body.love-mode .tournament-sub-tab  ,
@@ -14071,8 +14676,10 @@ body.love-mode .br-sub-tab  {
     color: #9c4a5e;
 }
 body.love-mode .library-sub-tab:hover:not(.active),
+body.love-mode .judge-sub-tab:hover:not(.active),
 body.love-mode .history-sub-tab:hover:not(.active),
 body.love-mode .library-sub-tab:focus-visible,
+body.love-mode .judge-sub-tab:focus-visible,
 body.love-mode .history-sub-tab:focus-visible,
 body.love-mode .reel-sub-tab:hover:not(.active),
 body.love-mode .reel-sub-tab:focus-visible,
@@ -14085,6 +14692,7 @@ body.love-mode .br-sub-tab:focus-visible  {
     color: #4a1d2a;
 }
 body.love-mode .library-sub-tab.active,
+body.love-mode .judge-sub-tab.active,
 body.love-mode .history-sub-tab.active,
 body.love-mode .reel-sub-tab.active,
 body.love-mode .tournament-sub-tab.active  ,
@@ -14551,6 +15159,7 @@ body.forest-mode .deck-name-input  {
 }
 body.forest-mode .deck-name-input:focus  { border-color: #386641; }
 body.forest-mode .library-sub-tab,
+body.forest-mode .judge-sub-tab,
 body.forest-mode .history-sub-tab,
 body.forest-mode .reel-sub-tab,
 body.forest-mode .tournament-sub-tab  ,
@@ -14560,8 +15169,10 @@ body.forest-mode .br-sub-tab  {
     color: #5a6a4b;
 }
 body.forest-mode .library-sub-tab:hover:not(.active),
+body.forest-mode .judge-sub-tab:hover:not(.active),
 body.forest-mode .history-sub-tab:hover:not(.active),
 body.forest-mode .library-sub-tab:focus-visible,
+body.forest-mode .judge-sub-tab:focus-visible,
 body.forest-mode .history-sub-tab:focus-visible,
 body.forest-mode .reel-sub-tab:hover:not(.active),
 body.forest-mode .reel-sub-tab:focus-visible,
@@ -14574,6 +15185,7 @@ body.forest-mode .br-sub-tab:focus-visible  {
     color: #2d3e1f;
 }
 body.forest-mode .library-sub-tab.active,
+body.forest-mode .judge-sub-tab.active,
 body.forest-mode .history-sub-tab.active,
 body.forest-mode .reel-sub-tab.active,
 body.forest-mode .tournament-sub-tab.active  ,
@@ -16561,6 +17173,7 @@ body.gold-mode .btn-small:hover {
 }
 
 body.gold-mode .library-sub-tab,
+body.gold-mode .judge-sub-tab,
 body.gold-mode .history-sub-tab,
 body.gold-mode .reel-sub-tab,
 body.gold-mode .tournament-sub-tab ,
@@ -16571,8 +17184,10 @@ body.gold-mode .br-sub-tab {
 }
 
 body.gold-mode .library-sub-tab:hover:not(.active),
+body.gold-mode .judge-sub-tab:hover:not(.active),
 body.gold-mode .history-sub-tab:hover:not(.active),
 body.gold-mode .library-sub-tab:focus-visible,
+body.gold-mode .judge-sub-tab:focus-visible,
 body.gold-mode .history-sub-tab:focus-visible,
 body.gold-mode .reel-sub-tab:hover:not(.active),
 body.gold-mode .reel-sub-tab:focus-visible,
@@ -16586,6 +17201,7 @@ body.gold-mode .br-sub-tab:focus-visible {
 }
 
 body.gold-mode .library-sub-tab.active,
+body.gold-mode .judge-sub-tab.active,
 body.gold-mode .history-sub-tab.active,
 body.gold-mode .reel-sub-tab.active,
 body.gold-mode .tournament-sub-tab.active ,
@@ -17097,6 +17713,7 @@ body.silver-mode .btn-small:hover {
 }
 
 body.silver-mode .library-sub-tab,
+body.silver-mode .judge-sub-tab,
 body.silver-mode .history-sub-tab,
 body.silver-mode .reel-sub-tab,
 body.silver-mode .tournament-sub-tab ,
@@ -17107,8 +17724,10 @@ body.silver-mode .br-sub-tab {
 }
 
 body.silver-mode .library-sub-tab:hover:not(.active),
+body.silver-mode .judge-sub-tab:hover:not(.active),
 body.silver-mode .history-sub-tab:hover:not(.active),
 body.silver-mode .library-sub-tab:focus-visible,
+body.silver-mode .judge-sub-tab:focus-visible,
 body.silver-mode .history-sub-tab:focus-visible,
 body.silver-mode .reel-sub-tab:hover:not(.active),
 body.silver-mode .reel-sub-tab:focus-visible,
@@ -17122,6 +17741,7 @@ body.silver-mode .br-sub-tab:focus-visible {
 }
 
 body.silver-mode .library-sub-tab.active,
+body.silver-mode .judge-sub-tab.active,
 body.silver-mode .history-sub-tab.active,
 body.silver-mode .reel-sub-tab.active,
 body.silver-mode .tournament-sub-tab.active ,
@@ -17633,6 +18253,7 @@ body.bronze-mode .btn-small:hover {
 }
 
 body.bronze-mode .library-sub-tab,
+body.bronze-mode .judge-sub-tab,
 body.bronze-mode .history-sub-tab,
 body.bronze-mode .reel-sub-tab,
 body.bronze-mode .tournament-sub-tab ,
@@ -17643,8 +18264,10 @@ body.bronze-mode .br-sub-tab {
 }
 
 body.bronze-mode .library-sub-tab:hover:not(.active),
+body.bronze-mode .judge-sub-tab:hover:not(.active),
 body.bronze-mode .history-sub-tab:hover:not(.active),
 body.bronze-mode .library-sub-tab:focus-visible,
+body.bronze-mode .judge-sub-tab:focus-visible,
 body.bronze-mode .history-sub-tab:focus-visible,
 body.bronze-mode .reel-sub-tab:hover:not(.active),
 body.bronze-mode .reel-sub-tab:focus-visible,
@@ -17658,6 +18281,7 @@ body.bronze-mode .br-sub-tab:focus-visible {
 }
 
 body.bronze-mode .library-sub-tab.active,
+body.bronze-mode .judge-sub-tab.active,
 body.bronze-mode .history-sub-tab.active,
 body.bronze-mode .reel-sub-tab.active,
 body.bronze-mode .tournament-sub-tab.active ,

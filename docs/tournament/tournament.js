@@ -118,6 +118,7 @@ function disconnectSwissRoom() {
   swissEditCode = null;
   swissViewCode = null;
   swissIsHost = false;
+  swissAssignOpenId = null;
   swissCanEdit = false;
   swissSubHosts = {};
   swissRoomMeta = {};
@@ -1864,6 +1865,14 @@ function resetSwiss() {
       : "Leave this live room?";
   } else if (isRegisteringPhase(state)) {
     promptMsg = "Cancel this tournament and close registration? Past tournaments in your history won't be affected.";
+  } else if (typeof isTournamentComplete === "function" && isTournamentComplete(state)) {
+    // A finished tournament is already archived to Past Tournaments — the
+    // snapshot is written the moment the final results render, before anyone
+    // touches this button. Hosts were avoiding Reset because the wording
+    // read as "your tournament will be cleared", so finished events sat in
+    // the lobby for days. Say what is actually true: there is nothing left
+    // to lose here.
+    promptMsg = "Close this finished tournament?\n\nThe results are already saved — it stays viewable in Past Tournaments and in everyone's history. This only clears the live room.";
   } else {
     promptMsg = "Reset this live tournament? The room (groups, matches, scores) will be cleared. Past tournaments in your history won't be affected.";
   }
@@ -2157,6 +2166,104 @@ function commitSwissMatchScore(matchId, scoreA, scoreB, isEdit) {
 
 let swissGroupViews = {}; // gi -> "matches" | "standings"
 
+// ===== Putting a sub-host on a match =====
+//
+// A Head Judge hosting a tournament can say WHO runs each match, rather than
+// leaving every co-host to pick up whatever is free. The assignment is written
+// to `matches/{id}/assignedTo` as a display name, the same shape as the
+// existing `judge` field — but the two mean different things and neither
+// replaces the other:
+//
+//   assignedTo  who the host has PUT ON this match, set in advance and left
+//               alone until the host changes it.
+//   judge       who is scoring it RIGHT NOW. Set when a match goes live and
+//               cleared when it ends or the score lands.
+//
+// This is a direction, not a lock. Anyone who could score a match before can
+// still score it: the room's write rule is host-or-co-host and this does not
+// narrow it. Making it a hard restriction would mean a co-host who was never
+// assigned anything could score nothing at all — one forgetful host and a
+// tournament stops moving.
+let swissAssignOpenId = null;   // the match whose judge picker is open, if any
+
+// Only the host assigns, and only when that host is a Head Judge. A plain
+// Judge hosting runs the tournament exactly as before.
+function canAssignMatches() {
+  return !!(swissIsHost && typeof window.isHeadJudge === "function" && window.isHeadJudge());
+}
+
+// The host plus everyone they have invited to co-host. Names, because that is
+// what the card shows and what `judge` already stores.
+function matchAssignCandidates() {
+  const out = [];
+  const seen = new Set();
+  const add = (n) => {
+    const k = subHostKey(n || "");
+    if (!k || seen.has(k)) return;
+    seen.add(k);
+    out.push(n);
+  };
+  const st = loadSwiss();
+  add((st && st.hostName) || (window.getCurrentUsername && window.getCurrentUsername()) || "");
+  Object.keys(swissSubHosts || {}).forEach(k => add(swissSubHosts[k]));
+  return out;
+}
+
+// The row under a match card. Everyone sees who is on a match; only a Head
+// Judge host sees a control. Hidden once the match is scored — by then the
+// question it answers is settled.
+function matchAssignRowHtml(id, m) {
+  if (!m || m.bye) return "";
+  if (m.scoreA != null && m.scoreB != null) return "";
+  const who = m.assignedTo || "";
+  const myName = (window.getCurrentUsername && window.getCurrentUsername()) || "";
+  const mine = !!(who && myName && subHostKey(who) === subHostKey(myName));
+  const cls = "swiss-match-assign" + (mine ? " is-mine" : "");
+
+  if (!canAssignMatches()) {
+    if (!who) return "";
+    return `<div class="${cls}"><span class="swiss-assign-chip">${escapeHtml(who)}</span></div>`;
+  }
+
+  if (swissAssignOpenId !== id) {
+    return `<div class="${cls}">
+      <button type="button" class="swiss-assign-chip swiss-assign-btn${who ? " is-set" : ""}"
+              data-assign="${escapeHtml(id)}"
+              aria-label="${who ? "Change who runs this match" : "Put a judge on this match"}"
+      >${who ? escapeHtml(who) : "+ judge"}</button>
+    </div>`;
+  }
+
+  const options = matchAssignCandidates().map(n => `
+    <button type="button" class="swiss-assign-chip swiss-assign-pick${
+      who && subHostKey(who) === subHostKey(n) ? " is-set" : ""}"
+            data-assign-to="${escapeHtml(id)}" data-assign-name="${escapeHtml(n)}"
+    >${escapeHtml(n)}</button>`).join("");
+  return `<div class="${cls} is-open">
+    ${options}
+    <button type="button" class="swiss-assign-chip swiss-assign-clear"
+            data-assign-to="${escapeHtml(id)}" data-assign-name=""
+    >${who ? "Clear" : "Cancel"}</button>
+  </div>`;
+}
+
+// Writes the assignment. `name` empty clears it.
+function assignMatchJudge(matchId, name) {
+  swissAssignOpenId = null;
+  if (!canAssignMatches()) { renderSwiss(); return; }
+  const s = loadSwiss();
+  const m = s.matches && s.matches[matchId];
+  if (!m) { renderSwiss(); return; }
+  if (name) m.assignedTo = name; else delete m.assignedTo;
+  persistSwiss(s);
+  if (swissRoomRef && swissCanEdit) {
+    swissCoHostUidReady
+      .then(() => swissRoomRef.update({ [`matches/${matchId}/assignedTo`]: name || null }))
+      .catch(e => console.warn("Match assignment failed:", e));
+  }
+  renderSwiss();
+}
+
 function renderSwissMatchCard(matchNum, id, m, seedA, seedB, isRoundRobin) {
   const done = m.scoreA != null && m.scoreB != null;
   const live = !done && m.startedAt != null;
@@ -2214,6 +2321,7 @@ function renderSwissMatchCard(matchNum, id, m, seedA, seedB, isRoundRobin) {
         <span class="swiss-score-cell ${bWin ? "swiss-score-win" : ""}">${bScore}</span>
       </div>
     </div>
+    ${matchAssignRowHtml(id, m)}
   </div>`;
 }
 
@@ -2627,6 +2735,7 @@ function renderSwissBracketCard(label, id, m, slotHints) {
         <span class="swiss-score-cell ${bWin ? "swiss-score-win" : ""}">${bScore}</span>
       </div>
     </div>
+    ${pending ? "" : matchAssignRowHtml(id, m)}
   </div>`;
 }
 
@@ -3173,6 +3282,8 @@ const STADIUM_OPTIONS = ["Xtreme", "Infinity", "Double Xtreme"];
 const RULE_OPTIONS = ["Official", "Unofficial"];
 const SHARE_TOURNAMENT_URL = "https://abu-mhn.github.io/XOptimizer/tournament/";
 const SHARE_TOURNAMENT_INVITE = "To the bladers that are planning to join this event, please click the link below for registration.";
+const SHARE_TOURNAMENT_JOIN_CODE_LABEL = "Join code:";
+const SHARE_TOURNAMENT_PRIVATE_NOTE = "This one is private — tap it in the Open Tournaments list and enter the code above to join or watch.";
 const SHARE_TOURNAMENT_INSTRUCTIONS = "New here? On the Tournament page, tap the Tutorial button (next to the QR / Refresh buttons) for a step-by-step guide on how to register as a Participant.";
 
 // "Join code: ABCD" copy button for a private room. Open rooms don't need one —
@@ -3407,6 +3518,9 @@ function showCoHostsPopup() {
 //
 //   To the bladers ... please click the link below for registration.
 //
+//   Join code: ABCD                  <- private rooms only
+//   This one is private — ...        <-
+//
 //   How to register as a Participant:
 //   1. ...
 //   ...
@@ -3438,6 +3552,25 @@ function composeTournamentShareMessage(state, details) {
 
   lines.push("");
   lines.push(SHARE_TOURNAMENT_INVITE);
+
+  // A private room is listed in the lobby but locked: tapping it asks for the
+  // join code. Sharing only the link therefore sent people to a tournament
+  // they could look at and not enter, with nothing on screen saying what they
+  // were missing. The code travels with the invite.
+  //
+  // Open rooms get nothing extra — they are findable in the lobby and need no
+  // code, so printing one would be noise. Same condition as the Join code
+  // button the host already sees, so the two cannot disagree about when a
+  // code matters.
+  const joinCode = (state && state.visibility === "closed")
+    ? (swissViewCode || (state && state.viewCode) || "")
+    : "";
+  if (joinCode) {
+    lines.push("");
+    lines.push(`${SHARE_TOURNAMENT_JOIN_CODE_LABEL} ${joinCode}`);
+    lines.push(SHARE_TOURNAMENT_PRIVATE_NOTE);
+  }
+
   lines.push("");
   lines.push(SHARE_TOURNAMENT_INSTRUCTIONS);
   lines.push("");
@@ -4187,7 +4320,13 @@ function callingMonitorBoardHtml(state) {
       }).join("")
     : `<div class="mon-empty">No match is live right now.</div>`;
   const nextHtml = upNext.length
-    ? upNext.map(m => `<div class="mon-next-row"><span class="mon-next-players">${escapeHtml(m.a)} <em>vs</em> ${escapeHtml(m.b)}</span><span class="mon-next-ctx">${escapeHtml(callingMatchLabel(state, m))}</span></div>`).join("")
+    ? upNext.map(m => {
+        // Who the host has put on it. The monitor is the screen a sub-host
+        // actually watches, so it is the one place the assignment has to show
+        // before the match starts.
+        const on = m.assignedTo ? `<span class="mon-next-judge">${escapeHtml(m.assignedTo)}</span>` : "";
+        return `<div class="mon-next-row"><span class="mon-next-players">${escapeHtml(m.a)} <em>vs</em> ${escapeHtml(m.b)}</span><span class="mon-next-ctx">${escapeHtml(callingMatchLabel(state, m))}${on}</span></div>`;
+      }).join("")
     : `<div class="mon-empty mon-empty-sm">Nothing queued.</div>`;
   return `
     <div class="mon-head"><div class="mon-headline"><span class="mon-title">${escapeHtml(state.tournamentName || "Tournament")}</span><span class="mon-format">${escapeHtml(tournamentFormatLabel(state.mode, state.pairing, false, state.topN))}</span></div><span class="mon-clock" id="mon-clock"></span></div>
@@ -4521,6 +4660,7 @@ function renderSwiss() {
         </div>
       </div>
     </div>
+    ${renderUnpaidPanel(state)}
     ${groupsHtml}
     ${bracketHtml}
     ${isSwissOnly && groupStageDone ? renderCombinedSwissStandings(state) : ""}
@@ -4603,6 +4743,31 @@ function renderSwiss() {
   view.querySelector("#swiss-edit-name")?.addEventListener("click", showEditTournamentNamePopup);
   bindSwissShareButton(view);
 
+  // The fees panel's buttons. bindSwissRegisteringHandlers wires the identical
+  // button on the registration screen, but that runs only for the registering
+  // branch — so without this the panel would render in the running view and
+  // the buttons would do nothing at all.
+  view.querySelectorAll(".swiss-unpaid button.swiss-reg-paid[data-reg-id]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      setRegistrantPaid(btn.dataset.regId, btn.dataset.paid !== "1");
+    });
+  });
+
+  // The judge picker sits OUTSIDE the match card, so tapping it cannot start a
+  // match by accident — that is why it is its own row in .swiss-match-wrap
+  // rather than a corner of the card.
+  view.querySelectorAll("[data-assign]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      swissAssignOpenId = swissAssignOpenId === btn.dataset.assign ? null : btn.dataset.assign;
+      renderSwiss();
+    });
+  });
+  view.querySelectorAll("[data-assign-to]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      assignMatchJudge(btn.dataset.assignTo, btn.dataset.assignName || "");
+    });
+  });
+
   // Match cards are interactive only for users who can edit (host + co-host).
   // Participants joined via the view-only code see cards but can't open them.
   if (canEdit) {
@@ -4676,6 +4841,54 @@ function swissRegSubmeta(minTotal, paidCount) {
 // room codes / leave button stay where users expect them), but the body is
 // the registrants list and a host-only Start button. Match-deck pre-fill
 // later in the tournament reads from these registrants directly.
+// Who still owes the entry fee, shown once the tournament is under way.
+//
+// Fee tracking lived entirely in the registration screen, which is replaced by
+// the groups and bracket the moment the draw is made — so the one person who
+// needs it, the Keeper collecting money, lost the list exactly when players
+// start arriving late and paying at the table. This brings it back for the
+// rest of the event.
+//
+// Gated on canMarkFeePaid(): the host and any Keeper in the room, which is
+// already the permission for this data. Everyone else sees nothing — who has
+// not paid is not the room's business.
+//
+// Names stay tappable here for the same reason they are on the registration
+// screen: the Keeper is usually marking someone paid at the moment they
+// notice them in the list.
+function renderUnpaidPanel(state) {
+  if (!canMarkFeePaid()) return "";
+  const registrants = listRegistrants(state);
+  if (!registrants.length) return "";
+  const unpaid = registrants
+    .filter(r => !r.paid)
+    .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+
+  // Nothing outstanding still gets a line. A Keeper opening this wants to
+  // know the answer is "nobody", not wonder whether the panel is broken.
+  if (!unpaid.length) {
+    return `
+      <details class="swiss-unpaid swiss-unpaid-clear">
+        <summary class="swiss-unpaid-summary">Fees <span class="swiss-unpaid-count is-clear">All paid</span></summary>
+        <p class="swiss-unpaid-empty">Every registered player has paid.</p>
+      </details>`;
+  }
+
+  // Open by default while money is outstanding; collapsed once it is not.
+  return `
+    <details class="swiss-unpaid" open>
+      <summary class="swiss-unpaid-summary">Fees <span class="swiss-unpaid-count">${unpaid.length} unpaid</span></summary>
+      <ul class="swiss-unpaid-list">
+        ${unpaid.map(r => `
+          <li class="swiss-unpaid-row">
+            <span class="swiss-unpaid-name">${escapeHtml(r.name || "(unnamed)")}</span>
+            <button type="button" class="swiss-reg-paid" data-reg-id="${escapeHtml(r.id)}" data-paid="0"
+                    title="Tap to mark fee paid">Unpaid</button>
+          </li>`).join("")}
+      </ul>
+    </details>`;
+}
+
 function renderSwissRegisteringMarkup(state) {
   const isHost = swissIsHost;
   // Hosts AND co-hosts can both start the tournament, remove registrants,
@@ -10721,37 +10934,59 @@ function refreshOpenTournamentRooms() {
         const doneP = db.ref("pastTournaments/" + r.editCode + "/archivedAt").once("value")
           .then(s => s.val())
           .catch(() => null);
-        // ...and whether it is STILL finished. The archive outlives the run it
-        // describes: nothing deletes it, and Reopen keeps the same edit code,
-        // so a tournament that finished yesterday and was reopened today
-        // carries yesterday's archivedAt while being very much live. Closing
-        // on the archive alone pulled that live tournament off the lobby.
+        // ...and whether it is STILL finished, asked the way the rest of the
+        // app asks it.
         //
-        // The room's own Final is the check: decided means finished now,
-        // undecided or absent means a fresh draw is being played.
-        const finalP = db.ref("swissRooms/" + r.editCode + "/matches/bracket-f-0").once("value")
-          .then(s => ({ ok: true, v: s.val() }))
-          .catch(() => ({ ok: false, v: null }));
-        return Promise.all([phaseP, regP, pairP, subP, nameP, capP, visP, doneP, finalP]).then(([phaseRead, count, pairing, subHosts, liveName, maxParticipants, visibility, archivedAt, finalRead]) => ({
-          room: r, phaseRead, count, pairing, subHosts, liveName, maxParticipants, visibility, archivedAt, finalRead
+        // This used to test the room's Final on its own, which was a SECOND,
+        // weaker definition of finished — and the two disagreed. On every
+        // load the host's device drops its pointer into a room only when
+        // isTournamentComplete() says so, and for a single-elim that needs
+        // every placement final decided, not just the Final. Score the Final
+        // but skip the 3rd-place match and the lobby closed the tournament
+        // while the host's app kept reconnecting into it: a room that no
+        // longer existed in the lobby, with Reset the only way out. One
+        // definition now, shared with the pointer drop, so "closed in the
+        // lobby" and "finished as far as the app is concerned" cannot come
+        // apart.
+        //
+        // It costs a full room read, so it is asked only of a room that has
+        // an archive AND whose archived day has passed — usually none, at
+        // most one. Every other room is decided from the cheap reads above.
+        const doneStateP = doneP.then(archivedAt => {
+          if (!finishedBeforeToday(archivedAt)) {
+            return { archivedAt, stillComplete: false, checked: false };
+          }
+          return db.ref("swissRooms/" + r.editCode).once("value")
+            .then(snap => ({
+              archivedAt,
+              stillComplete: typeof isTournamentComplete === "function"
+                ? !!isTournamentComplete(snap.val())
+                : false,
+              checked: true,
+            }))
+            // A failed read means we do not know, and not knowing is never a
+            // reason to remove anything.
+            .catch(() => ({ archivedAt, stillComplete: false, checked: false }));
+        });
+        return Promise.all([phaseP, regP, pairP, subP, nameP, capP, visP, doneStateP]).then(([phaseRead, count, pairing, subHosts, liveName, maxParticipants, visibility, done]) => ({
+          room: r, phaseRead, count, pairing, subHosts, liveName, maxParticipants, visibility, done
         }));
       })).then(results => {
         const live = [];
-        results.forEach(({ room, phaseRead, count, pairing, subHosts, liveName, maxParticipants, visibility, archivedAt, finalRead }) => {
+        results.forEach(({ room, phaseRead, count, pairing, subHosts, liveName, maxParticipants, visibility, done }) => {
           // Could not read the room? Then we do not know anything about it.
           // Leave it exactly as it is — listed, with its cached summary. A
           // lobby entry is only ever removed on evidence, never on silence.
           if (!phaseRead.ok) { live.push(room); return; }
           const phase = phaseRead.v;
 
-          // Finished NOW — the room's own Final is decided — and finished on
-          // an earlier Malaysian day. Both halves matter: the first stops a
-          // reopened tournament being closed by its predecessor's archive,
-          // the second gives a finished event the rest of its own day.
-          const decidedFinal = !!(finalRead.ok && finalRead.v &&
-            finalRead.v.scoreA != null && finalRead.v.scoreB != null &&
-            finalRead.v.scoreA !== finalRead.v.scoreB);
-          if (decidedFinal && finishedBeforeToday(archivedAt)) {
+          // Finished on an earlier Malaysian day AND still finished now.
+          // `stillComplete` is only ever true when the day has already
+          // passed — the check is not run otherwise — so this is the whole
+          // condition. It stops a reopened tournament being closed by its
+          // predecessor's archive, and gives a finished event the rest of
+          // its own day.
+          if (done.stillComplete) {
             // Only the lobby entry. The room and the archive stay — this is
             // exactly what Reset would have removed and nothing more.
             db.ref("openTournaments/" + room.editCode).set(null).catch(() => {});
@@ -10765,9 +11000,13 @@ function refreshOpenTournamentRooms() {
             // be in progress. That badge is half the reason these get left
             // up — nothing on the lobby said the tournament was over.
             //
-            // Gated on the live Final too, or a reopened tournament would be
-            // badged Finished while it is being played.
-            room.finishedAt = decidedFinal ? (archivedAt || null) : null;
+            // An archive dated today means it completed today, so the badge
+            // follows it directly. A reopened tournament carries an OLDER
+            // archive, which is checked against the live room above and comes
+            // back not-complete — so it is not badged while it is replayed.
+            room.finishedAt = done.checked
+              ? (done.stillComplete ? done.archivedAt : null)
+              : (done.archivedAt || null);
             // Refresh the cached count too so future viewers benefit.
             if (typeof count === "number" && count !== room.registrantCount) {
               db.ref("openTournaments/" + room.editCode + "/registrantCount")
@@ -10942,7 +11181,68 @@ function publishPastTournament(editCode, state) {
   };
   // JSON round-trip drops undefined so Firebase accepts the payload.
   db.ref("pastTournaments/" + editCode).set(JSON.parse(JSON.stringify(snap)))
+    .then(() => recordJudgeActivity(editCode, state, snap.hostUid))
     .catch(e => { pastTournamentArchived.delete(editCode); console.warn("Past tournament archive failed:", e); });
+}
+
+// Credit the host and the co-hosts for running this event, so the Judge tab
+// can rank judges by how many they have actually run.
+//
+// Nothing already in the database can answer that question. `userTournaments`
+// is private to each host and deleted when the room is reset, and the
+// `pastTournaments` snapshot records `hostUid` but never who co-hosted. So the
+// count is recorded here, at the one moment an event is known to have
+// finished, and it starts from zero — events that ran before this shipped
+// cannot be recovered.
+//
+// One child per event keyed by the tournament code, not a counter: writing the
+// same event twice is still one event, so no transaction is needed and a
+// re-archive cannot inflate anyone's total.
+//
+// Only the host's device gets here — `pastTournaments/{code}` is host-only to
+// write, so a co-host's archive attempt is rejected before this chains. That
+// suits the rule on `judgeStats`, which lets the host of an archived event
+// write anyone's entry for it and everyone else only their own.
+//
+// Co-hosts are taken from `coHostUids`, which is populated only when that
+// account actually opens the room on its own device. Someone listed as a
+// sub-host who never turned up is not credited.
+function recordJudgeActivity(editCode, state, hostUid) {
+  const db = initFirebase();
+  if (!db || !editCode || !state) return;
+  const at = new Date().toISOString();
+  const event = String(state.tournamentName || "").slice(0, 80);
+
+  const write = (uid, role, name) => {
+    if (!uid) return;
+    const entry = { role, at, event };
+    if (name) entry.name = String(name).slice(0, 30);
+    db.ref("judgeStats/" + uid + "/" + editCode).set(entry)
+      .catch(e => console.warn("Judge activity write failed:", e && e.message));
+  };
+
+  write(hostUid, "host", state.hostName || "");
+
+  const coUids = (swissRoomMeta && swissRoomMeta.coHostUids) || {};
+  const active = Object.keys(coUids).filter(u => coUids[u] && u !== hostUid);
+  if (!active.length) return;
+
+  // `coHostUids` is keyed by uid and `subHosts` by username, with nothing
+  // joining the two. Resolve each sub-host name through the usernames index so
+  // the entry can carry a display name; an unresolved one still counts, just
+  // without a name of its own.
+  const names = Object.keys(swissSubHosts || {})
+    .map(k => swissSubHosts[k])
+    .filter(Boolean);
+  Promise.all(names.map(n =>
+    db.ref("usernames/" + subHostKey(n) + "/uid").once("value")
+      .then(snapshot => ({ name: n, uid: snapshot.val() }))
+      .catch(() => ({ name: n, uid: null }))
+  )).then(pairs => {
+    const nameFor = {};
+    pairs.forEach(pair => { if (pair.uid) nameFor[pair.uid] = pair.name; });
+    active.forEach(u => write(u, "cohost", nameFor[u] || ""));
+  });
 }
 
 function refreshPastTournaments() {
@@ -11035,6 +11335,7 @@ function openArchivedTournament(snap) {
   swissEditCode = null;
   swissViewCode = null;
   swissIsHost = false;
+  swissAssignOpenId = null;
   swissCanEdit = false;
   swissSessionRole = "view";
   const state = {

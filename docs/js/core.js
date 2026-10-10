@@ -1168,7 +1168,7 @@ if (window.MutationObserver) {
 
 document.addEventListener("DOMContentLoaded", function initActiveTabRender() {
   // Skip the "More" trigger: on the pages it stands in for (Battle Royale /
-  // Friends / Achievement / Revox / Developer) it carries .active *and* sits
+  // Friends / Achievement / Judge / Revox / Developer) it carries .active *and* sits
   // earlier in the DOM than the real entry inside the menu — matching it here
   // would hand us an element with no data-mode and skip the page's render.
   const activeTab = document.querySelector(".tab.active:not(.tab-more-btn)");
@@ -1219,6 +1219,9 @@ document.addEventListener("DOMContentLoaded", function initActiveTabRender() {
     if (typeof renderFriends === "function") renderFriends();
   }
 
+  if (mode === "judge") {
+    if (typeof renderJudge === "function") renderJudge();
+  }
 });
 
 function escapeHtml(s) {

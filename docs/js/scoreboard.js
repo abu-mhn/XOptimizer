@@ -403,11 +403,23 @@ let scoreboardSaveCallback = null;
   // each tested the caller for itself.
   let prestartEnabled = true;
 
+  // Skip, and it stays skipped for the rest of the match.
+  //
+  // It has to: the gate is re-armed after EVERY scored point, because each
+  // point is its own launch. A Skip that lasted one point would need pressing
+  // seven times a match — more taps than the two Ready buttons it replaces.
+  //
+  // Cleared by Reset and by loading a different match, so it is a decision
+  // about this match rather than a setting that quietly sticks forever.
+  let prestartSkipped = false;
+
   function armPrestart() {
-    // No gate on this board: there is nothing to arm, so go straight to the
-    // live board instead. Doing it here rather than at the call sites is what
-    // keeps "after a score", "after Reset" and "after a tilt" consistent.
-    if (!prestartEnabled) { revealBoard(); return; }
+    // Nothing to arm — either this board has no gate at all (a tournament
+    // match) or the judge has skipped it for this match. Either way, go
+    // straight to the live board. Doing it here rather than at the call sites
+    // is what keeps "after a score", "after Reset" and "after a tilt"
+    // consistent.
+    if (!prestartEnabled || prestartSkipped) { revealBoard(); return; }
     clearPrestartTimers();
     countdownRunning = false;
     readySides = { a: false, b: false };
@@ -549,6 +561,24 @@ let scoreboardSaveCallback = null;
     swapSides();
   });
 
+  // Straight to the board, no Ready and no countdown. For a judge who is
+  // calling the start themselves, or scoring a battle that has already begun.
+  //
+  // Deliberately does NOT prime the audio the way Ready does: skipping is a
+  // choice not to hear the clips, so there is nothing to unlock. If the gate
+  // is armed again afterwards — after a score, a Reset, or a tilt — it comes
+  // back, because skipping is a decision about THIS start, not a setting.
+  //
+  // Only reachable before the countdown begins: once it is running, the whole
+  // divider is faded out and click-through (.sb-counting .sb-divider), so
+  // there is nothing to press.
+  document.getElementById("sb-skip")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (!prestartEnabled) return;
+    prestartSkipped = true;
+    revealBoard();
+  });
+
   overlay.querySelectorAll(".sb-ready-btn").forEach(btn => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -612,6 +642,9 @@ let scoreboardSaveCallback = null;
   // restart does. Both callers go through here so they can't drift apart.
   function resetMatch() {
     clearScores();
+    // Reset is "start this match over", which includes the launch ritual, so
+    // it also undoes a Skip.
+    prestartSkipped = false;
     armPrestart();
   }
 
@@ -824,6 +857,7 @@ let scoreboardSaveCallback = null;
     // Back to the standalone board, which does want the gate — otherwise a
     // tournament match would leave every later tilt gateless until reload.
     prestartEnabled = true;
+    prestartSkipped = false;
     armPrestart();
     // The match is over, so neither the rotate prompt, the outstanding open
     // request, nor the portrait fallback should outlive it.
@@ -863,6 +897,7 @@ let scoreboardSaveCallback = null;
     closeBtn?.classList.toggle("hidden", !scoreboardSaveCallback);
     // Set before arming, since arming is what reads it.
     prestartEnabled = !(opts && opts.skipPrestart);
+    prestartSkipped = false;
     // Opens on the Ready gate unless the caller said otherwise.
     armPrestart();
     // Mobile is tilt-driven: reveal now only if already landscape, otherwise

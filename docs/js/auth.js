@@ -322,6 +322,7 @@
   // keeper as a co-host (which is the access they need to mark payments).
   const PUBLIC_TAG_INDEXES = {
     "Judge":        "judges",
+    "Head Judge":   "judges",
     "Guest Judge":  "judges",
     "Keeper":       "judges",
     "Revox Member": "revoxAccounts",
@@ -830,6 +831,7 @@
     if (lower === "tester") return " account-tag-tester";
     if (lower === "guest judge") return " account-tag-guest-judge";
     if (lower === "keeper") return " account-tag-keeper";
+    if (lower === "head judge") return " account-tag-head-judge";
     if (lower === "judge") return " account-tag-judge";
     if (lower === "gold player") return " account-tag-gold";
     if (lower === "silver player") return " account-tag-silver";
@@ -853,7 +855,20 @@
 
   // Exposed so the Tournament tab can gate "Create Tournament" — hosting
   // requires the "Judge" tag (set by a developer).
-  window.isJudge = function isJudge() { return hasTag("Judge"); };
+  // A Head Judge sits above a Judge on the same ladder, so everything gated on
+  // isJudge() — Create Tournament, picking yourself to oversee a Battle Royale
+  // battle — is open to them too, without needing both tags on the account.
+  window.isJudge = function isJudge() {
+    return hasTag("Judge") || hasTag("Head Judge");
+  };
+
+  // A "Head Judge" reviews the applications of people who have passed the
+  // judge test and signs them off. Developer-assigned (Users tab on the
+  // Developer page), and a Developer counts as one — so a build with no Head
+  // Judge yet is not a build where nobody can be approved.
+  window.isHeadJudge = function isHeadJudge() {
+    return hasTag("Head Judge") || hasTag("Developer");
+  };
 
   // A "Guest Judge" can be invited to co-host a tournament (they show up in
   // the sub-host typeahead via the shared judges index) but can NOT create
@@ -934,6 +949,22 @@
   function paintRevoxTab() {
     const show = hasTag("Revox Admin") || hasTag("Revox Member");
     document.querySelectorAll('.tab[data-mode="revox"]').forEach(tab => {
+      tab.classList.toggle("hidden", !show && !tab.classList.contains("active"));
+    });
+  }
+
+  // The Judge tab holds the test that GRANTS the Judge tag, so gating it on
+  // holding that tag would mean only judges could become judges. It is open to
+  // any signed-in account, like Achievement. The page itself still tells a
+  // non-judge what they are looking at, and the tag is only ever granted by
+  // passing the test.
+  //
+  // Same "current page's own tab is never hidden" rule as the others, so
+  // someone sitting on the page while signing out does not watch it vanish
+  // under them.
+  function paintJudgeTab() {
+    const show = !!currentProfile;
+    document.querySelectorAll('.tab[data-mode="judge"]').forEach(tab => {
       tab.classList.toggle("hidden", !show && !tab.classList.contains("active"));
     });
   }
@@ -2309,6 +2340,7 @@
   window.addEventListener("userprofilechange", () => {
     paintDeveloperTab();
     paintRevoxTab();
+    paintJudgeTab();
     paintAchievementTab();
     paintBattleRoyaleTab();
     paintFriendsTab();
@@ -2321,6 +2353,7 @@
   window.onAuthChange(() => {
     paintDeveloperTab();
     paintRevoxTab();
+    paintJudgeTab();
     paintAchievementTab();
     paintBattleRoyaleTab();
     paintFriendsTab();
@@ -2332,6 +2365,7 @@
     document.addEventListener("DOMContentLoaded", () => {
       paintDeveloperTab();
       paintRevoxTab();
+      paintJudgeTab();
       paintAchievementTab();
       paintBattleRoyaleTab();
       paintFriendsTab();
@@ -2342,6 +2376,7 @@
   } else {
     paintDeveloperTab();
     paintRevoxTab();
+    paintJudgeTab();
     paintAchievementTab();
     paintBattleRoyaleTab();
     paintFriendsTab();
