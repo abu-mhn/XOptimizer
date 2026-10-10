@@ -1093,6 +1093,41 @@ function enableHorizontalDragScroll(el) {
   update();
 })();
 
+// ===== Close a modal when its backdrop is clicked =====
+//
+// Only when the gesture both STARTED and ENDED on the backdrop.
+//
+// A plain `click` listener is not enough, and the way it fails is invisible
+// until someone hits it. If a press begins inside the card and the pointer
+// moves before release — dragging to scroll an image grid, a thumb sliding a
+// few pixels on a touchscreen — the click event fires on the nearest common
+// ancestor of press and release, which is the overlay. The modal then closes
+// on what the user experienced as a scroll, throwing away whatever they had
+// filled in.
+//
+// It bit the Deck part picker hardest: that card deliberately overflows so
+// its dropdown's image grid is not clipped, which leaves a tall scrollable
+// grid sitting directly over the backdrop.
+//
+// pointerdown is the real signal; mousedown and touchstart are there for
+// browsers that skip it, and all three write the same answer, so firing
+// several times is harmless. A click with no press before it — a keyboard
+// Enter — leaves the flag false and does NOT close, which is right: the
+// overlay is not focusable, so such a click is not a backdrop dismissal.
+window.closeOnBackdrop = function closeOnBackdrop(overlay, close) {
+  if (!overlay || typeof close !== "function") return;
+  let startedOnBackdrop = false;
+  const mark = (e) => { startedOnBackdrop = e.target === overlay; };
+  overlay.addEventListener("pointerdown", mark);
+  overlay.addEventListener("mousedown", mark);
+  overlay.addEventListener("touchstart", mark, { passive: true });
+  overlay.addEventListener("click", (e) => {
+    const ok = e.target === overlay && startedOnBackdrop;
+    startedOnBackdrop = false;
+    if (ok) close();
+  });
+};
+
 // ===== Rows that scroll sideways with no visible scrollbar =====
 //
 // These rows all hide their scrollbar (scrollbar-width: none and friends) so a

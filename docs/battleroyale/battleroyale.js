@@ -931,7 +931,7 @@
     document.body.appendChild(overlay);
     const close = () => overlay.remove();
     overlay.querySelector("#br-challenge-cancel").onclick = close;
-    overlay.addEventListener("click", e => { if (e.target === overlay) close(); });
+    closeOnBackdrop(overlay, close);
 
     // Nothing is pre-selected. This used to default to `list[0]`, which meant a
     // judge you never chose was already highlighted when the dialog opened —

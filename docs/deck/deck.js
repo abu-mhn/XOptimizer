@@ -1009,7 +1009,7 @@ function buildDeckEditPopup() {
       </div>
     </div>`;
   document.body.appendChild(overlay);
-  overlay.addEventListener("click", e => { if (e.target === overlay) closeDeckEdit(); });
+  closeOnBackdrop(overlay, closeDeckEdit);
   document.getElementById("deck-edit-cancel").addEventListener("click", closeDeckEdit);
   document.getElementById("deck-edit-save").addEventListener("click", saveDeckEdit);
   // Cycle a multi-mode part's mode. Delegated on the fields host (bound once)
@@ -1252,7 +1252,14 @@ function openDeckEdit(slotIdx) {
     const i = list.findIndex(p => p.name === name);
     if (i >= 0) deckEditValues[key] = String(i);
   });
-  if (!parts.ratchet) deckEditValues.ratchet = NO_RATCHET;
+  // NO_RATCHET is the "combined away" sentinel, and the Ratchet row is hidden
+  // whenever it is set. For an EXISTING combo with no ratchet that is right:
+  // the ratchet is inside an expandCx blade or a ratchet-bit, so there is
+  // nothing to show. A NEW combo has no ratchet because nothing is chosen
+  // yet — a different thing entirely — so it must start on the ordinary
+  // Blade / Ratchet / Bit form. Without the `slot &&` guard, every new combo
+  // opened with the Ratchet row already hidden.
+  if (slot && !parts.ratchet) deckEditValues.ratchet = NO_RATCHET;
 
   // An expandCx blade carries its own ratchet, so open straight into
   // "Combine (Blade + Ratchet)" mode (the ratchet row stays hidden). A ratchet-

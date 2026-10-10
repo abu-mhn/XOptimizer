@@ -336,6 +336,9 @@ Settings
 - Match Alerts: per-device toggle for tournament match-start notifications — shows the current state (unsupported on this browser / blocked by browser / off / on) with a single button to turn alerts on (prompts for Notification permission) or mute them. Works alongside the in-app toast: muting only silences the system-level OS notification
 - Show Features (this list)
 
+Other
+- Tapping a popup's dark backdrop closes it, but only when the tap both started and ended there. A plain click handler was not enough: a click event fires on the nearest common ancestor of where a press began and where it ended, so pressing inside a popup and drifting a few pixels before release — dragging to scroll a part picker, a thumb moving on a touchscreen — landed the click on the backdrop and closed the popup, throwing away whatever had been filled in. It hit the Deck part picker hardest, where the dropdown's image grid deliberately overflows the card and sits right over the backdrop. All six popups share one helper now
+
 Profile
 - Your own profile tab — the profile photo doubles as the tab icon
 - Upload a photo and a banner (tap the image to change it), set a username and a short bio

@@ -5371,9 +5371,20 @@ body.forest-mode   .btn-deck-edit:hover img { filter: brightness(0) invert(1); }
 
 /* The part pickers use the calculator's searchable dropdowns, which show an
    image grid (.dd-list) as an absolutely-positioned overlay. The base
-   .popup-card clips that overlay with `overflow-y: auto`, so let the edit card
-   overflow instead and align the modal to the top — the overlay itself scrolls
-   when a tall grid opens. This makes the picker look like the calculator's. */
+   .popup-card clips that overlay with `overflow-y: auto`, so the edit card
+   overflows instead and the overlay itself scrolls when a tall grid opens.
+   This makes the picker look like the calculator's.
+
+   Centring it is therefore not as simple as `align-items: center`. A centred
+   flex item that grows TALLER than its scroll container has its top pushed
+   above the scroll origin, where nothing can scroll to it — open a long part
+   list and the Blade row would be unreachable above the viewport.
+
+   `align-items: flex-start` plus auto block margins on the card gives both:
+   auto margins absorb the spare room and centre the card while it fits, and
+   collapse to zero the moment it does not, leaving it at the top and fully
+   scrollable. Auto margins on a flex item take precedence over align-items,
+   which is what makes the pair work. */
 #deck-edit-popup {
     align-items: flex-start;
 }
@@ -5381,6 +5392,8 @@ body.forest-mode   .btn-deck-edit:hover img { filter: brightness(0) invert(1); }
 .deck-edit-card {
     overflow: visible;
     max-height: none;
+    margin-top: auto;
+    margin-bottom: auto;
 }
 
 /* Save / Cancel show an icon next to their text label. */

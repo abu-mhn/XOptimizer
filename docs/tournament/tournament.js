@@ -10682,7 +10682,7 @@ window.addEventListener("userprofilechange", maybeRunBattleRoyaleSeasonRollover)
         </div>
       </div>`;
     document.body.appendChild(overlay);
-    overlay.addEventListener("click", e => { if (e.target === overlay) closeTutorialPopup(); });
+    closeOnBackdrop(overlay, closeTutorialPopup);
     document.getElementById("tutorial-close").addEventListener("click", closeTutorialPopup);
 
     overlay.querySelectorAll(".tutorial-tab").forEach(btn => {
@@ -10733,7 +10733,7 @@ window.addEventListener("userprofilechange", maybeRunBattleRoyaleSeasonRollover)
         </div>
       </div>`;
     document.body.appendChild(overlay);
-    overlay.addEventListener("click", e => { if (e.target === overlay) closeTournamentQrPopup(); });
+    closeOnBackdrop(overlay, closeTournamentQrPopup);
     document.getElementById("tournament-qr-close").addEventListener("click", closeTournamentQrPopup);
   }
 
@@ -11584,7 +11584,7 @@ function showClosedRoomCodePrompt(room) {
   document.addEventListener("keydown", onKey);
   overlay.querySelector("#closed-room-code-submit").onclick = submit;
   overlay.querySelector("#closed-room-code-cancel").onclick = close;
-  overlay.addEventListener("click", e => { if (e.target === overlay) close(); });
+  closeOnBackdrop(overlay, close);
   setTimeout(() => input?.focus(), 0);
 }
 
@@ -11699,7 +11699,7 @@ function buildParticipantModePopup() {
       <button type="button" id="participant-mode-cancel" class="btn popup-cancel">Cancel</button>
     </div>`;
   document.body.appendChild(overlay);
-  overlay.addEventListener("click", e => { if (e.target === overlay) overlay.classList.add("hidden"); });
+  closeOnBackdrop(overlay, () => overlay.classList.add("hidden"));
 }
 
 function showParticipantModeChoice(room) {
