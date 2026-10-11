@@ -141,6 +141,7 @@
               ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60"
             },
             "deck": {
+              ".write": "auth != null && root.child('swissRooms').child($code).child('registrants').child($regId).child('createdBy').val() === auth.uid",
               "$slot": {
                 ".validate": "$slot.matches(/^[0-2]$/) && newData.hasChild('mode')",
                 "mode":  { ".validate": "newData.isString() && (newData.val() === 'standard' || newData.val() === 'cx' || newData.val() === 'cxExpand')" },
@@ -163,6 +164,10 @@
             },
             "paid": {
               ".validate": "newData.isBoolean()"
+            },
+            "deckChangedAt": {
+              ".write": "auth != null && root.child('swissRooms').child($code).child('registrants').child($regId).child('createdBy').val() === auth.uid",
+              ".validate": "newData.isString() && newData.val().length <= 32"
             },
             "createdBy": {
               ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 128 && (!data.exists() ? newData.val() === auth.uid : newData.val() === data.val())"
@@ -249,7 +254,7 @@
         },
         "tags": {
           "$tag": {
-            ".validate": "newData.isBoolean() && ( root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer' || (auth.uid === $uid && newData.val() === true && (($tag === 'Judge' && root.child('judgeApplications').child($uid).child('status').val() === 'approved' && root.child('judgeApplications').child($uid).child('role').val() === 'Judge') || ($tag === 'Guest Judge' && root.child('judgeApplications').child($uid).child('status').val() === 'approved' && root.child('judgeApplications').child($uid).child('role').val() === 'Guest Judge') || ($tag === 'Dragon Tamer' && root.child('achievements').child($uid).child('dragonTamer').child('awarded').val() === true) || ($tag === 'Dragon Slayer' && root.child('achievements').child($uid).child('dragonSlayer').child('awarded').val() === true) || ($tag === 'Lone Wolf' && root.child('achievements').child($uid).child('lonewolf').child('awarded').val() === true) || ($tag === 'Rush Hour' && root.child('achievements').child($uid).child('rushHour').child('awarded').val() === true) || ($tag === 'King of The Jungle' && root.child('achievements').child($uid).child('kingOfJungle').child('awarded').val() === true) || ($tag === 'Sharknado' && root.child('achievements').child($uid).child('sharknado').child('awarded').val() === true) || ($tag === 'Sorcerer Supreme' && root.child('achievements').child($uid).child('sorcererSupreme').child('awarded').val() === true) || ($tag === 'Paleonerd' && root.child('achievements').child($uid).child('paleonerd').child('awarded').val() === true) || ($tag === 'King of All Types' && root.child('achievements').child($uid).child('kingOfAllTypes').child('awarded').val() === true))) )"
+            ".validate": "newData.isBoolean() && ( root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer' || (auth.uid === $uid && newData.val() === true && (($tag === 'Judge' && root.child('judgeApplications').child($uid).child('status').val() === 'approved' && root.child('judgeApplications').child($uid).child('role').val() === 'Judge') || ($tag === 'Guest Judge' && root.child('judgeApplications').child($uid).child('status').val() === 'approved' && root.child('judgeApplications').child($uid).child('role').val() === 'Guest Judge') || ($tag === 'Head Judge' && root.child('judgeApplications').child($uid).child('status').val() === 'approved' && root.child('judgeApplications').child($uid).child('role').val() === 'Head Judge') || ($tag === 'Dragon Tamer' && root.child('achievements').child($uid).child('dragonTamer').child('awarded').val() === true) || ($tag === 'Dragon Slayer' && root.child('achievements').child($uid).child('dragonSlayer').child('awarded').val() === true) || ($tag === 'Lone Wolf' && root.child('achievements').child($uid).child('lonewolf').child('awarded').val() === true) || ($tag === 'Rush Hour' && root.child('achievements').child($uid).child('rushHour').child('awarded').val() === true) || ($tag === 'King of The Jungle' && root.child('achievements').child($uid).child('kingOfJungle').child('awarded').val() === true) || ($tag === 'Sharknado' && root.child('achievements').child($uid).child('sharknado').child('awarded').val() === true) || ($tag === 'Sorcerer Supreme' && root.child('achievements').child($uid).child('sorcererSupreme').child('awarded').val() === true) || ($tag === 'Paleonerd' && root.child('achievements').child($uid).child('paleonerd').child('awarded').val() === true) || ($tag === 'King of All Types' && root.child('achievements').child($uid).child('kingOfAllTypes').child('awarded').val() === true))) )"
           }
         },
         "$other": { ".validate": false }
@@ -388,7 +393,7 @@
           ".validate": "newData.isString() && newData.val().length <= 32"
         },
         "role": {
-          ".validate": "newData.isString() && (newData.val() === 'Judge' || newData.val() === 'Guest Judge')"
+          ".validate": "newData.isString() && (newData.val() === 'Judge' || newData.val() === 'Guest Judge' || newData.val() === 'Head Judge')"
         },
         "status": {
           ".validate": "newData.isString() && (newData.val() === 'pending' || ((root.child('users').child(auth.uid).child('tags').child('Head Judge').val() === true || root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer') && (newData.val() === 'approved' || newData.val() === 'rejected')))"
@@ -503,7 +508,7 @@
         "bio":         { ".validate": "newData.isString() && newData.val().length <= 300" },
         "photoPos":    { ".validate": "newData.isString() && newData.val().length <= 16" },
         "bannerPos":   { ".validate": "newData.isString() && newData.val().length <= 16" },
-        "tags":        { "$tag": { ".write": "auth != null && ($tag === 'Judge' || $tag === 'Guest Judge') && (root.child('users').child(auth.uid).child('tags').child('Head Judge').val() === true || root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')", ".validate": "newData.isBoolean()" } },
+        "tags":        { "$tag": { ".write": "auth != null && ($tag === 'Judge' || $tag === 'Guest Judge' || $tag === 'Head Judge') && (root.child('users').child(auth.uid).child('tags').child('Head Judge').val() === true || root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer')", ".validate": "newData.isBoolean()" } },
         "starredDeck": {
           "$slot": {
             ".validate": "$slot.matches(/^[0-2]$/) && newData.hasChild('mode')",

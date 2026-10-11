@@ -362,6 +362,7 @@ function connectSwissRoom(editCode, viewCode, asHost, canEdit, roleHint) {
       try {
         const prevState = JSON.parse(localStorage.getItem(SWISS_KEY) || "null") || {};
         detectAndAnnounceMatchStarts(prevState, remote);
+        detectAndAnnounceDeckChanges(prevState, remote);
         detectAndAnnounceMyMatchResults(prevState, remote);
         detectSelfRemovedFromRoom(prevState, remote, editCode);
       } catch (e) { /* non-fatal */ }
@@ -3789,20 +3790,37 @@ function copyRegistrantNames(state, btn) {
   });
 }
 
+// Edit the details that Share sends. Same popup as creation, pre-filled, and
+// this time the answers are saved onto the live tournament.
+function bindEventDetailsButton(view) {
+  const btn = view.querySelector("#swiss-event-details");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    const state = loadSwiss();
+    showEventDetailsPopup({
+      title: "Event details",
+      subtitle: state.tournamentName || "What Share sends with the code",
+      okLabel: "Save",
+      initial: state.eventDetails || {},
+      onSave: (details) => {
+        saveTournamentEventDetails(details);
+        renderSwiss();
+      }
+    });
+  });
+}
+
 function bindSwissShareButton(view) {
   const btn = view.querySelector("#swiss-share");
   if (!btn) return;
   btn.addEventListener("click", () => {
-    if (swissCanEdit) {
-      // Host / co-host: open the details popup so they can pick / edit the
-      // date, time, stadium, rule, remark before sharing.
-      showShareDetailsPopup(btn);
-    } else {
-      // Viewer / participant: share whatever details the host has saved.
-      const state = loadSwiss();
-      const message = composeTournamentShareMessage(state, state.eventDetails);
-      dispatchShareMessage(message, btn);
-    }
+    // Share, and nothing else. The date, time, stadium and rule are asked
+    // once when the tournament is created, so by the time anybody taps this
+    // there is nothing left to fill in — for the host or anyone else.
+    // Getting a form every single time you wanted to send a link was the
+    // reason this moved.
+    const state = loadSwiss();
+    dispatchShareMessage(composeTournamentShareMessage(state, state.eventDetails), btn);
   });
 }
 
@@ -3828,12 +3846,22 @@ function saveTournamentEventDetails(details) {
 // Popup that lets the host / co-host fill (or edit) the share-message
 // fields. Pre-fills from state.eventDetails so re-opening shows the
 // previous choices.
-function showShareDetailsPopup(triggerBtn) {
+// Ask for the event details: date, time, stadium, rule, remark.
+//
+// Two callers with nothing else in common — creating a tournament, where
+// there is no state to read, and editing afterwards, where there is — so this
+// only COLLECTS. What happens with the answers is the caller's business,
+// which is what lets the same popup serve both.
+//
+// `onSave` receives the details object. `onCancel` runs if they back out,
+// which creation needs: a cancelled form there must not create anything.
+function showEventDetailsPopup(opts) {
+  const o = opts || {};
   const popup = document.getElementById("tournament-share-popup");
   if (!popup) {
-    // Popup missing — fall back to sharing whatever's already on state.
-    const state = loadSwiss();
-    dispatchShareMessage(composeTournamentShareMessage(state, state.eventDetails), triggerBtn);
+    // No popup in this build: treat it as "nothing to add" rather than
+    // blocking the caller entirely.
+    if (typeof o.onSave === "function") o.onSave(o.initial || {});
     return;
   }
   const dateInput = popup.querySelector("#share-date-input");
@@ -3844,11 +3872,15 @@ function showShareDetailsPopup(triggerBtn) {
   const submitBtn = popup.querySelector("#tournament-share-submit");
   const cancelBtn = popup.querySelector("#tournament-share-cancel");
   const nameLabel = popup.querySelector("#tournament-share-subtitle");
+  // The caller names the event. This used to read the live tournament, which
+  // creation does not have yet — and the leftover reference threw before the
+  // popup could open at all.
+  if (nameLabel) nameLabel.textContent = (typeof o.subtitle === "string" && o.subtitle)
+    ? o.subtitle : "";
 
-  const state = loadSwiss();
-  const details = state.eventDetails || {};
+  const details = o.initial || {};
   if (nameLabel) {
-    nameLabel.textContent = (state.tournamentName || "").trim() || "(unnamed tournament)";
+  
   }
   if (dateInput) dateInput.value = details.date || "";
   if (timeInput) timeInput.value = details.time || "";
@@ -3881,7 +3913,7 @@ function showShareDetailsPopup(triggerBtn) {
   };
 
   if (submitBtn) {
-    submitBtn.onclick = async () => {
+    submitBtn.onclick = () => {
       const picked = {
         date: dateInput?.value || "",
         time: timeInput?.value || "",
@@ -3889,13 +3921,25 @@ function showShareDetailsPopup(triggerBtn) {
         rule: ruleCtrl ? ruleCtrl.getValue() : "",
         remark: (remarkInput?.value || "").trim()
       };
-      saveTournamentEventDetails(picked);
       close();
-      const message = composeTournamentShareMessage(loadSwiss(), picked);
-      await dispatchShareMessage(message, triggerBtn);
+      if (typeof o.onSave === "function") o.onSave(picked);
     };
   }
-  if (cancelBtn) cancelBtn.onclick = close;
+  if (cancelBtn) {
+    cancelBtn.onclick = () => {
+      close();
+      // Creation needs to hear about this: a cancelled form there must not
+      // leave a half-made tournament behind.
+      if (typeof o.onCancel === "function") o.onCancel();
+    };
+  }
+  // The popup is shared, so its title has to be set each time rather than
+  // left on whatever the last caller wanted.
+  const titleEl = popup.querySelector(".popup-title");
+  if (titleEl && o.title) titleEl.textContent = o.title;
+  const okEl = popup.querySelector("#tournament-share-submit .btn-label")
+    || popup.querySelector("#tournament-share-submit");
+  if (okEl && o.okLabel) okEl.textContent = o.okLabel;
   popup.classList.remove("hidden");
 }
 
@@ -4771,6 +4815,7 @@ function renderSwiss() {
         ${showStartKnockoutBtn ? `<button type="button" id="swiss-start-bracket" class="btn">Start Knockout</button>` : ""}
         <div class="swiss-toolbar-actions">
           ${tournamentComplete ? "" : renderSwissShareButton()}
+          ${canEdit && !tournamentComplete && !swissArchiveView ? `<button type="button" id="swiss-event-details" class="btn btn-icon-sm" aria-label="Edit event details" title="Date, time, stadium and rule — what Share sends"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="width:15px;height:15px;flex:0 0 auto;"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-2 .9-2 2v14a2 2 0 002 2h14c1.1 0 2-.9 2-2V6a2 2 0 00-2-2zm0 16H5V10h14v10zM5 8V6h14v2H5z"/></svg><span class="swiss-toolbar-btn-label">Details</span></button>` : ""}
           ${canEdit && !tournamentComplete && state.matches && Object.keys(state.matches).length ? `<button type="button" id="swiss-monitor" class="btn btn-icon-sm swiss-monitor-btn" aria-label="Open calling monitor" title="Open the calling monitor on a second screen / projector"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="width:15px;height:15px;flex:0 0 auto;"><path d="M20 3H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h6l-2 3v1h8v-1l-2-3h6c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 13H4V5h16v11z"/></svg><span class="swiss-toolbar-btn-label">Monitor</span></button>` : ""}
           ${swissIsHost && !tournamentComplete ? renderCoHostsButton() : ""}
           ${canEdit && !tournamentComplete && canAddParticipant(state) ? `<button type="button" id="swiss-edit-participants" class="btn btn-icon-sm btn-icon-plus" aria-label="Add participant" title="Add participant"><span class="swiss-toolbar-btn-plus-icon">+</span><span class="swiss-toolbar-btn-label">Add</span></button>` : ""}
@@ -4874,6 +4919,7 @@ function renderSwiss() {
   view.querySelector("#swiss-monitor")?.addEventListener("click", openCallingMonitor);
   view.querySelector("#swiss-edit-name")?.addEventListener("click", showEditTournamentNamePopup);
   bindSwissShareButton(view);
+  bindEventDetailsButton(view);
 
   // The fees panel's buttons. bindSwissRegisteringHandlers wires the identical
   // button on the registration screen, but that runs only for the registering
@@ -5026,6 +5072,68 @@ function renderUnpaidPanel(state) {
           </li>`).join("")}
       </ul>
     </details>`;
+}
+
+// ===== "Is this the deck you're actually playing?" =====
+//
+// A registrant's deck is a SNAPSHOT, copied from the player's pinned deck at
+// the moment they were registered. Players turn up having built something new
+// for the event, never re-pin it, and the judge then checks them against a
+// deck from the last tournament. Nothing is wrong from the app's point of
+// view — the registered deck is exactly what was pinned — so nothing warns
+// anybody. This asks, once, before it matters.
+//
+// Confirmation is kept on the DEVICE, not on the registrant. Unknown fields
+// under registrants/$regId are rejected by the database rules ($other:
+// false), so a `deckConfirmed` field would need a rules deploy to work at
+// all, and would fail silently until then. Nobody else needs to see the
+// answer — this is a nudge to one player, not an audit trail — so the device
+// is the right place for it.
+function deckConfirmKey(editCode, regId) {
+  return "swissDeckOk_" + editCode + "_" + regId;
+}
+function deckConfirmed(editCode, regId) {
+  try { return localStorage.getItem(deckConfirmKey(editCode, regId)) === "1"; }
+  catch (e) { return true; }   // no storage: do not nag on every render
+}
+function markDeckConfirmed(editCode, regId) {
+  try { localStorage.setItem(deckConfirmKey(editCode, regId), "1"); } catch (e) {}
+}
+
+// The one registrant on this device that still needs asking, or null.
+//
+// Only while REGISTERING: once the tournament starts the deck is locked, and
+// a reminder you cannot act on is worse than none.
+function registrantNeedingDeckCheck(state) {
+  if (!swissEditCode || !isRegisteringPhase(state)) return null;
+  const mine = (typeof findMyRegistrantIds === "function")
+    ? findMyRegistrantIds(state, swissEditCode) : [];
+  const regs = state.registrants || {};
+  const id = mine.find(x => regs[x] && !deckConfirmed(swissEditCode, x));
+  return id ? { id, reg: regs[id] } : null;
+}
+
+function renderDeckCheckBanner(state) {
+  const need = registrantNeedingDeckCheck(state);
+  if (!need) return "";
+  const deck = normalizeBeyCheckDeck(need.reg.deck);
+  const empty = isBeyCheckDeckEmpty(deck);
+  const summary = empty ? "" : deckSummaryText(deck);
+  return `<div class="swiss-deckcheck" data-deckcheck-id="${escapeHtml(need.id)}">
+    <div class="swiss-deckcheck-main">
+      <strong class="swiss-deckcheck-title">${empty
+        ? "You have no deck registered."
+        : "Is this the deck you're playing today?"}</strong>
+      ${empty
+        ? `<span class="swiss-deckcheck-deck swiss-deckcheck-none">Nothing registered — add it now, or the judge will record it at Bey Check.</span>`
+        : `<span class="swiss-deckcheck-deck">${escapeHtml(summary)}</span>`}
+      <span class="swiss-deckcheck-why">Registered when you joined. If you've built something new since, change it here. Once the tournament starts you can still switch — tell the judge and they'll record it at Bey Check when your match is called.</span>
+    </div>
+    <div class="swiss-deckcheck-actions">
+      ${empty ? "" : `<button type="button" class="swiss-deckcheck-btn is-ok" data-deckcheck-ok="${escapeHtml(need.id)}">That's my deck</button>`}
+      <button type="button" class="swiss-deckcheck-btn is-change" data-deckcheck-edit="${escapeHtml(need.id)}">${empty ? "Add my deck" : "Change it"}</button>
+    </div>
+  </div>`;
 }
 
 function renderSwissRegisteringMarkup(state) {
@@ -5363,6 +5471,7 @@ function renderSwissRegisteringMarkup(state) {
              ].map(o => `<button type="button" class="swiss-reg-paidfilter-btn${regFilter === o.v ? " is-active" : ""}${o.n === 0 ? " is-empty" : ""}" data-regfilter="${o.v}">${o.label}<span class="swiss-reg-filter-count">${o.n}</span></button>`).join("")}
            </div>`
         : ""}
+      ${renderDeckCheckBanner(state)}
       <ul class="swiss-reg-list">${registrantRows}<li class="swiss-reg-noresults hidden">No participants match your search.</li></ul>
       <div class="swiss-reg-actions">${startBtnHtml}</div>
     </section>
@@ -5507,6 +5616,7 @@ function bindSwissRegisteringHandlers(view, state) {
     copyRegistrantNames(state, e.currentTarget);
   });
   bindSwissShareButton(view);
+  bindEventDetailsButton(view);
   // Copy the join code (Closed tournaments) to the clipboard.
   bindSwissJoinCodeButton(view);
   // Fee-paid toggle (host / Keeper only — read-only badges aren't buttons).
@@ -5528,10 +5638,48 @@ function bindSwissRegisteringHandlers(view, state) {
       removeRegistrant(id);
     });
   });
+  // "Change my deck", from the Your Matches panel, mid-tournament.
+  view.querySelectorAll("[data-change-deck]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.changeDeck;
+      const st = loadSwiss();
+      const reg = (st.registrants || {})[id];
+      if (!reg) return;
+      // The same deck picker as registration, with everything that is not the
+      // deck closed off: the name is locked, and the submit goes down the
+      // deck-only path rather than rewriting the whole entry.
+      showRegistrationPopup(
+        { editCode: swissEditCode, viewCode: swissViewCode,
+          name: st.tournamentName || "", mode: st.mode || "swiss" },
+        { editRegistrantId: id, initialName: reg.name || "",
+          initialDeck: normalizeBeyCheckDeck(reg.deck),
+          lockName: true, allowEmptyDeck: false, deckOnly: true }
+      );
+    });
+  });
+
   view.querySelectorAll(".swiss-reg-name-edit").forEach(btn => {
     btn.addEventListener("click", () => {
       const id = btn.dataset.regId;
       if (id) showEditRegistrantPopup(id);
+    });
+  });
+
+  // "That's my deck" — answered, so stop asking for this tournament.
+  view.querySelectorAll("[data-deckcheck-ok]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      markDeckConfirmed(swissEditCode, btn.dataset.deckcheckOk);
+      renderSwiss();
+    });
+  });
+  // "Change it" — the same popup their own row already opens. Marked answered
+  // on the way in: they have been asked and are acting on it, so the banner
+  // must not still be sitting there when the popup closes.
+  view.querySelectorAll("[data-deckcheck-edit]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.deckcheckEdit;
+      markDeckConfirmed(swissEditCode, id);
+      showEditRegistrantPopup(id);
     });
   });
   hydrateTournamentAvatars(view);
@@ -5659,6 +5807,69 @@ const BANNER_NEUTRAL_SCRIM = "linear-gradient(rgba(13, 17, 23, 0.55), rgba(13, 1
 // without both players assigned. If we recognize the signed-in user's
 // name as one of the players, the toast carries an extra "You're up!"
 // emphasis line.
+// A player changed their own deck mid-tournament: tell whoever is running it.
+//
+// Read off the room snapshot the host's device already receives, by comparing
+// each registrant's deckChangedAt against the previous one. No extra listener,
+// no extra read, and no reliance on the player's device being able to reach
+// the judge's.
+//
+// Only for host and co-hosts — they are the ones who check decks. The player
+// who made the change does not need telling, and a viewer is not owed it.
+//
+// `deckChangedAt` is a timestamp rather than a flag so that a SECOND change
+// announces again. A boolean would latch after the first one and go quiet
+// exactly when somebody is switching decks repeatedly.
+const announcedDeckChanges = new Map();   // regId -> the stamp already shown
+
+function detectAndAnnounceDeckChanges(prevState, remote) {
+  if (!swissCanEdit) return;                       // not running this room
+  if (!remote || isRegisteringPhase(remote)) return;   // normal before start
+  const prev = (prevState && prevState.registrants) || {};
+  const now = remote.registrants || {};
+  Object.keys(now).forEach(id => {
+    const r = now[id];
+    const stamp = r && r.deckChangedAt;
+    if (!stamp) return;
+    // Unchanged since the last snapshot, or already announced on this device
+    // (a re-render of the same stamp must not toast twice).
+    if (prev[id] && prev[id].deckChangedAt === stamp) return;
+    if (announcedDeckChanges.get(id) === stamp) return;
+    announcedDeckChanges.set(id, stamp);
+    // First sight of an already-stamped registrant — opening the room, or a
+    // reconnect — is not news. Only a change observed against a previous
+    // snapshot is.
+    if (!prev[id]) return;
+    showDeckChangeToast(r.name || "A player", normalizeBeyCheckDeck(r.deck));
+  });
+}
+
+function showDeckChangeToast(name, deck) {
+  // The same container the match toasts use — it creates itself on demand,
+  // which getElementById on a hard-coded id did not.
+  const host = (typeof ensureToastContainer === "function") ? ensureToastContainer() : null;
+  if (!host) return;
+  const summary = isBeyCheckDeckEmpty(deck) ? "" : deckSummaryText(deck);
+  const card = document.createElement("div");
+  card.className = "match-toast match-toast-deckchange";
+  card.innerHTML = `
+    <div class="match-toast-head">
+      <span class="match-toast-tag">Deck changed</span>
+      <button type="button" class="match-toast-close" aria-label="Dismiss">&times;</button>
+    </div>
+    <div class="match-toast-players">${escapeHtml(name)} changed their deck</div>
+    ${summary ? `<div class="match-toast-deck">${escapeHtml(summary)}</div>` : ""}
+    <div class="match-toast-deckhint">Check it at Bey Check before their next match.</div>`;
+  host.appendChild(card);
+  const dismiss = () => {
+    if (!card.parentNode) return;
+    card.classList.add("match-toast-leaving");
+    setTimeout(() => card.remove(), 220);
+  };
+  card.querySelector(".match-toast-close").addEventListener("click", dismiss);
+  setTimeout(dismiss, 12000);
+}
+
 function detectAndAnnounceMatchStarts(prevState, remote) {
   if (!remote || !remote.matches) return;
   const prevMatches = (prevState && prevState.matches) || {};
@@ -5764,6 +5975,28 @@ function renderMyTournamentRecap(state, ownerCode) {
 
   const isMe = (n) => n && myNamesLower.has(String(n).trim().toLowerCase());
 
+  // A live room renders this panel with no ownerCode; History passes the code
+  // of a tournament that has already finished. Only the first has a judge to
+  // ask, so only the first gets told to ask one.
+  const isLive = !ownerCode && !!swissEditCode && !isRegisteringPhase(state);
+
+  // Which registration is this device's, and may it rewrite the deck?
+  //
+  // Only an entry carrying createdBy for the signed-in account: that is what
+  // the database rule checks, so offering the button to anybody else would be
+  // offering a write that comes back denied. A guest the host bulk-added has
+  // no owner, and still asks the judge.
+  const myUid = ((window.getCurrentUser && window.getCurrentUser()) || {}).uid || "";
+  let myRegId = "";
+  if (isLive && myUid) {
+    const regs = state.registrants || {};
+    myRegId = Object.keys(regs).find(id => {
+      const r = regs[id];
+      return r && r.createdBy === myUid && isMe(r.name);
+    }) || "";
+  }
+  const canChangeDeck = !!myRegId;
+
   // My decided matches, ordered chronologically (group rounds first, then the
   // knockout bracket — QF → SF → … → Final last).
   const results = [];
@@ -5820,6 +6053,14 @@ function renderMyTournamentRecap(state, ownerCode) {
       <div class="my-recap-deck my-recap-mydeck">
         <span class="my-recap-deck-label">Your deck</span>
         ${renderDeckCombos(myDeck)}
+        ${canChangeDeck
+          ? `<div class="my-recap-deck-actions">
+              <button type="button" class="my-recap-deck-btn" data-change-deck="${escapeHtml(myRegId)}">Change my deck</button>
+              <span class="my-recap-deck-note">The judge is told when you do.</span>
+            </div>`
+          : isLive
+            ? `<p class="my-recap-deck-change">Switched decks? Tell the judge — they'll record it at Bey Check when your match is called.</p>`
+            : ""}
       </div>
       ${results.length ? `<div class="my-recap-record"><span class="my-recap-w">${wins}W</span> – <span class="my-recap-l">${losses}L</span></div>` : ""}
       ${rows || `<p class="my-recap-empty">No results yet — your matches will appear here as they finish.</p>`}
@@ -6090,6 +6331,7 @@ function showMatchStartToast({ a, b, where, isMine }) {
     </div>
     <div class="match-toast-players">${escapeHtml(a)} <span class="match-toast-vs">vs</span> ${escapeHtml(b)}</div>
     ${where ? `<div class="match-toast-where">${escapeHtml(where)}</div>` : ""}
+    ${isMine ? `<div class="match-toast-deckhint">Playing a different deck? Tell the judge — they can change it at Bey Check.</div>` : ""}
     ${showEnable ? `<button type="button" class="match-toast-enable">Turn on alerts</button>` : ""}
   `;
   host.appendChild(card);
@@ -10279,14 +10521,34 @@ document.getElementById("swiss-generate")?.addEventListener("click", async () =>
     return; // user cancelled the sign-in modal
   }
   showTournamentModePopup((mode, tournamentName, roundCount, ranked, groupCount, pairing, topN, placementDepth, maxParticipants, visibility) => {
-    // Open Registration only — empty room in registering phase. Players
-    // self-register with their decks via the Rooms tab, then the host
-    // clicks Start to generate groups / bracket from the registrants.
-    const next = createRegisteringTournamentState({
-      mode, tournamentName, roundCount, ranked, groupCount, pairing, topN, placementDepth, maxParticipants, visibility,
-      hostUid: user ? user.uid : null
+    // Then the event details, once, here — so Share never asks again.
+    showEventDetailsPopup({
+      title: "Event details",
+      subtitle: (tournamentName || "").trim() || "Where and when is this?",
+      okLabel: "Create",
+      initial: {},
+      onSave: (details) => {
+        // Open Registration only — empty room in registering phase. Players
+        // self-register with their decks via the Rooms tab, then the host
+        // clicks Start to generate groups / bracket from the registrants.
+        const next = createRegisteringTournamentState({
+          mode, tournamentName, roundCount, ranked, groupCount, pairing, topN, placementDepth, maxParticipants, visibility,
+          hostUid: user ? user.uid : null
+        });
+        // Carried on the state the room is created from, so the details are
+        // in Firebase from the first write rather than needing a second one.
+        if (details && Object.keys(details).some(k => details[k])) {
+          next.eventDetails = {
+            date: details.date || "", time: details.time || "",
+            stadium: details.stadium || "", rule: details.rule || "",
+            remark: details.remark || ""
+          };
+        }
+        startTournamentFromState(next);
+      }
+      // No onCancel: backing out of the details means no tournament, which
+      // is what happens by doing nothing.
     });
-    startTournamentFromState(next);
   });
 });
 
@@ -10619,7 +10881,14 @@ window.addEventListener("userprofilechange", maybeRunBattleRoyaleSeasonRollover)
   });
   document.getElementById("past-tournaments-refresh")?.addEventListener("click", refreshPastTournaments);
   document.getElementById("swiss-rooms-qr")?.addEventListener("click", showTournamentQrPopup);
-  document.getElementById("swiss-rooms-tutorial")?.addEventListener("click", showTutorialPopup);
+  // Same button, decided at tap time rather than at bind time: the tag can
+  // arrive after this page has already loaded.
+  document.getElementById("swiss-rooms-tutorial")?.addEventListener("click", () => {
+    if (judgeHoldsAnyTag()) showJudgeManualPopup();
+    else showTutorialPopup();
+  });
+  paintTournamentHelpButton();
+  window.addEventListener("userprofilechange", paintTournamentHelpButton);
 
   // Only accounts tagged "Judge" may create a tournament. The button (and the
   // surrounding helper hint + divider) hide for everyone else, including
@@ -10641,6 +10910,160 @@ window.addEventListener("userprofilechange", maybeRunBattleRoyaleSeasonRollover)
   // Profile fetches resolve after onAuthChange fires; re-paint when it lands
   // so a freshly signed-in Judge sees the button without a refresh.
   window.addEventListener("userprofilechange", paintCreateTournamentBtn);
+
+
+  // ===== Judge's manual =====
+  //
+  // The Tutorial beside Open Tournaments teaches a PLAYER how to join. A
+  // judge's problem is the opposite one — they are running the thing — so for
+  // anyone carrying a judge tag that same button becomes Manual and opens
+  // this instead. Non-judges still get the Tutorial; losing it would strip
+  // help from the people who need it most.
+  //
+  // Four tabs, in the order a tournament actually happens. Kept as text
+  // rather than gifs because every one of these answers changes with a
+  // release, and a stale screenshot is worse than no screenshot.
+  function judgeHoldsAnyTag() {
+    const j = (typeof window.isJudge === "function") && window.isJudge();
+    const g = (typeof window.isGuestJudge === "function") && window.isGuestJudge();
+    return !!(j || g);
+  }
+
+  const JUDGE_MANUAL_TABS = [
+    { id: "create", label: "Create", body: `
+      <p class="jm-lead">Creating a tournament needs the <strong>Judge</strong> tag. A Head Judge counts;
+      a <strong>Guest Judge</strong> does not — they can be invited to co-host someone else's
+      tournament, but the Create button stays hidden for them.</p>
+      <ol class="jm-steps">
+        <li><strong>Create Tournament</strong> — pick the format first: Swiss, Swiss + knockout,
+        single or double elimination, round-robin groups. Set the rounds, group count and how deep the
+        placings go.</li>
+        <li><strong>Participant cap</strong> — optional. Registration closes itself when the room is
+        full, and you can change the cap later from the registration screen.</li>
+        <li><strong>Open or closed</strong> — open tournaments are listed publicly; closed ones are
+        join-by-code only, and Share includes that code for you.</li>
+        <li><strong>Event details</strong> — date, time, stadium, rule and a remark. Asked once, here,
+        so <strong>Share</strong> never stops to ask again. Leave any of it blank if you do not know yet.</li>
+      </ol>
+      <p class="jm-note">Got the date wrong? <strong>Details</strong>, next to Share, reopens that form
+      any time.</p>` },
+
+    { id: "register", label: "Register", body: `
+      <ol class="jm-steps">
+        <li><strong>Share the code.</strong> Share copies a message with the join code. Players open the
+        Tournament tab, tap your room in Open Tournaments and register themselves with their deck.</li>
+        <li><strong>Add people yourself.</strong> Bulk Guests takes a list of names, one per line, up to 50
+        at a time. A name that matches a registered account picks up that account's pinned deck
+        automatically.</li>
+        <li><strong>Co-hosts.</strong> Invite them by username in the Sub-hosts popup — anyone tagged
+        Judge, Head Judge, Guest Judge or Keeper appears in the typeahead. A co-host can score, add and
+        remove players; only you can reset the room.</li>
+        <li><strong>Fees.</strong> Invite a <strong>Keeper</strong> as a co-host and they can mark who has
+        paid. The count shows "· N paid", and unpaid names stay listed for you even after the tournament
+        starts.</li>
+        <li><strong>Banned parts.</strong> Pick parts nobody may use. Registration blocks a deck containing
+        one; Bey Check warns you but still lets you record it.</li>
+      </ol>
+      <p class="jm-note">Players are asked once to confirm the deck on record is the one they are actually
+      playing, so fewer of them turn up registered with last month's deck.</p>` },
+
+    { id: "run", label: "Run", body: `
+      <ol class="jm-steps">
+        <li><strong>Start</strong> builds the groups or bracket from whoever is registered. Registration
+        closes at that point — <strong>Reopen</strong> puts it back without losing anybody.</li>
+        <li><strong>Tap a match</strong> to open Bey Check: both decks, pre-filled from what they
+        registered, with any banned part flagged. Change a deck here if a player has switched.</li>
+        <li><strong>Score it</strong> on the number pad, or turn your phone sideways for the full
+        scoreboard. Tournament matches skip the Ready screen and the 3-2-1 — it is yours to call.</li>
+        <li><strong>Calling Monitor</strong> puts the live match and what is next on a second screen or
+        projector, with the assigned judge beside each queued match.</li>
+        <li><strong>Put a judge on a match.</strong> If you are a <strong>Head Judge</strong> hosting, every
+        unscored match card has a chip underneath: tap it and name a co-host. They can then open only that
+        match until it is scored, and everyone can see whose it is.</li>
+      </ol>
+      <p class="jm-note">A player who changes their own deck mid-tournament is announced to you with a
+      toast — check it at Bey Check before their next match.</p>` },
+
+    { id: "finish", label: "Finish", body: `
+      <ol class="jm-steps">
+        <li><strong>Results are saved the moment the final standings appear</strong>, into Past
+        Tournaments. Nothing you do afterwards loses them.</li>
+        <li><strong>Leave</strong> — the red Reset turns into a green Leave once the tournament is
+        finished, because there is nothing left to reset. It closes the live room and nothing more.</li>
+        <li><strong>Forgot to close it?</strong> Any finished tournament still sitting open is closed
+        automatically at midnight, Malaysia time.</li>
+      </ol>
+      <h4 class="jm-h">When something goes wrong</h4>
+      <ul class="jm-list">
+        <li><strong>A player dropped out of the room.</strong> They can open the tournament again and
+        rejoin their matches — registration being closed does not lock out someone already in it.</li>
+        <li><strong>Wrong score.</strong> Tap the match again and re-enter it; standings recompute.</li>
+        <li><strong>Wrong draw.</strong> Reshuffle re-draws round one; Move shifts a player between
+        groups. Both only while that is still safe to do.</li>
+        <li><strong>Stuck.</strong> Reset clears the live room. On a finished tournament that is only the
+        room — the results are already archived.</li>
+      </ul>` },
+  ];
+
+  function buildJudgeManualPopup() {
+    if (document.getElementById("judge-manual-popup")) return;
+    const overlay = document.createElement("div");
+    overlay.id = "judge-manual-popup";
+    overlay.className = "popup-overlay hidden";
+    overlay.innerHTML = `
+      <div class="popup-card jm-card">
+        <h2 class="popup-title">Running a tournament</h2>
+        <div class="tutorial-tabs jm-tabs" role="tablist">
+          ${JUDGE_MANUAL_TABS.map((t, i) => `<button type="button" class="tutorial-tab${i === 0 ? " active" : ""}"
+            data-jm-tab="${t.id}" role="tab" aria-selected="${i === 0 ? "true" : "false"}">${t.label}</button>`).join("")}
+        </div>
+        ${JUDGE_MANUAL_TABS.map((t, i) => `<div class="jm-pane${i === 0 ? " active" : ""}" data-jm-pane="${t.id}">${t.body}</div>`).join("")}
+        <div class="popup-actions">
+          <button type="button" class="btn popup-cancel" id="judge-manual-close">
+            <img src="assets/icons/exit-button.png" alt="" onerror="this.style.display='none'">
+            <span class="btn-label">Close</span>
+          </button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    closeOnBackdrop(overlay, closeJudgeManualPopup);
+    document.getElementById("judge-manual-close").addEventListener("click", closeJudgeManualPopup);
+    overlay.querySelectorAll("[data-jm-tab]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const tab = btn.dataset.jmTab;
+        overlay.querySelectorAll("[data-jm-tab]").forEach(b => {
+          const on = b.dataset.jmTab === tab;
+          b.classList.toggle("active", on);
+          b.setAttribute("aria-selected", on ? "true" : "false");
+        });
+        overlay.querySelectorAll("[data-jm-pane]").forEach(pane => {
+          pane.classList.toggle("active", pane.dataset.jmPane === tab);
+        });
+      });
+    });
+  }
+
+  function showJudgeManualPopup() {
+    buildJudgeManualPopup();
+    document.getElementById("judge-manual-popup").classList.remove("hidden");
+  }
+
+  function closeJudgeManualPopup() {
+    document.getElementById("judge-manual-popup")?.classList.add("hidden");
+  }
+
+  // One button, two audiences. Repainted on every profile change because the
+  // tag arrives after sign-in, and a judge who signed in on this page would
+  // otherwise still be looking at the player tutorial.
+  function paintTournamentHelpButton() {
+    const btn = document.getElementById("swiss-rooms-tutorial");
+    if (!btn) return;
+    const forJudge = judgeHoldsAnyTag();
+    const label = btn.querySelector("span:not(.btn-label)") || btn.querySelector("span");
+    if (label) label.textContent = forJudge ? "Manual" : "Tutorial";
+    btn.title = forJudge ? "How to create and run a tournament" : "How to participate";
+    btn.setAttribute("aria-label", btn.title);
+  }
 
   // ===== Tutorial popup =====
   // Two tabs (Participant / Guest) — each shows a single demo gif with a
@@ -11646,15 +12069,24 @@ function openJoinChoicePopup(room) {
     cohostBtn.onclick = null;
   }
   if (participantBtn) {
-    // A running tournament has closed registration — co-host and viewer
-    // still work, but the participant sign-up path is disabled. The desc
-    // text is restored explicitly because the popup is reused across rooms.
+    // A running tournament has closed registration to NEW players, which is
+    // not the same as closing the door on the ones already in it. Disabling
+    // the button outright stranded anyone whose phone died or who tapped
+    // Leave mid-tournament, with their registrant entry still sitting in the
+    // room. It stays enabled and offers to take them back to their matches;
+    // rejoinTournamentAsParticipant creates nothing and refuses a stranger.
+    //
+    // The desc text is restored explicitly because the popup is reused
+    // across rooms.
     const desc = participantBtn.querySelector(".tournament-mode-desc");
     if (room.phase === "running") {
-      participantBtn.disabled = true;
-      participantBtn.classList.add("is-disabled");
-      participantBtn.onclick = null;
-      if (desc) desc.textContent = "Registration is closed — this tournament has already started.";
+      participantBtn.disabled = false;
+      participantBtn.classList.remove("is-disabled");
+      if (desc) desc.textContent = "Registration is closed, but if you're already playing you can rejoin your matches.";
+      participantBtn.onclick = () => {
+        close();
+        rejoinTournamentAsParticipant(room);
+      };
     } else {
       participantBtn.disabled = false;
       participantBtn.classList.remove("is-disabled");
@@ -11914,6 +12346,59 @@ function joinTournamentAsViewer(room) {
 // as a participant — no registration popup, since their name + deck are
 // already on file. Mirrors joinTournamentAsViewer but tags the session
 // role "participant" so the History tab records it correctly.
+// Someone who is ALREADY in this tournament, coming back to it.
+//
+// Registration closing and the door closing are two different things, and the
+// Participant button used to treat them as one: once a room was running it was
+// disabled outright, so a player whose phone died, who closed the tab, or who
+// tapped Leave by accident had no way back to their own matches. Their
+// registrant entry was still sitting there the whole time.
+//
+// Two ways to be recognised, because players arrive both ways:
+//
+//   * a registration under the signed-in username, and
+//   * a registration this DEVICE made. That is the only handle a guest has
+//     — they have no account to match against — and it is remembered through
+//     a mid-tournament Leave, which only clears it during registration.
+//
+// Nothing is created here. If neither matches, registration really is closed
+// and they are told so.
+function rejoinTournamentAsParticipant(room) {
+  if (!firebaseReady()) {
+    alert("Live sync isn't configured on this build.");
+    return;
+  }
+  const db = initFirebase();
+  if (!db || !room || !room.editCode) {
+    alert("Couldn't reach that tournament.");
+    return;
+  }
+  const owned = (typeof loadDeviceOwnedRegIds === "function")
+    ? loadDeviceOwnedRegIds(room.editCode) : [];
+  const myUname = (window.getCurrentUsername && window.getCurrentUsername()) || "";
+  const lower = myUname.trim().toLowerCase();
+
+  db.ref("swissRooms/" + room.editCode + "/registrants").once("value").then(snap => {
+    const regs = snap.val() || {};
+    const byDevice = owned.some(id => !!regs[id]);
+    const byName = !!lower && Object.keys(regs).some(id => {
+      const r = regs[id];
+      return r && typeof r.name === "string" && r.name.trim().toLowerCase() === lower;
+    });
+    if (byDevice || byName) {
+      joinTournamentAsParticipant(room);
+      return;
+    }
+    alert(
+      "Registration for this tournament has closed, and we couldn't find you in it.\n\n" +
+      "If you are playing, sign in with the username you registered under, " +
+      "or ask the host to let you back in."
+    );
+  }).catch(() => {
+    alert("Couldn't check that tournament just now. Try again in a moment.");
+  });
+}
+
 function joinTournamentAsParticipant(room) {
   if (!firebaseReady()) {
     alert("Live sync isn't configured on this build.");
@@ -12284,6 +12769,12 @@ function showRegistrationPopup(room, options = {}) {
       setStatus(`This tournament bans: ${names}. Swap them out before submitting.`, "err");
       return;
     }
+    // A mid-tournament deck change goes down its own narrow path; everything
+    // else is still a full registration write.
+    if (options.deckOnly) {
+      submitDeckChange(room.editCode, editRegistrantId, deck, setStatus, close);
+      return;
+    }
     submitRegistration(room, name, deck, setStatus, close, { selfRegister, editRegistrantId, asGuest });
   };
   submitBtn.onclick = submit;
@@ -12513,6 +13004,39 @@ function addTestRegistrants(count) {
     });
   }).catch(e => {
     alert("Couldn't add test registrants: " + (e?.message || e));
+  });
+}
+
+// Change just the deck, after registration has closed.
+//
+// Deliberately NOT routed through submitRegistration: that path re-checks the
+// phase, the participant cap and duplicate names, and overwrites the whole
+// entry. All of that is right while registration is open. Mid-tournament the
+// only thing that may move is the deck, so this writes the deck and nothing
+// else, which is exactly what the database rule now allows.
+//
+// `deckChangedAt` is what tells the judge afterwards, written in the SAME
+// update as the deck so a deck can never change without the marker landing
+// with it.
+function submitDeckChange(editCode, registrantId, deck, setStatus, onSuccess) {
+  const db = initFirebase();
+  if (!db || !editCode || !registrantId) {
+    setStatus("Couldn't reach the tournament.", "err");
+    return;
+  }
+  setStatus("Saving\u2026", "pending");
+  db.ref("swissRooms/" + editCode + "/registrants/" + registrantId).update({
+    deck: JSON.parse(JSON.stringify(deck || null)),
+    deckChangedAt: new Date().toISOString()
+  }).then(() => {
+    if (typeof onSuccess === "function") onSuccess();
+  }).catch(e => {
+    const msg = (e && e.message) || String(e);
+    // The likely failure, and worth naming: the rules allowing this are not
+    // deployed yet, so the old answer still applies.
+    setStatus(/permission|denied/i.test(msg)
+      ? "This tournament won't let you change your own deck \u2014 ask the judge to record it at Bey Check."
+      : "Couldn't save your deck: " + msg, "err");
   });
 }
 

@@ -51,21 +51,20 @@
 (function () {
   "use strict";
 
-  // The whole sitting, not per question. Ten questions in two minutes is
-  // twelve seconds each: time to recognise an answer you already know, and
-  // none to look one up.
-  //
-  // The briefing and the clock both derive from this, so changing the number
-  // is the whole change.
-  const EXAM_MS = 2 * 60 * 1000;
   // The clock turns red for the last quarter of the sitting. Kept as a
   // fraction rather than a flat minute: a minute was a sensible warning on a
-  // five-minute paper and would be half of this one, which is a warning that
-  // stops meaning anything.
-  const CLOCK_WARN_MS = Math.round(EXAM_MS / 4);
 
   const JUDGE_TAG = "Judge";
   const GUEST_TAG = "Guest Judge";
+  const HEAD_TAG = "Head Judge";
+  // Lowest first. Earning a rung drops everything below it, so nobody wears
+  // two badges for the same thing — in the account's own tags and in the
+  // public profile both.
+  const ROLE_LADDER = [GUEST_TAG, JUDGE_TAG, HEAD_TAG];
+  function rolesBelow(tag) {
+    const i = ROLE_LADDER.indexOf(tag);
+    return i > 0 ? ROLE_LADDER.slice(0, i) : [];
+  }
   // Every tag that keeps a name in the public `judges` index — the list the
   // sub-host typeahead and the Battle Royale picker read. Mirrors
   // PUBLIC_TAG_INDEXES in auth.js; both must name the same set or a rejection
@@ -74,7 +73,9 @@
 
   // Straight from the official regulations (12th Edition and the 2026
   // updates). `a` is the index of the correct option.
-  const QUESTIONS = [
+  // The rules questions. Both exams draw on these; the Head Judge paper adds
+  // the manual ones below.
+  const RULES_QUESTIONS = [
     {
       q: "How many points does a Survivor Finish score?",
       o: ["1 point", "2 points", "3 points", "No points"],
@@ -157,6 +158,146 @@
     },
   ];
 
+  // Questions from the Manual — running a tournament, not scoring a battle.
+  // A Head Judge approves other judges and directs matches, so knowing the
+  // rules is the floor, not the bar.
+  const MANUAL_QUESTIONS = [
+    {
+      q: "Which tag is required to create a tournament?",
+      o: ["Guest Judge", "Judge", "Keeper", "Any signed-in account"],
+      a: 1,
+      why: "Judge \u2014 and a Head Judge counts as one. A Guest Judge can be invited to co-host but cannot create.",
+    },
+    {
+      q: "When are a tournament's date, time and stadium asked for?",
+      o: [
+        "Every time you tap Share",
+        "Once, when the tournament is created",
+        "Only after the tournament finishes",
+        "They are never asked \u2014 you type them into the share message",
+      ],
+      a: 1,
+      why: "Once at creation, so Share just shares. The Details button reopens them later.",
+    },
+    {
+      q: "A co-host's phone dies mid-tournament. Who can still score their match?",
+      o: [
+        "Nobody \u2014 the match is stuck",
+        "The host, and any other co-host",
+        "Only the player who was assigned it",
+        "Only a Head Judge",
+      ],
+      a: 1,
+      why: "Scoring is open to the host and every co-host. Being put on a match directs who should run it; it never leaves a match unreachable.",
+    },
+    {
+      q: "A player registered weeks ago and has built a new deck since. What happens?",
+      o: [
+        "Their registered deck updates automatically",
+        "They are stuck with the old deck",
+        "They can change it themselves, and the judge is told",
+        "Only the host can change it, in secret",
+      ],
+      a: 2,
+      why: "They change it from Your Matches, and host and co-hosts get a toast naming them \u2014 check it at Bey Check.",
+    },
+    {
+      q: "What does Bey Check pre-fill each player's deck from?",
+      o: [
+        "Nothing \u2014 the judge types it in",
+        "What they registered",
+        "The last tournament they played",
+        "Their highest-rated deck",
+      ],
+      a: 1,
+      why: "From the registration, with any banned part flagged. The judge can change it there if the player has switched.",
+    },
+    {
+      q: "A finished tournament is still sitting in the lobby. What happens if nobody closes it?",
+      o: [
+        "It stays there forever",
+        "It closes automatically at midnight, Malaysia time",
+        "It is deleted along with its results",
+        "It reopens for registration",
+      ],
+      a: 1,
+      why: "Closed automatically overnight. The results were archived when the final standings appeared, so nothing is lost.",
+    },
+    {
+      q: "When are a tournament's results saved to Past Tournaments?",
+      o: [
+        "When the host taps Leave",
+        "The moment the final standings appear",
+        "At midnight",
+        "Only if the host taps Share first",
+      ],
+      a: 1,
+      why: "Before anybody touches a button. That is why the exit button turns into Leave rather than Reset.",
+    },
+    {
+      q: "A player closed their tab mid-tournament. How do they get back to their matches?",
+      o: [
+        "They cannot \u2014 registration has closed",
+        "The host must re-add them by hand",
+        "They open the tournament again and rejoin",
+        "They must register a second time",
+      ],
+      a: 2,
+      why: "Registration closing shuts the door on new players, not on the ones already in it.",
+    },
+    {
+      q: "You put a co-host on a match. What can they do until it is scored?",
+      o: [
+        "Open any match, as before",
+        "Open only that match",
+        "Nothing \u2014 they are locked out entirely",
+        "Only watch, not score",
+      ],
+      a: 1,
+      why: "It is a job, not a suggestion. Score it, or take them off it, and they are free again.",
+    },
+    {
+      q: "Who can mark a registrant's fee as paid?",
+      o: [
+        "Anyone in the room",
+        "The host, and a Keeper invited as a co-host",
+        "Only the player themselves",
+        "Only a Head Judge",
+      ],
+      a: 1,
+      why: "A Keeper handles fees once invited as a co-host; the host can too.",
+    },
+  ];
+
+  // ---- the two exams ----
+  //
+  // Same engine, different papers. A Judge sitting the Head Judge exam is
+  // being asked whether they can RUN the thing, not just score it, so the
+  // paper adds the manual questions, runs longer, and has no consolation
+  // role: they already hold Judge, and there is no rung between.
+  const EXAMS = {
+    judge: {
+      id: "judge",
+      title: "The exam",
+      earns: JUDGE_TAG,
+      consolation: GUEST_TAG,
+      requires: null,
+      ms: 1 * 60 * 1000,
+      pool: () => RULES_QUESTIONS.slice(),
+    },
+    head: {
+      id: "head",
+      title: "The Head Judge exam",
+      earns: HEAD_TAG,
+      consolation: null,
+      requires: JUDGE_TAG,
+      // Twice the paper, three times the clock: the manual questions take
+      // longer to read than "how many points is a Burst Finish".
+      ms: 3 * 60 * 1000,
+      pool: () => RULES_QUESTIONS.concat(MANUAL_QUESTIONS),
+    },
+  };
+
   // ---- state ----
   let view = "exam";               // exam | ranking | approve
 
@@ -165,6 +306,11 @@
   // "intro" is also what lets someone with an application already pending see
   // its status until they deliberately choose to sit it again.
   let phase = "intro";             // intro | sitting | result
+  // The paper actually being sat: the exam's questions in THIS attempt's
+  // order. Shuffled per sitting, so answers cannot be memorised as a
+  // sequence of positions and passed around as "C, A, A, D...".
+  let paper = [];
+  let examId = "judge";            // which of EXAMS this sitting is
   let answers = [];                // chosen option index per question
   let endsAt = 0;                  // epoch ms the clock runs out
   let ticker = null;               // the one-second interval while sitting
@@ -205,6 +351,10 @@
     if (tag === GUEST_TAG) {
       return !!(typeof window.isGuestJudge === "function" && window.isGuestJudge());
     }
+    // Asked about the top rung this used to fall through to amJudge(), which
+    // is true for every Judge — so a Judge looked like they already held Head
+    // Judge and was never offered the paper for it.
+    if (tag === HEAD_TAG) return amHeadJudge();
     return amJudge();
   }
   function esc(v) {
@@ -217,18 +367,49 @@
     return (name && window.usernameKey) ? window.usernameKey(name) : "";
   }
 
+  // Which exam this account is being offered.
+  //
+  // Already a Judge? The next paper up is the Head Judge one. Everybody else
+  // sits the Judge exam, including a Guest Judge working their way up — the
+  // Head Judge exam is a promotion from Judge, not a shortcut past it.
+  function currentExam() {
+    // Anyone who already holds Judge OR Head Judge gets the Head Judge paper.
+    //
+    // For a Judge that is the promotion. For a Head Judge it is a refresher:
+    // they are at the top, so nothing is filed either way (the result view's
+    // `already` check sees to that), but showing them the paper BELOW the one
+    // they passed would be odd — and worse, it is the one whose consolation
+    // is Guest Judge.
+    return EXAMS[(amJudge() || holds(HEAD_TAG)) ? "head" : "judge"];
+  }
+
   function score() {
-    return QUESTIONS.reduce((n, q, i) => n + (answers[i] === q.a ? 1 : 0), 0);
+    return paper.reduce((n, q, i) => n + (answers[i] === q.a ? 1 : 0), 0);
   }
   function answeredAll() {
-    return QUESTIONS.every((_, i) => answers[i] != null);
+    return paper.length > 0 && paper.every((_, i) => answers[i] != null);
   }
   function answeredCount() {
-    return QUESTIONS.reduce((n, _, i) => n + (answers[i] != null ? 1 : 0), 0);
+    return paper.reduce((n, _, i) => n + (answers[i] != null ? 1 : 0), 0);
   }
-  // A judge's calls are not partially right, so Judge takes every answer.
-  function roleFor(s) {
-    return s === QUESTIONS.length ? JUDGE_TAG : GUEST_TAG;
+  // A judge's calls are not partially right, so the full role takes every
+  // answer. The Judge exam has a consolation below it; the Head Judge exam
+  // has none, because the person sitting it already holds the rung below.
+  function roleFor(s, exam) {
+    if (s === paper.length) return exam.earns;
+    return exam.consolation;        // null on the Head Judge paper
+  }
+
+  // Fisher-Yates. A fresh order every sitting, so the answers cannot be
+  // learned as positions — which matters most on the retake-as-often-as-you
+  // -like exams here.
+  function shuffled(list) {
+    const out = list.slice();
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = out[i]; out[i] = out[j]; out[j] = t;
+    }
+    return out;
   }
   function clock(ms) {
     const t = Math.max(0, Math.ceil(ms / 1000));
@@ -236,11 +417,14 @@
   }
 
   function startExam() {
+    const exam = currentExam();
+    examId = exam.id;
+    paper = shuffled(exam.pool());
     answers = [];
     outcome = null;
     errorMsg = "";
     phase = "sitting";
-    endsAt = Date.now() + EXAM_MS;
+    endsAt = Date.now() + exam.ms;
     stopClock();
     // Only the clock's own text is rewritten each second. Re-rendering the
     // whole panel every tick would throw away the scroll position, which on a
@@ -255,7 +439,7 @@
       const el = document.getElementById("judge-clock");
       if (!el) return;
       el.textContent = clock(left);
-      if (left <= CLOCK_WARN_MS) el.className = "judge-clock is-low";
+      if (left <= Math.round(exam.ms / 4)) el.className = "judge-clock is-low";
     }, 1000);
     render();
   }
@@ -269,13 +453,16 @@
   // an unfinished paper earns no role at all, only another go.
   function finishExam() {
     stopClock();
+    const exam = EXAMS[examId] || EXAMS.judge;
     const finished = answeredAll();
     const s = score();
     outcome = {
       finished,
       answered: answeredCount(),
+      total: paper.length,
       score: s,
-      role: finished ? roleFor(s) : null,
+      exam: exam.id,
+      role: finished ? roleFor(s, exam) : null,
     };
     phase = "result";
     render();
@@ -310,7 +497,7 @@
     if (!myApp || myApp.status !== "approved") return Promise.resolve();
     // Whichever role was approved — claiming the wrong one is what the
     // database rules reject, since they check the application's own role.
-    const tag = myApp.role === GUEST_TAG ? GUEST_TAG : JUDGE_TAG;
+    const tag = ROLE_LADDER.includes(myApp.role) ? myApp.role : JUDGE_TAG;
     if (holds(tag)) return Promise.resolve();
     claimed = true;
     return d.ref("users/" + user.uid + "/tags/" + tag).set(true)
@@ -320,14 +507,16 @@
         // rather than setting it false matters — the rules only let an account
         // set its OWN tag to true, so writing false here would be rejected,
         // while a delete skips validation entirely.
-        if (tag === JUDGE_TAG) {
-          // Unconditional on purpose. Asking holds(GUEST_TAG) first would read
-          // the cached profile, which has not necessarily loaded when this
-          // runs — and a false reading there leaves the account wearing both
-          // badges. Deleting a key that was never set is a no-op.
-          return d.ref("users/" + user.uid + "/tags/" + GUEST_TAG).set(null)
-            .catch(e => console.warn("Dropping the Guest Judge tag failed:", e && e.message));
-        }
+        // Every rung BELOW the one just claimed comes off. Unconditional on
+        // purpose: asking holds() first would read the cached profile, which
+        // has not necessarily loaded when this runs, and a false reading
+        // there leaves the account wearing two badges. Deleting a key that
+        // was never set is a no-op.
+        const below = rolesBelow(tag);
+        if (!below.length) return;
+        return Promise.all(below.map(lower =>
+          d.ref("users/" + user.uid + "/tags/" + lower).set(null)
+            .catch(e => console.warn("Dropping " + lower + " failed:", e && e.message))));
       })
       .then(() => {
         if (typeof window.refreshCurrentProfile === "function") {
@@ -417,7 +606,7 @@
       username: name,
       key: keyFor(name),
       score: outcome.score,
-      total: QUESTIONS.length,
+      total: paper.length,
       at: new Date().toISOString(),
       status: "pending",
       role: outcome.role,
@@ -459,19 +648,19 @@
         if (!key) return null;
         // The role the exam earned them, not a fixed one — a Guest Judge
         // application must not quietly hand out the full Judge badge.
-        const tag = app.role === GUEST_TAG ? GUEST_TAG : JUDGE_TAG;
+        const tag = ROLE_LADDER.includes(app.role) ? app.role : JUDGE_TAG;
         if (status === "approved") {
           const writes = [
             d.ref("profiles/" + key + "/tags/" + tag).set(true),
             d.ref("judges/" + key).set(app.username || key),
           ];
-          // Promoting a Guest Judge: take the lower badge off at the same
-          // time, or they wear both until their own device catches up — and
-          // the public badge is the one everyone else sees.
-          if (tag === JUDGE_TAG) {
-            writes.push(d.ref("profiles/" + key + "/tags/" + GUEST_TAG).set(null)
+          // A promotion takes the lower badges off at the same time, or they
+          // wear both until their own device catches up — and the public
+          // badge is the one everyone else sees.
+          rolesBelow(tag).forEach(lower => {
+            writes.push(d.ref("profiles/" + key + "/tags/" + lower).set(null)
               .catch(() => null));
-          }
+          });
           return Promise.all(writes);
         }
         // A rejection after a previous approval has to take the markers back
@@ -550,7 +739,7 @@
 
   function renderQuestions() {
     const graded = phase === "result";
-    return QUESTIONS.map((q, i) => {
+    return paper.map((q, i) => {
       const chosen = answers[i];
       const right = graded && chosen === q.a;
       const wrong = graded && chosen !== q.a;
@@ -583,6 +772,9 @@
   function statusHead() {
     const status = myApp && myApp.status;
     const role = (myApp && myApp.role) || JUDGE_TAG;
+    if (holds(HEAD_TAG)) {
+      return `<div class="judge-status is-judge">You are a Head Judge. You approve new judges from the Approvals tab, you can put a named co-host on each match of a tournament you host, and you count as a Judge everywhere one is needed. This is the top of the ladder \u2014 there is no paper above it.</div>`;
+    }
     if (amJudge()) {
       return `<div class="judge-status is-judge">You are a Judge. You can create tournaments, be invited as a co-host, and be picked to oversee a Battle Royale battle.</div>`;
     }
@@ -608,22 +800,38 @@
   }
 
   function introView() {
-    const n = QUESTIONS.length;
-    const mins = Math.round(EXAM_MS / 60000);
+    const exam = currentExam();
+    const n = exam.pool().length;
+    const mins = Math.round(exam.ms / 60000);
+    const head = exam.id === "head";
     const again = !!(myApp || amJudge() || holds(GUEST_TAG));
     return `${statusHead()}
       <div class="judge-intro">
-        <h3 class="judge-h">The exam</h3>
-        <p>${n} questions on the official tournament regulations, against a ${mins}-minute clock. The clock
-        starts when you press the button below, and it does not stop if you leave this tab.</p>
+        <h3 class="judge-h">${esc(exam.title)}</h3>
+        ${head
+          ? `<p>You already hold <strong>Judge</strong>. This is the paper above it: ${n} questions against a
+             ${mins}-minute clock, covering the official regulations <em>and</em> the Manual — creating a
+             tournament, running it, and what to do when something goes wrong. Read the Manual first; it is
+             the Tutorial button beside Open Tournaments.</p>`
+          : `<p>${n} questions on the official tournament regulations, against a ${mins}-minute clock. The
+             clock starts when you press the button below, and it does not stop if you leave this tab.</p>`}
         <ul class="judge-intro-list">
-          <li><strong>Every answer right, in time</strong> — you apply as a <em>Judge</em>: create tournaments,
-          co-host, and oversee Battle Royale battles.</li>
-          <li><strong>All answered in time, not all right</strong> — you apply as a <em>Guest Judge</em>: co-host
-          and oversee battles, but not create tournaments of your own.</li>
+          ${head
+            ? `<li><strong>Every answer right, in time</strong> — you apply as a <em>Head Judge</em>: approve
+               new judges, and put a named co-host on each match of a tournament you host.</li>
+               <li><strong>Anything less</strong> — nothing is filed and you stay a Judge. There is no rung
+               between the two, so this paper has no consolation.</li>`
+            : `<li><strong>Every answer right, in time</strong> — you apply as a <em>Judge</em>: create
+               tournaments, co-host, and oversee Battle Royale battles.</li>
+               <li><strong>All answered in time, not all right</strong> — you apply as a <em>Guest Judge</em>:
+               co-host and oversee battles, but not create tournaments of your own.</li>`}
           <li><strong>The clock beats you</strong> — nothing is filed, and you can sit it again straight away.</li>
         </ul>
-        <p class="judge-note">Either way, a Head Judge approves the application before the role is granted.</p>
+        <p class="judge-note">${holds(HEAD_TAG)
+          ? "You already hold Head Judge, so nothing is filed \u2014 sit it whenever you want to check yourself against it. "
+          : ""}The questions come in a different order every sitting. ${head
+          ? "A Head Judge approves the application before the role is granted, and approving it drops your Judge tag — the roles are a ladder, not a collection."
+          : "Either way, a Head Judge approves the application before the role is granted."}</p>
       </div>
       <div class="judge-actions">
         <button type="button" class="btn" id="judge-start">${again ? "Sit the exam again" : "Start the exam"}</button>
@@ -631,12 +839,14 @@
   }
 
   function sittingView() {
+    const exam = EXAMS[examId] || EXAMS.judge;
+    const warnAt = Math.round(exam.ms / 4);
     const left = endsAt - Date.now();
     return `
       <div class="judge-clock-bar">
         <span class="judge-clock-label">Time left</span>
-        <span class="judge-clock${left <= CLOCK_WARN_MS ? " is-low" : ""}" id="judge-clock">${clock(left)}</span>
-        <span class="judge-clock-count" id="judge-answered">${answeredCount()} / ${QUESTIONS.length} answered</span>
+        <span class="judge-clock${left <= warnAt ? " is-low" : ""}" id="judge-clock">${clock(left)}</span>
+        <span class="judge-clock-count" id="judge-answered">${answeredCount()} / ${paper.length} answered</span>
       </div>
       <ol class="judge-quiz">${renderQuestions()}</ol>
       <div class="judge-actions">
@@ -646,7 +856,7 @@
 
   function resultView() {
     const o = outcome || { finished: false, answered: 0, score: 0, role: null };
-    const n = QUESTIONS.length;
+    const n = o.total || paper.length;
     let card;
 
     if (!o.finished) {
@@ -658,18 +868,24 @@
           An unfinished paper earns no role. The correct answers are below — read them and sit it again.
         </div>`;
     } else {
-      const perfect = o.role === JUDGE_TAG;
-      const already = holds(o.role);
-      // A full Judge who re-sits and drops a question must not be able to talk
-      // themselves down into a Guest Judge application.
-      const demotion = !perfect && amJudge();
+      const sat = EXAMS[o.exam] || EXAMS.judge;
+      const perfect = o.score === n;
+      const already = !!o.role && holds(o.role);
+      // Two different "nothing to apply for" cases. On the Judge paper, a full
+      // Judge who drops a question must not be able to talk themselves down
+      // into a Guest Judge application. On the Head Judge paper there IS no
+      // lesser role, so an imperfect sitting simply earns nothing.
+      const noConsolation = !perfect && !sat.consolation;
+      const demotion = !perfect && sat.id === "judge" && amJudge();
       const waiting = !!(myApp && myApp.status === "pending");
-      const canApply = !already && !demotion && !waiting;
+      const canApply = !!o.role && !already && !demotion && !noConsolation && !waiting;
       card = `<div class="judge-result ${perfect ? "is-pass" : "is-partial"}">
           <strong>${o.score} / ${n} — ${perfect ? "a perfect paper." : `${n - o.score} wrong.`}</strong>
           ${perfect
-            ? "You qualify to apply as a Judge."
-            : "You qualify to apply as a Guest Judge — co-hosting and Battle Royale, but not creating tournaments of your own. Sit it again and get every answer right to apply as a full Judge."}
+            ? `You qualify to apply as a ${esc(sat.earns)}.`
+            : noConsolation
+              ? `A Head Judge paper has to be perfect \u2014 you stay a Judge. Read the Manual and sit it again.`
+              : "You qualify to apply as a Guest Judge \u2014 co-hosting and Battle Royale, but not creating tournaments of your own. Sit it again and get every answer right to apply as a full Judge."}
           ${demotion ? " You already hold the full Judge tag, so there is nothing to apply for here." : ""}
           ${already && !demotion ? ` You already hold ${esc(o.role)}.` : ""}
           ${waiting ? " You already have an application waiting on a Head Judge." : ""}
@@ -721,6 +937,7 @@
     const card = (a, showActions) => {
       const key = a.key || keyFor(a.username);
       const guest = a.role === GUEST_TAG;
+      const head = a.role === HEAD_TAG;
       return `
       <li class="judge-app${a.status === "approved" ? " is-approved" : ""}${a.status === "rejected" ? " is-rejected" : ""}"
           data-face="${esc(key)}">
@@ -730,7 +947,7 @@
           <div class="judge-app-who">
             <span class="judge-app-name">${esc(a.username || a.uid)}</span>
             <span class="judge-app-meta">
-              <span class="judge-app-role${guest ? " is-guest" : ""}">${esc(a.role || JUDGE_TAG)}</span>
+              <span class="judge-app-role${guest ? " is-guest" : ""}${head ? " is-head" : ""}">${esc(a.role || JUDGE_TAG)}</span>
               <span class="judge-app-score">${esc(a.score)} / ${esc(a.total)}</span>
               <span class="judge-app-date">${esc(shortDate(a.at))}</span>
             </span>
@@ -802,7 +1019,7 @@
     on("#judge-start", startExam);
     on("#judge-again", startExam);
     on("#judge-submit", () => {
-      const unanswered = QUESTIONS.findIndex((_, i) => answers[i] == null);
+      const unanswered = paper.findIndex((_, i) => answers[i] == null);
       if (unanswered !== -1) {
         alert(`Question ${unanswered + 1} hasn't been answered yet. The clock is still running.`);
         return;
