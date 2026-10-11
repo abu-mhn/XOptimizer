@@ -281,7 +281,8 @@ const DATA = {
     { atk: 30, def: 20, sta: 20, dash: 30, burstRes: 80, weight: 2.3, name: "Gear Unite", codename: "GU" },
     { atk: 15, def: 20, sta: 60, dash: 5, burstRes: 30, weight: 1.9, name: "Narrow", codename: "Nr", meta: true },
     { atk: 5, def: 55, sta: 40, dash: 10, burstRes: 20, weight: 3.1, name: "Disk Spike", codename: "DS" },
-    { atk: 45, def: 5, sta: 5, dash: 45, burstRes: 80, weight: 0, name: "Low Cyclone", codename: "LC" }
+    { atk: 45, def: 5, sta: 5, dash: 45, burstRes: 80, weight: 0, name: "Low Cyclone", codename: "LC" },
+    { atk: 10, def: 15, sta: 45, dash: 30, burstRes: 30, weight: 2.0, name: "Gear Ball", codename: "GB" }
   ],
 
   ratchetBits: [
