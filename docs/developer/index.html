@@ -709,6 +709,7 @@
             <button type="button" class="developer-sub-tab active" data-developer-view="users" role="tab" aria-selected="true">Users</button>
             <button type="button" class="developer-sub-tab" data-developer-view="database" role="tab" aria-selected="false">Database</button>
             <button type="button" class="developer-sub-tab" data-developer-view="tags" role="tab" aria-selected="false">Tags</button>
+            <button type="button" class="developer-sub-tab" data-developer-view="meta" role="tab" aria-selected="false">Meta</button>
           </div>
           <div class="developer-sub-panel" id="developer-panel-users">
             <p class="developer-count" id="developer-count">Registered users: …</p>
@@ -721,6 +722,34 @@
           </div>
           <div class="developer-sub-panel hidden" id="developer-panel-database">
             <p class="account-hint">Database tools coming soon.</p>
+          </div>
+          <div class="developer-sub-panel hidden" id="developer-panel-meta">
+            <p class="account-hint">Month-end job: whatever sits in <strong>S</strong> or <strong>A</strong> on
+            the usage tier list is meta. This reads that month's play counts, cuts the tiers the same way the
+            Tier List card does, and lists the <code>meta:</code> flags in <code>data.js</code> that no longer
+            match. It changes nothing by itself &mdash; <code>data.js</code> ships with the site, so the edit is
+            yours.</p>
+            <div class="developer-meta-controls">
+              <label class="dm-label" for="developer-meta-month">Month</label>
+              <div class="dm-group">
+                <input type="month" id="developer-meta-month">
+                <button type="button" class="dm-go" id="developer-meta-run">Compute</button>
+              </div>
+            </div>
+            <div id="developer-meta-out" class="developer-meta-out"></div>
+
+            <div class="dm-apply">
+              <label class="dm-label" for="developer-meta-paste">Apply to data.js</label>
+              <p class="dm-apply-hint">Paste the two lists here &mdash; Compute fills this in for you.
+              Nothing is sent anywhere: the page fetches its own <code>data.js</code>, changes only the
+              <code>meta:</code> flags you listed, and gives you the finished file to drop into the repo.</p>
+              <textarea id="developer-meta-paste" rows="6" spellcheck="false"
+                placeholder="meta: true&#10;  lockChips / Wolf&#10;&#10;meta: false&#10;  bits / Flat"></textarea>
+              <div class="dm-apply-row">
+                <button type="button" class="dm-go" id="developer-meta-build">Build updated data.js</button>
+                <span id="developer-meta-status" class="dm-apply-status"></span>
+              </div>
+            </div>
           </div>
           <div class="developer-sub-panel hidden" id="developer-panel-tags">
             <p class="account-hint">Every tag the app recognises. Grouped by how it's assigned. Free-form tags can still be typed in the Users tab — only the ones listed here drive in-app behavior (tabs, themes, badges, gated buttons).</p>

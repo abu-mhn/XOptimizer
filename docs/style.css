@@ -2074,6 +2074,297 @@ body.forest-mode   .developer-sub-tab.active { border-color: #b5c89a; border-bot
 .developer-tag-group-hint {
     margin-top: 0;
 }
+/* ---- month-end meta tool (Developer page) ----
+   Two lists side by side, because the question is always "what moves, and
+   which way" — reading them as one flat list meant checking a label on every
+   row to know which direction it went. */
+.developer-meta-controls {
+    margin: 12px 0 16px;
+}
+.dm-label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #8b949e;
+}
+
+/* The month and the thing you do with it are one control, so they share a
+   border and sit flush. Separately they were two rectangles of slightly
+   different heights with a gap between them, which reads as an accident. */
+.dm-group {
+    display: inline-flex;
+    align-items: stretch;
+    border: 1px solid #30363d;
+    border-radius: 7px;
+    overflow: hidden;
+    background: #0d1117;
+}
+.dm-group:focus-within {
+    border-color: #58a6ff;
+}
+.dm-group input {
+    font: inherit;
+    font-size: 0.85rem;
+    /* An explicit height on both halves: padding alone left them a pixel or
+       two apart, because the native month field adds its own metrics. */
+    height: 38px;
+    box-sizing: border-box;
+    padding: 0 12px;
+    border: none;
+    background: transparent;
+    color: #e6edf3;
+    /* Makes the browser draw the picker chrome for a dark field, so the
+       calendar glyph is light instead of a black smudge. */
+    color-scheme: dark;
+    outline: none;
+}
+.dm-group input::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 0.15s;
+}
+.dm-group input::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+}
+.dm-go {
+    flex: 0 0 auto;
+    height: 38px;
+    box-sizing: border-box;
+    padding: 0 20px;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border: none;
+    border-left: 1px solid #30363d;
+    background: #238636;
+    color: #fff;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.dm-go:hover { background: #2ea043; }
+.dm-go:active { background: #1f7a30; }
+.dm-go:focus-visible { outline: 2px solid #58a6ff; outline-offset: -2px; }
+
+/* ---- the result ---- */
+.dm-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #21262d;
+}
+.dm-head-left {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.dm-month {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #e6edf3;
+    font-variant-numeric: tabular-nums;
+}
+.dm-sub {
+    font-size: 0.74rem;
+    color: #8b949e;
+}
+.dm-copy {
+    flex: 0 0 auto;
+    font: inherit;
+    font-size: 0.76rem;
+    font-weight: 600;
+    padding: 7px 14px;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    background: #21262d;
+    color: #c9d1d9;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.dm-copy:hover { border-color: #58a6ff; color: #e6edf3; }
+.dm-copy.is-done { border-color: #2ea043; background: #238636; color: #fff; }
+
+/* Per-category coverage: how many of the played parts made S or A. */
+.dm-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin: 12px 0 14px;
+}
+.dm-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px;
+    border: 1px solid #30363d;
+    border-radius: 999px;
+    background: #0d1117;
+    font-size: 0.7rem;
+}
+.dm-field-name { color: #8b949e; }
+.dm-field-n {
+    color: #c9d1d9;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.dm-cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+}
+.dm-col {
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    background: #0d1117;
+    padding: 10px 12px;
+}
+.dm-col.is-on { border-color: rgba(63, 185, 80, 0.4); }
+.dm-col.is-off { border-color: rgba(248, 81, 73, 0.35); }
+.dm-col-h {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 8px;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #8b949e;
+}
+.dm-count {
+    min-width: 20px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+.dm-col.is-on .dm-count { background: rgba(63, 185, 80, 0.18); color: #7ee787; }
+.dm-col.is-off .dm-count { background: rgba(248, 81, 73, 0.16); color: #ffa198; }
+
+.dm-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+.dm-row {
+    display: grid;
+    /* The array name leads and is what you search data.js for, so it gets a
+       fixed column and the part name never shifts left and right down the
+       list. */
+    grid-template-columns: 7.5em 1fr;
+    align-items: baseline;
+    gap: 8px;
+    padding: 3px 0;
+    font-size: 0.8rem;
+}
+.dm-where {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.72rem;
+    color: #6e7681;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.dm-name { color: #e6edf3; }
+
+.dm-how {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border-left: 2px solid #30363d;
+    font-size: 0.76rem;
+    line-height: 1.6;
+    color: #8b949e;
+}
+.dm-how strong { color: #c9d1d9; }
+.dm-how code {
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: #161b22;
+    color: #c9d1d9;
+    font-size: 0.92em;
+}
+
+/* ---- paste a list back in and get the edited file ---- */
+.dm-apply {
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid #21262d;
+}
+.dm-apply-hint {
+    margin: 0 0 10px;
+    font-size: 0.76rem;
+    line-height: 1.6;
+    color: #8b949e;
+}
+.dm-apply-hint code {
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: #161b22;
+    color: #c9d1d9;
+    font-size: 0.92em;
+}
+.dm-apply textarea {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    font: inherit;
+    /* Monospace so the `array / Name` columns line up and a typo in the
+       separator is visible rather than something you squint at. */
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    line-height: 1.6;
+    border: 1px solid #30363d;
+    border-radius: 7px;
+    background: #0d1117;
+    color: #e6edf3;
+    resize: vertical;
+    outline: none;
+}
+.dm-apply textarea:focus { border-color: #58a6ff; }
+.dm-apply-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-top: 10px;
+}
+/* .dm-go is drawn to sit flush inside .dm-group; on its own it needs its own
+   edges back, or it shows a stray left border and square corners. */
+.dm-apply-row .dm-go {
+    border: 1px solid #2ea043;
+    border-radius: 7px;
+}
+.dm-apply-status {
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: #8b949e;
+}
+.dm-apply-status.is-ok { color: #3fb950; }
+.dm-apply-status.is-err { color: #f85149; }
+
+.dm-empty,
+.dm-note,
+.dm-error {
+    margin: 4px 0 0;
+    font-size: 0.76rem;
+    color: #6e7681;
+}
+.dm-empty { font-style: italic; }
+.dm-note { margin-top: 12px; }
+.dm-error { color: #ff7b72; font-style: italic; }
+
 .developer-tag-list {
     list-style: none;
     margin: 0;

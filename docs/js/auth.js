@@ -1029,8 +1029,355 @@
       () => publishJudgePending(0));
   }
 
+  // ===== Month-end: which parts are meta =====
+  //
+  // "Meta" means a part sat in S or A on the usage tier list for the month.
+  // That list is cut from play counts in bestParts/{YYYY-MM}, which only the
+  // database knows — so this is the only place the answer can be worked out,
+  // and data.js is a static file that ships with the site, so applying it is
+  // a human edit. This tool produces exactly that edit and nothing else.
+  //
+  // It reuses buildTierRows rather than reimplementing the cut. The tier
+  // boundaries have a rule about ties that is easy to get subtly wrong, and
+  // a second copy would drift from the card people actually look at.
+  const META_TIERS = ["S", "A"];
+
+  function metaMonthKey(d) {
+    const dt = d || new Date();
+    return dt.getFullYear() + "-" + String(dt.getMonth() + 1).padStart(2, "0");
+  }
+
+  // Every part DATA knows about, flattened, with the array it came from so a
+  // name can be reported alongside its category.
+  function metaAllParts() {
+    const out = [];
+    if (typeof DATA === "undefined" || !DATA) return out;
+    Object.keys(DATA).forEach(key => {
+      const arr = DATA[key];
+      if (!Array.isArray(arr)) return;
+      arr.forEach(part => {
+        if (part && typeof part.name === "string" && part.name) {
+          out.push({ list: key, name: part.name, meta: part.meta === true });
+        }
+      });
+    });
+    return out;
+  }
+
+  function computeMetaChanges(monthKey) {
+    let db = null;
+    try { db = firebase.database(); } catch (e) { db = null; }
+    if (!db) return Promise.reject(new Error("Live sync isn't configured on this build."));
+    if (typeof buildTierRows !== "function") {
+      return Promise.reject(new Error("The tier builder isn't loaded on this page."));
+    }
+    return db.ref("bestParts/" + monthKey).once("value").then(snap => {
+      const val = snap.val();
+      if (!val) throw new Error("No play data for " + monthKey + ".");
+
+      // S and A, per field, cut the same way the Tier List card cuts them.
+      const promoted = new Set();
+      const perField = [];
+      Object.keys(val).forEach(field => {
+        const bucket = val[field] || {};
+        const ranked = Object.keys(bucket)
+          .map(k => bucket[k])
+          .filter(r => r && r.name)
+          .map(r => ({ name: r.name, score: Number(r.count) || 0 }))
+          .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+        if (!ranked.length) return;
+        const rows = buildTierRows(ranked);
+        const top = [];
+        rows.forEach(row => {
+          if (META_TIERS.indexOf(row.tier) === -1) return;
+          row.parts.forEach(pt => { promoted.add(pt.name); top.push(pt.name); });
+        });
+        perField.push({ field, played: ranked.length, top });
+      });
+
+      // A part nobody brought all month is not in the list at all, which is
+      // below F — so it is not meta either. That falls out of the rule rather
+      // than being a separate decision, but it is the case that moves the
+      // most flags, so it is worth saying out loud in the output.
+      const parts = metaAllParts();
+      const on = parts.filter(x => promoted.has(x.name) && !x.meta);
+      const off = parts.filter(x => !promoted.has(x.name) && x.meta);
+      const unseen = parts.filter(x => !promoted.has(x.name) && x.meta &&
+        !Object.keys(val).some(f => Object.keys(val[f] || {})
+          .some(k => (val[f][k] || {}).name === x.name)));
+      return { monthKey, perField, on, off, unseen, total: parts.length, promoted };
+    });
+  }
+
+  function renderMetaChanges(r) {
+    const out = document.getElementById("developer-meta-out");
+    if (!out) return;
+    const changes = r.on.length + r.off.length;
+
+    // One row per part: the array it lives in, then its name. The array is
+    // what you search data.js for, so it leads.
+    const rows = (items, kind) => items.length
+      ? `<ul class="dm-list">${items.map(x =>
+          `<li class="dm-row"><span class="dm-where">${escapeHtml(x.list)}</span>` +
+          `<span class="dm-name">${escapeHtml(x.name)}</span></li>`).join("")}</ul>`
+      : `<p class="dm-empty">Nothing to ${kind}.</p>`;
+
+    out.innerHTML = `
+      <div class="dm-head">
+        <div class="dm-head-left">
+          <span class="dm-month">${escapeHtml(r.monthKey)}</span>
+          <span class="dm-sub">${r.total} parts checked · ${changes} to change</span>
+        </div>
+        ${changes ? `<button type="button" class="dm-copy" id="developer-meta-copy">Copy</button>` : ""}
+      </div>
+
+      <div class="dm-fields">
+        ${r.perField.map(f => `<span class="dm-field" title="${escapeHtml(f.field)}: ${f.top.length} of ${f.played} played are S or A">
+          <span class="dm-field-name">${escapeHtml(f.field)}</span>
+          <span class="dm-field-n">${f.top.length}/${f.played}</span>
+        </span>`).join("")}
+      </div>
+
+      <div class="dm-cols">
+        <section class="dm-col is-on">
+          <h4 class="dm-col-h">Turn on <span class="dm-count">${r.on.length}</span></h4>
+          ${rows(r.on, "add")}
+        </section>
+        <section class="dm-col is-off">
+          <h4 class="dm-col-h">Turn off <span class="dm-count">${r.off.length}</span></h4>
+          ${rows(r.off, "remove")}
+        </section>
+      </div>
+
+      ${r.unseen.length ? `<p class="dm-note">${r.unseen.length} of those to turn off were not brought at all
+        this month — below F rather than in B—D.</p>` : ""}
+      ${changes ? `<div class="dm-how">
+        <strong>Where this goes:</strong> <code>docs/data.js</code> &mdash; each part is one object in the
+        array named on the left, with a <code>meta:</code> flag on it. Use the box below to make that edit
+        for you: it hands back the whole file with these ${changes} flags changed and nothing else touched,
+        which you commit in place of the current one. Copy gives you the two lists as plain text if you
+        would rather edit by hand &mdash; if you do, note that eight parts are written across several
+        lines with a <code>modes:</code> array, and theirs sits on a line of its own after it.
+      </div>` : `<p class="dm-note">Every flag already matches. Nothing to do.</p>`}`;
+
+    // The button is rebuilt with the result, so it is wired here rather than
+    // once at startup.
+    const copyBtn = document.getElementById("developer-meta-copy");
+    if (!copyBtn) return;
+    const text =
+      "meta: true" + String.fromCharCode(10) +
+      (r.on.map(x => "  " + x.list + " / " + x.name).join(String.fromCharCode(10)) || "  (none)") +
+      String.fromCharCode(10, 10) + "meta: false" + String.fromCharCode(10) +
+      (r.off.map(x => "  " + x.list + " / " + x.name).join(String.fromCharCode(10)) || "  (none)");
+    // Fill the apply box too, so the copy/paste round-trip is optional.
+    const pasteBox = document.getElementById("developer-meta-paste");
+    if (pasteBox && !pasteBox.value.trim()) pasteBox.value = text;
+
+    copyBtn.addEventListener("click", () => {
+      if (!navigator.clipboard || !navigator.clipboard.writeText) return;
+      navigator.clipboard.writeText(text).then(() => {
+        copyBtn.textContent = "Copied";
+        copyBtn.classList.add("is-done");
+        setTimeout(() => {
+          copyBtn.textContent = "Copy";
+          copyBtn.classList.remove("is-done");
+        }, 1500);
+      }).catch(() => {});
+    });
+  }
+
+  // ===== Turning the list into an updated data.js =====
+  //
+  // The browser cannot write a file that ships with the site, so the next
+  // best thing is to do the edit here and hand the result over. The page
+  // fetches its OWN data.js and patches the text, rather than re-serialising
+  // the parsed DATA object: that would throw away the comments, the key
+  // order and the formatting, and turn a 50-line diff into a whole-file one.
+  //
+  // Two traps, both of which bit a hand-written pass at this:
+  //
+  //   * names repeat across arrays. "Wolf" is a lock chip while "Silver
+  //     Wolf" is a blade; "Flat" is a bit and so is "Low Flat". Every lookup
+  //     is scoped to its own array and must match exactly once.
+  //   * eight parts are written across several lines around a nested
+  //     `modes: [...]`, with their meta on a line of its own after it. So
+  //     this matches braces and edits whole objects, never lines.
+  //
+  // Anything it cannot place with certainty is REPORTED, never skipped.
+
+  // "  lockChips / Wolf" under a "meta: true" heading.
+  function parseMetaList(text) {
+    const want = [];          // { list, name, meta }
+    const bad = [];
+    let flag = null;
+    String(text || "").split(/\r?\n/).forEach((raw, i) => {
+      const line = raw.trim();
+      if (!line) return;
+      const head = /^meta:\s*(true|false)$/i.exec(line);
+      if (head) { flag = head[1].toLowerCase() === "true"; return; }
+      if (/^\(none\)$/i.test(line)) return;
+      const row = /^([A-Za-z]+)\s*\/\s*(.+)$/.exec(line);
+      if (!row || flag === null) { bad.push("line " + (i + 1) + ": " + line); return; }
+      want.push({ list: row[1], name: row[2].trim(), meta: flag });
+    });
+    return { want, bad };
+  }
+
+  // The { ... } for one part inside one array, braces matched so a nested
+  // modes array cannot end it early.
+  function metaObjectSpan(src, arr, name) {
+    const head = new RegExp("^  " + arr + ": \\[", "m").exec(src);
+    if (!head) return { error: "no array called " + arr };
+    const nextArr = /^  [A-Za-z]+: \[/m.exec(src.slice(head.index + head[0].length));
+    const end = nextArr ? head.index + head[0].length + nextArr.index : src.length;
+
+    const needle = 'name: "' + name + '"';
+    const hits = [];
+    let from = head.index;
+    for (;;) {
+      const at = src.indexOf(needle, from);
+      if (at === -1 || at >= end) break;
+      // `codename: "..."` ends with `name: "..."`, and so does `modeName`
+      // once case is ignored. Only count a hit that starts the key.
+      if (!/[A-Za-z]/.test(src[at - 1] || "")) hits.push(at);
+      from = at + needle.length;
+    }
+    if (hits.length !== 1) {
+      return { error: arr + " / " + name + ": matched " + hits.length + " entries" };
+    }
+
+    let depth = 0, i = hits[0];
+    for (; i >= 0; i--) {
+      const c = src[i];
+      if (c === "}") depth++;
+      else if (c === "{") { if (!depth) break; depth--; }
+    }
+    if (i < 0) return { error: arr + " / " + name + ": no opening brace" };
+    depth = 0;
+    let j = i;
+    for (; j < end; j++) {
+      const c = src[j];
+      if (c === "{") depth++;
+      else if (c === "}") { depth--; if (!depth) break; }
+    }
+    if (depth !== 0) return { error: arr + " / " + name + ": unbalanced braces" };
+    return { start: i, end: j + 1 };
+  }
+
+  function applyMetaToSource(src, want) {
+    const errors = [];
+    const edits = [];
+    const seen = [];
+    want.forEach(w => {
+      const span = metaObjectSpan(src, w.list, w.name);
+      if (span.error) { errors.push(span.error); return; }
+      seen.push(span);
+      const obj = src.slice(span.start, span.end);
+      const target = w.meta ? "meta: true" : "meta: false";
+      const other = w.meta ? "meta: false" : "meta: true";
+      let next;
+      if (obj.indexOf(target) !== -1) {
+        next = obj;                                   // already right
+      } else if (obj.indexOf(other) !== -1) {
+        next = obj.replace(other, target);
+      } else {
+        // The file's convention: meta follows codename.
+        const cn = /codename: "[^"]*"/.exec(obj);
+        if (!cn) { errors.push(w.list + " / " + w.name + ": no codename to anchor on"); return; }
+        next = obj.slice(0, cn.index + cn[0].length) + ", " + target + obj.slice(cn.index + cn[0].length);
+      }
+      if (next !== obj) edits.push({ start: span.start, end: span.end, text: next });
+    });
+
+    // Two entries landing on the same object means the list contradicts
+    // itself; applying either would be a guess. This checks every part that
+    // RESOLVED, not every part that produced an edit: if the flag already
+    // matches one of the two entries, only the other becomes an edit, and a
+    // check over the edits alone would see nothing wrong and take it.
+    const order = seen.slice().sort((a, b) => a.start - b.start);
+    for (let k = 1; k < order.length; k++) {
+      if (order[k].start < order[k - 1].end) {
+        errors.push("two entries name the same part");
+        break;
+      }
+    }
+    const sorted = edits.slice().sort((a, b) => a.start - b.start);
+    let out = src;
+    sorted.slice().reverse().forEach(e => {
+      out = out.slice(0, e.start) + e.text + out.slice(e.end);
+    });
+    return { out, changed: edits.length, errors };
+  }
+
+  function initDeveloperMetaApply() {
+    const box = document.getElementById("developer-meta-paste");
+    const btn = document.getElementById("developer-meta-build");
+    const status = document.getElementById("developer-meta-status");
+    if (!box || !btn) return;
+    const say = (msg, kind) => {
+      if (!status) return;
+      status.textContent = msg;
+      status.className = "dm-apply-status" + (kind ? " is-" + kind : "");
+    };
+    btn.addEventListener("click", () => {
+      const parsed = parseMetaList(box.value);
+      if (parsed.bad.length) {
+        say("Could not read: " + parsed.bad[0], "err");
+        return;
+      }
+      if (!parsed.want.length) { say("Nothing to apply.", "err"); return; }
+      say("Reading data.js\u2026");
+      // Cache-busted: a stale copy would be patched and handed back as if it
+      // were current, quietly reverting whatever changed since.
+      fetch("data.js?meta=" + Date.now())
+        .then(res => { if (!res.ok) throw new Error("data.js came back " + res.status); return res.text(); })
+        .then(src => {
+          const r = applyMetaToSource(src, parsed.want);
+          if (r.errors.length) {
+            say(r.errors.length + " could not be placed: " + r.errors[0], "err");
+            return;
+          }
+          const blob = new Blob([r.out], { type: "text/javascript" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "data.js";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          const same = parsed.want.length - r.changed;
+          say(r.changed + " changed" + (same ? ", " + same + " already correct" : "") +
+              " \u2014 data.js downloaded.", "ok");
+        })
+        .catch(e => say((e && e.message) || String(e), "err"));
+    });
+  }
+
+  function initDeveloperMetaTool() {
+    const runBtn = document.getElementById("developer-meta-run");
+    const monthEl = document.getElementById("developer-meta-month");
+    const out = document.getElementById("developer-meta-out");
+    if (!runBtn || !monthEl) return;
+    // Defaults to the month just gone, since this is a month-END job and is
+    // most often run once the new one has started.
+    const now = new Date();
+    monthEl.value = metaMonthKey(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+    runBtn.addEventListener("click", () => {
+      const key = monthEl.value || metaMonthKey();
+      if (out) out.innerHTML = `<p class="dm-note">Reading ${escapeHtml(key)}\u2026</p>`;
+      computeMetaChanges(key)
+        .then(renderMetaChanges)
+        .catch(e => {
+          if (out) out.innerHTML = `<p class="dm-error">${escapeHtml((e && e.message) || String(e))}</p>`;
+        });
+    });
+  }
+
   function paintJudgeTab() {
     watchJudgeApplications();
+    initDeveloperMetaTool();
+    initDeveloperMetaApply();
     const show = !!currentProfile;
     document.querySelectorAll('.tab[data-mode="judge"]').forEach(tab => {
       tab.classList.toggle("hidden", !show && !tab.classList.contains("active"));

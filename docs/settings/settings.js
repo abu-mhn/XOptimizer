@@ -27,7 +27,7 @@ Calculator
 - Searchable part dropdowns
 - Action buttons (Calculate / Reset / Random) show icon + label inline
 - Additional button modes: Random, Meta
-- Meta picker for Clock Mirage narrows the ratchet slot to names ending in "5", then applies the normal meta-first preference inside that pool — so it lands on a -5 ratchet that is itself flagged meta (currently 7-55) rather than picking uniformly across every -5. Falls back to the rest of the -5 pool if none are flagged. Same rule applies to the tournament's auto-generated meta decks, which honour the per-deck no-repeat exclusion on top
+- Meta picker for Clock Mirage narrows the ratchet slot to names ending in "5", then applies the normal meta-first preference inside that pool. No -5 ratchet is flagged meta this month, so it falls back to picking across the whole -5 pool; in a month where one is, it lands on that one. Same rule applies to the tournament's auto-generated meta decks, which honour the per-deck no-repeat exclusion on top
 - Ratchet-less "expandCX" blades (e.g. Bullet Griffon, Glory Valkyrie) auto-force "No Ratchet" and restrict the bit list to regular (non-ratchet) bits — they compute and build as blade + bit everywhere (Calculator, Deck, Dashboard, Bey Check)
 - CX / CX Expand results show the lock chip, blade(s) and assist blade assembled into one combined image (also used in the Deck, History and Dashboard)
 - Tap the combined blade to flip through its parts in an auto-sliding, swipeable carousel
@@ -42,7 +42,7 @@ Library
 - Sort by Name, ATK, DEF, STA, Weight, Height
 - Tap any part image for a larger preview
 - Tier sub-tab: pick a part type (Blade, Ratchet, Bit, Main / Metal / Over / Assist Blade) and a basis (ATK, DEF, STA or Weight), and every part of that type is dropped into S / A / B / C / D / F rows. Tap any tile for the usual image popup; your choice is remembered
-- The ranking is PURELY the numbers printed on the part — no votes, no usage counts (that's the Dashboard's Most Played list) — so any placement can be checked against the part itself. Parts flagged "meta" carry a star rather than being pushed up a tier: that flag is a curated opinion, and folding it into a stat-derived score would make the tiers unexplainable
+- The ranking is PURELY the numbers printed on the part — no votes, no usage counts (that's the Dashboard's Most Played list) — so any placement can be checked against the part itself. Parts flagged "meta" carry a star rather than being pushed up a tier: that flag comes from how much the part was PLAYED last month (S or A on the usage list), which is a different question from how it reads on paper, and folding one into the other would make the tiers unexplainable
 - One basis at a time, deliberately: there is no combined "overall" score. Beyblade X gives every part in a class the same stat budget — 63 of the 78 blades total exactly 100, and 35 of the 37 ratchets total 30 — so ranking on ATK + DEF + STA puts nearly every part on the same number and collapses the whole list into one tier
 - Each tier takes a fixed share of the pool, so the shape stays put and the parts fall into it rather than the rows being sized by wherever the numbers happen to cluster. Parts with identical scores always share a tier, so two parts with the same number can never straddle a cut-off and sit a tier apart
 - A part that switches mode (Hells Nether, Scorpio Spear, Lightning L-Drago, Eclipse, Turn, Dual, Turbo, Operate) is ranked once PER MODE, each with its own image and score — Hells Nether is 50 ATK in Normal and 70 in Low, so it sits in two different tiers at once. The mode name shows under the part name
@@ -375,7 +375,13 @@ Profile
 
 Developer
 - Extra tab shown only to accounts tagged "Developer"
-- Three sub-tabs: Users (the registered-user list + tag controls), Database (raw Firebase data browser), and Tags (reference list of every tag the app recognises — Admin / Role, Medal, Achievement — with the real badge styling and a short explanation of what each one unlocks)
+- Four sub-tabs: Users (the registered-user list + tag controls), Database (raw Firebase data browser), Tags (reference list of every tag the app recognises — Admin / Role, Medal, Achievement — with the real badge styling and a short explanation of what each one unlocks), and Meta (the month-end meta flags)
+- Meta tab: the month-end job. Whatever sat in S or A on the usage tier list is meta, so this reads that month's play counts, cuts the tiers through the SAME builder the Tier List card uses, and lists every meta: flag in data.js that no longer matches — which to turn on, which to turn off. It defaults to the month just gone, since this is a month-end job usually run once the new one has started
+- Paste the two lists into the box below them and it makes the edit for you: the page fetches its own data.js, changes only the meta: flags you listed, and downloads the finished file to commit in place of the current one. Compute pre-fills the box, so the copy/paste step is only needed when the list came from somewhere else
+- It patches the real file text rather than regenerating data.js from the loaded DATA, so comments, key order and formatting survive and the diff is only the flags that moved
+- Names repeat between arrays ("Wolf" is a lock chip, "Silver Wolf" is a blade; "Flat" is a bit and so is "Low Flat"), so every entry is scoped to its own array and must match exactly one part. Anything it cannot place with certainty is reported and the download is refused — it never half-applies
+- The last step is still yours: data.js is a static file that ships with the site, so the browser cannot write it in place. The tool hands you the file; you commit it
+- A part nobody brought all month is not on the list at all, which is below F — so it is not meta either. That falls out of the rule rather than being a separate decision, but it is what moves the most flags, so it is counted separately in the output
 - Users sub-tab: lists every registered user with a total count, searchable by username or email; each user's current tags show as badges
 - Developers can add AND remove tags on any user (multiple tags per user)
 - Hover or click a username in the list to open that account's profile card
