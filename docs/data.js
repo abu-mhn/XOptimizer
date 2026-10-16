@@ -149,6 +149,7 @@ const DATA = {
     { atk: 15, def: 15, sta: 10, weight: 27.8, spindirection: "R", name: "Delta", codename: "DELTA", meta: false },
     { atk: 4, def: 10, sta: 16, weight: 28.0, spindirection: "R", name: "Whip", codename: "WHIP", meta: true },
     { atk: 4, def: 17, sta: 5, weight: 28.0, spindirection: "R", name: "Tread", codename: "TREAD" },
+    { atk: 15, def: 12, sta: 13, weight: 0, spindirection: "R", name: "Force", codename: "FORCE"}
   ],
 
   overBlades: [
@@ -158,6 +159,7 @@ const DATA = {
     { atk: 8, def: 7, sta: 5, weight: 3.5, spindirection: "R", name: "Peak", codename: "P" },
     { atk: 4, def: 10, sta: 16, weight: 3.6, spindirection: "R", name: "Outer", codename: "O" },
     { atk: 4, def: 17, sta: 4, weight: 4.3, spindirection: "R", name: "Tough", codename: "T" },
+    { atk: 15, def: 12, sta: 13, weight: 0, spindirection: "R", name: "Weight", codename: "W" },
   ],
 
   assistBlades: [
@@ -286,6 +288,7 @@ const DATA = {
     { atk: 45, def: 5, sta: 5, dash: 45, burstRes: 80, weight: 0, name: "Low Cyclone", codename: "LC" },
     { atk: 10, def: 15, sta: 45, dash: 30, burstRes: 30, weight: 2.0, name: "Gear Ball", codename: "GB" },
     { atk: 30, def: 15, sta: 30, dash: 25, burstRes: 80, weight: 0, name: "Low Point", codename: "LP" },
+    { atk: 40, def: 22, sta: 18, dash: 20, burstRes: 80, weight: 0, name: "Metal Taper", codename: "MT" },
   ],
 
   ratchetBits: [

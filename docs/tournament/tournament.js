@@ -3776,9 +3776,29 @@ function formatShareDate(value) {
 // were split out of their queue entry for the same reason.
 const POSTER_MAX_EDGE = 640;       // enough to read a poster's own text
 const POSTER_MAX_BYTES = 120000;   // the rule allows 150000; leave headroom
+// The copy behind the full-screen viewer. Never touched by a list, so it can
+// afford to be big; still capped, because it is one database value.
+const POSTER_FULL_EDGE = 1600;
+const POSTER_FULL_BYTES = 480000;  // the rule allows 600000
 
-// Downscale a picked file to a JPEG data URL that fits. Quality steps down
-// rather than the size, so the text on a poster stays legible.
+// One decode, two JPEGs: the band a list draws, and the copy the viewer
+// opens. Quality steps down rather than the size, so the text printed on a
+// poster survives.
+function renderPosterSize(img, maxEdge, maxBytes) {
+  const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
+  const w = Math.max(1, Math.round(img.width * scale));
+  const h = Math.max(1, Math.round(img.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = w; canvas.height = h;
+  canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+  let q = 0.82, url = canvas.toDataURL("image/jpeg", q);
+  while (url.length > maxBytes && q > 0.3) {
+    q -= 0.08;
+    url = canvas.toDataURL("image/jpeg", q);
+  }
+  return url.length > maxBytes ? "" : url;
+}
+
 function compressTournamentPoster(file) {
   return new Promise((resolve, reject) => {
     if (!file || !/^image\//.test(file.type || "")) { reject(new Error("Pick an image file.")); return; }
@@ -3791,22 +3811,17 @@ function compressTournamentPoster(file) {
         // iOS Safari can fire load before the bitmap is decoded, and then
         // drawImage paints nothing at all.
         const finish = () => {
-          const scale = Math.min(1, POSTER_MAX_EDGE / Math.max(img.width, img.height));
-          const w = Math.max(1, Math.round(img.width * scale));
-          const h = Math.max(1, Math.round(img.height * scale));
-          const canvas = document.createElement("canvas");
-          canvas.width = w; canvas.height = h;
-          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-          let q = 0.78, url = canvas.toDataURL("image/jpeg", q);
-          while (url.length > POSTER_MAX_BYTES && q > 0.3) {
-            q -= 0.08;
-            url = canvas.toDataURL("image/jpeg", q);
-          }
-          if (url.length > POSTER_MAX_BYTES) {
+          const card = renderPosterSize(img, POSTER_MAX_EDGE, POSTER_MAX_BYTES);
+          if (!card) {
             reject(new Error("That image is too detailed to shrink \u2014 try a simpler one."));
             return;
           }
-          resolve(url);
+          // The big one is a bonus, not a requirement: if it will not fit,
+          // the viewer opens the card copy rather than the poster failing.
+          let full = renderPosterSize(img, POSTER_FULL_EDGE, POSTER_FULL_BYTES);
+          // No point storing a second copy that is no better than the first.
+          if (full && full.length <= card.length) full = "";
+          resolve({ card, full });
         };
         if (img.decode) img.decode().then(finish, finish);
         else finish();
@@ -3847,32 +3862,128 @@ function loadTournamentPoster(editCode) {
   return pr;
 }
 
-function saveTournamentPoster(editCode, image) {
+function saveTournamentPoster(editCode, poster) {
   const db = initFirebase();
   if (!db || !editCode) return Promise.resolve();
+  // Accepts either shape: { card, full } from the compressor, or a bare
+  // string, which the earlier single-size calls passed.
+  const card = typeof poster === "string" ? poster : ((poster && poster.card) || "");
+  const full = (poster && typeof poster === "object" && poster.full) || "";
   const ref = db.ref("tournamentPosters/" + editCode);
-  // Write through the cache so the lists show it without a round trip.
-  tournamentPosterCache[editCode] = image || null;
-  return (image ? ref.set({ image }) : ref.set(null))
+  // Write through both caches so the lists and the viewer show it without a
+  // round trip.
+  tournamentPosterCache[editCode] = card || null;
+  tournamentPosterFullCache[editCode] = full || null;
+  const payload = full ? { image: card, full } : { image: card };
+  return (card ? ref.set(payload) : ref.set(null))
     .catch(e => {
       console.warn("Poster save failed:", e);
-      // The cache lied; drop it so the next read asks the database.
+      // The caches lied; drop them so the next read asks the database.
       delete tournamentPosterCache[editCode];
+      delete tournamentPosterFullCache[editCode];
     });
 }
 
 function forgetTournamentPoster(editCode) {
-  if (editCode) delete tournamentPosterCache[editCode];
+  if (!editCode) return;
+  delete tournamentPosterCache[editCode];
+  delete tournamentPosterFullCache[editCode];
 }
 
-// The <img> for a card, or "" when there is nothing to show yet. Lists call
-// this at render time and then fill the gaps asynchronously, so a cached
-// poster appears immediately instead of flashing in.
-function posterImgHtml(editCode) {
+// The big copy, read only when somebody opens the viewer. Kept out of
+// loadTournamentPoster on purpose: a list must never pull half a megabyte
+// per row just to draw a 104px band.
+const tournamentPosterFullCache = Object.create(null);
+const tournamentPosterFullInflight = Object.create(null);
+
+function loadTournamentPosterFull(editCode) {
+  if (!editCode) return Promise.resolve(null);
+  if (editCode in tournamentPosterFullCache) return Promise.resolve(tournamentPosterFullCache[editCode]);
+  if (editCode in tournamentPosterFullInflight) return tournamentPosterFullInflight[editCode];
+  const db = initFirebase();
+  if (!db) return Promise.resolve(null);
+  const pr = db.ref("tournamentPosters/" + editCode + "/full").once("value")
+    .then(snap => {
+      const v = snap.val();
+      const img = (typeof v === "string" && v) ? v : null;
+      // Cached either way: a poster with no bigger copy should be asked
+      // about once, not every time the viewer opens.
+      tournamentPosterFullCache[editCode] = img;
+      delete tournamentPosterFullInflight[editCode];
+      return img;
+    })
+    .catch(() => {
+      delete tournamentPosterFullInflight[editCode];
+      return null;   // not cached: a failed read is not an answer
+    });
+  tournamentPosterFullInflight[editCode] = pr;
+  return pr;
+}
+
+// Full-screen poster. Opens on whatever the card already has, so it never
+// flashes empty, and swaps in the bigger copy when its read lands.
+function showPosterViewer(editCode, cardSrc) {
+  const src = cardSrc || tournamentPosterCache[editCode];
+  if (!src) return null;
+  const existing = document.getElementById("tournament-poster-viewer");
+  if (existing) existing.remove();
+  const box = document.createElement("div");
+  box.id = "tournament-poster-viewer";
+  box.className = "poster-viewer";
+  const img = document.createElement("img");
+  img.alt = "Event poster";
+  img.src = src;
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "poster-viewer-close";
+  btn.setAttribute("aria-label", "Close");
+  btn.innerHTML = "&times;";
+  box.appendChild(img);
+  box.appendChild(btn);
+  const close = () => {
+    box.remove();
+    document.removeEventListener("keydown", onKey);
+  };
+  function onKey(e) { if (e.key === "Escape") close(); }
+  btn.addEventListener("click", close);
+  // Anywhere outside the image. closeOnBackdrop only fires when the press
+  // AND the release were both on the backdrop, so dragging off the image
+  // does not dismiss it.
+  if (typeof window.closeOnBackdrop === "function") window.closeOnBackdrop(box, close);
+  else box.addEventListener("click", (e) => { if (e.target === box) close(); });
+  document.addEventListener("keydown", onKey);
+  document.body.appendChild(box);
+
+  loadTournamentPosterFull(editCode).then(full => {
+    if (full && box.isConnected) img.src = full;
+  }).catch(() => {});
+  return box;
+}
+
+// The poster band for a card: its own button, outside the card, so tapping
+// the card still means join and tapping the poster means look at it.
+function posterButtonHtml(editCode) {
   const img = tournamentPosterCache[editCode];
-  return img
-    ? `<img class="swiss-room-card-poster" src="${escapeHtml(img)}" alt="" loading="lazy">`
-    : "";
+  if (!img) return "";
+  return `<button type="button" class="swiss-room-poster-btn" data-poster-code="${escapeHtml(editCode)}"
+            title="View poster" aria-label="View poster">
+            <img class="swiss-room-card-poster" src="${escapeHtml(img)}" alt="">
+          </button>`;
+}
+
+// One click handler for a whole list, so a re-render cannot leave stale ones
+// behind and hydration does not have to bind anything it inserts.
+function bindCardPosterViewer(list) {
+  if (!list || list.dataset.posterBound === "1") return;
+  list.dataset.posterBound = "1";
+  list.addEventListener("click", (e) => {
+    const btn = e.target.closest && e.target.closest("[data-poster-code]");
+    if (!btn || !list.contains(btn)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const img = btn.querySelector("img");
+    showPosterViewer(btn.dataset.posterCode, img ? img.src : "");
+  });
 }
 
 // Fill in the posters a list rendered without. Cards are rebuilt on every
@@ -3880,20 +3991,28 @@ function posterImgHtml(editCode) {
 // pass free.
 function hydrateCardPosters(list) {
   if (!list || !list.querySelectorAll) return;
-  list.querySelectorAll(".swiss-room-card[data-edit-code]").forEach(card => {
-    if (card.querySelector(".swiss-room-card-poster")) return;
-    const code = card.dataset.editCode;
+  bindCardPosterViewer(list);
+  list.querySelectorAll(".swiss-room-card-wrap[data-edit-code]").forEach(wrap => {
+    if (wrap.querySelector(".swiss-room-poster-btn")) return;
+    const code = wrap.dataset.editCode;
     loadTournamentPoster(code).then(img => {
-      if (!img || !card.isConnected) return;
-      // The card may have been re-rendered under us while this was in
-      // flight; isConnected is the cheap way to notice.
-      if (card.querySelector(".swiss-room-card-poster")) return;
+      if (!img || !wrap.isConnected) return;
+      // A refresh can land while this is in flight, replacing the wrapper
+      // with one that already has its poster. Re-check both.
+      if (wrap.querySelector(".swiss-room-poster-btn")) return;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "swiss-room-poster-btn";
+      btn.dataset.posterCode = code;
+      btn.title = "View poster";
+      btn.setAttribute("aria-label", "View poster");
       const el = document.createElement("img");
       el.className = "swiss-room-card-poster";
       el.alt = "";
       el.src = img;
-      card.insertBefore(el, card.firstChild);
-      card.classList.add("has-poster");
+      btn.appendChild(el);
+      wrap.insertBefore(btn, wrap.firstChild);
+      wrap.classList.add("has-poster");
     });
   });
 }
@@ -5436,17 +5555,51 @@ function markDeckConfirmed(editCode, regId) {
   try { localStorage.setItem(deckConfirmKey(editCode, regId), "1"); } catch (e) {}
 }
 
-// The one registrant on this device that still needs asking, or null.
+// Which registration is the person at this screen, as opposed to one they
+// merely created?
 //
-// Only while REGISTERING: once the tournament starts the deck is locked, and
-// a reminder you cannot act on is worse than none.
+// findMyRegistrantIds answers "what may this device delete", and a host who
+// bulk-adds walk-ins owns every one of them. Asking somebody "is this the
+// deck you're playing today?" about a guest they typed in is nonsense, and
+// confirming it would silence the question for the entry that actually
+// needed it.
+//
+// Signed in, the test is the recap panel's: created by this account AND
+// carrying this account's name. A bulk-added guest fails the second half.
+// Signed out, the only identity the device has is the entry it registered,
+// so that works only when there is exactly one — with several, there is no
+// way to tell which is the player, and guessing is what caused this.
+function myOwnRegistrantId(state, editCode) {
+  const regs = (state && state.registrants) || {};
+  const owned = (typeof findMyRegistrantIds === "function")
+    ? findMyRegistrantIds(state, editCode).filter(id => regs[id]) : [];
+  if (!owned.length) return "";
+
+  const uname = ((window.getCurrentUsername && window.getCurrentUsername()) || "")
+    .trim().toLowerCase();
+  const uid = ((window.getCurrentUser && window.getCurrentUser()) || {}).uid || "";
+  if (uid && uname) {
+    const mine = owned.find(id => {
+      const r = regs[id];
+      return r && r.createdBy === uid &&
+        String(r.name || "").trim().toLowerCase() === uname;
+    });
+    return mine || "";
+  }
+  return owned.length === 1 ? owned[0] : "";
+}
+
+// The registrant that still needs asking, or null.
+//
+// Only while REGISTERING: afterwards the player cannot rewrite their own
+// entry (the rules only allow it in that phase), and a reminder you cannot
+// act on is worse than none.
 function registrantNeedingDeckCheck(state) {
   if (!swissEditCode || !isRegisteringPhase(state)) return null;
-  const mine = (typeof findMyRegistrantIds === "function")
-    ? findMyRegistrantIds(state, swissEditCode) : [];
+  const id = myOwnRegistrantId(state, swissEditCode);
+  if (!id || deckConfirmed(swissEditCode, id)) return null;
   const regs = state.registrants || {};
-  const id = mine.find(x => regs[x] && !deckConfirmed(swissEditCode, x));
-  return id ? { id, reg: regs[id] } : null;
+  return regs[id] ? { id, reg: regs[id] } : null;
 }
 
 function renderDeckCheckBanner(state) {
@@ -5454,16 +5607,16 @@ function renderDeckCheckBanner(state) {
   if (!need) return "";
   const deck = normalizeBeyCheckDeck(need.reg.deck);
   const empty = isBeyCheckDeckEmpty(deck);
-  const summary = empty ? "" : deckSummaryText(deck);
+  const summary = empty ? "" : deckSummaryThumbsHtml(deck);
   return `<div class="swiss-deckcheck" data-deckcheck-id="${escapeHtml(need.id)}">
     <div class="swiss-deckcheck-main">
       <strong class="swiss-deckcheck-title">${empty
         ? "You have no deck registered."
         : "Is this the deck you're playing today?"}</strong>
+      <span class="swiss-deckcheck-why">Registered when you joined. If you've built something new since, change it here. Once the tournament starts you can still switch — tell the judge and they'll record it at Bey Check when your match is called.</span>
       ${empty
         ? `<span class="swiss-deckcheck-deck swiss-deckcheck-none">Nothing registered — add it now, or the judge will record it at Bey Check.</span>`
-        : `<span class="swiss-deckcheck-deck">${escapeHtml(summary)}</span>`}
-      <span class="swiss-deckcheck-why">Registered when you joined. If you've built something new since, change it here. Once the tournament starts you can still switch — tell the judge and they'll record it at Bey Check when your match is called.</span>
+        : summary}
     </div>
     <div class="swiss-deckcheck-actions">
       ${empty ? "" : `<button type="button" class="swiss-deckcheck-btn is-ok" data-deckcheck-ok="${escapeHtml(need.id)}">That's my deck</button>`}
@@ -6488,15 +6641,51 @@ function recapMatchOrder(m) {
 
 // Short, readable summary of a registered deck for a result toast — the lead
 // part of each of the 3 combos (blade / main blade / metal blade / lock chip).
-function deckSummaryText(deck) {
-  if (!Array.isArray(deck)) return "";
-  const names = [];
+// The part that identifies each slot, WITH the field it came from. The
+// field is what picks the image folder, and the old version threw it away
+// the moment it had the name.
+function deckSummaryParts(deck) {
+  if (!Array.isArray(deck)) return [];
+  const out = [];
   deck.forEach(slot => {
     const p = (slot && slot.parts) || {};
-    const lead = p.blade || p.mainBlade || p.metalBlade || p.lockChip || "";
-    if (lead) names.push(lead);
+    const field = p.blade ? "blade"
+      : p.mainBlade ? "mainBlade"
+      : p.metalBlade ? "metalBlade"
+      : p.lockChip ? "lockChip"
+      : "";
+    if (field) out.push({ field, name: p[field] });
   });
-  return names.join(" · ");
+  return out;
+}
+
+function deckSummaryText(deck) {
+  return deckSummaryParts(deck).map(x => x.name).join(" \u00b7 ");
+}
+
+// The registered deck in full: every slot, every part.
+//
+// A row of blades cannot answer "is this your deck?" \u2014 two decks can
+// share all three and differ in every ratchet and bit, so you could look
+// straight at somebody else's and see nothing wrong. The text summary keeps
+// the lead part, because the toasts it feeds have one line to live in.
+//
+// Drawn by renderBeyCheckSlotParts, the same function Bey Check uses. The
+// judge will check this deck against what is in your hand at that screen,
+// so the two should look the same \u2014 and it already handles the CX
+// combined tile, the per-mode field list and the NO_RATCHET sentinel.
+function deckSummaryThumbsHtml(deck) {
+  if (!Array.isArray(deck) || typeof renderBeyCheckSlotParts !== "function") return "";
+  const slots = deck
+    .map((slot, i) => ({ slot, i }))
+    .filter(x => x.slot && !(typeof isBeyCheckSlotEmpty === "function" && isBeyCheckSlotEmpty(x.slot)));
+  if (!slots.length) return "";
+  const rows = slots.map(({ slot, i }) => `
+    <div class="swiss-deckcheck-slot">
+      <span class="swiss-deckcheck-slot-n">${i + 1}</span>
+      <div class="bey-check-slot-parts">${renderBeyCheckSlotParts(slot)}</div>
+    </div>`).join("");
+  return `<div class="swiss-deckcheck-slots">${rows}</div>`;
 }
 
 // When a match the signed-in player (or a device-owned registrant) is in
@@ -8841,12 +9030,45 @@ function renderBeyCheckSlot(slotIdx, slot) {
   const body = empty
     ? `<div class="bey-check-slot-summary">Empty — tap to build</div>`
     : `<div class="bey-check-slot-parts">${renderBeyCheckSlotParts(slot)}</div>`;
+  // The slot is a <button> (tap to build), so the drag handle has to be a
+  // sibling of it rather than inside it — nested buttons are invalid and
+  // cannot take focus. The wrapper is what the list lays out.
   return `
-    <button type="button" class="bey-check-slot${empty ? " bey-check-slot-empty" : ""}" data-slot="${slotIdx}">
-      <div class="bey-check-slot-label">Slot ${slotIdx + 1}</div>
-      ${body}
-    </button>
+    <div class="bey-check-slot-wrap" data-slot="${slotIdx}">
+      <button type="button" class="bey-check-slot-grip" data-slot-grip="${slotIdx}"
+              aria-label="Move slot ${slotIdx + 1}" title="Drag to swap with another slot">
+        <span aria-hidden="true">&#8942;&#8942;</span>
+      </button>
+      <button type="button" class="bey-check-slot${empty ? " bey-check-slot-empty" : ""}" data-slot="${slotIdx}">
+        <div class="bey-check-slot-label">Slot ${slotIdx + 1}</div>
+        ${body}
+      </button>
+    </div>
   `;
+}
+
+// Drag-to-swap for a rendered set of bey-check slots. `deck` is mutated in
+// place and `rerender` redraws \u2014 the three popups that show these slots
+// each own their own draft array, so the swap cannot be done for them.
+function bindBeyCheckSlotSwap(host, getDeck, rerender) {
+  if (!host || typeof window.enableSwapDrag !== "function") return;
+  window.enableSwapDrag(host, {
+    item: ".bey-check-slot-wrap",
+    handle: "data-slot-grip",
+    flag: "beySlotDragBound",
+    indexOf: (el) => Number(el.dataset.slot),
+    onSwap: (a, b) => {
+      const deck = getDeck();
+      if (!Array.isArray(deck)) return false;
+      if (a === b) return false;
+      if (!(a >= 0 && a < deck.length) || !(b >= 0 && b < deck.length)) return false;
+      const tmp = deck[a];
+      deck[a] = deck[b];
+      deck[b] = tmp;
+      rerender();
+      return true;
+    },
+  });
 }
 
 // Calculator-style combo builder for the bey check slot popup — no mode tabs.
@@ -9240,6 +9462,7 @@ function showBeyCheckPopup(matchId) {
         }. You can still record, but the host marked these as not allowed.</div>`
       : "";
     slotsHost.innerHTML = banner + deck.map((s, i) => renderBeyCheckSlot(i, s)).join("");
+    bindBeyCheckSlotSwap(slotsHost, () => decks[activeSide], renderSlots);
     slotsHost.querySelectorAll(".bey-check-slot").forEach(el => {
       el.addEventListener("click", () => {
         const slotIdx = Number(el.dataset.slot);
@@ -10124,6 +10347,7 @@ function showAddParticipantPopup() {
   const renderSlots = () => {
     if (!slotsHost) return;
     slotsHost.innerHTML = deck.map((s, i) => renderBeyCheckSlot(i, s)).join("");
+    bindBeyCheckSlotSwap(slotsHost, () => deck, renderSlots);
     slotsHost.querySelectorAll(".bey-check-slot").forEach(el => {
       el.addEventListener("click", () => {
         const slotIdx = Number(el.dataset.slot);
@@ -11664,14 +11888,16 @@ function renderMyTournamentRooms(list, rooms) {
     const badge = r.phase === "running"
       ? `<span class="swiss-room-running-badge">In progress</span>`
       : `<span class="swiss-room-hosting-badge">Registering</span>`;
-    const poster = posterImgHtml(r.editCode);
+    const poster = posterButtonHtml(r.editCode);
     return `
-      <button type="button" class="swiss-room-card${poster ? " has-poster" : ""}" data-edit-code="${escapeHtml(r.editCode)}">
+      <div class="swiss-room-card-wrap${poster ? " has-poster" : ""}" data-edit-code="${escapeHtml(r.editCode)}">
         ${poster}
-        <div class="swiss-room-card-name">${escapeHtml(name)}${badge}${eventDetailLines(r.eventDetails)}</div>
-        <div class="swiss-room-card-mode">${modeLabel}</div>
-        <div class="swiss-room-card-meta">Host code ${escapeHtml(r.editCode)}</div>
-      </button>
+        <button type="button" class="swiss-room-card" data-edit-code="${escapeHtml(r.editCode)}">
+          <div class="swiss-room-card-name">${escapeHtml(name)}${badge}${eventDetailLines(r.eventDetails)}</div>
+          <div class="swiss-room-card-mode">${modeLabel}</div>
+          <div class="swiss-room-card-meta">Host code ${escapeHtml(r.editCode)}</div>
+        </button>
+      </div>
     `;
   }).join("");
   hydrateCardPosters(list);
@@ -12115,10 +12341,11 @@ function renderLobbyRooms(list, rooms) {
     const detailsHtml = eventDetailLines(r.eventDetails);
     // Rendered inline when it is already cached, so a refresh does not make
     // every poster flash out and back in; hydrateCardPosters fills the rest.
-    const poster = posterImgHtml(r.editCode);
+    const poster = posterButtonHtml(r.editCode);
     return `
-      <button type="button" class="swiss-room-card${poster ? " has-poster" : ""}" data-edit-code="${escapeHtml(r.editCode)}">
+      <div class="swiss-room-card-wrap${poster ? " has-poster" : ""}" data-edit-code="${escapeHtml(r.editCode)}">
         ${poster}
+      <button type="button" class="swiss-room-card" data-edit-code="${escapeHtml(r.editCode)}">
         <div class="swiss-room-card-name">
           <span class="swiss-room-card-title">${escapeHtml(name)}</span>
           ${detailsHtml}
@@ -12132,6 +12359,7 @@ function renderLobbyRooms(list, rooms) {
           ${cohostBadge}
         </div>
       </button>
+      </div>
     `;
   }).join("");
   hydrateCardPosters(list);
@@ -13068,6 +13296,7 @@ function showRegistrationPopup(room, options = {}) {
   const renderSlots = () => {
     if (!slotsHost) return;
     slotsHost.innerHTML = deck.map((s, i) => renderBeyCheckSlot(i, s)).join("");
+    bindBeyCheckSlotSwap(slotsHost, () => deck, renderSlots);
     slotsHost.querySelectorAll(".bey-check-slot").forEach(el => {
       el.addEventListener("click", () => {
         const slotIdx = Number(el.dataset.slot);

@@ -3370,11 +3370,74 @@ body.forest-mode .features-list {
     color: #fff;
 }
 
+/* One column on a phone, side by side once there is room. A slot needs
+   about three 56px tiles plus its padding, so 196px is the point below
+   which a second column would start clipping the parts — auto-fit keeps
+   it at one column until then and adds a second or third by itself. */
 .bey-check-slots {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(196px, 1fr));
+    align-items: start;
     gap: 10px;
     margin-bottom: 10px;
+}
+/* The banner about banned parts is a sibling of the slots and must not be
+   squeezed into a column of its own. */
+.bey-check-slots > .bey-check-banned {
+    grid-column: 1 / -1;
+}
+
+/* The slot is a <button>; its grip has to be a sibling, not a child. The
+   wrapper is the grid item and the drop target. */
+.bey-check-slot-wrap {
+    position: relative;
+    display: flex;
+    min-width: 0;
+}
+.bey-check-slot-wrap .bey-check-slot {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.bey-check-slot-grip {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 1;
+    padding: 4px 6px;
+    font-size: 0.9rem;
+    line-height: 1;
+    letter-spacing: -2px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: #6e7681;
+    cursor: grab;
+    /* These sit on a scrolling page, and inside a popup that scrolls too.
+       Without this the browser claims a downward drag for the scroll and
+       the slot never moves on touch. */
+    touch-action: none;
+}
+.bey-check-slot-grip:hover { color: #c9d1d9; background: rgba(240, 246, 252, 0.06); }
+.bey-check-slot-grip:active { cursor: grabbing; }
+.bey-check-slot-grip:focus-visible {
+    outline: 2px solid #58a6ff;
+    outline-offset: 1px;
+}
+/* pointer-events: none is load-bearing, not decoration: elementFromPoint
+   has to report the slot UNDERNEATH the pointer, and without it the answer
+   is always the one being dragged. */
+.bey-check-slot-wrap.is-dragging {
+    pointer-events: none;
+    z-index: 5;
+    opacity: 0.9;
+}
+.bey-check-slot-wrap.is-dragging .bey-check-slot {
+    border-color: #58a6ff;
+    box-shadow: 0 10px 24px rgba(1, 4, 9, 0.6);
+}
+.bey-check-slot-wrap.is-swap-target .bey-check-slot {
+    border-color: #58a6ff;
+    background: #161e29;
 }
 
 .bey-check-slot {
@@ -3404,6 +3467,8 @@ body.forest-mode .features-list {
     font-size: .8rem;
     color: #8b949e;
     font-weight: 600;
+    /* Room for the grip, which is absolutely positioned in this corner. */
+    padding-right: 24px;
 }
 
 .bey-check-slot-summary {
@@ -3424,6 +3489,9 @@ body.forest-mode .features-list {
     margin-top: 4px;
     overflow-x: auto;
     justify-content: safe center;
+    /* Equal height whatever the names do: "Shark Scale" wraps to two lines
+       and "Rush" does not, and in a row of slots that shows. */
+    align-items: flex-start;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -3502,6 +3570,9 @@ body.bronze-mode   .bey-check-part-name { color: #f0e2d2; }
     gap: 2px;
 }
 
+.bey-check-slot .bey-check-part-name {
+    min-height: 2.4em;
+}
 .bey-check-part-name {
     font-size: .72rem;
     color: #8b949e;
@@ -5610,6 +5681,51 @@ body.forest-mode .image-popup-dot.active {
 .deck-slot-empty-text {
     color: #8b949e;
     font-style: italic;
+}
+
+/* Grip, label, then the actions pushed to the far end. Without the auto
+   margin, space-between would strand the label in the middle of the row. */
+.deck-slot-header .deck-slot-label {
+    margin-right: auto;
+    margin-left: 8px;
+}
+.deck-slot-grip {
+    flex: 0 0 auto;
+    padding: 2px 4px;
+    font-size: 0.95rem;
+    line-height: 1;
+    letter-spacing: -2px;
+    border: none;
+    background: transparent;
+    color: #6e7681;
+    cursor: grab;
+    /* The deck is a vertical list on a vertically scrolling page. Without
+       this the browser claims a downward drag for the scroll and the slot
+       never moves on touch. Scoped to the grip, so scrolling the page by
+       dragging anywhere else is untouched. */
+    touch-action: none;
+}
+.deck-slot-grip:hover { color: #c9d1d9; }
+.deck-slot-grip:active { cursor: grabbing; }
+.deck-slot-grip:focus-visible {
+    outline: 2px solid #58a6ff;
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+/* The card in hand. pointer-events: none is load-bearing, not decoration:
+   elementFromPoint has to report the slot UNDERNEATH the cursor, and
+   without it the answer is always the card being dragged. */
+.deck-slot.is-dragging {
+    pointer-events: none;
+    position: relative;
+    z-index: 5;
+    opacity: 0.9;
+    border-color: #58a6ff;
+    box-shadow: 0 10px 24px rgba(1, 4, 9, 0.6);
+}
+.deck-slot.is-swap-target {
+    border-color: #58a6ff;
+    background: #1b2430;
 }
 
 .deck-slot-actions {
@@ -10632,13 +10748,15 @@ body.forest-mode   .swiss-banned-chip { color: #b42d2d; }
 /* "Is this the deck you're playing today?" — shown to one player, about their
    own registration, while there is still time to change it. Amber rather than
    red: nothing is broken, they are being asked a question. */
+/* A stack, not a row. This held one line of deck when it was a flex row
+   with the buttons pushed right by margin-left:auto; now it holds three
+   rows of tiles, and that layout left the buttons floating halfway down an
+   empty column beside them. */
 .swiss-deckcheck {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
+    display: grid;
+    gap: 10px;
     margin: 0 0 10px;
-    padding: 10px 12px;
+    padding: 12px 14px;
     border: 1px solid rgba(210, 153, 34, 0.5);
     border-radius: 8px;
     background: rgba(210, 153, 34, 0.1);
@@ -10646,13 +10764,13 @@ body.forest-mode   .swiss-banned-chip { color: #b42d2d; }
 .swiss-deckcheck-main {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 6px;
     min-width: 0;
-    flex: 1 1 220px;
 }
 .swiss-deckcheck-title {
-    font-size: 0.9rem;
-    color: #e6edf3;
+    font-size: 0.95rem;
+    line-height: 1.3;
+    color: #f0f6fc;
 }
 .swiss-deckcheck-deck {
     font-size: 0.8rem;
@@ -10664,6 +10782,58 @@ body.forest-mode   .swiss-banned-chip { color: #b42d2d; }
     font-style: italic;
     color: #d29922;
 }
+/* One row per slot, each drawn with the Bey Check tiles so the player sees
+   the same thing the judge will. The row scrolls sideways on its own (that
+   is .bey-check-slot-parts' own behaviour), so a four-part CX combo does
+   not force the banner wider than the phone. */
+/* One panel holding three unframed rows left the top of the list looking
+   unfinished: rows 2 and 3 were visually divided from the row above them
+   and row 1 had nothing. Each row is its own card now, so all three are
+   framed the same — which is also how a slot looks in the registration
+   popup, the other place a deck is shown. */
+.swiss-deckcheck-slots {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 2px 0 0;
+}
+.swiss-deckcheck-slot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding: 6px 10px 6px 6px;
+    border: 1px solid rgba(240, 246, 252, 0.09);
+    border-radius: 8px;
+    background: rgba(1, 4, 9, 0.3);
+}
+.swiss-deckcheck-slot-n {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.66rem;
+    font-weight: 700;
+    border-radius: 50%;
+    background: rgba(240, 246, 252, 0.08);
+    color: #8b949e;
+}
+/* The tiles are laid out by .bey-check-slot-parts; it centres them, which
+   is right in a full-width panel and wrong beside a slot number. */
+.swiss-deckcheck-slot .bey-check-slot-parts {
+    margin-top: 0;
+    justify-content: flex-start;
+    min-width: 0;
+}
+.swiss-deckcheck-slot .bey-check-part-name {
+    /* Two lines, always: "Shark Scale" wraps and "Rush" does not, and
+       without a floor the rows come out visibly different heights. */
+    min-height: 2.4em;
+    color: #c9d1d9;
+}
+
 .swiss-deckcheck-why {
     font-size: 0.72rem;
     line-height: 1.45;
@@ -10671,9 +10841,11 @@ body.forest-mode   .swiss-banned-chip { color: #b42d2d; }
 }
 .swiss-deckcheck-actions {
     display: flex;
-    gap: 6px;
-    flex-shrink: 0;
-    margin-left: auto;
+    flex-wrap: wrap;
+    gap: 8px;
+    /* Their own row at the end of the stack, at the end of the line: the
+       last thing you read and the thing you came to press. */
+    justify-content: flex-end;
 }
 .swiss-deckcheck-btn {
     font: inherit;
@@ -11681,9 +11853,6 @@ button.swiss-reg-paid:hover {
    Hence the explicit weight (it would inherit 600) and the full width (the
    column is align-items: flex-start, so an item is only as wide as its own
    text unless it says otherwise). */
-/* A poster spans the whole card, above everything. The grid only gains the
-   row when there IS one (.has-poster) — declaring the area unconditionally
-   would leave an empty track, and its gap, on every card without a poster. */
 /* ---- poster picker in the Event details popup ---- */
 .share-poster {
     margin-bottom: 10px;
@@ -11744,21 +11913,76 @@ button.swiss-reg-paid:hover {
     border-color: #f85149;
 }
 
-.swiss-room-card.has-poster {
-    grid-template-areas: "poster poster" "name mode" "meta meta";
-    padding-top: 0;
+/* The poster is a button of its own, stacked above the card rather than
+   inside it: the card is already a <button> ("tap to join"), and nesting one
+   interactive element in another is invalid and has nowhere sensible to put
+   keyboard focus. The wrapper is what the list lays out; the two children
+   share one outline so they still read as a single card. */
+.swiss-room-card-wrap {
+    display: grid;
+}
+.swiss-room-card-wrap.has-poster .swiss-room-card {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    border-top: none;
+}
+.swiss-room-poster-btn {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 1px solid rgba(110, 118, 129, 0.3);
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    background: #161b22;
+    cursor: zoom-in;
     overflow: hidden;
 }
+.swiss-room-poster-btn:focus-visible {
+    outline: 2px solid #58a6ff;
+    outline-offset: -2px;
+}
 .swiss-room-card-poster {
-    grid-area: poster;
     display: block;
-    width: calc(100% + 24px);
-    /* Out to the card's own edges, under its radius, rather than floating
-       inside the padding like a thumbnail. */
-    margin: 0 -12px 6px;
+    width: 100%;
     height: 104px;
     object-fit: cover;
-    background: #161b22;
+}
+
+/* ---- full-screen poster ---- */
+.poster-viewer {
+    position: fixed;
+    inset: 0;
+    z-index: 4000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(1, 4, 9, 0.92);
+    cursor: zoom-out;
+}
+.poster-viewer img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: 6px;
+    cursor: default;
+}
+.poster-viewer-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 38px;
+    height: 38px;
+    font-size: 1.5rem;
+    line-height: 1;
+    border: 1px solid #30363d;
+    border-radius: 50%;
+    background: rgba(13, 17, 23, 0.85);
+    color: #f0f6fc;
+    cursor: pointer;
+}
+.poster-viewer-close:hover {
+    border-color: #58a6ff;
 }
 
 .swiss-room-card-when {

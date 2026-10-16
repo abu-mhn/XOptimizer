@@ -304,6 +304,22 @@ function removeDeckSlot(idx) {
   renderDeck();
 }
 
+// Trade two slots. Swap, not reorder: with a handful of slots "put this one
+// where that one is" is what people mean, and it needs no insertion point.
+// A null is a legitimate value \u2014 dragging a filled slot onto an empty one
+// moves it there, which is the same operation.
+function swapDeckSlots(a, b) {
+  const deck = loadDeck();
+  if (a === b) return false;
+  if (!(a >= 0 && a < deck.length) || !(b >= 0 && b < deck.length)) return false;
+  const tmp = deck[a];
+  deck[a] = deck[b];
+  deck[b] = tmp;
+  persistDeck(deck);
+  renderDeck();
+  return true;
+}
+
 function renderDeckSelector() {
   const container = document.getElementById("deck-selector");
   if (!container) return;
@@ -450,6 +466,21 @@ function runDeckSlotModeChange(slotIdx, field, newModeIdx) {
   renderDeck();
 }
 
+// Dragging a slot by its handle. The mechanics live in core.js, shared
+// with the registration popup's slots — two copies of pointer handling
+// would drift, and the drift would be invisible until a deck rearranged
+// itself on its own.
+function bindDeckSlotDrag(container) {
+  if (typeof window.enableSwapDrag !== "function") return;
+  window.enableSwapDrag(container, {
+    item: ".deck-slot",
+    handle: "data-grip",
+    flag: "slotDragBound",
+    indexOf: (el) => Number(el.dataset.slotIndex),
+    onSwap: (a, b) => swapDeckSlots(a, b),
+  });
+}
+
 function renderDeck() {
   renderDeckSelector();
   const container = document.getElementById("deck-list");
@@ -462,6 +493,7 @@ function renderDeck() {
   deck.forEach((item, idx) => {
     const div = document.createElement("div");
     div.className = "deck-slot";
+    div.dataset.slotIndex = String(idx);
     if (!item) {
       // An empty slot is the obvious place to tap to fill it, and until now it
       // did nothing — a combo could only arrive from the Calculator, a paste,
@@ -535,6 +567,10 @@ function renderDeck() {
     const graphHtml = (typeof renderStatBars === "function") ? renderStatBars(total) : "";
     div.innerHTML = `
       <div class="deck-slot-header">
+        <button type="button" class="deck-slot-grip" data-grip="${idx}"
+                aria-label="Move slot ${idx + 1}" title="Drag to swap with another slot">
+          <span aria-hidden="true">&#8942;&#8942;</span>
+        </button>
         <strong class="deck-slot-label">Slot ${idx + 1}</strong>
         <div class="deck-slot-actions">
           <button type="button" class="btn-deck-edit" data-slot="${idx}" aria-label="Edit slot ${idx + 1}" title="Edit combo">
@@ -565,6 +601,8 @@ function renderDeck() {
     `;
     container.appendChild(div);
   });
+
+  bindDeckSlotDrag(container);
 
   container.querySelectorAll(".btn-deck-remove").forEach(btn => {
     btn.addEventListener("click", () => removeDeckSlot(Number(btn.dataset.slot)));

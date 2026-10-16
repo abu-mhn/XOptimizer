@@ -827,6 +827,146 @@ function enableHorizontalWheelScroll(el) {
   }, { passive: false });
 }
 
+// ===== Drag one item onto another to trade places =====
+//
+// Used by the deck tab's combo slots and the registration popup's. Both are
+// lists whose items are <button>s, which rules out HTML5 drag-and-drop (it
+// never fires on touch, so on a phone the feature would not exist) and
+// rules out making the item itself the drag target (a button inside a
+// button is invalid and unfocusable).
+//
+// So: a HANDLE inside each item. That also settles the touch problem —
+// these lists sit on a vertically scrolling page, and a drag that starts
+// anywhere on the item competes with the page scroll on every touch. The
+// handle carries touch-action: none and claims the gesture; everywhere else
+// still scrolls.
+//
+//   container  the list. One listener set, guarded, so a re-render cannot
+//              leave stale handlers behind.
+//   item       selector for one draggable item
+//   handle     data-attribute marking the grip inside it
+//   indexOf    item element -> its position
+//   onSwap     (a, b) -> trade them and re-render
+//
+window.enableSwapDrag = function enableSwapDrag(container, opts) {
+  const o = opts || {};
+  if (!container || !o.item || !o.handle || typeof o.onSwap !== "function") return;
+  const flag = o.flag || "swapDragBound";
+
+  // Replaced on EVERY call, even though the listeners below are bound once.
+  //
+  // These containers outlive the thing they show. The registration popup's
+  // slot host is a static element in the page, so each open hands us a new
+  // draft deck and a new re-render. Keeping the first call's closures meant
+  // a drag on the second open rearranged the PREVIOUS popup's array: the
+  // slots moved on screen and the deck that got saved never changed.
+  container.__swapDrag = o;
+  if (container.dataset[flag] === "1") return;
+  container.dataset[flag] = "1";
+
+  const cfg = () => container.__swapDrag || o;
+  const itemSel = () => cfg().item;
+  const handleSel = () => "[" + cfg().handle + "]";
+  const indexOf = (el) => (cfg().indexOf || ((x) => Number(x.dataset.index)))(el);
+  const onSwap = (a, b) => cfg().onSwap(a, b);
+
+  const SLOP = 5;                 // a tap on the handle stays a tap
+  let id = null, fromIdx = -1, startY = 0, card = null, dragging = false, target = null;
+
+  const clearTarget = () => {
+    if (target) target.classList.remove("is-swap-target");
+    target = null;
+  };
+  const stop = () => {
+    if (card) {
+      card.classList.remove("is-dragging");
+      card.style.transform = "";
+    }
+    clearTarget();
+    card = null; id = null; fromIdx = -1; dragging = false;
+  };
+
+  container.addEventListener("pointerdown", (e) => {
+    const grip = e.target.closest && e.target.closest(handleSel());
+    if (!grip || !container.contains(grip)) return;
+    if (e.button != null && e.button !== 0) return;
+    card = grip.closest(itemSel());
+    if (!card) return;
+    id = e.pointerId;
+    fromIdx = indexOf(card);
+    startY = e.clientY;
+    dragging = false;
+    // Captured on the handle, so a release outside the list still ends it.
+    if (grip.setPointerCapture) grip.setPointerCapture(id);
+    grip.addEventListener("pointermove", onMove);
+    grip.addEventListener("pointerup", onUp);
+    grip.addEventListener("pointercancel", onUp);
+  });
+
+  function onMove(e) {
+    if (e.pointerId !== id || !card) return;
+    const dy = e.clientY - startY;
+    if (!dragging) {
+      if (Math.abs(dy) < SLOP) return;
+      dragging = true;
+      card.classList.add("is-dragging");
+    }
+    card.style.transform = "translateY(" + dy + "px)";
+    // .is-dragging sets pointer-events: none, which is what lets this see
+    // the item UNDERNEATH rather than the one in hand.
+    const under = document.elementFromPoint(e.clientX, e.clientY);
+    const hit = under && under.closest ? under.closest(itemSel()) : null;
+    const next = (hit && hit !== card && container.contains(hit)) ? hit : null;
+    if (next !== target) {
+      clearTarget();
+      target = next;
+      if (target) target.classList.add("is-swap-target");
+    }
+  }
+
+  function onUp(e) {
+    if (e.pointerId !== id) return;
+    const grip = e.currentTarget;
+    grip.removeEventListener("pointermove", onMove);
+    grip.removeEventListener("pointerup", onUp);
+    grip.removeEventListener("pointercancel", onUp);
+    if (grip.releasePointerCapture && grip.hasPointerCapture && grip.hasPointerCapture(id)) {
+      grip.releasePointerCapture(id);
+    }
+    // A cancel is not a drop. The system takes the pointer for its own
+    // gestures — a swipe-back, the notification shade, a palm on the glass
+    // — and committing there would rearrange a deck nobody touched.
+    const cancelled = e.type === "pointercancel";
+    const from = fromIdx;
+    const to = (dragging && target && !cancelled) ? indexOf(target) : -1;
+    const wasDragging = dragging;
+    stop();
+    // Last, because onSwap re-renders and throws these elements away.
+    if (wasDragging && to >= 0) onSwap(from, to);
+  }
+
+  // The handle is a real button, so moving an item should not need a
+  // pointer at all.
+  container.addEventListener("keydown", (e) => {
+    const grip = e.target.closest && e.target.closest(handleSel());
+    if (!grip) return;
+    const dir = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0;
+    if (!dir) return;
+    e.preventDefault();
+    const item = grip.closest(itemSel());
+    if (!item) return;
+    const from = indexOf(item);
+    const to = from + dir;
+    if (onSwap(from, to) === false) return;
+    // Focus follows the item that moved, so a second press carries on with
+    // the same one instead of grabbing whatever landed in the old place.
+    const moved = Array.prototype.find.call(
+      container.querySelectorAll(handleSel()),
+      g => { const it = g.closest(itemSel()); return it && indexOf(it) === to; });
+    if (moved && moved.focus) moved.focus();
+  });
+};
+
 // Grab-and-drag panning for the same horizontal-only rows. Touch already pans
 // natively, so this only takes over for mouse / pen — otherwise a row whose
 // scrollbar is hidden has no mouse affordance at all. Buttons inside the row
