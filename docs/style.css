@@ -1084,6 +1084,19 @@ select {
     background: #f85149;
 }
 
+/* Leave, for a host stepping away from a room that keeps running. It sits
+   beside Reset, so it must not read as a second destructive button: red is
+   taken, green belongs to the actions that DO something to the tournament,
+   and this one does nothing to it at all. Neutral is the honest colour. */
+.btn-leave {
+    background: #30363d;
+    flex: 0 0 auto;
+    padding: 12px 24px;
+}
+.btn-leave:hover {
+    background: #3d444d;
+}
+
 .btn-lucky {
     background: #8957e5;
     flex: 0 0 auto;
@@ -5218,6 +5231,7 @@ body.forest-mode .image-popup-dot.active {
 
 .calc-btn img,
 .btn-reset img,
+.btn-leave img,
 .btn-lucky img {
     filter: brightness(0) invert(1);
 }
@@ -11637,6 +11651,140 @@ button.swiss-reg-paid:hover {
     font-style: italic;
     margin: 0;
 }
+/* The empty-list message as a panel rather than a stray line. Colour is
+   left to inherit from .swiss-rooms-empty, which every theme already
+   overrides — setting one here would make this the only block that
+   ignores the theme. */
+.swiss-rooms-empty.is-blank {
+    display: grid;
+    gap: 4px;
+    justify-items: center;
+    text-align: center;
+    padding: 22px 16px;
+    margin-top: 6px;
+    border: 1px dashed rgba(110, 118, 129, 0.35);
+    border-radius: 8px;
+    font-style: normal;
+}
+.swiss-rooms-empty-title {
+    margin: 0;
+    font-weight: 600;
+}
+.swiss-rooms-empty-sub {
+    margin: 0;
+    font-size: 0.82rem;
+    opacity: 0.8;
+}
+
+/* Both of these sit inside .swiss-room-card-name, which is the grid's name
+   column: a bold flex column that already stacks the title and the badge.
+   Hence the explicit weight (it would inherit 600) and the full width (the
+   column is align-items: flex-start, so an item is only as wide as its own
+   text unless it says otherwise). */
+/* A poster spans the whole card, above everything. The grid only gains the
+   row when there IS one (.has-poster) — declaring the area unconditionally
+   would leave an empty track, and its gap, on every card without a poster. */
+/* ---- poster picker in the Event details popup ---- */
+.share-poster {
+    margin-bottom: 10px;
+}
+.share-poster-drop {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 1px dashed #30363d;
+    border-radius: 8px;
+    background: #0d1117;
+    color: #8b949e;
+    cursor: pointer;
+    overflow: hidden;
+}
+.share-poster-drop:hover {
+    border-color: #58a6ff;
+}
+.share-poster-empty {
+    display: block;
+    padding: 26px 12px;
+    font-size: 0.82rem;
+    text-align: center;
+}
+.share-poster-img {
+    display: block;
+    width: 100%;
+    max-height: 180px;
+    object-fit: cover;
+}
+.share-poster-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 6px;
+}
+.share-poster-note {
+    font-size: 0.72rem;
+    line-height: 1.4;
+    color: #8b949e;
+}
+.share-poster-note.is-err {
+    color: #f85149;
+}
+.share-poster-clear {
+    flex: 0 0 auto;
+    padding: 4px 10px;
+    font: inherit;
+    font-size: 0.74rem;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    background: transparent;
+    color: #f85149;
+    cursor: pointer;
+}
+.share-poster-clear:hover {
+    border-color: #f85149;
+}
+
+.swiss-room-card.has-poster {
+    grid-template-areas: "poster poster" "name mode" "meta meta";
+    padding-top: 0;
+    overflow: hidden;
+}
+.swiss-room-card-poster {
+    grid-area: poster;
+    display: block;
+    width: calc(100% + 24px);
+    /* Out to the card's own edges, under its radius, rather than floating
+       inside the padding like a thumbnail. */
+    margin: 0 -12px 6px;
+    height: 104px;
+    object-fit: cover;
+    background: #161b22;
+}
+
+.swiss-room-card-when {
+    align-self: stretch;
+    margin-top: 2px;
+    font-size: 0.8rem;
+    font-weight: 400;
+    color: #8b949e;
+}
+.swiss-room-card-remark {
+    align-self: stretch;
+    margin-top: 0;
+    font-size: 0.78rem;
+    font-weight: 400;
+    font-style: italic;
+    color: #8b949e;
+    /* Free text from the host. Clamped so one chatty remark cannot make its
+       row three times the height of every other row in the list; the full
+       text is on the title attribute. */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
 .swiss-room-card {
     text-align: left;
     width: 100%;
@@ -16612,21 +16760,29 @@ body.forest-mode .swiss-rooms-heading {
 
 body.light-mode .swiss-rooms-hint,
 body.light-mode .swiss-rooms-empty,
+body.light-mode .swiss-room-card-when,
+body.light-mode .swiss-room-card-remark,
 body.light-mode .swiss-room-card-meta {
     color: #656d76;
 }
 body.tropical-mode .swiss-rooms-hint,
 body.tropical-mode .swiss-rooms-empty,
+body.tropical-mode .swiss-room-card-when,
+body.tropical-mode .swiss-room-card-remark,
 body.tropical-mode .swiss-room-card-meta {
     color: #8a6d3b;
 }
 body.love-mode .swiss-rooms-hint,
 body.love-mode .swiss-rooms-empty,
+body.love-mode .swiss-room-card-when,
+body.love-mode .swiss-room-card-remark,
 body.love-mode .swiss-room-card-meta {
     color: #9c4a5e;
 }
 body.forest-mode .swiss-rooms-hint,
 body.forest-mode .swiss-rooms-empty,
+body.forest-mode .swiss-room-card-when,
+body.forest-mode .swiss-room-card-remark,
 body.forest-mode .swiss-room-card-meta {
     color: #5a6a4b;
 }

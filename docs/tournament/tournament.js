@@ -15,6 +15,7 @@
 // authority to reset (wipes remote).
 const SWISS_ROOM_STORAGE = "beyblade_swiss_room";       // current joined room info (JSON)
 const SWISS_HOST_STORAGE = "beyblade_swiss_host_rooms"; // edit codes this device hosts
+const SWISS_STEPPED_AWAY = "beyblade_swiss_stepped_away"; // codes the host left without closing
 
 let swissDb = null;
 let swissEditCode = null;    // co-host code (primary room key)
@@ -62,6 +63,32 @@ function generateRoomCode() {
   let code = "";
   for (let i = 0; i < 6; i++) code += alphabet[Math.floor(Math.random() * alphabet.length)];
   return code;
+}
+
+// Rooms the host walked out of ON PURPOSE, as opposed to ones they have
+// simply not opened yet. Without this the my-tournaments auto-enter would
+// drop them straight back in on the next render and Leave would look broken.
+// Device-scoped, like SWISS_HOST_STORAGE: it is about what this browser
+// should do next, not about the tournament, so it has no business in the
+// room.
+function loadSteppedAwayRooms() {
+  try { return JSON.parse(localStorage.getItem(SWISS_STEPPED_AWAY)) || []; } catch (e) { return []; }
+}
+function markSteppedAway(code) {
+  if (!code) return;
+  const rooms = loadSteppedAwayRooms();
+  if (!rooms.includes(code)) {
+    rooms.push(code);
+    try { localStorage.setItem(SWISS_STEPPED_AWAY, JSON.stringify(rooms)); } catch (e) {}
+  }
+}
+function clearSteppedAway(code) {
+  if (!code) return;
+  const rooms = loadSteppedAwayRooms().filter(c => c !== code);
+  try { localStorage.setItem(SWISS_STEPPED_AWAY, JSON.stringify(rooms)); } catch (e) {}
+}
+function hasSteppedAway(code) {
+  return !!code && loadSteppedAwayRooms().includes(code);
 }
 
 function loadHostedRooms() {
@@ -1928,12 +1955,61 @@ function resetSwiss() {
     try {
       dbHandle.ref("swissRooms/" + codeForRemote).set(null);
       if (viewCodeForRemote) dbHandle.ref("swissViewCodes/" + viewCodeForRemote).set(null);
+      // Before the room goes: the poster's write rule identifies the host
+      // through swissRooms/{code}/hostUid, which is about to stop existing.
+      // (There is an orphan clause for the ones that slip through, but not
+      // needing it is better.)
+      dbHandle.ref("tournamentPosters/" + codeForRemote).set(null).catch(() => {});
+      forgetTournamentPoster(codeForRemote);
       removeOpenRoomIndex(codeForRemote);
       if (state.hostUid) removeUserTournament(state.hostUid, codeForRemote);
+      clearSteppedAway(codeForRemote);
     } catch (e) {}
   }
 
   renderSwiss();
+}
+
+// Step out of your own room and leave it running.
+//
+// Reset is the other door, and it is the only one that existed: it wipes the
+// room, drops it out of Open Tournaments and takes the registrants with it.
+// That is the right thing when a tournament is being CANCELLED and the wrong
+// thing every other time a host wants to put their phone down — hand the
+// floor to a co-host, free the device for something else, or come back after
+// lunch. Hosts were resetting events they meant to keep, or just closing the
+// tab and hoping.
+//
+// So this touches nothing shared. The room, its registrants, its lobby entry
+// and its userTournaments summary all stay exactly as they are; only this
+// device disconnects. Everything below the confirm is local.
+function leaveSwissRoomAsHost() {
+  const code = swissEditCode;
+  if (!code || !swissIsHost) return;
+  const state = loadSwiss();
+  const regs = (typeof listRegistrants === "function") ? listRegistrants(state).length : 0;
+  const who = regs === 1 ? "1 registrant" : regs + " registrants";
+  // Spell out the difference from Reset, because the two buttons sit next to
+  // each other and one of them is destructive.
+  const msg = "Leave this tournament running?" +
+    String.fromCharCode(10, 10) +
+    "It stays open with " + who + " and anyone can still join. Co-hosts can " +
+    "keep running it while you are away." +
+    String.fromCharCode(10, 10) +
+    "You can come back to it any time from My Tournaments. Nothing is deleted " +
+    "\u2014 use Reset for that.";
+  if (!confirm(msg)) return;
+
+  // Set before disconnecting: disconnectSwissRoom clears swissEditCode, and
+  // the marker is what stops my-tournaments auto-entering the room again on
+  // the very next render.
+  markSteppedAway(code);
+  disconnectSwissRoom();
+  // Straight to localStorage, bypassing persistSwiss — a push here would
+  // write this empty placeholder over the live room.
+  localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [], phase: "running", registrants: {} }));
+  renderSwiss();
+  if (typeof renderMyTournaments === "function") renderMyTournaments();
 }
 
 function startSwissMatch(matchId) {
@@ -3457,6 +3533,20 @@ function bindSwissJoinCodeButton(view) {
   });
 }
 
+// Only for the host, only in a room, and only when the other button still
+// says Reset. Once a tournament is finished that button already says Leave
+// and closing the room is the right end to it, so a second Leave beside it
+// would be two words for two different things.
+function renderSwissHostLeaveButton(exitState) {
+  if (!swissIsHost || !swissEditCode) return "";
+  if (exitState && exitState.done) return "";
+  return `<button type="button" id="swiss-leave" class="btn btn-leave btn-icon-sm" title="Leave \u2014 the tournament keeps running">
+            <img src="assets/icons/logout.png" alt=""
+                 onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x2192;');">
+            <span class="swiss-toolbar-btn-label">Leave</span>
+          </button>`;
+}
+
 function renderSwissShareButton() {
   return `<button type="button" id="swiss-share" class="btn btn-icon-sm swiss-share-btn" aria-label="Copy tournament details" title="Copy tournament details to clipboard">
     <img src="assets/icons/share.png" alt=""
@@ -3677,6 +3767,166 @@ function formatShareDate(value) {
   return `${day} ${months[mo]} ${y} (${weekdays[date.getDay()]})`;
 }
 
+// ===== Event posters =====
+//
+// Kept at tournamentPosters/{editCode}, NOT on the room. The room is under a
+// .on("value") listener for everyone inside the tournament, and RTDB resends
+// the whole node on every change \u2014 a poster living there would be
+// re-downloaded by every device on every score. The Revox evidence photos
+// were split out of their queue entry for the same reason.
+const POSTER_MAX_EDGE = 640;       // enough to read a poster's own text
+const POSTER_MAX_BYTES = 120000;   // the rule allows 150000; leave headroom
+
+// Downscale a picked file to a JPEG data URL that fits. Quality steps down
+// rather than the size, so the text on a poster stays legible.
+function compressTournamentPoster(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !/^image\//.test(file.type || "")) { reject(new Error("Pick an image file.")); return; }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Couldn't read that file."));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("That file isn't a readable image."));
+      img.onload = () => {
+        // iOS Safari can fire load before the bitmap is decoded, and then
+        // drawImage paints nothing at all.
+        const finish = () => {
+          const scale = Math.min(1, POSTER_MAX_EDGE / Math.max(img.width, img.height));
+          const w = Math.max(1, Math.round(img.width * scale));
+          const h = Math.max(1, Math.round(img.height * scale));
+          const canvas = document.createElement("canvas");
+          canvas.width = w; canvas.height = h;
+          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+          let q = 0.78, url = canvas.toDataURL("image/jpeg", q);
+          while (url.length > POSTER_MAX_BYTES && q > 0.3) {
+            q -= 0.08;
+            url = canvas.toDataURL("image/jpeg", q);
+          }
+          if (url.length > POSTER_MAX_BYTES) {
+            reject(new Error("That image is too detailed to shrink \u2014 try a simpler one."));
+            return;
+          }
+          resolve(url);
+        };
+        if (img.decode) img.decode().then(finish, finish);
+        else finish();
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Per-session, so re-rendering a list (which happens on every refresh) does
+// not re-read images it already has. `null` is cached too: "this tournament
+// has no poster" is an answer worth keeping.
+const tournamentPosterCache = Object.create(null);
+const tournamentPosterInflight = Object.create(null);
+
+function loadTournamentPoster(editCode) {
+  if (!editCode) return Promise.resolve(null);
+  if (editCode in tournamentPosterCache) return Promise.resolve(tournamentPosterCache[editCode]);
+  if (editCode in tournamentPosterInflight) return tournamentPosterInflight[editCode];
+  const db = initFirebase();
+  if (!db) return Promise.resolve(null);
+  const pr = db.ref("tournamentPosters/" + editCode + "/image").once("value")
+    .then(snap => {
+      const v = snap.val();
+      const img = (typeof v === "string" && v) ? v : null;
+      tournamentPosterCache[editCode] = img;
+      delete tournamentPosterInflight[editCode];
+      return img;
+    })
+    .catch(() => {
+      // Not cached: a failed read is not evidence there is no poster, and
+      // caching the failure would keep it missing for the whole session.
+      delete tournamentPosterInflight[editCode];
+      return null;
+    });
+  tournamentPosterInflight[editCode] = pr;
+  return pr;
+}
+
+function saveTournamentPoster(editCode, image) {
+  const db = initFirebase();
+  if (!db || !editCode) return Promise.resolve();
+  const ref = db.ref("tournamentPosters/" + editCode);
+  // Write through the cache so the lists show it without a round trip.
+  tournamentPosterCache[editCode] = image || null;
+  return (image ? ref.set({ image }) : ref.set(null))
+    .catch(e => {
+      console.warn("Poster save failed:", e);
+      // The cache lied; drop it so the next read asks the database.
+      delete tournamentPosterCache[editCode];
+    });
+}
+
+function forgetTournamentPoster(editCode) {
+  if (editCode) delete tournamentPosterCache[editCode];
+}
+
+// The <img> for a card, or "" when there is nothing to show yet. Lists call
+// this at render time and then fill the gaps asynchronously, so a cached
+// poster appears immediately instead of flashing in.
+function posterImgHtml(editCode) {
+  const img = tournamentPosterCache[editCode];
+  return img
+    ? `<img class="swiss-room-card-poster" src="${escapeHtml(img)}" alt="" loading="lazy">`
+    : "";
+}
+
+// Fill in the posters a list rendered without. Cards are rebuilt on every
+// refresh, so this runs after each render; the cache makes all but the first
+// pass free.
+function hydrateCardPosters(list) {
+  if (!list || !list.querySelectorAll) return;
+  list.querySelectorAll(".swiss-room-card[data-edit-code]").forEach(card => {
+    if (card.querySelector(".swiss-room-card-poster")) return;
+    const code = card.dataset.editCode;
+    loadTournamentPoster(code).then(img => {
+      if (!img || !card.isConnected) return;
+      // The card may have been re-rendered under us while this was in
+      // flight; isConnected is the cheap way to notice.
+      if (card.querySelector(".swiss-room-card-poster")) return;
+      const el = document.createElement("img");
+      el.className = "swiss-room-card-poster";
+      el.alt = "";
+      el.src = img;
+      card.insertBefore(el, card.firstChild);
+      card.classList.add("has-poster");
+    });
+  });
+}
+
+// The share message has a whole line per field and can spell everything
+// out. A lobby row has one line for all of it, so these are the short forms:
+// "Fri 17 Oct", not "17 October 2026 (Friday)".
+function formatLobbyDate(value) {
+  if (typeof value !== "string") return "";
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return value || "";
+  const y = Number(m[1]), mo = Number(m[2]) - 1, day = Number(m[3]);
+  const date = new Date(y, mo, day);
+  if (isNaN(date.getTime())) return value;
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const weekdays = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  // The year is only worth the space when it is not the obvious one.
+  const year = y === new Date().getFullYear() ? "" : " " + y;
+  return `${weekdays[date.getDay()]} ${day} ${months[mo]}${year}`;
+}
+
+// <input type="time"> stores 24-hour, which is not how the time was typed
+// on most phones and not how anyone reads a start time here.
+function formatLobbyTime(value) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(value == null ? "" : value));
+  if (!m) return String(value == null ? "" : value);
+  const h = Number(m[1]), min = Number(m[2]);
+  if (!(h >= 0 && h <= 23) || !(min >= 0 && min <= 59)) return String(value);
+  const suffix = h < 12 ? "AM" : "PM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${m[2]} ${suffix}`;
+}
+
 function composeTournamentShareMessage(state, details) {
   const d = details || {};
   const name = (state?.tournamentName || "").trim() || "Tournament";
@@ -3797,16 +4047,25 @@ function bindEventDetailsButton(view) {
   if (!btn) return;
   btn.addEventListener("click", () => {
     const state = loadSwiss();
-    showEventDetailsPopup({
+    const code = swissEditCode;
+    const open = (poster) => showEventDetailsPopup({
       title: "Event details",
       subtitle: state.tournamentName || "What Share sends with the code",
       okLabel: "Save",
+      okIcon: "assets/icons/diskette.png",
       initial: state.eventDetails || {},
+      poster: poster || "",
       onSave: (details) => {
         saveTournamentEventDetails(details);
+        if (details.posterChanged && code) saveTournamentPoster(code, details.poster);
         renderSwiss();
       }
     });
+    // Fetch the existing poster first so the popup opens showing it. If the
+    // read fails the popup still opens, just without it \u2014 and because
+    // nothing was touched, posterChanged stays false and saving will not
+    // delete the image that is actually there.
+    loadTournamentPoster(code).then(open).catch(() => open(""));
   });
 }
 
@@ -3904,12 +4163,72 @@ function showEventDetailsPopup(opts) {
   if (dateInput) dateInput.onchange = () => { if (timeInput) timeInput.focus(); };
   if (timeInput) timeInput.onchange = () => openDropdownMenu(stadiumDd);
 
+  // ---- poster ----
+  // Three states: nothing chosen, something chosen, and busy shrinking. The
+  // last one matters because a phone photo takes a visible moment and the
+  // host would otherwise think the tap did nothing.
+  const posterPick = popup.querySelector("#share-poster-pick");
+  const posterFile = popup.querySelector("#share-poster-file");
+  const posterImg = popup.querySelector("#share-poster-img");
+  const posterEmpty = popup.querySelector("#share-poster-empty");
+  const posterNote = popup.querySelector("#share-poster-note");
+  const posterClear = popup.querySelector("#share-poster-clear");
+  const POSTER_HINT = "Optional. Shown on the tournament in Open Tournaments.";
+  let posterValue = typeof o.poster === "string" ? o.poster : "";
+  // Only a touched poster is written back. Re-saving the details must not
+  // re-upload an unchanged image, and must not wipe one the popup failed to
+  // load in the first place.
+  let posterChanged = false;
+  const paintPoster = (note, isErr) => {
+    if (posterImg) {
+      posterImg.src = posterValue || "";
+      posterImg.classList.toggle("hidden", !posterValue);
+    }
+    if (posterEmpty) posterEmpty.classList.toggle("hidden", !!posterValue);
+    if (posterClear) posterClear.classList.toggle("hidden", !posterValue);
+    if (posterNote) {
+      posterNote.textContent = note || POSTER_HINT;
+      posterNote.classList.toggle("is-err", !!isErr);
+    }
+  };
+  paintPoster();
+  if (posterPick && posterFile) {
+    posterPick.onclick = () => posterFile.click();
+    posterFile.onchange = () => {
+      const file = posterFile.files && posterFile.files[0];
+      // Clear the input either way, so picking the SAME file again still
+      // fires a change event.
+      const done = () => { posterFile.value = ""; };
+      if (!file) { done(); return; }
+      paintPoster("Shrinking\u2026");
+      compressTournamentPoster(file).then(url => {
+        posterValue = url;
+        posterChanged = true;
+        paintPoster();
+        done();
+      }).catch(e => {
+        paintPoster((e && e.message) || "Couldn't use that image.", true);
+        done();
+      });
+    };
+  }
+  if (posterClear) {
+    posterClear.onclick = () => {
+      posterValue = "";
+      posterChanged = true;
+      paintPoster();
+    };
+  }
+
   const close = () => {
     popup.classList.add("hidden");
     if (submitBtn) submitBtn.onclick = null;
     if (cancelBtn) cancelBtn.onclick = null;
     if (dateInput) dateInput.onchange = null;
     if (timeInput) timeInput.onchange = null;
+    if (posterPick) posterPick.onclick = null;
+    if (posterFile) { posterFile.onchange = null; posterFile.value = ""; }
+    if (posterClear) posterClear.onclick = null;
   };
 
   if (submitBtn) {
@@ -3919,7 +4238,12 @@ function showEventDetailsPopup(opts) {
         time: timeInput?.value || "",
         stadium: stadiumCtrl ? stadiumCtrl.getValue() : "",
         rule: ruleCtrl ? ruleCtrl.getValue() : "",
-        remark: (remarkInput?.value || "").trim()
+        remark: (remarkInput?.value || "").trim(),
+        // The poster is not part of eventDetails \u2014 that node has a
+        // field whitelist, and an image does not belong on the room anyway.
+        // It travels beside the details and the caller stores it separately.
+        poster: posterValue,
+        posterChanged
       };
       close();
       if (typeof o.onSave === "function") o.onSave(picked);
@@ -3940,6 +4264,17 @@ function showEventDetailsPopup(opts) {
   const okEl = popup.querySelector("#tournament-share-submit .btn-label")
     || popup.querySelector("#tournament-share-submit");
   if (okEl && o.okLabel) okEl.textContent = o.okLabel;
+  // The icon has to move with the label. This popup started life as Share
+  // and kept that arrow in the markup, so "Create" and "Save" both sat
+  // behind a share icon — which reads as "this sends the tournament
+  // somewhere" at the exact moment it does not.
+  const okIcon = popup.querySelector("#tournament-share-submit img");
+  if (okIcon && o.okIcon) {
+    okIcon.src = o.okIcon;
+    // A previous caller's icon may have 404'd and hidden itself; this one
+    // deserves its own chance to load.
+    okIcon.style.display = "";
+  }
   popup.classList.remove("hidden");
 }
 
@@ -4829,7 +5164,7 @@ function renderSwiss() {
                      onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
                 <span class="swiss-toolbar-btn-label">Back</span>
               </button>`
-            : `<button type="button" id="swiss-clear" class="btn btn-reset btn-icon-sm${exitBtn.done ? " is-done" : ""}" title="${resetTitle}">
+            : `${renderSwissHostLeaveButton(exitBtn)}<button type="button" id="swiss-clear" class="btn btn-reset btn-icon-sm${exitBtn.done ? " is-done" : ""}" title="${resetTitle}">
                 <img src="assets/icons/exit-button.png" alt=""
                      onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
                 <span class="swiss-toolbar-btn-label">${exitBtn.label}</span>
@@ -5005,6 +5340,7 @@ function renderSwiss() {
     btn.addEventListener("click", showEditRoundCountPopup);
   });
   view.querySelector("#swiss-clear")?.addEventListener("click", resetSwiss);
+  view.querySelector("#swiss-leave")?.addEventListener("click", leaveSwissRoomAsHost);
   view.querySelector("#swiss-archive-back")?.addEventListener("click", exitArchiveView);
 
   // Wire up any part-usage carousels rendered into the view.
@@ -5409,6 +5745,7 @@ function renderSwissRegisteringMarkup(state) {
         <div class="swiss-toolbar-actions">
           ${renderSwissShareButton()}
           ${swissIsHost ? renderCoHostsButton() : ""}
+          ${renderSwissHostLeaveButton(exitB)}
           <button type="button" id="swiss-clear" class="btn btn-reset btn-icon-sm${exitB.done ? " is-done" : ""}" title="${exitB.title}">
             <img src="assets/icons/exit-button.png" alt=""
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x21BA;');">
@@ -5577,6 +5914,7 @@ function bindSwissRegisteringHandlers(view, state) {
   // Re-apply any active search / row filter after a (re-)render.
   if (regSearch || regFilterBtns.length) applySwissRegFilters(view);
   view.querySelector("#swiss-clear")?.addEventListener("click", resetSwiss);
+  view.querySelector("#swiss-leave")?.addEventListener("click", leaveSwissRoomAsHost);
   view.querySelector("#swiss-edit-mode")?.addEventListener("click", showSwissFormatPopup);
   view.querySelector("#swiss-edit-groups")?.addEventListener("click", () => {
     showSwissGroupsPopup((gc) => updateRegisteringSetting({ groupCount: gc }), state.pairing === "round-robin");
@@ -10526,6 +10864,7 @@ document.getElementById("swiss-generate")?.addEventListener("click", async () =>
       title: "Event details",
       subtitle: (tournamentName || "").trim() || "Where and when is this?",
       okLabel: "Create",
+      okIcon: "assets/icons/tournament.png",
       initial: {},
       onSave: (details) => {
         // Open Registration only — empty room in registering phase. Players
@@ -10545,6 +10884,11 @@ document.getElementById("swiss-generate")?.addEventListener("click", async () =>
           };
         }
         startTournamentFromState(next);
+        // After, not before: the room only gets its code inside
+        // startTournamentFromState, and the poster is keyed by it.
+        if (details && details.poster && swissEditCode) {
+          saveTournamentPoster(swissEditCode, details.poster);
+        }
       }
       // No onCancel: backing out of the details means no tournament, which
       // is what happens by doing nothing.
@@ -11255,19 +11599,34 @@ function refreshMyTournaments() {
     .then(snap => {
       const rooms = Object.values(snap.val() || {}).filter(r => r && r.editCode);
       if (!rooms.length) return;
-      // Cross-check each entry against the live room: prune ones whose room
-      // is gone, and read `pairing` live (it isn't kept in the summary).
+      // Cross-check each entry against the live room, and read anything the
+      // summary cannot be trusted for off the room itself.
+      //
+      // That summary is written when the tournament is created and on Start,
+      // and never again. So a name typed afterwards — which is the normal
+      // way round, the card says "+ Add tournament name" until you do —
+      // leaves it holding "", and the card said "(unnamed tournament)" about
+      // a tournament with a name on it. Same for a rename by a co-host, and
+      // same for the event details. The lobby already reads its name live
+      // for exactly this reason; this list did not.
       return Promise.all(rooms.map(r =>
         Promise.all([
           db.ref("swissRooms/" + r.editCode + "/phase").once("value").then(s => s.val()).catch(() => null),
-          db.ref("swissRooms/" + r.editCode + "/pairing").once("value").then(s => s.val()).catch(() => null)
-        ]).then(([phase, pairing]) => ({ room: r, phase, pairing }))
+          db.ref("swissRooms/" + r.editCode + "/pairing").once("value").then(s => s.val()).catch(() => null),
+          db.ref("swissRooms/" + r.editCode + "/eventDetails").once("value").then(s => s.val()).catch(() => null),
+          // undefined, not null, when the read fails: "could not ask" has to
+          // stay distinguishable from "it really is blank", or a dropped
+          // connection would wipe a name the summary still knows.
+          db.ref("swissRooms/" + r.editCode + "/tournamentName").once("value").then(s => s.val()).catch(() => undefined)
+        ]).then(([phase, pairing, eventDetails, liveName]) => ({ room: r, phase, pairing, eventDetails, liveName }))
       )).then(results => {
         const live = [];
-        results.forEach(({ room, phase, pairing }) => {
+        results.forEach(({ room, phase, pairing, eventDetails, liveName }) => {
           if (phase === "registering" || phase === "running") {
             room.phase = phase;
             room.pairing = pairing || null;
+            room.eventDetails = eventDetails || null;
+            if (liveName !== undefined) room.name = liveName || "";
             live.push(room);
           } else {
             removeUserTournament(user.uid, room.editCode);
@@ -11277,11 +11636,18 @@ function refreshMyTournaments() {
         if (!live.length) return;
         // Auto-enter: one live tournament and not already in a room → drop
         // straight in. Section stays hidden.
-        if (live.length === 1 && !swissEditCode) {
+        //
+        // Unless the host left that room on purpose. Dropping them back into
+        // the thing they just walked out of makes Leave look like it failed,
+        // so instead the pick list is shown — one tap back in when they want
+        // it, and nothing happening until then.
+        if (live.length === 1 && !swissEditCode && !hasSteppedAway(live[0].editCode)) {
           joinMyTournament(live[0]);
           return;
         }
         // 2+ live tournaments → a genuine choice, so reveal the pick list.
+        // One stepped-away room counts as a choice too: going back in is the
+        // whole point of showing it.
         renderMyTournamentRooms(list, live);
         showSection(true);
       });
@@ -11298,14 +11664,17 @@ function renderMyTournamentRooms(list, rooms) {
     const badge = r.phase === "running"
       ? `<span class="swiss-room-running-badge">In progress</span>`
       : `<span class="swiss-room-hosting-badge">Registering</span>`;
+    const poster = posterImgHtml(r.editCode);
     return `
-      <button type="button" class="swiss-room-card" data-edit-code="${escapeHtml(r.editCode)}">
-        <div class="swiss-room-card-name">${escapeHtml(name)}${badge}</div>
+      <button type="button" class="swiss-room-card${poster ? " has-poster" : ""}" data-edit-code="${escapeHtml(r.editCode)}">
+        ${poster}
+        <div class="swiss-room-card-name">${escapeHtml(name)}${badge}${eventDetailLines(r.eventDetails)}</div>
         <div class="swiss-room-card-mode">${modeLabel}</div>
         <div class="swiss-room-card-meta">Host code ${escapeHtml(r.editCode)}</div>
       </button>
     `;
   }).join("");
+  hydrateCardPosters(list);
   list.querySelectorAll(".swiss-room-card").forEach(btn => {
     btn.addEventListener("click", () => {
       const room = rooms.find(r => r.editCode === btn.dataset.editCode);
@@ -11321,6 +11690,9 @@ function joinMyTournament(room) {
   if (!room || !room.editCode) return;
   if (!firebaseReady()) { alert("Live sync isn't configured on this build."); return; }
   markRoomHosted(room.editCode);
+  // Walking back in ends the "stepped away" state — otherwise the host would
+  // have to pick this room from the list every time, forever.
+  clearSteppedAway(room.editCode);
   disconnectSwissRoom();
   // Empty placeholder — connectSwissRoom's listener fills it from the remote.
   localStorage.setItem(SWISS_KEY, JSON.stringify({ groups: null, matches: {}, groupRounds: [], phase: "running", registrants: {} }));
@@ -11437,8 +11809,11 @@ function refreshOpenTournamentRooms() {
   if (!list) return;
   const setStatus = msg => { if (status) status.textContent = msg || ""; };
   if (!firebaseReady()) {
-    list.innerHTML = "";
-    setStatus("Live sync isn't configured on this build.");
+    // Same orphan as an empty list: blanking the list on its own left the
+    // "tap a tournament to join" hint sitting above nothing at all.
+    setLobbyEmptyState(list, "Live sync isn't set up",
+      "This build has no connection to the tournament database.");
+    setStatus("");
     return;
   }
   setStatus("Loading…");
@@ -11448,7 +11823,8 @@ function refreshOpenTournamentRooms() {
       const val = snap.val() || {};
       const rooms = Object.values(val).filter(r => r && r.editCode);
       if (!rooms.length) {
-        list.innerHTML = `<p class="swiss-rooms-empty">No tournaments right now. Ask your host to create one.</p>`;
+        setLobbyEmptyState(list, "No tournaments right now",
+          "Ask your host to create one, then tap Refresh.");
         setStatus("");
         setSubHostTabAlert(false);
         return;
@@ -11494,6 +11870,15 @@ function refreshOpenTournamentRooms() {
         const visP = db.ref("swissRooms/" + r.editCode + "/visibility").once("value")
           .then(s => s.val())
           .catch(() => null);
+        // When and where. Same reason as the cap above: the lobby summary
+        // has a field whitelist in the rules ($other: validate false), so
+        // putting these in it would need a rules change and get rejected
+        // until that shipped. A leaf read needs nothing new, and it also
+        // means an edit to the details shows up without re-publishing the
+        // summary — which a co-host's edit never does.
+        const evP = db.ref("swissRooms/" + r.editCode + "/eventDetails").once("value")
+          .then(s => s.val())
+          .catch(() => null);
         // When the tournament finished, if it has. Written once when a
         // complete tournament is first rendered; absent while it is still
         // being played.
@@ -11534,12 +11919,12 @@ function refreshOpenTournamentRooms() {
             // reason to remove anything.
             .catch(() => ({ archivedAt, stillComplete: false, checked: false }));
         });
-        return Promise.all([phaseP, regP, pairP, subP, nameP, capP, visP, doneStateP]).then(([phaseRead, count, pairing, subHosts, liveName, maxParticipants, visibility, done]) => ({
-          room: r, phaseRead, count, pairing, subHosts, liveName, maxParticipants, visibility, done
+        return Promise.all([phaseP, regP, pairP, subP, nameP, capP, visP, evP, doneStateP]).then(([phaseRead, count, pairing, subHosts, liveName, maxParticipants, visibility, eventDetails, done]) => ({
+          room: r, phaseRead, count, pairing, subHosts, liveName, maxParticipants, visibility, eventDetails, done
         }));
       })).then(results => {
         const live = [];
-        results.forEach(({ room, phaseRead, count, pairing, subHosts, liveName, maxParticipants, visibility, done }) => {
+        results.forEach(({ room, phaseRead, count, pairing, subHosts, liveName, maxParticipants, visibility, eventDetails, done }) => {
           // Could not read the room? Then we do not know anything about it.
           // Leave it exactly as it is — listed, with its cached summary. A
           // lobby entry is only ever removed on evidence, never on silence.
@@ -11584,6 +11969,7 @@ function refreshOpenTournamentRooms() {
             room.subHosts = subHosts || {};
             room.maxParticipants = (typeof maxParticipants === "number" && maxParticipants >= 2) ? maxParticipants : null;
             room.visibility = visibility === "closed" ? "closed" : "open";
+            room.eventDetails = eventDetails || null;
             if (liveName !== undefined) room.name = liveName || "";
             live.push(room);
           } else {
@@ -11604,12 +11990,34 @@ function refreshOpenTournamentRooms() {
         } else {
           setSubHostTabAlert(false);
         }
+        // Rooms you host are not what this list is for. It says "tap a
+        // tournament to join", and you cannot join your own — tapping it
+        // just put you back in as host, which is My Tournaments' job. The
+        // same tournament appearing twice on one screen, once with a
+        // "Hosting" badge, was two routes to the same place.
+        //
+        // Filtered HERE and not at the fetch, deliberately: the stale-entry
+        // prune and the co-host alert above both have to keep seeing every
+        // room, including yours. A host's own abandoned lobby entry is
+        // exactly the kind the prune exists to clear.
+        const joinable = uidLA ? live.filter(r => r.hostUid !== uidLA) : live;
         if (!live.length) {
-          list.innerHTML = `<p class="swiss-rooms-empty">No tournaments right now. Ask your host to create one.</p>`;
+          setLobbyEmptyState(list, "No tournaments right now",
+            "Ask your host to create one, then tap Refresh.");
           setStatus("");
           return;
         }
-        renderLobbyRooms(list, live);
+        if (!joinable.length) {
+          // There ARE open tournaments, they are just all yours. Saying
+          // "no tournaments" here would read as though yours had vanished.
+          const mine = live.length === 1 ? "The only one open is yours." : "The only ones open are yours.";
+          setLobbyEmptyState(list, "Nothing to join right now",
+            mine + " See My Tournaments above.");
+          setStatus("");
+          return;
+        }
+        setLobbyEmptyState(list, null);
+        renderLobbyRooms(list, joinable);
         setStatus("");
       });
     })
@@ -11619,11 +12027,55 @@ function refreshOpenTournamentRooms() {
     });
 }
 
+// The lobby with nothing in it.
+//
+// Two things were wrong and only one of them was the message. The hint above
+// the list explains how to tap a row and what the roles are, which is advice
+// about rows that do not exist — so it goes while the list is empty and
+// comes back with the first room. And the message itself was a bare italic
+// line sitting under three buttons, which reads as a failed load rather than
+// an answer; in a box of its own it reads as the answer it is.
+//
+// Passing no title restores the hint and leaves the list alone, which is
+// what the render path wants.
+function setLobbyEmptyState(list, title, sub) {
+  if (!list) return;
+  const section = typeof list.closest === "function" ? list.closest(".swiss-rooms-section") : null;
+  const hint = section ? section.querySelector(".swiss-rooms-hint") : null;
+  if (hint) hint.classList.toggle("hidden", !!title);
+  if (!title) return;
+  // is-blank keeps the theme colours (they key on .swiss-rooms-empty) while
+  // the box styling stays off the two plain one-liners that share the class.
+  list.innerHTML = `<div class="swiss-rooms-empty is-blank">
+      <p class="swiss-rooms-empty-title">${title}</p>
+      ${sub ? `<p class="swiss-rooms-empty-sub">${sub}</p>` : ""}
+    </div>`;
+}
+
+// The "when and where" block, shared by the lobby and My Tournaments.
+//
+// Each part is dropped when the host left it blank rather than printed as an
+// empty gap, so a tournament with only a stadium still reads as a sentence
+// instead of a row of separators.
+function eventDetailLines(details) {
+  const ev = details || {};
+  const when = [formatLobbyDate(ev.date), formatLobbyTime(ev.time), String(ev.stadium || "").trim()]
+    .filter(Boolean);
+  const whenHtml = when.length
+    ? `<div class="swiss-room-card-when">${when.map(escapeHtml).join(" \u00b7 ")}</div>`
+    : "";
+  // On its own line: it is a sentence from the host, not another field.
+  const remark = String(ev.remark || "").trim();
+  const remarkHtml = remark
+    ? `<div class="swiss-room-card-remark" title="${escapeHtml(remark)}">${escapeHtml(remark)}</div>`
+    : "";
+  return whenHtml + remarkHtml;
+}
+
 function renderLobbyRooms(list, rooms) {
-  // Tag rooms the signed-in account hosts, or has been added to as a
-  // sub-host, so the user can spot them in the lobby.
-  const myUid = (typeof getCurrentUser === "function" && getCurrentUser())
-    ? getCurrentUser().uid : null;
+  // Tag rooms the signed-in account has been added to as a sub-host, so the
+  // user can spot the invitation in the lobby. There is no "Hosting" tag any
+  // more: the caller filters your own rooms out, so one could never render.
   const myUname = (window.getCurrentUsername && window.getCurrentUsername()) || "";
   const myKey = myUname ? subHostKey(myUname) : "";
   list.innerHTML = rooms.map(r => {
@@ -11643,9 +12095,6 @@ function renderLobbyRooms(list, rooms) {
     const fullBadge = isFull
       ? `<span class="swiss-room-full-badge" title="Registration full">Full</span>`
       : "";
-    const hostingBadge = (myUid && r.hostUid && r.hostUid === myUid)
-      ? `<span class="swiss-room-hosting-badge">Hosting</span>`
-      : "";
     // You were added to this room's sub-host list — you'll join as co-host.
     // Show a "!" alert badge so the user spots the invitation at a glance.
     const cohostBadge = (myKey && r.subHosts && r.subHosts[myKey])
@@ -11662,14 +12111,20 @@ function renderLobbyRooms(list, rooms) {
     const closedBadge = r.visibility === "closed"
       ? `<span class="swiss-room-closed-badge" title="Private — a code is required to join">Closed</span>`
       : "";
+    // When and where, in the order a player asks it.
+    const detailsHtml = eventDetailLines(r.eventDetails);
+    // Rendered inline when it is already cached, so a refresh does not make
+    // every poster flash out and back in; hydrateCardPosters fills the rest.
+    const poster = posterImgHtml(r.editCode);
     return `
-      <button type="button" class="swiss-room-card" data-edit-code="${escapeHtml(r.editCode)}">
+      <button type="button" class="swiss-room-card${poster ? " has-poster" : ""}" data-edit-code="${escapeHtml(r.editCode)}">
+        ${poster}
         <div class="swiss-room-card-name">
           <span class="swiss-room-card-title">${escapeHtml(name)}</span>
+          ${detailsHtml}
         </div>
         <div class="swiss-room-card-mode">${modeLabel}</div>
         <div class="swiss-room-card-meta">
-          ${hostingBadge}
           <span class="swiss-room-card-meta-text">${meta.map(escapeHtml).join(" · ")}</span>
           ${runningBadge}
           ${fullBadge}
@@ -11679,6 +12134,7 @@ function renderLobbyRooms(list, rooms) {
       </button>
     `;
   }).join("");
+  hydrateCardPosters(list);
   list.querySelectorAll(".swiss-room-card").forEach(btn => {
     btn.addEventListener("click", () => {
       const editCode = btn.dataset.editCode;

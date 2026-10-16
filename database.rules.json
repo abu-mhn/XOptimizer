@@ -186,6 +186,16 @@
       }
     },
 
+    "tournamentPosters": {
+      "$code": {
+        ".read": true,
+        ".write": "auth != null && (root.child('swissRooms').child($code).child('hostUid').val() === auth.uid || (!newData.exists() && !root.child('swissRooms').child($code).child('hostUid').exists()) || (root.child('users').child(auth.uid).child('tags').child('Developer').val() === true || root.child('users').child(auth.uid).child('tag').val() === 'Developer'))",
+        ".validate": "!newData.exists() || newData.hasChildren(['image'])",
+        "image":  { ".validate": "newData.isString() && newData.val().length <= 150000" },
+        "$other": { ".validate": false }
+      }
+    },
+
     "openTournaments": {
       ".read": true,
       "$code": {

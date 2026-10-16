@@ -1048,6 +1048,19 @@
       <textarea id="share-remark-input" class="tournament-name-input tournament-share-remark" rows="3" placeholder="Anything else to mention..."></textarea>
 
 
+      <label class="tournament-name-label">Poster</label>
+      <div class="share-poster" id="share-poster">
+        <button type="button" class="share-poster-drop" id="share-poster-pick">
+          <span class="share-poster-empty" id="share-poster-empty">Add a poster or banner</span>
+          <img class="share-poster-img hidden" id="share-poster-img" alt="">
+        </button>
+        <input type="file" id="share-poster-file" accept="image/*" class="hidden">
+        <div class="share-poster-row">
+          <span class="share-poster-note" id="share-poster-note">Optional. Shown on the tournament in Open Tournaments.</span>
+          <button type="button" class="share-poster-clear hidden" id="share-poster-clear">Remove</button>
+        </div>
+      </div>
+
       <div class="popup-actions">
         <button type="button" id="tournament-share-submit" class="btn">Share</button>
         <button type="button" id="tournament-share-cancel" class="btn popup-cancel">Cancel</button>
