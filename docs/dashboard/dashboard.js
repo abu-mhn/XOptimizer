@@ -458,7 +458,17 @@ function bindDashboardUsageTier(root) {
     const card = root.querySelector("[data-usage-tier]");
     if (!card) return;
     const header = card.querySelector(".dashboard-card-header");
-    card.innerHTML = (header ? header.outerHTML : "") + dashboardRenderUsageTierInner();
+    // Keep the chip row where it was. Only the chips: the tier rows below
+    // are a different set of parts after this, so their old offsets mean
+    // nothing.
+    const repaint = () => {
+      card.innerHTML = (header ? header.outerHTML : "") + dashboardRenderUsageTierInner();
+    };
+    if (typeof window.withRailScroll === "function") {
+      window.withRailScroll(card, ".tier-chips", repaint);
+    } else {
+      repaint();
+    }
     bindDashboardUsageTier(root);
   });
 }

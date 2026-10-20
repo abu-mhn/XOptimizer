@@ -765,7 +765,17 @@ function libraryRenderTierInner() {
 function renderLibraryTier() {
   const host = document.getElementById("library-tier");
   if (!host) return;
-  host.innerHTML = libraryRenderTierInner();
+  // The chip rows keep their scroll across the repaint: picking a type
+  // from the right-hand end used to snap the row back to the start, so
+  // choosing the next one meant scrolling out there again. The tier rows
+  // are not included — their contents change, so an old offset would be
+  // an offset into a different list.
+  const repaint = () => { host.innerHTML = libraryRenderTierInner(); };
+  if (typeof window.withRailScroll === "function") {
+    window.withRailScroll(host, ".tier-chips", repaint);
+  } else {
+    repaint();
+  }
   // The tier rows and chip rails hide their scrollbars (six stacked rows meant
   // six tracks), which leaves a mouse with nothing to grab. Same treatment the
   // rest of the app's horizontal rails get: vertical wheel scrolls sideways,

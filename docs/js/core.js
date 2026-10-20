@@ -827,6 +827,32 @@ function enableHorizontalWheelScroll(el) {
   }, { passive: false });
 }
 
+// Repaint a card without losing where its horizontal rails were scrolled.
+//
+// innerHTML replaces the rails with new elements, and a new element starts
+// at scrollLeft 0. For a row of chips you pick FROM, that means choosing
+// one near the right-hand end scrolls the row back to the start and you
+// have to find your place again to pick the next.
+//
+// Matched by position among the rails that `selector` finds, which holds
+// because the repaint emits the same rails in the same order. Rails whose
+// CONTENT changes wholesale — the tier rows, when the part type changes —
+// are deliberately not included by the callers: putting those back where
+// they were would be restoring an offset into a different list.
+window.withRailScroll = function withRailScroll(host, selector, repaint) {
+  if (typeof repaint !== "function") return;
+  if (!host || !host.querySelectorAll) { repaint(); return; }
+  const before = [];
+  host.querySelectorAll(selector).forEach(r => before.push(r.scrollLeft || 0));
+  repaint();
+  host.querySelectorAll(selector).forEach((r, i) => {
+    const x = before[i];
+    // A rail that was at the start needs nothing doing, and writing 0 to a
+    // not-yet-laid-out element is a no-op anyway.
+    if (x) r.scrollLeft = x;
+  });
+};
+
 // ===== Drag one item onto another to trade places =====
 //
 // Used by the deck tab's combo slots and the registration popup's. Both are

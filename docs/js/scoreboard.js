@@ -558,7 +558,7 @@ let scoreboardSaveCallback = null;
   document.getElementById("sb-swap")?.addEventListener("click", (e) => {
     e.stopPropagation();
     if (prestartEl?.classList.contains("sb-counting")) return;
-    swapSides();
+    openSwapChooser();
   });
 
   // Straight to the board, no Ready and no countdown. For a judge who is
@@ -686,9 +686,251 @@ let scoreboardSaveCallback = null;
     updateDisplay();
   }
 
+  // ===== Who moves: ask, or play for it =====
+  //
+  // Judges were swapping sides by fiat, which is fine when both players
+  // agree and awkward when they do not. Rock-paper-scissors is what they
+  // do at the table anyway, so the board can run it.
+  const RPS_THROWS = ["rock", "paper", "scissors"];
+  const RPS_BEATS = { rock: "scissors", paper: "rock", scissors: "paper" };
+
+  function rpsOutcome(mine, theirs) {
+    if (mine === theirs) return "draw";
+    return RPS_BEATS[mine] === theirs ? "win" : "lose";
+  }
+
+  // A draw is re-thrown, because that is what rock-paper-scissors is.
+  // Counting a draw as "stay" would hand the challenger a 1-in-3 chance of
+  // moving and nobody could explain why their odds were that bad.
+  // Returns every round played, so the animation can show the draws too.
+  function rpsPlay(rand) {
+    const r = typeof rand === "function" ? rand : Math.random;
+    const pick = () => RPS_THROWS[Math.min(RPS_THROWS.length - 1,
+      Math.max(0, Math.floor(r() * RPS_THROWS.length)))];
+    const rounds = [];
+    for (let i = 0; i < 20; i++) {
+      const mine = pick(), theirs = pick();
+      const out = rpsOutcome(mine, theirs);
+      rounds.push({ mine, theirs, out });
+      if (out !== "draw") return { rounds, result: out };
+    }
+    // Twenty draws means the generator is broken, not that the players are
+    // evenly matched. Decide it with one more throw rather than looping —
+    // and decide it evenly, because a fixed answer here would be a bias
+    // that only ever shows up when something else has already gone wrong.
+    const mine = pick();
+    const theirs = r() < 0.5 ? RPS_BEATS[mine]
+      : Object.keys(RPS_BEATS).find(k => RPS_BEATS[k] === mine);
+    const out = rpsOutcome(mine, theirs);
+    rounds.push({ mine, theirs, out });
+    return { rounds, result: out };
+  }
+
+  function sbSideName(side) {
+    const el = side === "a" ? labelA : labelB;
+    const n = el && el.querySelector(".scoreboard-player-name");
+    const t = (n && n.textContent || "").trim();
+    return t || (side === "a" ? "A" : "B");
+  }
+
+  function rpsIcon(throwName) {
+    return "assets/icons/" + throwName + ".png";
+  }
+
+  // The icon is the span's MASK, not its content, so the colour comes from
+  // currentColor and follows whatever theme the board is wearing. Drawn as
+  // an <img> these are black-on-transparent and vanish on a dark card.
+  //
+  // `is-ready` is what turns the fill on. Until then the span is
+  // transparent, because a mask whose image has not arrived yet does not
+  // mask anything and the element would paint as a solid block of colour.
+  function setRpsThrow(el, throwName) {
+    if (!el) return;
+    el.style.setProperty("--rps-ico", 'url("' + rpsIcon(throwName) + '")');
+    el.dataset.throw = throwName;
+  }
+
+  // Fetched once per session. Resolves true when all three are in cache,
+  // false if any failed — in which case the reels show the word instead of
+  // a square that would never be cut out.
+  let rpsIconsReady = null;
+  function preloadRpsIcons() {
+    if (rpsIconsReady) return rpsIconsReady;
+    rpsIconsReady = Promise.all(RPS_THROWS.map(t => new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => resolve(true);
+      img.onerror = () => resolve(false);
+      img.src = rpsIcon(t);
+    }))).then(all => all.every(Boolean));
+    return rpsIconsReady;
+  }
+
+  let sbSwapUi = null;
+  let sbSwapTimers = [];
+  function sbSwapCleanup() {
+    // Intervals and timeouts both land here; browsers share one id space,
+    // but clearing each explicitly costs nothing and says what is meant.
+    sbSwapTimers.forEach(t => { clearInterval(t); clearTimeout(t); });
+    sbSwapTimers = [];
+    if (sbSwapUi) sbSwapUi.remove();
+    sbSwapUi = null;
+  }
+
+  // The chooser, and the two steps that can follow it. One element, its
+  // body replaced per step, so there is only ever one thing to clean up.
+  function openSwapChooser() {
+    sbSwapCleanup();
+    const box = document.createElement("div");
+    box.className = "sb-swapmode";
+    box.innerHTML = '<div class="sb-swapmode-card" role="dialog" aria-modal="true"></div>';
+    const card = box.querySelector(".sb-swapmode-card");
+    sbSwapUi = box;
+    (overlay || document.body).appendChild(box);
+
+    const close = () => sbSwapCleanup();
+    box.addEventListener("click", (e) => { if (e.target === box) close(); });
+
+    const step1 = () => {
+      card.innerHTML =
+        '<h3 class="sb-swapmode-title">Switch positions</h3>' +
+        '<div class="sb-swapmode-opts">' +
+          '<button type="button" class="sb-swapmode-btn" data-mode="normal">' +
+            '<strong>Normal switch</strong><span>Just swap the two sides.</span></button>' +
+          '<button type="button" class="sb-swapmode-btn" data-mode="player">' +
+            '<strong>Player switch</strong><span>One player asks to move. Rock-paper-scissors decides.</span></button>' +
+        '</div>' +
+        '<button type="button" class="sb-swapmode-cancel">Cancel</button>';
+      card.querySelector('[data-mode="normal"]').onclick = () => { close(); swapSides(); };
+      card.querySelector('[data-mode="player"]').onclick = step2;
+      card.querySelector(".sb-swapmode-cancel").onclick = close;
+    };
+
+    const step2 = () => {
+      card.innerHTML =
+        '<h3 class="sb-swapmode-title">Who wants to change position?</h3>' +
+        '<div class="sb-swapmode-opts sb-swapmode-who">' +
+          '<button type="button" class="sb-swapmode-btn" data-who="a"></button>' +
+          '<button type="button" class="sb-swapmode-btn" data-who="b"></button>' +
+        '</div>' +
+        '<button type="button" class="sb-swapmode-cancel">Back</button>';
+      ["a", "b"].forEach(side => {
+        const b = card.querySelector('[data-who="' + side + '"]');
+        b.textContent = sbSideName(side);
+        b.onclick = () => step3(side);
+      });
+      card.querySelector(".sb-swapmode-cancel").onclick = step1;
+    };
+
+    // The slot machine. Both reels cycle, then land on the decided throws.
+    // The OUTCOME is settled before the animation starts — the spin is a
+    // reveal, not the draw itself, so a closed board or a dropped frame
+    // cannot change who won.
+    const step3 = (challenger) => {
+      const other = challenger === "a" ? "b" : "a";
+      const play = rpsPlay();
+      const final = play.rounds[play.rounds.length - 1];
+      card.innerHTML =
+        '<h3 class="sb-swapmode-title">' + escapeSb(sbSideName(challenger)) +
+          ' wants to switch</h3>' +
+        '<div class="sb-rps">' +
+          '<div class="sb-rps-side"><span class="sb-rps-name"></span>' +
+            '<div class="sb-rps-reel" data-reel="mine">' +
+              '<span class="sb-rps-ico" role="img"></span></div></div>' +
+          '<span class="sb-rps-vs">VS</span>' +
+          '<div class="sb-rps-side"><span class="sb-rps-name"></span>' +
+            '<div class="sb-rps-reel" data-reel="theirs">' +
+              '<span class="sb-rps-ico" role="img"></span></div></div>' +
+        '</div>' +
+        '<p class="sb-rps-result" aria-live="polite">Rock, paper, scissors…</p>' +
+        '<button type="button" class="sb-swapmode-cancel hidden">Close</button>';
+      const names = card.querySelectorAll(".sb-rps-name");
+      names[0].textContent = sbSideName(challenger);
+      names[1].textContent = sbSideName(other);
+      const mineImg = card.querySelector('[data-reel="mine"] .sb-rps-ico');
+      const theirsImg = card.querySelector('[data-reel="theirs"] .sb-rps-ico');
+      const resultEl = card.querySelector(".sb-rps-result");
+      const doneBtn = card.querySelector(".sb-swapmode-cancel");
+
+      const startSpin = (ready) => {
+        // The card can be gone before the images land.
+        if (!sbSwapUi || !card.isConnected) return;
+        const paint = (mine, theirs) => {
+          setRpsThrow(mineImg, mine);
+          setRpsThrow(theirsImg, theirs);
+          if (!ready) {
+            mineImg.textContent = mine;
+            theirsImg.textContent = theirs;
+          }
+        };
+        // The first frame is painted BEFORE the fill is switched on.
+        //
+        // setInterval does not run its callback until the first tick, so
+        // turning the fill on up here left 90ms where the span had a
+        // colour and no mask URL at all — and `mask-image: var(--rps-ico)`
+        // with nothing in the property is not a mask, so the browser drew
+        // the whole square. That was the white box, and preloading the
+        // files could not fix it because the problem was never the files.
+        paint(RPS_THROWS[0], RPS_THROWS[1]);
+        if (ready) {
+          mineImg.classList.add("is-ready");
+          theirsImg.classList.add("is-ready");
+        } else {
+          // No icons: say the throw rather than show an empty square.
+          mineImg.classList.add("is-text");
+          theirsImg.classList.add("is-text");
+        }
+        let i = 1;
+        const spin = setInterval(() => {
+          paint(RPS_THROWS[i % 3], RPS_THROWS[(i + 1) % 3]);
+          i++;
+        }, 90);
+        sbSwapTimers.push(spin);
+
+        const land = setTimeout(() => {
+          clearInterval(spin);
+          setRpsThrow(mineImg, final.mine);
+          setRpsThrow(theirsImg, final.theirs);
+          if (!ready) {
+            mineImg.textContent = final.mine;
+            theirsImg.textContent = final.theirs;
+          }
+          // Named for a screen reader, which cannot see a masked background.
+          mineImg.setAttribute("aria-label", final.mine);
+          theirsImg.setAttribute("aria-label", final.theirs);
+          const won = play.result === "win";
+          const draws = play.rounds.length - 1;
+          resultEl.textContent = (draws ? draws + (draws === 1 ? " draw, then " : " draws, then ") : "")
+            + (won
+              ? sbSideName(challenger) + " wins — switching."
+              : sbSideName(challenger) + " loses — positions stay.");
+          resultEl.classList.add(won ? "is-win" : "is-lose");
+          card.classList.add("is-done");
+          doneBtn.classList.remove("hidden");
+          doneBtn.textContent = "Close";
+          // Swapped only when they close, so the board does not move under
+          // the result they are still reading.
+          doneBtn.onclick = () => { close(); if (won) swapSides(); };
+        }, 1500);
+        sbSwapTimers.push(land);
+      };
+      // Nothing spins until the three files are in cache. They are local
+      // and cached after the first play, so this is a frame on the first
+      // run and nothing afterwards.
+      preloadRpsIcons().then(startSpin);
+    };
+
+    step1();
+  }
+
+  function escapeSb(v) {
+    return String(v == null ? "" : v)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
   swapBtn?.addEventListener("click", (e) => {
     e.stopPropagation();
-    swapSides();
+    openSwapChooser();
   });
 
   // Set when the user taps check to save — the scoreboard keeps the just-
