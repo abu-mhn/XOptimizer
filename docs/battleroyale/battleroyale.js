@@ -1,20 +1,29 @@
 // docs/battleroyale/battleroyale.js — Battle Royale.
 //
-// Registered users challenge another player who has the SAME points, staking
-// an equal wager. The challenger picks a Judge (a user with the "Judge" tag).
-// Flow: challenge → opponent accepts → the Judge is notified, oversees the
-// real battle and declares the winner → the wager moves loser → winner.
+// Every week the round assigns each player an opponent within reach of
+// their tier. Both of them tap Ready, play it, and score it between
+// them — there is no Judge, and nothing to accept or arrange.
+// Flow: the week draws a pairing → both tap Ready → either opens the
+// scoreboard → the wager moves loser → winner. A round nobody plays is
+// a draw that costs both of them a point.
 //
 // Data model (Firebase):
-//   battleRoyale/players/{uid}:    { username, points, isJudge, updatedAt }
+//   battleRoyale/players/{uid}:    { username, points, stake, isJudge, updatedAt }
 //   battleRoyale/challenges/{cid}: { challengerUid, challengerName,
 //        opponentUid, opponentName, judgeUid, judgeName, wager, status,
-//        winnerUid?, createdAt, resolvedAt? }
+//        ready: { uid: bool }, forfeitUid?, winnerUid?, createdAt, resolvedAt? }
 //   status: pending → accepted | declined → resolved (+ cancelled)
+//   A round record's cid is "r_<weekKey>_<pairId>", which is how the
+//   derived pairing and the written one find each other.
 //
 // Points are a SEPARATE balance (everyone starts at BR_DEFAULT_POINTS) — the
-// tournament ranking is untouched. The Judge's device performs the transfer;
-// the DB rules let a Judge-tagged account write any player's points.
+// tournament ranking is untouched.
+//
+// The judge machinery below (the picker, the queue, isJudge) belongs to
+// the hand-made challenge that used to exist. Nothing creates one any
+// more: showChallengePopup has no caller. It is still here because the
+// DB rules gate a points TRANSFER on the Judge tag, so a round battle
+// between two untagged players cannot pay out until those are changed.
 (function () {
   "use strict";
 
@@ -100,6 +109,159 @@
     const loPts = hiIsA ? bPts : aPts;
     return Math.min(loPts, Math.floor(hiPts / BR_UPSET_MULTIPLIER));
   }
+  // ===== Weekly rounds =====
+  //
+  // A round runs Monday 00:00 to Sunday 24:00, Malaysian time — the same
+  // clock the tournament lobby closes on, so "midnight Sunday" means one
+  // moment for everybody rather than whatever each phone thinks.
+  const BR_MYT_OFFSET_MS = 8 * 60 * 60 * 1000;
+  const BR_DAY_MS = 24 * 60 * 60 * 1000;
+  const BR_WEEK_MS = 7 * BR_DAY_MS;
+
+  // Milliseconds since the Monday that starts the round containing `nowMs`.
+  function brRoundStart(nowMs) {
+    const shifted = (typeof nowMs === "number" ? nowMs : Date.now()) + BR_MYT_OFFSET_MS;
+    const dayIndex = Math.floor(shifted / BR_DAY_MS);
+    // 1970-01-01 was a Thursday, so +3 lands Monday on 0.
+    const sinceMonday = ((dayIndex + 3) % 7 + 7) % 7;
+    return (dayIndex - sinceMonday) * BR_DAY_MS - BR_MYT_OFFSET_MS;
+  }
+  function brRoundEnd(nowMs) { return brRoundStart(nowMs) + BR_WEEK_MS; }
+
+  // The round's name, and the seed every device shuffles with. Derived from
+  // the start instant, so it cannot drift between devices in different
+  // timezones the way a formatted local date would.
+  function brRoundKey(nowMs) {
+    return "w" + Math.floor(brRoundStart(nowMs) / BR_DAY_MS);
+  }
+
+  // FNV-1a over the key, the same shape the dashboard's daily pick uses.
+  function brHash(str) {
+    let h = 0x811c9dc5 >>> 0;
+    const t = String(str);
+    for (let i = 0; i < t.length; i++) {
+      h = Math.imul(h ^ t.charCodeAt(i), 16777619) >>> 0;
+    }
+    h ^= h >>> 13;
+    h = Math.imul(h, 16777619) >>> 0;
+    h ^= h >>> 17;
+    return h >>> 0;
+  }
+
+  // Deterministic shuffle. Fisher-Yates driven by a counter off the seed,
+  // so the same list and key always come out in the same order.
+  function brShuffle(list, key) {
+    const out = list.slice();
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = brHash(key + ":" + i) % (i + 1);
+      const t = out[i]; out[i] = out[j]; out[j] = t;
+    }
+    return out;
+  }
+
+  // This round's pairings.
+  //
+  // Sorted by uid BEFORE the shuffle: the cache arrives in whatever order
+  // Firebase hands it over, and an unsorted input would shuffle differently
+  // on two devices holding the same players.
+  //
+  // Greedy, because the tiers restrict who can meet: walk the shuffled list
+  // and give each unpaired player the first later one within reach. Anyone
+  // left over sits the round out — an odd pool, or a tier with nobody
+  // adjacent, is not their doing and must not cost them a point.
+  // `canMeet` is the policy, handed in rather than reached for: who may
+  // face whom is a tier rule, and pairing is the arithmetic around it.
+  // Defaults to the tier rule, which is what the app always wants.
+  function brPairingsFor(key, players, canMeet) {
+    const reach = typeof canMeet === "function" ? canMeet : tiersCanMeet;
+    const ids = Object.keys(players || {}).filter(uid => players[uid]).sort();
+    const order = brShuffle(ids, key);
+    const taken = Object.create(null);
+    const pairs = [];
+    const byes = [];
+    for (let i = 0; i < order.length; i++) {
+      const a = order[i];
+      if (taken[a]) continue;
+      let partner = "";
+      for (let j = i + 1; j < order.length; j++) {
+        const b = order[j];
+        if (taken[b]) continue;
+        if (!reach(players[a], players[b])) continue;
+        partner = b;
+        break;
+      }
+      taken[a] = true;
+      if (!partner) { byes.push(a); continue; }
+      taken[partner] = true;
+      // Ordered by uid so the pair's id is the same whichever side builds it.
+      const lo = a < partner ? a : partner;
+      const hi = a < partner ? partner : a;
+      pairs.push({ id: lo + "_" + hi, a: lo, b: hi });
+    }
+    return { pairs, byes };
+  }
+
+  function brPairingFor(key, players, uid, canMeet) {
+    if (!uid) return null;
+    const round = brPairingsFor(key, players, canMeet);
+    return round.pairs.find(x => x.a === uid || x.b === uid) || null;
+  }
+
+  // What this week's match is worth.
+  //
+  // Each player sets a standing stake — the most they are willing to play
+  // for — and the pairing uses the SMALLER of the two, so being assigned
+  // an opponent can never drag someone into a bigger bet than they chose.
+  // Still capped by what both can actually settle, since an upset pays
+  // double and the favourite has to be able to cover it.
+  const BR_DEFAULT_STAKE = 5;
+  function brStakeOf(p) {
+    const v = num(p && p.stake);
+    return v > 0 ? Math.floor(v) : BR_DEFAULT_STAKE;
+  }
+  function brWagerBetween(a, b) {
+    return Math.max(0, Math.min(brStakeOf(a), brStakeOf(b), maxWagerBetween(a, b)));
+  }
+
+  // A round nobody played. Both lose a point and it counts as a draw — the
+  // penalty is for not turning up, so it falls on both sides equally and
+  // does not depend on who was at fault.
+  const BR_NO_SHOW_PENALTY = 1;
+
+  // "2 days 4 hours left" — coarse on purpose. A ticking clock invites
+  // people to cut it fine; what matters is roughly how much weekend is
+  // left to arrange a battle.
+  // "3d 08h 14m 52s". Fixed-width fields so the line does not jiggle as
+  // the numbers tick, and the day dropped once there is none left rather
+  // than showing a permanent "0d".
+  function brTimeLeftLabel(ms) {
+    if (!(ms > 0)) return "Round over";
+    const total = Math.floor(ms / 1000);
+    const d = Math.floor(total / 86400);
+    const h = Math.floor((total % 86400) / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const sec = total % 60;
+    const pad = (n) => (n < 10 ? "0" + n : String(n));
+    return (d > 0 ? d + "d " : "") + pad(h) + "h " + pad(m) + "m " + pad(sec) + "s left";
+  }
+
+  // One interval for the page, not one per render: render() runs on every
+  // players/challenges/winRates change, and a fresh timer each time would
+  // stack up and tick the same element several times a second.
+  let brClockTimer = null;
+  function startRoundClock() {
+    if (brClockTimer) return;
+    brClockTimer = setInterval(() => {
+      const el = document.getElementById("br-round-clock");
+      if (!el) return;                      // not on screen; nothing to do
+      const left = brRoundEnd() - Date.now();
+      el.textContent = brTimeLeftLabel(left);
+      // The round just rolled over: redraw for the new pairing rather
+      // than leave yesterday's opponent on screen counting down from zero.
+      if (left <= 0 && el.dataset.key !== brRoundKey()) render();
+    }, 1000);
+  }
+
   function winRatePctForPlayer(p) {
     const rec = recordForPlayer(p);
     const games = num(rec && rec.wins) + num(rec && rec.losses) + num(rec && rec.ties);
@@ -111,6 +273,301 @@
   }
 
   // ---- helpers ----
+  // Pure round logic, exported so it can be tested without a DOM or a
+  // database. Nothing in the app reads these off the window.
+  window.__brRoundInternals = {
+    brRoundStart, brRoundEnd, brRoundKey, brHash, brShuffle,
+    brPairingsFor, brPairingFor, brStakeOf, brWagerBetween, tiersCanMeet,
+    BR_DEFAULT_STAKE, BR_NO_SHOW_PENALTY, BR_WEEK_MS,
+  };
+
+  // The pairing is derived, but the Judge's verdict has to live
+  // somewhere, so each pairing gets a challenge record — the same shape
+  // the rest of this module already resolves, scores and pays out.
+  //
+  // The id is the round plus the pair, so whichever of the two opens the
+  // app first writes it and the second writes the identical thing over
+  // the top. No race, no duplicates, and nothing to clean up.
+  function brRoundCid(key, pair) { return "r_" + key + "_" + pair.id; }
+
+  // A name for a uid, for a record written before that player had one.
+  function playerName(uid) {
+    const p = uid && playersCache[uid];
+    return (p && p.username) || "";
+  }
+
+  // Who has said they are at the table. A map under the record rather
+  // than two fields, so the rules can tie each key to the uid writing it.
+  function brIsReady(c, uid) { return !!(c && c.ready && uid && c.ready[uid]); }
+  function brBothReady(c) {
+    return !!c && brIsReady(c, c.challengerUid) && brIsReady(c, c.opponentUid);
+  }
+
+  // The two names on the board. They were falling back to "Challenger"
+  // and "Opponent" — the A and B that showed up — because nothing
+  // armed a round battle at all.
+  function brSideName(c, side) {
+    const uid = side === "a" ? c.challengerUid : c.opponentUid;
+    const named = side === "a" ? c.challengerName : c.opponentName;
+    return named || playerName(uid) || (side === "a" ? "Player 1" : "Player 2");
+  }
+
+  // What happens when a score is saved. Shared by the rotation and the
+  // button, so the pot cannot be paid out two different ways.
+  function brVerdict(target) {
+    return ({ scoreA, scoreB }) => {
+      brArmedCid = null;
+      if (scoreA === scoreB) {
+        alert("It's a tie — the wager needs a winner. Score it again.");
+        armJudgeScoreboard();   // put the same battle back up
+        return;
+      }
+      resolveChallenge(target.cid, scoreA > scoreB ? target.challengerUid : target.opponentUid);
+    };
+  }
+
+  // Open the board now, rather than waiting to be turned sideways. A
+  // rotation-locked phone never fires that event and a desktop has no
+  // rotation at all, so without this those players had no way in.
+  function openBrScoreboard(cid) {
+    const c = cid && challengesCache[cid];
+    if (!c || c.status === "resolved") return;
+    // Checked here as well as on the button: the button is drawn from a
+    // snapshot, and the opponent can un-ready nothing but the record can
+    // arrive stale after a reconnect.
+    if (isRoundCid(cid) && !brBothReady(c)) return;
+    if (typeof window.openScoreboard !== "function") return;
+    const target = Object.assign({ cid }, c);
+    brArmedCid = cid;
+    window.openScoreboard(
+      brSideName(target, "a"), brSideName(target, "b"),
+      brVerdict(target),
+      0, 0, null, () => { brArmedCid = null; }
+    );
+  }
+
+  // The record for a pairing, if one has been written yet.
+  function roundChallengeFor(key, pair) {
+    return pair ? (challengesCache[brRoundCid(key, pair)] || null) : null;
+  }
+
+  function isRoundCid(cid) { return String(cid || "").indexOf("r_") === 0; }
+  function roundKeyOfCid(cid) { return String(cid || "").slice(2).split("_")[0]; }
+
+  // Every round record for this player this round, oldest first.
+  //
+  // There should be one. There can be more, because the draw is computed
+  // from a pool that moves during the week — someone registers, or a
+  // tournament result shifts a tier — and a later recomputation pairs
+  // them differently while the earlier record is still sitting there.
+  function roundRecordsFor(key, uid) {
+    return Object.keys(challengesCache)
+      .filter(cid => isRoundCid(cid) && roundKeyOfCid(cid) === key)
+      .map(cid => Object.assign({ cid }, challengesCache[cid]))
+      .filter(c => c.challengerUid === uid || c.opponentUid === uid)
+      .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || ""))
+        || a.cid.localeCompare(b.cid));
+  }
+
+  // Which pairings count, resolved once for the whole round.
+  //
+  // Records are taken in the order they were written and kept only if
+  // neither player is already spoken for. Every device walks the same
+  // list in the same order, so they all reach the same set — which is
+  // what makes the pairing MUTUAL: if my phone says I face you, yours
+  // says you face me, because both phones accepted the same record.
+  //
+  // Asking "the earliest record naming me" per player is not enough.
+  // Two devices can write at nearly the same moment, and then A's
+  // earliest could be A-B while B's earliest is an older B-C — each
+  // correct on its own and disagreeing with the other.
+  function resolvedRound(key) {
+    const taken = Object.create(null);
+    const out = [];
+    Object.keys(challengesCache)
+      .filter(cid => isRoundCid(cid) && roundKeyOfCid(cid) === key)
+      .map(cid => Object.assign({ cid }, challengesCache[cid]))
+      .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || ""))
+        || a.cid.localeCompare(b.cid))
+      .forEach(c => {
+        if (taken[c.challengerUid] || taken[c.opponentUid]) return;
+        taken[c.challengerUid] = true;
+        taken[c.opponentUid] = true;
+        out.push(c);
+      });
+    return out;
+  }
+
+  // The pairing that counts for this player.
+  function authoritativeRound(key, uid) {
+    return resolvedRound(key).find(c => c.challengerUid === uid || c.opponentUid === uid) || null;
+  }
+
+  // A leftover: a second pairing naming someone already spoken for.
+  function isLiveRoundRecord(c) {
+    if (!c || !isRoundCid(c.cid)) return true;      // not a round record
+    return resolvedRound(roundKeyOfCid(c.cid)).some(x => x.cid === c.cid);
+  }
+
+  // Clear the leftovers this bug already created.
+  //
+  // Only ever my own, only ever unresolved, and never the one that
+  // counts — a scored battle has moved points and must not be touched.
+  function pruneDuplicateRounds(key) {
+    const d = db(), uid = myUid();
+    if (!d || !uid) return;
+    const mine = roundRecordsFor(key, uid);
+    if (mine.length < 2) return;
+    mine.slice(1).forEach(c => {
+      if (c.status === "resolved") return;
+      d.ref(CHALLENGES_REF + "/" + c.cid).set(null)
+        .catch(e => console.warn("Couldn't clear duplicate pairing " + c.cid + ":", e));
+    });
+  }
+
+  // Your standing stake. Yours alone to set — the rules allow a player to
+  // write their own, and nothing else reads it but the pairing maths.
+  function saveStandingStake(value) {
+    const d = db(), uid = myUid();
+    if (!d || !uid) return;
+    const v = Math.max(0, Math.floor(Number(value) || 0));
+    d.ref(PLAYERS_REF + "/" + uid + "/stake").set(v)
+      .then(() => { if (playersCache[uid]) playersCache[uid].stake = v; render(); })
+      .catch(e => {
+        // Until the database rules are deployed, `stake` is an unknown
+        // field on the player record and is refused. That is a deploy,
+        // not something the player can fix, so say so.
+        const msg = String((e && e.message) || e);
+        alert(/permission|denied/i.test(msg)
+          ? "Couldn't save your stake — the database rules for it haven't been deployed yet. Ask the organiser to deploy, then try again."
+          : "Couldn't save your stake: " + msg);
+      });
+  }
+
+  // "I can't play this week."
+  //
+  // Written onto the pairing, not applied to anyone's balance: moving
+  // points is a Judge's job, and the end-of-round settlement already
+  // runs. Recording it early is what lets the opponent stop chasing a
+  // battle that is not going to happen.
+  function forfeitRound(cid) {
+    const d = db(), uid = myUid();
+    if (!d || !uid || !cid) return;
+    const c = challengesCache[cid];
+    if (!c || c.status === "resolved" || c.forfeitUid) return;
+    if (c.challengerUid !== uid && c.opponentUid !== uid) return;
+    d.ref(CHALLENGES_REF + "/" + cid + "/forfeitUid").set(uid)
+      .then(() => { if (challengesCache[cid]) challengesCache[cid].forfeitUid = uid; render(); })
+      .catch(e => {
+        const msg = String((e && e.message) || e);
+        alert(/permission|denied/i.test(msg)
+          ? "Couldn't record that — the database rules for it haven't been deployed yet."
+          : "Couldn't record that: " + msg);
+      });
+  }
+
+  // "I'm at the table" — and, tapped again, "actually I'm not".
+  //
+  // Under my own uid, which is the whole point: the rules reject a write
+  // to the other player's key, so one person cannot mark both ready and
+  // then score the battle alone.
+  //
+  // Set to false rather than removed. A delete skips .validate, so the
+  // rule tying a key to its own uid would not run on the way back out.
+  function toggleRoundReady(cid) {
+    const d = db(), uid = myUid();
+    if (!d || !uid || !cid) return;
+    const c = challengesCache[cid];
+    if (!c || c.status === "resolved" || c.forfeitUid) return;
+    if (c.challengerUid !== uid && c.opponentUid !== uid) return;
+    const want = !brIsReady(c, uid);
+    d.ref(CHALLENGES_REF + "/" + cid + "/ready/" + uid).set(want)
+      .then(() => {
+        const cur = challengesCache[cid];
+        if (cur) cur.ready = Object.assign({}, cur.ready, { [uid]: want });
+        render();
+      })
+      .catch(e => {
+        const msg = String((e && e.message) || e);
+        alert(/permission|denied/i.test(msg)
+          ? "Couldn't change that — the database rules for it haven't been deployed yet."
+          : "Couldn't change that: " + msg);
+      });
+  }
+
+  // Rounds that ended with nobody playing.
+  //
+  // Both sides lose a point and it goes down as a draw: the penalty is
+  // for not turning up, which is a thing both of them did, and deciding
+  // whose fault it was is not something an app can do.
+  //
+  // Applied by either player's device, over their own rounds only. It
+  // used to be a Judge's job, which with no Judge meant nobody's.
+  //
+  // Both of them running it is the point: a player who never opens the
+  // app cannot dodge the penalty, because the other one applies it.
+  // Idempotent, and safe to race — the charge is an absolute value
+  // computed from the same record, not a decrement, so two devices
+  // landing it together write the same number rather than charging
+  // twice, and the record is marked resolved in the same update.
+  function settleFinishedRounds() {
+    const d = db();
+    const meUid = myUid();
+    if (!d || !meUid) return;
+    const nowKey = brRoundKey();
+    Object.keys(challengesCache).forEach(cid => {
+      if (cid.indexOf("r_") !== 0) return;              // not a round record
+      const c = challengesCache[cid];
+      if (!c || c.status === "resolved") return;
+      if (c.challengerUid !== meUid && c.opponentUid !== meUid) return;
+      // "r_<key>_<a>_<b>" — anything from an earlier round is over.
+      const key = cid.slice(2).split("_")[0];
+      if (key === nowKey) return;                        // still running
+      const a = playersCache[c.challengerUid], b = playersCache[c.opponentUid];
+      const updates = {};
+      updates[CHALLENGES_REF + "/" + cid + "/status"] = "resolved";
+      updates[CHALLENGES_REF + "/" + cid + "/winnerUid"] = "";
+      updates[CHALLENGES_REF + "/" + cid + "/resolvedAt"] = new Date().toISOString();
+      // Somebody said up front they could not make it. The point is
+      // theirs alone — the other player did nothing wrong, and with an
+      // assigned opponent they had no say in who they were waiting on.
+      const gaveUp = c.forfeitUid || "";
+      const charge = (uid, p) => (p && (!gaveUp || gaveUp === uid))
+        // Never below zero: a point you do not have cannot be taken.
+        ? Math.max(0, num(p.points) - BR_NO_SHOW_PENALTY)
+        : null;
+      const aPts = charge(c.challengerUid, a);
+      const bPts = charge(c.opponentUid, b);
+      if (aPts !== null) updates[PLAYERS_REF + "/" + c.challengerUid + "/points"] = aPts;
+      if (bPts !== null) updates[PLAYERS_REF + "/" + c.opponentUid + "/points"] = bPts;
+      d.ref().update(updates)
+        .catch(e => console.warn("No-show settlement failed for " + cid + ":", e));
+    });
+  }
+
+  function ensureRoundChallenge(key, pair) {
+    const d = db();
+    if (!d || !pair) return;
+    const cid = brRoundCid(key, pair);
+    if (challengesCache[cid]) return;          // already there
+    // Already paired this round — by an earlier draw, before the pool
+    // moved. That record stands; writing another is what produced two.
+    const uidNow = myUid();
+    if (authoritativeRound(key, uidNow)) return;
+    const a = playersCache[pair.a], b = playersCache[pair.b];
+    if (!a || !b) return;
+    const uid = myUid();
+    if (uid !== pair.a && uid !== pair.b) return;   // only the two of them
+    d.ref(CHALLENGES_REF + "/" + cid).set({
+      challengerUid: pair.a, challengerName: a.username || "",
+      opponentUid: pair.b, opponentName: b.username || "",
+      judgeUid: "", judgeName: "",
+      wager: brWagerBetween(a, b),
+      status: "accepted",          // assigned, so there is nothing to accept
+      createdAt: new Date().toISOString(),
+    }).catch(e => console.warn("Round pairing not recorded:", e));
+  }
+
   function db() {
     if (dbHandle) return dbHandle;
     try { if (typeof firebase !== "undefined" && firebase.database) dbHandle = firebase.database(); }
@@ -344,13 +801,22 @@
     return !!(playersCache[pid] || {}).isJudge;
   }
 
+  // Once per page. This runs from render(), and a write here fires the
+  // players listener, which renders again — so a write that does not
+  // stick (a tag the rules spell differently, say) span the panel
+  // forever and no field in it could be typed into.
+  let judgeFlagSynced = false;
   function syncJudgeFlag() {
+    if (judgeFlagSynced) return;
     const uid = myUid();
     const database = db();
     if (!uid || !database) return;
     const rec = playersCache[uid];
-    if (!rec || !!rec.isJudge === amJudge()) return;
-    database.ref(PLAYERS_REF + "/" + uid + "/isJudge").set(amJudge()).catch(() => {});
+    if (!rec) return;                       // roster not in yet; try next render
+    judgeFlagSynced = true;                 // set before the write, not after
+    if (!!rec.isJudge === amJudge()) return;
+    database.ref(PLAYERS_REF + "/" + uid + "/isJudge").set(amJudge())
+      .catch(e => console.warn("BR judge flag not synced:", e));
   }
 
   // ---- live data ----
@@ -361,7 +827,7 @@
     bindBrOrientation();
     database.ref(PLAYERS_REF).on("value", snap => {
       playersCache = snap.val() || {};
-      if (brTabVisible()) { render(); renderShop(); renderBrDeck(); }
+      if (brTabVisible()) { render(); renderShop(); renderBrDeck(); renderBrRanking(); }
     });
     database.ref(CHALLENGES_REF).on("value", snap => {
       challengesCache = snap.val() || {};
@@ -372,12 +838,12 @@
       // is mobile-only — desktop uses the on-screen "Draw cards" button.
       if (brIsMobile) handleBrPrepOrientation();
       armJudgeScoreboard();
-      if (brTabVisible()) { render(); renderShop(); renderBrDeck(); }
+      if (brTabVisible()) { render(); renderShop(); renderBrDeck(); renderBrRanking(); }
     });
     // Win rates (tournament W/L/T) drive each player's tier.
     database.ref(WINRATES_REF).on("value", snap => {
       winRatesCache = snap.val() || {};
-      if (brTabVisible()) { render(); renderShop(); renderBrDeck(); }
+      if (brTabVisible()) { render(); renderShop(); renderBrDeck(); renderBrRanking(); }
     });
   }
 
@@ -472,7 +938,19 @@
     const database = db();
     if (!c || !database) return;
     if (c.status !== "accepted") return;
-    if (myUid() !== c.judgeUid) { alert("Only the assigned Judge can declare the winner."); return; }
+    // A round battle has no judge and never had one: the record is
+    // written with judgeUid "", so this test refused both players and
+    // the scoreboard quietly did nothing. The two of them settle it.
+    const meUid = myUid();
+    const mayDeclare = isRoundCid(cid)
+      ? (meUid === c.challengerUid || meUid === c.opponentUid)
+      : (meUid === c.judgeUid);
+    if (!mayDeclare) {
+      alert(isRoundCid(cid)
+        ? "Only the two players in this battle can score it."
+        : "Only the assigned Judge can declare the winner.");
+      return;
+    }
     if (winnerUid !== c.challengerUid && winnerUid !== c.opponentUid) return;
     const loserUid = winnerUid === c.challengerUid ? c.opponentUid : c.challengerUid;
     const wager = num(c.wager);
@@ -519,10 +997,17 @@
       return;
     }
     const uid = myUid();
+    // A hand-made challenge waits for the judge it named. A round
+    // battle has no judge — either player rotates their phone and
+    // scores it between them, which is how it works at the table
+    // anyway, and waiting on a third person was stopping these being
+    // played at all.
+    const mine = uid ? authoritativeRound(brRoundKey(), uid) : null;
     const target = uid
-      ? Object.keys(challengesCache)
+      ? (Object.keys(challengesCache)
           .map(cid => Object.assign({ cid }, challengesCache[cid]))
           .find(c => c.status === "accepted" && c.judgeUid === uid)
+         || (mine && mine.status === "accepted" && !mine.forfeitUid && brBothReady(mine) ? mine : null))
       : null;
     if (!target) {
       if (brArmedCid) {
@@ -543,18 +1028,12 @@
     }
     if (typeof window.armScoreboard !== "function") return;
     brArmedCid = target.cid;
+    // Both names come off the record. They were falling back to
+    // "Challenger" / "Opponent" — the A and B on the board — because
+    // nothing armed a round battle at all.
     window.armScoreboard(
-      target.challengerName || "Challenger",
-      target.opponentName || "Opponent",
-      ({ scoreA, scoreB }) => {
-        brArmedCid = null;
-        if (scoreA === scoreB) {
-          alert("It's a tie — the wager needs a winner. Tilt back and score again.");
-          armJudgeScoreboard(); // re-arm the same battle for another go
-          return;
-        }
-        resolveChallenge(target.cid, scoreA > scoreB ? target.challengerUid : target.opponentUid);
-      },
+      brSideName(target, "a"), brSideName(target, "b"),
+      brVerdict(target),
       0, 0,
       null,
       // Prompt to rotate only while the Judge is actually on Battle Royale.
@@ -658,9 +1137,22 @@
     // Outgoing (I challenged someone, still waiting for them to accept).
     const outgoing = all.filter(c => c.challengerUid === uid && c.status === "pending");
     // My active battles (accepted, I'm a player) — where ability cards are played.
-    const myActive = all.filter(c => c.status === "accepted" && (c.challengerUid === uid || c.opponentUid === uid));
+    // A round battle is shown by "This week", which is also the only
+    // place it belongs: it was assigned rather than agreed, so there is
+    // no Cancel, and listing it twice made one pairing look like two.
+    const isRoundRecord = (c) => String(c.cid || "").indexOf("r_") === 0;
+    const myActive = all.filter(c => c.status === "accepted" && !isRoundRecord(c) &&
+      (c.challengerUid === uid || c.opponentUid === uid));
     // Judge queue (I'm the Judge, accepted and awaiting my verdict).
-    const judging = all.filter(c => c.judgeUid === uid && c.status === "accepted");
+    // Battles waiting on a verdict. A hand-made challenge names its
+    // judge; an assigned round battle has none, so any Judge can pick it
+    // up — otherwise it sat in a queue belonging to nobody and could
+    // never be scored at all.
+    // Only hand-made challenges, which named a judge. A round battle is
+    // scored by the two players between them, so putting it in somebody
+    // else's queue only made them wait on a third person.
+    const judging = all.filter(c => c.status === "accepted" && !isRoundRecord(c) &&
+      c.judgeUid === uid);
     // Players I can challenge: SAME tier as me, with at least 1 point to stake,
     // not me, not already in an active challenge.
     const busyUids = new Set();
@@ -680,9 +1172,9 @@
 
     const myGames = gamesForPlayer(me);
     const myWr = winRatePctForPlayer(me);
-    let html = `<div class="br-points">Your tier: <strong class="br-tier br-tier-${myTier.key}">${myTier.short}</strong> <span class="br-tier-name">${myTier.name}</span>${amJudge() ? ` <span class="br-judge-tag">Judge</span>` : ""}</div>`;
+    let html = `<div class="br-points">Your tier: <strong class="br-tier br-tier-${myTier.key}">${myTier.short}</strong> <span class="br-tier-name">${myTier.name}</span></div>`;
     html += `<div class="br-points br-points-sub">Win rate: <strong>${myWr}%</strong> over ${myGames} battle${myGames === 1 ? "" : "s"} · Points: <strong>${myPoints}</strong></div>`;
-    html += `<p class="br-hint">Your tier comes from your tournament win rate <em>and</em> how many battles you've played (a small record can't reach the top). You can challenge your own tier and the one either side of it — ${esc(myTier.short)} can meet ${esc(tierReachLabel(myTier))}. Both stake an equal wager and the Judge declares the winner, who takes the pot. Beat someone from a higher tier and you take <strong>double</strong>.</p>`;
+    html += `<p class="br-hint">Your tier comes from your tournament win rate <em>and</em> how many battles you've played (a small record can't reach the top). Each week you're matched with someone from your own tier or the one either side of it — ${esc(myTier.short)} can meet ${esc(tierReachLabel(myTier))}. You both stake points and score the battle between you; the winner takes the pot. Beat someone from a higher tier and you take <strong>double</strong>.</p>`;
 
     if (judging.length) {
       html += `<div class="br-section"><h3 class="br-h">To judge (${judging.length})</h3>` +
@@ -730,7 +1222,7 @@
           const unequipped = iAmUnequipped(c);
           return `
           <div class="br-card">
-            <div class="br-card-main">vs <strong>${esc(c.opponentName)}</strong> · ${c.wager} pts · ${c.status === "accepted" ? "accepted — awaiting Judge" : "waiting for opponent"}</div>
+            <div class="br-card-main">vs <strong>${esc(c.opponentName)}</strong> · ${c.wager} pts · ${c.status === "accepted" ? "accepted — awaiting the result" : "waiting for opponent"}</div>
             ${cardsInPlayLine(c)}
             ${unequipped ? `<div class="br-card-hint">📱 Rotate to landscape (or tap Draw cards) to set your loadout.</div>` : ""}
             <div class="br-card-actions">
@@ -741,31 +1233,144 @@
         }).join("") + `</div>`;
     }
 
-    const anyTierScope = amDeveloper();
-    html += `<div class="br-section"><h3 class="br-h">Challenge a player <span class="br-sub">(${anyTierScope ? "any tier" : esc(tierReachLabel(myTier))})</span></h3>`;
-    if (myPoints < 1) {
-      html += `<p class="br-empty">You have no points to wager yet. Battle Royale points are awarded at the end of each month from your tournament ranking total — place in tournaments this month, then you can challenge ${anyTierScope ? "any player" : `players in ${esc(tierReachLabel(myTier))}`}.</p>`;
-    } else if (!targets.length) {
-      html += `<p class="br-empty">No one to challenge right now — ${anyTierScope ? "no players" : `you can challenge ${esc(tierReachLabel(myTier))}`} with enough points to stake. A battle across tiers needs the higher-tier player to cover double, since that is what an upset pays. Check back as others play.</p>`;
+    // ---- this week ----
+    //
+    // No picker any more: the round assigns an opponent, so the only
+    // thing left to choose is how much you are willing to play for.
+    const roundKey = brRoundKey();
+    const left = brRoundEnd() - Date.now();
+    pruneDuplicateRounds(roundKey);
+    // What was WRITTEN beats what the draw now computes: the pool moves
+    // during the week, and the opponent you were already shown — and who
+    // was shown you — is the one that counts.
+    const booked = authoritativeRound(roundKey, uid);
+    const pair = booked
+      ? { id: booked.cid.slice(("r_" + roundKey + "_").length),
+          a: booked.challengerUid, b: booked.opponentUid }
+      : brPairingFor(roundKey, playersCache, uid);
+    const settled = booked || (pair && roundChallengeFor(roundKey, pair));
+
+    html += `<div class="br-section br-round"><h3 class="br-h">This week <span class="br-sub br-clock" id="br-round-clock" data-key="${esc(roundKey)}">${esc(brTimeLeftLabel(left))}</span></h3>`;
+    if (!pair) {
+      html += `<p class="br-empty">No opponent this week — there was nobody in ${esc(tierReachLabel(myTier))} left to pair you with. You sit this round out, and sitting out costs you nothing.</p>`;
     } else {
-      html += `<ul class="br-players">` + targets.map(p => {
-        const t = tierForPlayer(p);
-        return `
-        <li class="br-player" data-pkey="${esc(winKeyFor(p.username) || "")}">
-          ${brAvatarHtml(p.username)}
-          <span class="br-player-name fr-profile-trigger" data-profile-username="${esc(p.username || "")}" title="View profile"><span class="br-player-nametext">${esc(p.username || "(unnamed)")}</span><span class="br-tier br-tier-${t.key}">${t.short}</span>${uidIsJudge(p.uid) ? `<span class="br-judge-tag">Judge</span>` : ""}</span>
-          <span class="br-player-points">${winRatePctForPlayer(p)}% WR · ${num(p.points)} pts</span>
-          <button type="button" class="br-btn br-btn-challenge" data-challenge="${esc(p.uid)}">Challenge</button>
-        </li>`;
-      }).join("") + `</ul>`;
+      const oppUid = pair.a === uid ? pair.b : pair.a;
+      const opp = playersCache[oppUid] || {};
+      const t = tierForPlayer(opp);
+      const wager = booked ? num(booked.wager) : brWagerBetween(me, opp);
+      const done = settled && settled.status === "resolved";
+      const gaveUp = (settled && settled.forfeitUid) || "";
+      // The scoreboard stays locked until both of them have said they
+      // are there to play it.
+      const iAmReady = brIsReady(settled, uid);
+      const oppReady = brIsReady(settled, oppUid);
+      const bothReady = brBothReady(settled);
+      html += `
+        <div class="br-round-card" data-pkey="${esc(winKeyFor(opp.username) || "")}">
+          ${brAvatarHtml(opp.username)}
+          <div class="br-round-main">
+            <span class="br-player-name fr-profile-trigger" data-profile-username="${esc(opp.username || "")}" title="View profile"><span class="br-player-nametext">${esc(opp.username || "(unnamed)")}</span><span class="br-tier br-tier-${t.key}">${t.short}</span></span>
+            <span class="br-player-points">${winRatePctForPlayer(opp)}% WR · ${num(opp.points)} pts</span>
+            <span class="br-round-wager">Playing for <strong>${wager}</strong> pt${wager === 1 ? "" : "s"}${
+              payoutMultiplier(me, opp) > 1 ? ` · <strong>double</strong> if you win` : ""}</span>
+          </div>
+          <span class="br-round-state">${done
+            ? (settled.winnerUid === uid ? "You won" : settled.winnerUid ? "You lost" : "Drawn")
+            : gaveUp ? (gaveUp === uid ? "You forfeited" : "Opponent forfeited")
+            : bothReady ? "Both ready \u2713"
+            : iAmReady ? "You're ready \u2713"
+            : oppReady ? "They're ready"
+            : "Not played yet"}</span>
+        </div>`;
+      if (!done && gaveUp) {
+        html += `<p class="br-hint br-round-hint">${gaveUp === uid
+          ? `You've said you can't play this week. It goes down as a draw and costs you ${BR_NO_SHOW_PENALTY} point when the round ends — your opponent keeps theirs.`
+          : `${esc(opp.username || "Your opponent")} can't play this week, so there's nothing to arrange. It's a draw and it costs you nothing.`}</p>`;
+      } else if (!done) {
+        const lock = bothReady ? "" : ` disabled title="You both tap I'm ready first"`;
+        html += `<div class="br-round-actions">
+          ${settled ? `<button type="button" class="br-btn ${
+            iAmReady ? "br-btn-unready" : "br-btn-accept"}" data-ready="${esc(settled.cid)}">${
+            iAmReady ? "Cancel ready" : "I'm ready"}</button>` : ""}
+          ${settled ? `<button type="button" class="br-btn br-btn-score" data-score="${esc(settled.cid)}"${lock}>Score this battle</button>` : ""}
+          <button type="button" class="br-btn br-btn-decline" data-forfeit="${esc(settled ? settled.cid : "")}">Can't play this week</button>
+        </div>`;
+        // Why it is locked matters more than that it is: a player who
+        // cannot see the reason reads it as broken.
+        const readyLine = bothReady
+          ? `You're both ready. Play it, then either of you taps Score this battle — or just turn your phone sideways. Not playing after all? Either of you can cancel ready.`
+          : iAmReady
+            ? `You're ready. The scoreboard unlocks once ${esc(opp.username || "your opponent")} taps it too, so a battle can't be scored by one of you alone. Tapped it by mistake? Cancel ready — it costs you nothing.`
+            : oppReady
+              ? `${esc(opp.username || "Your opponent")} is ready and waiting on you. Tap I'm ready when you're both at the stadium.`
+              : `Find each other and play it before the round ends. You both tap I'm ready — that's what unlocks the scoreboard, so nobody can score a battle on their own.`;
+        html += `<p class="br-hint br-round-hint">${readyLine} If the round ends unplayed it is a draw and <strong>both</strong> of you lose ${BR_NO_SHOW_PENALTY} point.</p>`;
+      }
     }
+    // The standing stake. Set once; every round uses the smaller of the
+    // two, so being assigned an opponent can never cost more than this.
+    html += `
+      <div class="br-stake">
+        <label class="br-stake-label" for="br-stake-input">Your standing stake</label>
+        <div class="br-stake-row">
+          <input id="br-stake-input" class="br-stake-input" type="number" min="0" step="1" value="${brStakeOf(me)}">
+          <button type="button" class="br-btn br-btn-accept" id="br-stake-save">Save</button>
+        </div>
+        <span class="br-stake-note">The most you'll play for. Each match uses the smaller of the two stakes.</span>
+      </div>`;
     html += `</div>`;
+
+    // Anything on the roster changing re-renders this whole panel, and
+    // on a busy ladder that is often. Carry the field you are typing in
+    // across the swap — value, focus and caret — or it reverts to the
+    // saved stake under your fingers.
+    const live = document.activeElement;
+    const keep = live && live.id === "br-stake-input" && root.contains(live)
+      ? { value: live.value, start: live.selectionStart, end: live.selectionEnd }
+      : null;
 
     root.innerHTML = html;
     hydrateBrAvatars(root);
     if (typeof window.bindTournamentProfileNames === "function") window.bindTournamentProfileNames(root);
 
-    root.querySelectorAll("[data-challenge]").forEach(b => b.addEventListener("click", () => showChallengePopup(b.dataset.challenge)));
+    if (keep) {
+      const again = root.querySelector("#br-stake-input");
+      if (again) {
+        again.value = keep.value;
+        again.focus();
+        // A number input only has a selection while it parses as one;
+        // setSelectionRange throws on it otherwise.
+        try { again.setSelectionRange(keep.start, keep.end); } catch (e) {}
+      }
+    }
+
+    // The pairing's record is created on first sight, by whichever of the
+    // two players looks first.
+    if (pair) ensureRoundChallenge(roundKey, pair);
+    settleFinishedRounds();
+    startRoundClock();
+
+    root.querySelectorAll("[data-ready]").forEach(b =>
+      b.addEventListener("click", () => toggleRoundReady(b.dataset.ready)));
+
+    root.querySelectorAll("[data-score]").forEach(b =>
+      b.addEventListener("click", () => openBrScoreboard(b.dataset.score)));
+
+    root.querySelectorAll("[data-forfeit]").forEach(b => b.addEventListener("click", () => {
+      if (!b.dataset.forfeit) return;
+      if (!confirm("Tell your opponent you can't play this week?\n\nIt goes down as a draw. You lose " +
+        BR_NO_SHOW_PENALTY + " point when the round ends; they keep theirs.")) return;
+      forfeitRound(b.dataset.forfeit);
+    }));
+
+    const stakeSave = root.querySelector("#br-stake-save");
+    if (stakeSave) {
+      stakeSave.addEventListener("click", () => {
+        const input = root.querySelector("#br-stake-input");
+        const v = Math.max(0, Math.floor(Number(input && input.value) || 0));
+        saveStandingStake(v);
+      });
+    }
     root.querySelectorAll("[data-accept]").forEach(b => b.addEventListener("click", () => acceptChallenge(b.dataset.accept)));
     root.querySelectorAll("[data-decline]").forEach(b => b.addEventListener("click", () => declineChallenge(b.dataset.decline)));
     root.querySelectorAll("[data-cancel]").forEach(b => b.addEventListener("click", () => { if (confirm("Cancel this challenge?")) cancelChallenge(b.dataset.cancel); }));
@@ -1269,44 +1874,102 @@
     // scored — including the rotate prompt, if the phone is still upright.
     armJudgeScoreboard();
     render();
-    // Resolve who really holds the Judge tag, then repaint the badges. Only
-    // the first call does any reading; every later render uses the cache.
-    if (!judgeUidCache) {
-      loadJudgeIndex().then(() => { if (brTabVisible()) render(); });
-    }
     renderShop();
     renderBrDeck();
   };
 
+  // ---- the standings ----
+  //
+  // Sorted on points, because points are what the game is played for.
+  // Win rate breaks a tie, since two players level on points are not
+  // level if one of them got there over twice as many battles.
+  function brRankedPlayers() {
+    return Object.keys(playersCache)
+      .map(pid => Object.assign({ uid: pid }, playersCache[pid]))
+      .filter(p => p.username)
+      .sort((a, b) => num(b.points) - num(a.points)
+        || winRatePctForPlayer(b) - winRatePctForPlayer(a)
+        || gamesForPlayer(b) - gamesForPlayer(a)
+        || String(a.username).localeCompare(String(b.username)));
+  }
+
+  // Level on points is level. Numbering them 6th and 7th would say one
+  // is ahead of the other, and nothing in the game says that.
+  function brPlaces(rows) {
+    let place = 0, prev = null;
+    return rows.map((p, i) => {
+      const pts = num(p.points);
+      if (prev === null || pts !== prev) { place = i + 1; prev = pts; }
+      return Object.assign({ place }, p);
+    });
+  }
+
+  function renderBrRanking() {
+    const root = document.getElementById("br-ranking");
+    if (!root) return;
+    const uid = myUid();
+    const rows = brPlaces(brRankedPlayers());
+    if (!rows.length) {
+      root.innerHTML = `<p class="br-empty">Nobody has joined Battle Royale yet. Open the Battle tab and you're in.</p>`;
+      return;
+    }
+    const mine = rows.find(p => p.uid === uid);
+    let html = "";
+    if (mine) {
+      // Your own line first: on a long list your row can be well off
+      // screen, and where you stand is the thing you came to find out.
+      html += `<p class="br-rank-you">You're <strong>#${mine.place}</strong> of ${rows.length} on <strong>${num(mine.points)}</strong> pt${
+        num(mine.points) === 1 ? "" : "s"}.</p>`;
+    }
+    html += `<div class="br-rank-list">`;
+    rows.forEach(p => {
+      const t = tierForPlayer(p);
+      const games = gamesForPlayer(p);
+      html += `
+        <div class="br-rank-row${p.uid === uid ? " br-rank-me" : ""}" data-pkey="${esc(winKeyFor(p.username) || "")}">
+          <span class="br-rank-place br-rank-place-${p.place <= 3 ? p.place : "n"}">${p.place}</span>
+          ${brAvatarHtml(p.username)}
+          <div class="br-rank-main">
+            <span class="br-player-name fr-profile-trigger" data-profile-username="${esc(p.username)}" title="View profile"><span class="br-player-nametext">${esc(p.username)}</span><span class="br-tier br-tier-${t.key}">${t.short}</span></span>
+            <span class="br-player-points">${winRatePctForPlayer(p)}% WR${
+              games ? ` over ${games} battle${games === 1 ? "" : "s"}` : ` \u00b7 no battles yet`}</span>
+          </div>
+          <span class="br-rank-points"><strong>${num(p.points)}</strong> pts</span>
+        </div>`;
+    });
+    html += `</div>`;
+    root.innerHTML = html;
+    hydrateBrAvatars(root);
+    if (typeof window.bindTournamentProfileNames === "function") window.bindTournamentProfileNames(root);
+  }
+
   // ---- Battle / Shop sub-tabs ----
   // Clicking a sub-tab activates it and shows the matching panel; the other
   // panels get hidden. Mirrors the reel / history sub-tab pattern.
+  const BR_CARD_VIEWS = ["deck", "shop"];
   function setupBrSubTabs() {
-    const tabs = document.querySelectorAll(".br-sub-tab");
+    const tabs = Array.prototype.slice.call(document.querySelectorAll(".br-sub-tab"));
     if (!tabs.length) return;
     const row = document.getElementById("br-sub-tabs");
-    if (!BR_CARDS_ENABLED) {
-      // The row ships hidden, so there is nothing to take away here — only the
-      // panels to settle, in case a previous session left Deck or Shop
-      // selected and its panel is the visible one.
-      if (row) row.classList.add("hidden");   // belt and braces if the markup drifts
-      tabs.forEach(t => t.classList.toggle("active", t.dataset.brView === "battle"));
+    // Deck and Shop belong to the card game, which is off. Ranking does
+    // not, so the row itself stays — it used to be hidden wholesale, and
+    // the standings went with it.
+    const live = tabs.filter(t => BR_CARDS_ENABLED || BR_CARD_VIEWS.indexOf(t.dataset.brView) < 0);
+    tabs.forEach(t => t.classList.toggle("hidden", live.indexOf(t) < 0));
+    if (row) row.classList.toggle("hidden", live.length < 2);
+
+    const show = (view) => {
+      tabs.forEach(t => t.classList.toggle("active", t.dataset.brView === view));
       document.querySelectorAll(".br-panel").forEach(panel => {
-        panel.classList.toggle("hidden", panel.id !== "br-panel-battle");
+        panel.classList.toggle("hidden", panel.id !== "br-panel-" + view);
       });
-      return;
-    }
-    // Cards are on, so the row is wanted: reveal what the markup ships hidden.
-    if (row) row.classList.remove("hidden");
-    tabs.forEach(tab => {
-      tab.addEventListener("click", () => {
-        const view = tab.dataset.brView;
-        tabs.forEach(t => t.classList.toggle("active", t === tab));
-        document.querySelectorAll(".br-panel").forEach(panel => {
-          panel.classList.toggle("hidden", panel.id !== "br-panel-" + view);
-        });
-      });
-    });
+      if (view === "ranking") renderBrRanking();
+    };
+    // A card panel left showing by an earlier session would have no tab
+    // left to leave it by.
+    const active = tabs.find(t => t.classList.contains("active"));
+    show(active && live.indexOf(active) >= 0 ? active.dataset.brView : "battle");
+    live.forEach(tab => tab.addEventListener("click", () => show(tab.dataset.brView)));
   }
 
   // Bind notification listeners on every page once signed in (so a Judge /

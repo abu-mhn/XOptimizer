@@ -477,19 +477,11 @@ h1 {
        original 79x60 and leave a gap beside it. 40/60 keeps it exactly in step
        with the plain tiles. */
     .side-dashboard .result-part-img-box-combined {
-        zoom: 0.667;
-        /* Restore the tile's natural dimensions before zoom scales them. The
-           40px rule above is a two-class selector, so it outranks the single
-           -combined / -x4 width rules and was squashing this tile to 40px wide
-           — clipping the assembled image, which then got shrunk again by zoom.
-           zoom does the shrinking here; the box just needs its true size. */
-        width: 79px;
-        height: 60px;
-        min-height: 60px;
-        max-height: 60px;
-    }
-    .side-dashboard .result-part-img-box-x4 {
-        width: 115px;
+        /* 40 / 60, the same multiplier the plain 40px tiles here use.
+           This used to be `zoom: 0.667` plus an explicit 79x60 to undo a
+           width rule that was squashing the box; the size comes from
+           --cx-k now, so neither is needed. */
+        --cx-k: 0.667;
     }
     .side-dashboard .result-part-img {
         max-width: 34px;
@@ -1275,13 +1267,18 @@ select {
    but pinned to the SAME 60px height so it lines up with the ratchet /
    bit tiles beside it — min/max-height + an explicit flex-basis leave the
    surrounding column flex no room to stretch it. */
+/* The layered CX thumbnail. Its parts are positioned absolutely at fixed
+   sizes, so the box cannot be resized on its own — everything inside is
+   multiplied by --cx-k, which defaults to 1 here and is overridden
+   wherever the tile has to match smaller neighbours. */
 .result-part-img-box-combined {
     position: relative;
-    width: 79px;
-    height: 60px;
-    min-height: 60px;
-    max-height: 60px;
-    flex: 0 0 60px;
+    --cx-k: 1;
+    width: calc(79px * var(--cx-k));
+    height: calc(60px * var(--cx-k));
+    min-height: calc(60px * var(--cx-k));
+    max-height: calc(60px * var(--cx-k));
+    flex: 0 0 calc(60px * var(--cx-k));
 }
 
 .result-part-layer {
@@ -1295,46 +1292,46 @@ select {
 
 /* Assist blade sits behind, nudged to the right so it stays visible. */
 .result-layer-assist {
-    width: 41px;
-    height: 41px;
-    transform: translate(calc(-50% + 12px), -50%);
+    width: calc(41px * var(--cx-k, 1));
+    height: calc(41px * var(--cx-k, 1));
+    transform: translate(calc(-50% + 12px * var(--cx-k, 1)), -50%);
 }
 
 /* Main / metal blade slightly left of centre. */
 .result-layer-main {
-    width: 43px;
-    height: 43px;
-    transform: translate(calc(-50% - 8px), -50%);
+    width: calc(43px * var(--cx-k, 1));
+    height: calc(43px * var(--cx-k, 1));
+    transform: translate(calc(-50% - 8px * var(--cx-k, 1)), -50%);
 }
 
 /* CX Expand: four parts cascaded left -> right in one wider tile
    (lock chip, over blade, metal blade, assist blade). */
 .result-part-img-box-x4 {
-    width: 115px;
+    width: calc(115px * var(--cx-k, 1));
 }
 
 .result-layer-x4-lock {
-    width: 25px;
-    height: 25px;
-    transform: translate(calc(-50% - 35px), -50%);
+    width: calc(25px * var(--cx-k, 1));
+    height: calc(25px * var(--cx-k, 1));
+    transform: translate(calc(-50% - 35px * var(--cx-k, 1)), -50%);
 }
 
 .result-layer-x4-over {
-    width: 38px;
-    height: 38px;
-    transform: translate(calc(-50% - 14px), -50%);
+    width: calc(38px * var(--cx-k, 1));
+    height: calc(38px * var(--cx-k, 1));
+    transform: translate(calc(-50% - 14px * var(--cx-k, 1)), -50%);
 }
 
 .result-layer-x4-metal {
-    width: 38px;
-    height: 38px;
-    transform: translate(calc(-50% + 7.5px), -50%);
+    width: calc(38px * var(--cx-k, 1));
+    height: calc(38px * var(--cx-k, 1));
+    transform: translate(calc(-50% + 7.5px * var(--cx-k, 1)), -50%);
 }
 
 .result-layer-x4-assist {
-    width: 38px;
-    height: 38px;
-    transform: translate(calc(-50% + 29px), -50%);
+    width: calc(38px * var(--cx-k, 1));
+    height: calc(38px * var(--cx-k, 1));
+    transform: translate(calc(-50% + 29px * var(--cx-k, 1)), -50%);
 }
 
 /* Keep a combined tile's label on a single line. */
@@ -1345,9 +1342,9 @@ select {
 
 /* Lock chip on the main blade, nudged a little to the left. */
 .result-layer-lock {
-    width: 20px;
-    height: 20px;
-    transform: translate(calc(-50% - 22.5px), -50%);
+    width: calc(20px * var(--cx-k, 1));
+    height: calc(20px * var(--cx-k, 1));
+    transform: translate(calc(-50% - 22.5px * var(--cx-k, 1)), -50%);
 }
 
 .result-part-name {
@@ -1772,6 +1769,90 @@ body.light-mode .result-part-name {
 }
 .account-win-rate.hidden {
     display: none;
+}
+/* The two scores an account collects. Labelled rather than left bare:
+   circuit ranking points and Battle Royale points are different
+   currencies that look identical as a number on its own. */
+/* The two scores an account collects, as cards that share the width.
+   They were pills sized to their own sentence, so they wrapped onto a
+   line each and left a ragged edge. auto-fit rather than a fixed two:
+   an account with no ranking yet shows one card, and it should fill
+   the row instead of sitting half-width. */
+.account-standing {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px;
+    margin: 0;
+}
+.account-standing.hidden {
+    display: none;
+}
+.account-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid #30363d;
+    background: #161b22;
+}
+.account-stat-value {
+    font-size: 1.15rem;
+    font-weight: 800;
+    line-height: 1.1;
+    color: #e6edf3;
+    font-variant-numeric: tabular-nums;
+}
+/* The context under the value. It is the longer of the two lines and
+   the less important, so it wraps rather than stretching the card. */
+.account-stat-label {
+    font-size: 0.7rem;
+    line-height: 1.25;
+    color: #8b949e;
+}
+.account-stat-br {
+    border-color: rgba(31, 111, 235, 0.4);
+    background: rgba(31, 111, 235, 0.08);
+}
+.account-stat-br .account-stat-value {
+    color: #58a6ff;
+}
+/* The pinned deck, under the same kind of label the Bio field uses. */
+.account-starred {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.account-starred.hidden {
+    display: none;
+}
+.account-starred-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #8b949e;
+}
+/* The shared compact deck list is built for a narrow panel. The profile
+   card is wider than three tiles, so the row's contents are centred in
+   it — the slot number together with the tiles it labels, as one group.
+   Centring the tiles alone pushed them off the number and left it
+   stranded at the far left.
+
+   The list is sized to its widest row and centred as a block, rather
+   than each row centring its own contents: that tied the slot number's
+   position to how wide that row happened to be, so the numbers did not
+   line up with each other.
+
+   Scoped to here; Bey Check and the tournament recap sit in narrow
+   panels where this makes no difference. */
+.account-starred .combo-slot-list {
+    width: -moz-max-content;
+    width: max-content;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
 }
 body.light-mode    .account-win-rate { color: #1f2328; }
 body.tropical-mode .account-win-rate { color: #2d3a3a; }
@@ -3370,13 +3451,15 @@ body.forest-mode .features-list {
     color: #fff;
 }
 
-/* One column on a phone, side by side once there is room. A slot needs
-   about three 56px tiles plus its padding, so 196px is the point below
-   which a second column would start clipping the parts — auto-fit keeps
-   it at one column until then and adds a second or third by itself. */
+/* One column, at every width.
+   Three across was tried and taken out again: the popup is narrower than
+   the window, so even on a wide screen each column came out under the
+   ~206px three 56px tiles need, and every slot quietly clipped its third
+   part. A slot showing two parts of three looks complete, which is worse
+   than one that is simply tall. */
 .bey-check-slots {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(196px, 1fr));
+    grid-template-columns: 1fr;
     align-items: start;
     gap: 10px;
     margin-bottom: 10px;
@@ -3533,6 +3616,11 @@ body.tropical-mode .bey-check-part-img-box { background: #fff0d6; border-color: 
 body.love-mode     .bey-check-part-img-box { background: #ffe1ea; border-color: #ffc1d2; }
 body.forest-mode   .bey-check-part-img-box { background: #e9efdc; border-color: #b5c89a; }
 
+body.space-mode  .bey-check-part-img-box { background: rgba(26, 35, 126, 0.25); border-color: #1a1f3d; }
+body.stormy-mode .bey-check-part-img-box { background: rgba(74, 144, 226, 0.18); border-color: #3a4054; }
+body.mono-mode   .bey-check-part-img-box { background: #111111; border-color: #2a2a2a; }
+body.revox-mode  .bey-check-part-img-box { background: rgba(31, 31, 39, 0.6); border-color: #34343f; }
+
 body.gold-mode   .bey-check-part-img-box { background: rgba(227, 179, 65, 0.18); border-color: #4a3c18; }
 body.silver-mode .bey-check-part-img-box { background: rgba(174, 182, 191, 0.18); border-color: #383f47; }
 body.bronze-mode .bey-check-part-img-box { background: rgba(198, 128, 68, 0.18); border-color: #4a3320; }
@@ -3541,6 +3629,10 @@ body.light-mode    .bey-check-part-name { color: #656d76; }
 body.tropical-mode .bey-check-part-name { color: #8a6d3b; }
 body.love-mode     .bey-check-part-name { color: #9c4a5e; }
 body.forest-mode   .bey-check-part-name { color: #5a6a4b; }
+body.space-mode    .bey-check-part-name { color: #c8d6e5; }
+body.stormy-mode   .bey-check-part-name { color: #d5dae4; }
+body.mono-mode     .bey-check-part-name { color: #e6e6e6; }
+body.revox-mode    .bey-check-part-name { color: #e4e4ea; }
 body.gold-mode     .bey-check-part-name { color: #f0e6cf; }
 body.silver-mode   .bey-check-part-name { color: #e8ecf0; }
 body.bronze-mode   .bey-check-part-name { color: #f0e2d2; }
@@ -3557,10 +3649,9 @@ body.bronze-mode   .bey-check-part-name { color: #f0e2d2; }
    Pin the combined box to that same 56px height + 6px radius so every
    tile in the slot row lines up. */
 .bey-check-slot-parts .result-part-img-box-combined {
-    height: 56px;
-    min-height: 56px;
-    max-height: 56px;
-    flex: 0 0 56px;
+    /* 56 / 60. Setting the height alone is what left the layers inside at
+       full size, overflowing a box that had shrunk around them. */
+    --cx-k: 0.933;
     border-radius: 6px;
 }
 
@@ -3809,28 +3900,6 @@ body.mono-mode .bey-check-slot-action-btn img {
     font-size: 0.78rem;
     color: #8b949e;
     margin: 2px 0 4px;
-}
-.my-recap-combos {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-}
-.my-recap-combo {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-}
-.my-recap-combo-img {
-    flex: 0 0 auto;
-    width: 26px;
-    height: 26px;
-    object-fit: contain;
-    border-radius: 4px;
-}
-.my-recap-combo-name {
-    font-size: 0.82rem;
-    color: #e6edf3;
-    word-break: break-word;
 }
 .my-recap-record {
     font-size: 0.82rem;
@@ -10709,6 +10778,56 @@ body.light-mode .swiss-group-progress {
     color: #8b949e;
 }
 
+/* The same question the registration banner asks, in the one place a
+   player definitely looks: the toast that says their match is on. It has
+   buttons because the banner's version did not, and advice with nothing
+   to tap is what got ignored. */
+.match-toast-deckask {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 8px;
+    padding: 8px 10px;
+    border: 1px solid rgba(210, 153, 34, 0.45);
+    border-radius: 7px;
+    background: rgba(210, 153, 34, 0.1);
+}
+.match-toast-deckask-q {
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: #f0f6fc;
+}
+.match-toast-deckask-deck {
+    font-size: 0.74rem;
+    line-height: 1.35;
+    color: #f0d39b;
+    overflow-wrap: anywhere;
+}
+.match-toast-deckask-btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 2px;
+}
+.match-toast-deckask-btn {
+    flex: 1 1 auto;
+    padding: 6px 10px;
+    font: inherit;
+    font-size: 0.74rem;
+    font-weight: 600;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    background: #21262d;
+    color: #c9d1d9;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.match-toast-deckask-btn.is-change {
+    border-color: rgba(210, 153, 34, 0.7);
+    color: #f0d39b;
+}
+.match-toast-deckask-btn:hover { border-color: #58a6ff; color: #e6edf3; }
+
 .match-toast-deckhint {
     margin-top: 5px;
     font-size: 0.72rem;
@@ -10967,6 +11086,18 @@ body.forest-mode   .swiss-banned-chip { color: #b42d2d; }
     border-radius: 8px;
     background: rgba(210, 153, 34, 0.1);
 }
+/* Answered. The same section, minus the urgency: nothing is being asked,
+   it is just where your deck lives and where you change it. Amber is
+   reserved for the question. */
+.swiss-deckcheck.is-settled {
+    border-color: rgba(110, 118, 129, 0.35);
+    background: rgba(110, 118, 129, 0.08);
+}
+.swiss-deckcheck.is-settled .swiss-deckcheck-title {
+    font-size: 0.9rem;
+    color: #c9d1d9;
+}
+
 .swiss-deckcheck-main {
     display: flex;
     flex-direction: column;
@@ -10997,13 +11128,13 @@ body.forest-mode   .swiss-banned-chip { color: #b42d2d; }
    and row 1 had nothing. Each row is its own card now, so all three are
    framed the same — which is also how a slot looks in the registration
    popup, the other place a deck is shown. */
-.swiss-deckcheck-slots {
+.combo-slot-list {
     display: flex;
     flex-direction: column;
     gap: 6px;
     margin: 2px 0 0;
 }
-.swiss-deckcheck-slot {
+.combo-slot-row {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -11013,7 +11144,7 @@ body.forest-mode   .swiss-banned-chip { color: #b42d2d; }
     border-radius: 8px;
     background: rgba(1, 4, 9, 0.3);
 }
-.swiss-deckcheck-slot-n {
+.combo-slot-n {
     flex: 0 0 auto;
     width: 18px;
     height: 18px;
@@ -11028,12 +11159,77 @@ body.forest-mode   .swiss-banned-chip { color: #b42d2d; }
 }
 /* The tiles are laid out by .bey-check-slot-parts; it centres them, which
    is right in a full-width panel and wrong beside a slot number. */
-.swiss-deckcheck-slot .bey-check-slot-parts {
+/* The compact variant. Everything the full size sets, scaled down in one
+   place — the tiles, the captions, the padding and the gaps — so the two
+   sizes cannot drift into looking like different components. */
+.combo-slot-list.is-compact {
+    gap: 4px;
+}
+.combo-slot-list.is-compact .combo-slot-row {
+    padding: 4px 8px 4px 4px;
+    gap: 6px;
+}
+.combo-slot-list.is-compact .combo-slot-n {
+    width: 15px;
+    height: 15px;
+    font-size: 0.6rem;
+}
+.combo-slot-list.is-compact .bey-check-slot-parts {
+    gap: 5px;
+}
+.combo-slot-list.is-compact .bey-check-part {
+    width: 40px;
+}
+.combo-slot-list.is-compact .bey-check-part-img-box {
+    width: 40px;
+    height: 40px;
+    border-radius: 5px;
+}
+.combo-slot-list.is-compact .bey-check-part-name {
+    font-size: 0.62rem;
+    line-height: 1.15;
+    /* Two lines still, or the rows come out uneven whenever one part's
+       name wraps and another's does not. */
+    min-height: 2.3em;
+}
+
+/* The combined tile's caption, matched to the plain tiles' captions
+   beside it. No width on .result-part: it sizes to its tile, and a fixed
+   one would squash the wider four-layer CX Expand variant. */
+/* Tappable: these open the part at full size. Only in a deck LIST — the
+   identical tiles inside the Bey Check slot popup belong to a button
+   that opens the combo builder, and a zoom cursor there would promise
+   the wrong thing. */
+.combo-slot-row .bey-check-part-img-box,
+.combo-slot-row .result-part-img-box {
+    cursor: zoom-in;
+}
+.combo-slot-row .bey-check-part-img-box:hover,
+.combo-slot-row .result-part-img-box:hover {
+    border-color: #58a6ff;
+}
+
+.combo-slot-row .result-part-name {
+    font-size: 0.72rem;
+    line-height: 1.2;
+    min-height: 2.4em;
+}
+/* 40 / 60, to sit beside the compact variant's 40px tiles. */
+.combo-slot-list.is-compact .result-part-img-box-combined {
+    --cx-k: 0.667;
+}
+.combo-slot-list.is-compact .result-part-name {
+    font-size: 0.62rem;
+    line-height: 1.15;
+    min-height: 2.3em;
+}
+
+.combo-slot-row .bey-check-slot-parts {
     margin-top: 0;
     justify-content: flex-start;
     min-width: 0;
 }
-.swiss-deckcheck-slot .bey-check-part-name {
+.combo-slot-row .bey-check-part-name {
     /* Two lines, always: "Shark Scale" wraps and "Rush" does not, and
        without a floor the rows come out visibly different heights. */
     min-height: 2.4em;
@@ -11231,8 +11427,13 @@ body.forest-mode   .swiss-banned-chip { color: #b42d2d; }
 .swiss-reg-badges {
     display: flex;
     align-items: center;
-    gap: 8px;
-    flex: 0 0 auto;
+    flex-wrap: wrap;
+    gap: 6px;
+    /* Was flex: 0 0 auto, which let the badges push past the row's edge
+       rather than give ground — with a fourth chip on your own row the
+       last one ran off the side. They wrap now, and the row grows. */
+    flex: 1 1 auto;
+    min-width: 0;
 }
 /* On narrow phones, stack the body: name on top, its Deck / Paid badges on a
    neat second line underneath — the × stays centered on the right. */
@@ -11284,6 +11485,16 @@ button.swiss-reg-name-edit:focus-visible {
     border-color: rgba(248, 81, 73, 0.35);
 }
 /* Partial-deck state — amber, sits between green-✓ and red-no-deck. */
+/* Not a fault, a question that has not been answered — so it reads as a
+   prompt rather than an error. "Deck ✓" stays green beside it: the deck is
+   legal, it is just unverified for today. */
+
+.swiss-reg-deck-badge-unconfirmed {
+    border-color: rgba(210, 153, 34, 0.5);
+    background: rgba(210, 153, 34, 0.14);
+    color: #d4a72c;
+}
+
 .swiss-reg-deck-badge-partial {
     background: rgba(210, 153, 34, 0.18);
     color: #d29922;
@@ -12733,11 +12944,20 @@ button.swiss-assign-chip:focus-visible {
     box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.5);
 }
 
-/* Tournament (Hosting / Ranking / Past) and Battle Royale (Battle / Deck /
-   Shop) each have three sub-tabs — keep them on one row instead of wrapping. */
-.tournament-sub-tabs,
-.br-sub-tabs {
+/* Tournament (Hosting / Ranking / Past) has three sub-tabs — keep them on
+   one row instead of wrapping. */
+.tournament-sub-tabs {
     grid-template-columns: repeat(3, 1fr);
+}
+
+/* Battle Royale's count varies: Deck and Shop belong to the card game and
+   are hidden while it is off. A fixed track left an empty column where
+   they used to be, so the columns are made per visible tab — a display:
+   none tab creates none, and the rest share the row evenly. */
+.br-sub-tabs {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
 }
 
 /* .hidden is declared near the top of this file as a plain `.hidden`, so it has
@@ -20217,6 +20437,178 @@ body.kingofalltypes-mode .btn-lucky img {
 .br-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .br-card-label { color: #8b949e; font-size: 0.82rem; }
 .br-card-hint { margin: 6px 0 2px; color: #8b949e; font-size: 0.82rem; line-height: 1.4; }
+/* ===== This week's round ===== */
+/* The countdown ticks every second, so it gets tabular figures: with
+   proportional digits the whole heading shifts sideways as 1s become 2s. */
+.br-clock {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    white-space: nowrap;
+}
+
+.br-round-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid rgba(110, 118, 129, 0.3);
+    border-radius: 10px;
+    background: rgba(110, 118, 129, 0.08);
+}
+.br-round-main {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+.br-round-wager {
+    font-size: 0.78rem;
+    color: #c9d1d9;
+}
+.br-round-state {
+    position: relative;
+    z-index: 1;
+    flex: 0 0 auto;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #8b949e;
+    text-align: right;
+}
+.br-round-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 8px;
+}
+
+/* On a phone the three buttons cannot share one line — "Score this
+   battle" and "Can't play this week" are too long together. Growing
+   them fills whichever line each lands on instead of leaving a ragged
+   right edge, and makes them easier to hit. */
+@media (max-width: 560px) {
+    .br-round-actions .br-btn {
+        flex: 1 1 auto;
+        padding: 7px 10px;
+    }
+}
+.br-round-hint {
+    margin-top: 8px;
+}
+/* ---- Battle Royale standings ---- */
+.br-rank-you {
+    margin: 0 0 10px;
+    font-size: 0.85rem;
+    color: #c9d1d9;
+}
+.br-rank-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.br-rank-row {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border: 1px solid rgba(110, 118, 129, 0.3);
+    border-radius: 10px;
+    background: rgba(110, 118, 129, 0.08);
+}
+/* Your own row, so you can find yourself without reading the names. */
+.br-rank-me {
+    border-color: #1f6feb;
+    background: rgba(31, 111, 235, 0.12);
+}
+.br-rank-place {
+    position: relative;
+    z-index: 1;
+    flex: 0 0 auto;
+    min-width: 26px;
+    text-align: center;
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: #8b949e;
+    font-variant-numeric: tabular-nums;
+}
+.br-rank-place-1 { color: #e3b341; }
+.br-rank-place-2 { color: #c9d1d9; }
+.br-rank-place-3 { color: #d18f52; }
+.br-rank-main {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+.br-rank-points {
+    position: relative;
+    z-index: 1;
+    flex: 0 0 auto;
+    font-size: 0.78rem;
+    color: #8b949e;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+.br-rank-points strong {
+    font-size: 0.95rem;
+    color: #e6edf3;
+}
+/* The profile banner behind a row. The shared rule is written for
+   .fr-row, and these rows are not that; they also need a positioned,
+   clipping parent or the banner spills out of the rounded corner. */
+.br-round-card { position: relative; overflow: hidden; }
+.br-rank-row.has-banner .fr-row-banner,
+.br-round-card.has-banner .fr-row-banner { opacity: 0.16; }
+@media (max-width: 480px) {
+    .br-rank-row { gap: 8px; padding: 8px 10px; }
+    .br-rank-place { min-width: 20px; font-size: 0.8rem; }
+    .br-rank-points { font-size: 0.72rem; }
+}
+.br-stake {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #21262d;
+}
+.br-stake-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #8b949e;
+}
+.br-stake-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.br-stake-input {
+    flex: 0 1 110px;
+    min-width: 0;
+    padding: 7px 10px;
+    font: inherit;
+    font-size: 0.85rem;
+    border: 1px solid #30363d;
+    border-radius: 7px;
+    background: #0d1117;
+    color: #e6edf3;
+}
+.br-stake-input:focus { border-color: #58a6ff; outline: none; }
+.br-stake-note {
+    font-size: 0.72rem;
+    line-height: 1.4;
+    color: #8b949e;
+}
+
 .br-players { list-style: none; margin: 0; padding: 0; }
 .br-player {
     position: relative;
@@ -20296,11 +20688,18 @@ body.kingofalltypes-mode .btn-lucky img {
 .br-btn-score:hover { background: #388bfd; }
 .br-btn-accept, .br-btn-win { background: #238636; color: #fff; }
 .br-btn-accept:hover, .br-btn-win:hover { background: #2ea043; }
+.br-btn-unready { background: transparent; color: #8b949e; border-color: #30363d; }
+.br-btn-unready:hover { background: #21262d; color: #c9d1d9; }
 .br-btn-decline { background: transparent; color: #f85149; border-color: rgba(248, 81, 73, 0.5); }
 .br-btn-decline:hover { background: rgba(248, 81, 73, 0.12); }
 .br-btn-buy { background: #238636; color: #fff; }
 .br-btn-buy:hover:not(:disabled) { background: #2ea043; }
 .br-btn-buy:disabled { background: #21262d; color: #6e7681; cursor: not-allowed; border-color: #30363d; }
+/* The round's Score button before both players are ready, and the ready
+   button once you've tapped it. Greyed rather than hidden: the thing you
+   are waiting for should stay on screen. */
+.br-btn:disabled { background: #21262d; color: #6e7681; cursor: not-allowed; border-color: #30363d; }
+.br-btn:disabled:hover { background: #21262d; }
 .br-btn-play { background: #8957e5; color: #fff; }
 .br-btn-play:hover { background: #a371f7; }
 

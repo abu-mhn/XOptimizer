@@ -555,6 +555,10 @@
             <span class="sub-tab-ico" style="--sub-ico:url('assets/icons/battle-royal.png')" aria-hidden="true"></span>
             <span>Battle</span>
           </button>
+          <button type="button" class="br-sub-tab" data-br-view="ranking">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="width:16px;height:16px;flex:0 0 auto;"><path d="M3 13h4v8H3v-8zm7-9h4v17h-4V4zm7 5h4v12h-4V9z"/></svg>
+            <span>Ranking</span>
+          </button>
           <button type="button" class="br-sub-tab" data-br-view="deck">
             <span class="sub-tab-ico" style="--sub-ico:url('assets/icons/cards.png')" aria-hidden="true"></span>
             <span>Deck</span>
@@ -565,8 +569,12 @@
           </button>
         </div>
         <div id="br-panel-battle" class="br-panel">
-          <p class="br-intro">Your tier is set by your tournament win rate <strong>and</strong> how many battles you’ve played. You can only challenge players in your own tier — both stake an equal points wager and a Judge declares the winner, who takes the pot.</p>
+          <p class="br-intro">Your tier is set by your tournament win rate <strong>and</strong> how many battles you’ve played. Every week you’re matched with someone from your own tier or the one either side of it — you both stake points, score the battle between you, and the winner takes the pot.</p>
           <div id="br-content"></div>
+        </div>
+        <div id="br-panel-ranking" class="br-panel hidden">
+          <p class="br-intro">Everyone in Battle Royale, by points. Win and you take your opponent&rsquo;s stake &mdash; beat someone from a higher tier and you take <strong>double</strong>.</p>
+          <div id="br-ranking"></div>
         </div>
         <div id="br-panel-shop" class="br-panel hidden">
           <p class="br-empty">The Shop is coming soon — spend your Battle Royale points here.</p>
@@ -811,11 +819,8 @@
       <p class="popup-text bey-check-subtitle" id="register-subtitle"></p>
       <label class="tournament-name-label" for="register-name-input">Your Name</label>
       <input id="register-name-input" type="text" class="tournament-name-input" placeholder="e.g. Alice" maxlength="60" autocomplete="off" />
-      <p class="popup-text register-deck-hint">Build the 3-combo deck you'll bring. The judge sees this deck at every match. Tip: copy a deck from the Deck tab, then paste it here.</p>
+      <p class="popup-text register-deck-hint">Build the 3-combo deck you'll bring. The judge sees this deck at every match. Tap a slot to build it, or drag a slot by its handle to reorder.</p>
       <div class="bey-check-slots" id="register-deck-slots"></div>
-      <div class="register-deck-actions">
-        <button type="button" id="register-paste" class="btn btn-sm"><img src="assets/icons/paste.png" alt="" onerror="this.style.display='none'"><span class="btn-label">Paste from Deck tab</span></button>
-      </div>
       <div id="register-status" class="swiss-join-status"></div>
       <div class="popup-actions bey-check-actions">
         <button type="button" id="register-submit" class="btn">Register</button>

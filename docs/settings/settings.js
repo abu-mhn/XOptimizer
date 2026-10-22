@@ -27,7 +27,7 @@ Calculator
 - Searchable part dropdowns
 - Action buttons (Calculate / Reset / Random) show icon + label inline
 - The same drag-to-swap works on the slots in the registration popup and at Bey Check, not only in the Deck tab. One implementation in core.js drives all of them — two copies of pointer handling would drift, and the drift would be invisible until a deck rearranged itself
-- Those slots lay out in one column on a phone and side by side once the popup is wide enough, without a media query, so it follows the popup's own width rather than the screen's. The floor is the width at which three part tiles would start to clip
+- Those slots stack in one column at every width, desktop included. Side-by-side was tried twice and dropped both times: letting the browser pick the column count gave two columns with the third slot stranded on its own row, and forcing three gave columns narrower than three part tiles need, so every slot quietly clipped its last part. A slot showing two parts of three looks complete, which is worse than one that is simply tall
 - Combos can be rearranged by dragging. Each slot has a handle; drag it onto another slot and the two trade places. Swap rather than insert — with a few slots "put this one where that one is" is what people mean, and an empty slot is a valid destination, so dragging a combo onto one moves it there
 - Dragged from the handle rather than the card body: the deck is a vertical list on a vertically scrolling page, so a drag starting anywhere on the card competes with the page scroll on every touch, and the card is full of buttons (edit, remove, the mode chips, the graph toggle) that a body drag would have to out-guess. The handle claims the gesture and scrolling everywhere else is unchanged
 - Built on pointer events, not HTML5 drag-and-drop, which does not fire on touch at all — on a phone the feature would simply not exist. A short press is still a tap; the drag starts past 5px. The card follows your finger, the slot underneath is outlined, and a drag the system cancels (a swipe-back, the notification shade, a palm on the screen) puts the card back without rearranging anything
@@ -62,7 +62,8 @@ Deck (3 Slots)
 - Reset / clear the deck
 - Download the deck as a PNG (background follows your theme)
 - Share the deck as an image — Web Share on mobile, download fallback on desktop
-- Copy a deck to paste into a tournament registration
+- Copy a deck, to paste into the Deck tab or into the host's Add-participant form. Registering yourself no longer needs it: your pinned deck is loaded into the form already
+- The registration form is just your name and the three slots now. The Paste and Auto-build buttons are gone from it — the pinned deck is loaded automatically, so pasting it repeated work already done, and Auto-build was a tester shortcut sitting in a player-facing form. Tap a slot to build it, drag a slot's handle to reorder. The host's Add-participant form keeps its own Paste, where there is no pinned deck to load
 - Pin a default deck — tap the star on a deck to make it your default; it's auto-loaded into the registration form when you join a tournament (you still review before submitting). The pin syncs across your devices
 - The pinned deck is also published to your public profile, so a HOST adding you as a guest can pre-fill it. Only the pinned deck is shared — every other saved deck stays private, since userDecks/{uid} is readable by its owner alone and a host's device has no way in. Unpinning clears the published copy. Publishing happens on save, so an existing pinned deck isn't shared until you next save or re-pin in the Deck tab
 - Paste a copied deck straight into the active deck with the Paste button
@@ -128,8 +129,15 @@ Tournament
 - Leaving marks the room locally so the host is not auto-entered straight back into it on the next render — a lone live tournament normally drops its host in automatically, which would have made Leave look like it did nothing. Instead the My Tournaments pick list is shown, one tap back in. Walking back in clears the mark, so auto-enter resumes as before
 - Once a tournament is finished the Leave button is hidden, because the other button already says Leave there and closing the finished room is the right end to it
 - "Is this the deck you're playing today?" — while registration is open, a player who is registered sees their registered deck once, with "That's my deck" and "Change it". A registrant's deck is a SNAPSHOT taken when they were registered, so a player who built something new and never re-pinned it gets checked against last month's deck, and nothing is wrong from the app's side to warn anybody about. Someone with no deck registered is told that instead, and offered only "Add my deck"
+- Your deck gets a section of its own above the registrants list, for as long as you can still change it. Unanswered it is the amber prompt asking whether this is the deck you're playing; answered, it stays put as a quiet "Your deck" block with a Change my deck button — because "where is my deck and how do I change it" is a question people go looking for later, and a prompt that vanishes the moment you answer it is a prompt that is never there when wanted
+- That replaced a chip in your own registrant row. The name has always opened the editor for the person it belongs to, but the only thing saying so was a title attribute — a tooltip, which does not exist on a phone — so players who wanted to change a part before the tournament started did not know they could. The chip was wrong twice over: a control hidden among badges, which are statements, and sitting on one row out of eleven where it read as a label rather than an action. The section is still resolved the same way the deck check resolves it — created by your account and carrying your name. The set of rows a device may EDIT is a different and much larger thing: a host who bulk-adds ten walk-ins created all ten, so keying it off that put "You" on every row in the list
+- The same question is asked again when your match is called, inside the "You're up!" toast — with Yes and Change it, where the registration banner's version was advice with nothing to tap. That toast is the one thing a player reliably reads, and it is the last moment at which telling the judge costs nobody anything. Answering in either place counts as the same answer
+- Judges can see who has not answered. A registrant with a legal deck that has not been confirmed today carries an "Unconfirmed" marker next to "Deck ✓" — the two are different facts, since the registered deck is a snapshot from whenever that player signed up. Amber rather than red: it is an unanswered question, not a rule violation
+- The marker is only shown where it can be acted on. An entry the host typed in has no account to answer from, and a deck-less or incomplete entry has nothing to confirm, so neither is flagged — pointing the judge at something nobody can fix is worse than not pointing at all
+- The answer is stored on the registrant now rather than only on the player's phone, which is what lets the judge see it, and needed a rules change: registrants reject unknown fields. The device copy stays as the fallback, because a guest with no account cannot write to the room at all
 - It asks only about YOUR OWN registration, identified as an entry created by your account AND carrying your account's name. A host who bulk-adds walk-ins owns every one of those entries, so "which registrations may this device delete" is not the same question as "who is the player" — asking the first of those was showing hosts a guest's deck and calling it theirs. Signed out, the device's single registration counts as you; with several there is no way to tell which, so it does not guess
-- The banner shows the registered deck in full: a numbered row per slot, every part of it pictured and named. Not just the blade — two decks can share all three blades and differ in every ratchet and bit, so a row of blades cannot answer the question being asked. Drawn by the same renderer Bey Check uses, so the player sees exactly what the judge will check against, including the combined CX tile and the per-mode field list. Empty slots contribute no row, and the placeholder a slot carries when its bit supplies the ratchet is not drawn as a part. The match toasts keep the text form, which has one line to fit in
+- Tap any part in a deck list to see it full size, in the same popup the Library uses. A combined CX tile opens the carousel version instead of zooming the composite: three or four parts are fused into that thumbnail and telling them apart is the reason for looking closely. Live view, registration section, match recap and Past-tournament results all do it; the Bey Check slot popup deliberately does not, because there the slot is a button that opens the combo builder and a zoom would steal the tap
+- The registered deck is shown in full wherever it appears — the registration banner, "Your deck" in the match recap, and the opponent's deck inside each match row: a numbered row per slot, every part of it pictured and named. One renderer behind all of them, so the same deck can never be described two different ways. A CX build keeps its combined blade thumbnail, as everywhere else in the app. That tile is a stack of absolutely positioned layers at fixed pixel sizes, so resizing the box alone used to leave the layers at full size inside it — it sat 79x60 among 40px tiles and broke the row. Every layer and the box itself are now multiplied by one custom property, so a single number per context sizes the whole thing and the two can never disagree. Two sizes: full in the banner, which asks a question once and wants to be looked at, and compact in the recap, which sits in the view for the whole tournament with results underneath it. A modifier on the same markup, not a second renderer. The recap used to draw only each slot's lead part with the rest spelled out as text, which is the information without the recognition. Not just the blade — two decks can share all three blades and differ in every ratchet and bit, so a row of blades cannot answer the question being asked. Drawn by the same renderer Bey Check uses, so the player sees exactly what the judge will check against, including the combined CX tile and the per-mode field list. Empty slots contribute no row, and the placeholder a slot carries when its bit supplies the ratchet is not drawn as a part. The match toasts keep the text form, which has one line to fit in
 - It asks only while registration is open, because that is the window in which the PLAYER can change it themselves — the database rules only let someone write their own registrant while the phase is "registering". The deck is NOT locked afterwards: the judge records the actual deck per match at Bey Check, so a player who switches mid-tournament just tells them. The answer is in all three places a player might ask it: the registration banner, the "You're up!" toast, and the "Your deck" block in Your Matches — the last of those being the one that is there all tournament long, which is where people actually look. The recap hint is hidden for a past tournament opened from History, where there is no judge left to ask.
 - Players change their own deck mid-tournament. "Your Matches" carries a "Change my deck" button that opens the same deck picker as registration, with the name locked. Only the deck moves — the write touches the deck and a timestamp and nothing else, so the name, guest flag, fee-paid flag and owner stamp are as locked as they ever were
 - Offered only for a registration the account actually owns (one made while signed in, carrying createdBy). A guest the host bulk-added has no owner the database rules can check, so they still ask the judge — and the button is never shown where the write would come back denied
@@ -153,7 +161,6 @@ Tournament
 - The Tournament tab itself shows a live "!" the moment a host adds you as a co-host to any open tournament — visible from any page, and it clears once you open that tournament
 - Edit the format while waiting for players — tap the format chip to switch between Swiss, Round Robin and Single Elimination, or the groups / rounds chips to adjust them; registrants are kept, no reset needed. Switching INTO a knockout format (Swiss + Top N or Round Robin + Top N) re-opens the Top-N picker so the host picks the bracket size right there — same flow as create time
 - Test button: bulk-adds synthetic participants for QA — visible only to accounts tagged "Tester"
-- Auto-build (Test) button in the Register popup — Tester-only. Prompts for one of the nine achievements and fills the 3-slot deck with a pre-built combo guaranteed to satisfy that achievement's win condition. Lets a tester verify each achievement's creditOnWin end-to-end without hand-rolling parts
 - Copy Names button (Tester-only, host / co-host): copies every registrant's name to the clipboard, one per line — a QA aid; the button flashes the copied count
 - Test decks obey "one of each part per deck" across all 3 slots (only light lock chips can repeat; Emperor / Valkyrie cannot)
 - Test deck mode mix is weighted realistic: ~75% Standard, ~13% CX, ~12% CX Expand
@@ -279,7 +286,7 @@ Judge
 - "Head Judge" can be earned by exam or assigned by hand on the Developer page. Hand-assignment is what gets the first one in place: a Developer counts as a Head Judge, so a build with nobody holding the tag is still a build where applications can be approved
 
   Approving an application
-- Approvals: a Head Judge sees everyone waiting, oldest first, with their score and which role it earned, and approves or rejects each one. Approving grants that role and nothing more — a Guest Judge application cannot quietly hand out the full Judge badge, and the database rules enforce the same thing by checking the application's own role, not just that it was approved. It sets the public badge and adds them to the judges index immediately, so they show up in the Battle Royale judge picker and the sub-hosts typeahead straight away; the tag itself lands on their own account the next time they open the app (their account is the only thing that can write it)
+- Approvals: a Head Judge sees everyone waiting, oldest first, with their score and which role it earned, and approves or rejects each one. Approving grants that role and nothing more — a Guest Judge application cannot quietly hand out the full Judge badge, and the database rules enforce the same thing by checking the application's own role, not just that it was approved. It sets the public badge and adds them to the judges index immediately, so they show up in the sub-hosts typeahead straight away; the tag itself lands on their own account the next time they open the app (their account is the only thing that can write it)
 - Each waiting applicant is shown as a card carrying their profile photo and their banner behind it, because a name alone tells a Head Judge nothing about who is asking. Someone with no photo or banner keeps a plain card rather than an empty frame
 - Turning down a Guest Judge's bid for Judge leaves their Guest Judge role intact, including their place in the sub-hosts typeahead. That index is shared by "Judge", "Head Judge", "Guest Judge" and "Keeper", so a rejection clears it only when none of those is left on the account
 
@@ -311,7 +318,7 @@ Revox
 - Member ranking by points — no password, the account tag is the key
 - Add Result popup: pick the tournament, date and placing — the placing sets the points (1st = 7 pts, 2nd = 5, 3rd = 3, Others = 2)
 - Add Result's Name dropdown lists accounts tagged "Revox Member" or "Revox Admin" (sourced from the public revoxAccounts index — maintained automatically when a Developer adds/removes either tag, and back-filled whenever a Developer opens the Developer tab), merged with anyone who already has a ranking entry
-- The revoxAccounts index is keyed by uid, so a rename updates the member's entry rather than orphaning it and leaving their old name selectable in the dropdown. A member may update their own entry only, and only while they already hold the tag — adding and removing members stays a Developer action. The Developer tab's sync pass also prunes index entries belonging to no account, clearing names left behind by past renames (the judges index is still username-keyed, since the Battle Royale judge picker resolves it by key)
+- The revoxAccounts index is keyed by uid, so a rename updates the member's entry rather than orphaning it and leaving their old name selectable in the dropdown. A member may update their own entry only, and only while they already hold the tag — adding and removing members stays a Developer action. The Developer tab's sync pass also prunes index entries belonging to no account, clearing names left behind by past renames (the judges index is still username-keyed, since the sub-hosts typeahead resolves it by key)
 - Auto-entry: any participant whose account is tagged "Revox Member" or "Revox Admin" (matched via the public revoxAccounts index) who plays in a ranked tournament is added to the Revox ranking automatically with placing-based points (1st = 7 pts, 2nd = 5, 3rd = 3, and everyone else who played = 2 "Others") — each result is awarded only once per tournament. A Revox Member added as a GUEST scores too: the revoxAccounts index alone decides eligibility, so filtering guests out beforehand only stripped the members (the non-members were rejected by the index anyway). Test registrants stay excluded
 - Add a result onto an existing member straight from their row, or as a brand-new member
 - Member self-submit: a "Submit My Result" button lets a Revox Member key in their own result (name locked to their account) with a required reference photo; it goes to a pending queue for a Revox Admin to review
@@ -328,28 +335,34 @@ Battle Pass
 - Connect, Disconnect and Clear Data buttons each carry an icon — link, unlink, and a trash can — so the action reads at a glance
 
 Battle Royale
-- A points-duel tab: challenge another registered player, stake an equal wager, and a Judge declares the winner who takes the pot (the loser loses the same)
-- Running as a plain challenge ladder for now: no deck, no ability cards, no shop. That layer (draw a hand, equip one card per combo, buy more with points) is built and switched off behind a single flag rather than deleted, so it comes back whole. Cards players already own stay in the database and battles that already had cards keep them — re-enabling restores what people had rather than resetting them. The Deck and Shop sub-tabs are hidden, and with only Battle left the sub-tab row is hidden with them
+- A points-duel tab run in weekly rounds: you are given an opponent, you both stake points, and the winner takes the pot (the loser loses the same). There is no challenging and no Judge
+- A round runs Monday 00:00 to Sunday 24:00, Malaysian time — the same clock the tournament lobby closes on, so "Sunday midnight" is one instant for everybody rather than whatever each phone thinks. The card counts down in days, hours, minutes and seconds
+- The pairing is DERIVED from the week and the pool, not stored: every device computes the same draw from the same seed, so there is no race to write it and no re-rolling an opponent by refreshing. Players are sorted before the shuffle, because the list arrives from Firebase in no particular order and an unsorted input would shuffle differently on two phones holding the same players
+- The first device to see a pairing writes it down, and that written record is what counts afterwards — the pool moves during the week, and the opponent you were already shown is the one you keep. The record's id is the round plus the pair, so whichever of the two opens the tab first writes the same id and the second finds it rather than making a duplicate
+- Running as a plain ladder for now: no deck, no ability cards, no shop. That layer (draw a hand, equip one card per combo, buy more with points) is built and switched off behind a single flag rather than deleted, so it comes back whole. Cards players already own stay in the database and battles that already had cards keep them — re-enabling restores what people had rather than resetting them. The Deck and Shop sub-tabs are hidden; Battle and Ranking remain
 - Points start at 0 and are earned ONLY by placing in tournaments — the tournament's placement points (1st = 5 down to 1) mirror into your Battle Royale balance when you finish, then you gamble them here. Points stay separate from the tournament ranking leaderboard
-- You can challenge your own tier and the one either side of it — S meets A, A meets S and B, B meets A and C, C meets B. Two steps apart (S vs B) is out of range. Your tier comes from your tournament win rate AND how many battles you've played (a small record can't reach the top)
+- You are matched within your own tier and the one either side of it — S meets A, A meets S and B, B meets A and C, C meets B. Two steps apart (S vs B) is out of range. Your tier comes from your tournament win rate AND how many battles you've played (a small record can't reach the top). Nobody left to pair with means you sit the round out, and sitting out costs nothing
+- Your standing stake is the most you will play for, set once on the Battle tab. Each round uses the SMALLER of the two players' stakes, so being assigned an opponent can never cost more than you chose. It is frozen onto the pairing when the round is drawn, so raising it affects next week rather than a round already running
 - Beating a player from a HIGHER tier pays double the wager. Beating a lower tier, or your own, pays the wager straight
 - The double comes out of the favourite's balance, not from nowhere. Battle Royale points are a closed economy — they only enter at the monthly rollover from tournament placements — so paying the underdog double while the favourite lost only the single wager would mint points on every upset and inflate everyone's balance over time. An upset moves twice the wager from one player to the other and the total in circulation is unchanged
-- Because of that, a cross-tier wager is capped at the lower of the underdog's balance and HALF the favourite's: the favourite has to be able to settle the double if they lose. Same-tier battles are still capped at the smaller of the two balances. A favourite too poor to cover double has no legal stake, so they aren't offered in the list
+- Because of that, a cross-tier wager is capped at the lower of the underdog's balance and HALF the favourite's: the favourite has to be able to settle the double if they lose. Same-tier battles are still capped at the smaller of the two balances
 - Points are debited from the loser first and the winner credited exactly what came out. The two sides used to run as independent transactions, so a loser's balance clamping at zero still credited the winner in full — inventing points. Doubling the payout would have doubled that leak, so it was fixed alongside
-- Tiers are read when the Judge declares the winner rather than stored on the challenge when it is created. Storing them would mean new fields on the challenge node, which the database rules reject outright, so it would need a rules deploy to go with it. Tiers only move when a tournament is scored, so the two answers differ only if that happens mid-battle
-- Developer accounts bypass the tier limit — a Developer-tagged player can challenge anyone, in any tier
-- Challenging requires picking a Judge from tappable chips — every account tagged "Judge" or "Head Judge" is listed (resolved from the public judges index, not just those who've opened Battle Royale), except your opponent. A "Guest Judge" or "Keeper" shares that index for the sub-hosts typeahead but is not offered here; the tag is re-checked against the profile rather than trusted from the index, so an entry left behind by a removed tag doesn't make anyone a judge. If you hold the Judge tag you can pick yourself. The opponent must Accept before the Judge steps in
-- Nothing is pre-selected, and Send challenge stays disabled until you choose. It used to default to the first judge in the list — and WHICH one that was came down to cache state, because the list paints twice (the judges already known, then everyone once the fetch lands) and the pick was made from whichever partial list arrived first. On a points wager, sending to a judge you never chose is a real cost, so the choice is now deliberate
-- A search box filters the judges as you type. It sits outside the list it filters, because the list repaints when the full set arrives and an input inside it would lose what you were typing. Filtering never clears your choice — a judge hidden by the search is still selected, and the dialog names them underneath so an enabled Send button always has a visible reason
-- Scoreboard scoring: once a battle is accepted, the Judge just rotates their phone to landscape and the tilt scoreboard opens with both players' names and photos — exactly like a tournament match. Higher score wins and the pot transfers automatically (a tie is rejected); no buttons to press
-- Skip button on the Ready gate: a small "Skip" under the swap arrows opens the board straight away — no Ready taps, no "3, 2, 1, Go Shoot", no sound. For a judge calling the start themselves, or scoring a battle already under way
+- Tiers are read when the winner is declared rather than stored on the pairing when it is created. Storing them would mean new fields on the challenge node, which the database rules reject outright, so it would need a rules deploy to go with it. Tiers only move when a tournament is scored, so the two answers differ only if that happens mid-battle
+- Developer accounts bypass the tier limit and can be paired with anyone
+- BOTH players tap "I'm ready" before the scoreboard will open. A scoreboard one player can open alone is a scoreboard that lies — they enter 3-0, the pot moves, and the other finds out from the standings. The flag is written under the tapper's own uid and the database rules refuse a write to anybody else's, so it cannot be tapped twice from one phone
+- Ready can be taken back. It was one-way, which made a mis-tap permanent for the week: the only way out was "Can't play this week", and that costs a point. Taking it back writes false rather than deleting the flag, because a delete skips validation and the rule tying a key to its own uid would not run
+- Either player scores it — no Judge. Tap "Score this battle" to open the full-screen board, or just turn the phone sideways; both go through one shared function, so the two ways in cannot pay the pot out differently. A button as well as the tilt because a rotation-locked phone never fires the orientation event and a desktop has no rotation at all
+- A round nobody plays is a draw and costs BOTH players a point — the penalty is for not turning up, which is a thing both of them did. Say "Can't play this week" up front and only you lose the point; your opponent keeps theirs, since with an assigned opponent they had no say in who they were waiting on
+- The settlement runs on either player's device, over their own rounds only. It used to be a Judge's job, which with no Judge in Battle Royale meant nobody's. Safe to race: the charge is an absolute value computed from the record rather than a decrement, so two devices landing it together write the same number instead of charging twice
+- The database rules let any signed-in player write Battle Royale points, because the transfer has to work between two untagged players. Scoped to the balance alone — username, stake and the judge flag keep their owner-only rule. It stops casual cheating in the UI, not a determined user with devtools
+- A Head Judge counts as a judge here, in the database rule as well as in the code. The rule accepted only the "Judge" tag while window.isJudge() has always meant "Judge" OR "Head Judge", so a Head Judge's mirrored flag was rejected on every write — and because that write runs from the render and a rejected write reverts, the panel rebuilt itself several times a second and no field in it could be typed into. The flag is also synced once per page now, so a write that does not stick cannot retry on the render it caused
+- A Ranking sub-tab lists everyone by points, with your own place stated above the list. Sorted on points, then win rate (two players level on points are not level if one got there over twice as many battles). Players level on points SHARE a place — numbering them 6th and 7th would claim an order the standings do not have
+- The "Turn your phone sideways" prompt covers Battle Royale too, with the same "Show anyway" fallback the tournament flow has. It only appears while you are actually on the Battle Royale tab — this arms off a database update that can land on any tab, and a full-screen prompt over whatever you were doing elsewhere would be an ambush
+- Skip button on the scoreboard's own Ready gate (the 3-2-1 launch gate, not the one above): a small "Skip" under the swap arrows opens the board straight away — no Ready taps, no "3, 2, 1, Go Shoot", no sound. For calling the start yourself, or scoring a battle already under way
 - Skipping lasts the whole match, not one point. The gate is re-armed after every scored point (each point is its own launch), so a Skip that covered one point would need pressing seven times a match — more taps than the two Ready buttons it replaces. Reset puts the gate back, and so does loading a different match
 - Skip deliberately does NOT unlock the countdown audio the way Ready does. Skipping is a choice not to hear the clips, and on iOS that tap is the one gesture available to approve sound — no reason to spend it on audio you just turned down
-- The "Turn your phone sideways" prompt covers Battle Royale too, with the same "Show anyway" fallback the tournament flow has. It matters here for the same reason: on an iPhone with rotation lock on, tilting fires no orientation event, so the board never appeared and a Judge was left with a battle they simply could not score. It only appears while you are actually on the Battle Royale tab — this arms off a database update that can land on any tab, and a full-screen prompt over whatever you were doing elsewhere would be an ambush. If the battle was accepted while you were away, opening Battle Royale raises it then
-- Notifications: the opponent is alerted when challenged, the Judge when the challenge is accepted, and both players when it's resolved (in-app toast + optional system notification, on any tab)
-- Either player can Cancel an accepted battle before the Judge scores it (no points move)
-- The Judge writes the point transfer — enforced by the DB rules, which only let a Judge-tagged account move another player's Battle Royale points
-- Each player in the challenge list shows their profile photo and banner; tap a name or avatar to open their profile card (hover on desktop)
+- Notifications: both players are told when a round is resolved (in-app toast + optional system notification, on any tab)
+- Every row in the standings shows the player's profile photo and banner; tap a name or avatar to open their profile card (hover on desktop)
 
 Friends
 - A Friends tab (sign-in only): add other players by their username, accept or decline incoming requests, and remove friends
@@ -395,7 +408,10 @@ Profile
 - Discord-style profile card; admin-assigned tags show as colour-coded badges (Revox red, Developer black-and-blue, Revox Admin gold-bordered, Tester teal, Judge black-on-white, Head Judge white-on-black)
 - Auto medal tags: the current top 3 of the tournament ranking carry a "Gold Player" / "Silver Player" / "Bronze Player" badge on their profile — derived live from the ranking (not stored on the account), so it always reflects the current standing and shifts automatically as rankings change. The matching medal tag also unlocks the matching Gold / Silver / Bronze theme
 - Tag chips render on a single horizontal line with an invisible scroller — same treatment in the profile page, the profile hover card, the Revox history popup and the Developer page rows
-- Every one of those hidden-scrollbar rows now works with a mouse: a vertical wheel scrolls them sideways, and they can be grabbed and dragged. Hiding the scrollbar gives a phone a clean strip to swipe, but on desktop it left no affordance at all — no bar to drag, and the wheel scrolled the page instead — so anything past the right edge was unreachable. The Judge picker in a Battle Royale challenge was where this showed: with four judges the last one sat off-screen with no way to get to it. Around twenty rows had the problem and only five had ever been wired up, because each was handled at its own call site; they are now listed in one place and bound together, including rows drawn later into popups. A press only becomes a drag past a few pixels, so buttons inside still click, and a row with nothing to scroll leaves your page scroll alone
+- Every one of those hidden-scrollbar rows now works with a mouse: a vertical wheel scrolls them sideways, and they can be grabbed and dragged. Hiding the scrollbar gives a phone a clean strip to swipe, but on desktop it left no affordance at all — no bar to drag, and the wheel scrolled the page instead — so anything past the right edge was unreachable. The Battle Royale judge picker was where this showed: with four judges the last one sat off-screen with no way to get to it. That picker has since gone with the challenge flow, but around twenty other rows had the same problem, and only five had ever been wired up, because each was handled at its own call site; they are now listed in one place and bound together, including rows drawn later into popups. A press only becomes a drag past a few pixels, so buttons inside still click, and a row with nothing to scroll leaves your page scroll alone
+- Where you stand in the tournament ranking sits on the card: your place, how many players that is out of, and your points. It comes from the same sorted table the medal tags are read off rather than a second count of its own. Players level on points SHARE a place — numbering two level players 6th and 7th would claim an order the ranking does not have — and a name that is not on the table shows nothing at all rather than coming last
+- Your Battle Royale points sit beside it, labelled, because circuit points and Battle Royale points are different currencies that look identical as a bare number
+- Your starred deck is shown on the card. It is the copy the Deck tab already publishes to your public profile so a host can pull it into a tournament, rendered with the same part tiles Bey Check uses
 - Profile syncs to your account — same photo, name and bio on every device
 - Row-sized thumbnails: saving a profile also derives a small photo (128px) and banner (512px) and stores them alongside the originals. Every surface that shows a face at small size — ranking rows, registrant rows, match cards, friends, Battle Royale, the profile hover card, the Revox history header — reads those instead, and they're cached in the browser so moving between tabs re-downloads nothing. A ranking page used to pull each player's FULL photo and banner on every visit (up to ~750 KB apiece for a GIF banner), which is what was burning through the database's monthly download allowance. The originals are untouched — they're still what the Profile tab edits and what a GIF animates from — and profiles saved before this fall back to them, then upgrade themselves the next time their owner signs in. A Developer opening the Users tab upgrades every account at once, including dormant ones
 - Anyone's profile opens as a card when you hover or click their username — in a tournament room, the final placement list, the tournament ranking, the Revox member list, or the Developer page
@@ -604,6 +620,9 @@ if ("serviceWorker" in navigator) {
     const emailEl = document.getElementById("account-email");
     const tagsEl = document.getElementById("account-tags");
     const winRateEl = document.getElementById("account-win-rate");
+    const standingEl = document.getElementById("account-standing");
+    const starredWrap = document.getElementById("account-starred");
+    const starredEl = document.getElementById("account-starred-deck");
     const saveBtn = document.getElementById("account-save-btn");
     const fileInput = document.getElementById("account-profile-file");
     const banner = document.getElementById("account-banner");
@@ -614,6 +633,10 @@ if ("serviceWorker" in navigator) {
     // and a plain dark strip shown until a banner is set.
     const PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%2321262d'/%3E%3Ccircle cx='32' cy='24' r='12' fill='%23484f58'/%3E%3Cpath d='M11 57c0-12 10-20 21-20s21 8 21 20z' fill='%23484f58'/%3E%3C/svg%3E";
     const BANNER_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 110'%3E%3Crect width='400' height='110' fill='%2321262d'/%3E%3C/svg%3E";
+
+    // Battle Royale keys its players by uid, not by username, and the
+    // uid only arrives with the auth user. fill() runs off the profile.
+    let accountUid = "";
 
     let pendingPhoto = "";
     let pendingBanner = "";
@@ -675,6 +698,8 @@ if ("serviceWorker" in navigator) {
         banner.style.objectPosition = pendingBannerPos || "50% 50%";
       }
       loadAccountWinRate(profile && profile.username);
+      loadAccountStanding(profile && profile.username);
+      loadAccountStarredDeck(profile && profile.username);
     };
 
     // Public win-rate counter, fetched from /winRates/{usernameKey}. Hidden
@@ -713,6 +738,73 @@ if ("serviceWorker" in navigator) {
       }).catch(() => { /* read failed → leave hidden */ });
     };
 
+    // Where this account stands, and what it has collected.
+    //
+    // Two separate scores that are easy to confuse, so they are labelled
+    // rather than left as bare numbers: the ranking is tournament points
+    // across the circuit, Battle Royale points are a separate balance
+    // that only moves on a wager.
+    const loadAccountStanding = (username) => {
+      if (!standingEl) return;
+      const bits = [];
+
+      // A number big enough to read at a glance, with the context that
+      // makes sense of it underneath — "#6" alone says nothing about
+      // whether that is out of eight or eighty.
+      const stat = (value, label, cls) =>
+        `<span class="account-stat${cls ? " " + cls : ""}">` +
+        `<span class="account-stat-value">${value}</span>` +
+        `<span class="account-stat-label">${label}</span></span>`;
+
+      const pos = (typeof window.rankingPositionForName === "function")
+        ? window.rankingPositionForName(username) : null;
+      if (pos) {
+        bits.push(stat(`#${pos.place}`,
+          `of ${pos.total} in Ranking \u00b7 ${pos.points} pt${pos.points === 1 ? "" : "s"}`));
+      }
+
+      const paint = () => {
+        standingEl.innerHTML = bits.join("");
+        standingEl.classList.toggle("hidden", !bits.length);
+      };
+      paint();
+
+      // Battle Royale points, read straight off the public player record.
+      const fb = (typeof firebase !== "undefined" && firebase.database) ? firebase.database() : null;
+      if (!fb || !accountUid) return;
+      fb.ref("battleRoyale/players/" + accountUid + "/points").once("value").then(snap => {
+        const v = snap.val();
+        if (typeof v !== "number") return;        // never played; nothing to show
+        bits.push(stat(String(v), `Battle Royale point${v === 1 ? "" : "s"}`, "account-stat-br"));
+        paint();
+      }).catch(() => {});
+    };
+
+    // The deck pinned on the Deck tab. It is already mirrored to the
+    // public profile so a host can pull it into a tournament; this is
+    // the same copy, shown to the person who pinned it.
+    const loadAccountStarredDeck = (username) => {
+      if (!starredWrap || !starredEl) return;
+      starredEl.innerHTML = "";
+      starredWrap.classList.add("hidden");
+      if (!username) return;
+      if (typeof window.fetchStarredDeckForName !== "function") return;
+      if (typeof window.deckSummaryThumbsHtml !== "function") return;
+      window.fetchStarredDeckForName(username).then(deck => {
+        if (!deck) return;                        // nothing pinned
+        const html = window.deckSummaryThumbsHtml(deck, true);
+        if (!html) return;
+        starredEl.innerHTML = html;
+        starredWrap.classList.remove("hidden");
+      }).catch(() => {});
+    };
+
+    // The ranking loads after the profile does, so the standing has to be
+    // repainted when it lands — the same event the tag row listens to.
+    window.addEventListener("rankingmedalschange", () => {
+      if (lastFilledProfile) loadAccountStanding(lastFilledProfile.username);
+    });
+
     // The medal cache loads / changes asynchronously — refresh only the
     // tag row so a freshly-known medal appears without wiping a photo the
     // user may have picked but not yet saved.
@@ -724,6 +816,7 @@ if ("serviceWorker" in navigator) {
     const render = (user) => {
       try { console.info("[account] render called with user:", !!user, user && user.email); } catch (e) {}
       if (user) {
+        accountUid = user.uid || "";
         signedOut?.classList.add("hidden");
         signedIn?.classList.remove("hidden");
         if (emailEl) emailEl.textContent = user.email || "";
@@ -734,6 +827,7 @@ if ("serviceWorker" in navigator) {
           fill({});
         }
       } else {
+        accountUid = "";
         signedIn?.classList.add("hidden");
         signedOut?.classList.remove("hidden");
       }

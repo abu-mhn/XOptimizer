@@ -4484,6 +4484,7 @@ function revoxTagBadges(profile) {
 let rankingMedalCache = { gold: "", silver: "", bronze: "" };
 
 function setRankingMedalCache(sortedList) {
+  setRankingStandings(sortedList);
   const keyOf = (r) => (r && r.name) ? subHostKey(r.name) : "";
   rankingMedalCache = {
     gold: keyOf(sortedList[0]),
@@ -4498,6 +4499,31 @@ function setRankingMedalCache(sortedList) {
   // gate refresh once the medal cache is known or changes.
   try { window.dispatchEvent(new Event("rankingmedalschange")); } catch (e) {}
 }
+
+// The whole table with the place each name holds, built from the list
+// the medals are already derived from. Equal points share a place, the
+// same way the Battle Royale standings read — calling one of two level
+// players 6th and the other 7th claims an order the ranking does not
+// have.
+let rankingStandings = [];
+function setRankingStandings(sortedList) {
+  let place = 0, prev = null;
+  rankingStandings = sortedList.map((r, i) => {
+    if (prev === null || r.points !== prev) { place = i + 1; prev = r.points; }
+    return { key: subHostKey(r.name), points: r.points, place: place };
+  });
+}
+
+// Where `name` stands, or null when the ranking has not loaded or the
+// name is not on it. The two are different answers and the caller needs
+// to tell them apart, so an unranked name is null rather than last.
+function rankingPositionForName(name) {
+  const k = subHostKey(name || "");
+  if (!k || !rankingStandings.length) return null;
+  const row = rankingStandings.find(r => r.key === k);
+  return row ? { place: row.place, total: rankingStandings.length, points: row.points } : null;
+}
+window.rankingPositionForName = rankingPositionForName;
 
 // The medal tag a username currently holds by ranking position, or "".
 function medalTagForName(name) {
@@ -4586,9 +4612,13 @@ function refreshProfileViewAddFriendBtn(username, anchorEl) {
     if (status === "requested")      { btn.textContent = "Requested";     btn.disabled = true; }
     else if (status === "incoming")  { btn.textContent = "Accept Friend"; }
     else                             { btn.textContent = "Add Friend"; }
-    // The card just grew by one button — re-anchor it under the name.
+    // The card just grew by one button — re-anchor it under the name,
+    // if that name is still on the page. It may not be: this read is
+    // async and the list underneath can repaint while it is in flight.
     const panel = document.getElementById("profile-view-popup");
-    if (panel && anchorEl) positionProfileDropdown(panel, anchorEl);
+    if (panel && anchorEl && anchorEl.isConnected !== false) {
+      positionProfileDropdown(panel, anchorEl);
+    }
   });
 }
 
@@ -4622,7 +4652,14 @@ function cancelProfileDropdownHide() {
 //      near the tap target instead of jumping to the top or bottom edge.
 function positionProfileDropdown(panel, anchorEl) {
   if (!panel || !anchorEl) return;
+  // A node that has left the document measures as all zeros, and
+  // anchoring to 0,0 drops the card in the corner of the screen. This is
+  // reachable whenever a list repaints while its card is open — Battle
+  // Royale repaints on every data change — so it is worth refusing
+  // rather than placing the card somewhere meaningless.
+  if (anchorEl.isConnected === false) return;
   const r = anchorEl.getBoundingClientRect();
+  if (!r.width && !r.height && !r.top && !r.left) return;
   const pw = panel.offsetWidth || 250;
   const ph = panel.offsetHeight || 220;
   const margin = 8;
@@ -5336,6 +5373,11 @@ function renderSwiss() {
   bindSwissRoomBadge(view);
   hydrateTournamentAvatars(view);
   bindTournamentProfileNames(view);
+  // The recap panel's "Change my deck" lives in THIS view and nowhere
+  // else, so leaving it to the registration binder meant it never had a
+  // handler at all.
+  bindDeckChangeButtons(view);
+  bindComboTileZoom(view);
   hydrateTop8Banners(view);
   bindSwissToolbarScroll(view);
   view.querySelector("#swiss-start-bracket")?.addEventListener("click", startSwissBracket);
@@ -5547,12 +5589,44 @@ function renderUnpaidPanel(state) {
 function deckConfirmKey(editCode, regId) {
   return "swissDeckOk_" + editCode + "_" + regId;
 }
-function deckConfirmed(editCode, regId) {
+// Answered on this device, OR answered on the registrant by this account
+// from any device. The registrant is the one the judge can see; the device
+// copy covers a guest with no account, who cannot write to it.
+function deckConfirmed(editCode, regId, state) {
+  const reg = state && state.registrants && state.registrants[regId];
+  if (reg && reg.deckConfirmed) return true;
   try { return localStorage.getItem(deckConfirmKey(editCode, regId)) === "1"; }
   catch (e) { return true; }   // no storage: do not nag on every render
 }
+
 function markDeckConfirmed(editCode, regId) {
   try { localStorage.setItem(deckConfirmKey(editCode, regId), "1"); } catch (e) {}
+  // ...and on the registrant, where the judge's list can read it. Only the
+  // owner may write it, so this is a no-op for a guest the host typed in —
+  // the device copy above is what carries those.
+  if (!swissRoomRef || !editCode || !regId) return;
+  const stamp = new Date().toISOString().slice(0, 24);
+  swissRoomRef.child("registrants/" + regId + "/deckConfirmed").set(stamp)
+    .catch(e => console.warn("Deck confirmation not recorded on the room:", e));
+}
+
+// Has this registrant answered the question? Used by the judge-facing
+// list, so it reads the ROOM, never this device: a player's answer on
+// their own phone is not visible here and must not be guessed at.
+function registrantDeckConfirmed(reg) {
+  return !!(reg && reg.deckConfirmed);
+}
+
+// Is this registrant one the question can even be asked of? A deck-less
+// entry has nothing to confirm, and a guest the host typed in has no
+// account to answer from — flagging either as "not confirmed" would be
+// pointing at something nobody can fix.
+function registrantCanConfirmDeck(reg) {
+  if (!reg || !reg.createdBy) return false;
+  const deck = (typeof normalizeBeyCheckDeck === "function")
+    ? normalizeBeyCheckDeck(reg.deck) : null;
+  if (!deck) return false;
+  return !(typeof isBeyCheckDeckEmpty === "function" && isBeyCheckDeckEmpty(deck));
 }
 
 // Which registration is the person at this screen, as opposed to one they
@@ -5597,30 +5671,48 @@ function myOwnRegistrantId(state, editCode) {
 function registrantNeedingDeckCheck(state) {
   if (!swissEditCode || !isRegisteringPhase(state)) return null;
   const id = myOwnRegistrantId(state, swissEditCode);
-  if (!id || deckConfirmed(swissEditCode, id)) return null;
+  if (!id || deckConfirmed(swissEditCode, id, state)) return null;
   const regs = state.registrants || {};
   return regs[id] ? { id, reg: regs[id] } : null;
 }
 
 function renderDeckCheckBanner(state) {
-  const need = registrantNeedingDeckCheck(state);
-  if (!need) return "";
-  const deck = normalizeBeyCheckDeck(need.reg.deck);
+  // The player's own deck, for as long as they can still change it. While
+  // the question is unanswered this is the amber prompt; once answered it
+  // stays put as a quiet section, because "where is my deck and how do I
+  // change it" is a question they go looking for later.
+  if (!swissEditCode || !isRegisteringPhase(state)) return "";
+  const id = myOwnRegistrantId(state, swissEditCode);
+  if (!id) return "";
+  const reg = (state.registrants || {})[id];
+  if (!reg) return "";
+
+  const asking = !deckConfirmed(swissEditCode, id, state);
+  const deck = normalizeBeyCheckDeck(reg.deck);
   const empty = isBeyCheckDeckEmpty(deck);
-  const summary = empty ? "" : deckSummaryThumbsHtml(deck);
-  return `<div class="swiss-deckcheck" data-deckcheck-id="${escapeHtml(need.id)}">
+  // Compact here too: this sits above the registrants list for the whole
+  // of registration, and full-size tiles pushed the list off the screen.
+  const summary = empty ? "" : deckSummaryThumbsHtml(deck, true);
+
+  const title = empty
+    ? (asking ? "You have no deck registered." : "No deck registered")
+    : (asking ? "Is this the deck you're playing today?" : "Your deck");
+  const why = asking
+    ? `<span class="swiss-deckcheck-why">Registered when you joined. If you've built something new since, change it here. Once the tournament starts you can still switch — tell the judge and they'll record it at Bey Check when your match is called.</span>`
+    : `<span class="swiss-deckcheck-why">Change it any time before the tournament starts. After that, tell the judge — they'll record it at Bey Check.</span>`;
+
+  return `<div class="swiss-deckcheck${asking ? "" : " is-settled"}" data-deckcheck-id="${escapeHtml(id)}">
     <div class="swiss-deckcheck-main">
-      <strong class="swiss-deckcheck-title">${empty
-        ? "You have no deck registered."
-        : "Is this the deck you're playing today?"}</strong>
-      <span class="swiss-deckcheck-why">Registered when you joined. If you've built something new since, change it here. Once the tournament starts you can still switch — tell the judge and they'll record it at Bey Check when your match is called.</span>
+      <strong class="swiss-deckcheck-title">${title}</strong>
+      ${why}
       ${empty
         ? `<span class="swiss-deckcheck-deck swiss-deckcheck-none">Nothing registered — add it now, or the judge will record it at Bey Check.</span>`
         : summary}
     </div>
     <div class="swiss-deckcheck-actions">
-      ${empty ? "" : `<button type="button" class="swiss-deckcheck-btn is-ok" data-deckcheck-ok="${escapeHtml(need.id)}">That's my deck</button>`}
-      <button type="button" class="swiss-deckcheck-btn is-change" data-deckcheck-edit="${escapeHtml(need.id)}">${empty ? "Add my deck" : "Change it"}</button>
+      ${asking && !empty ? `<button type="button" class="swiss-deckcheck-btn is-ok" data-deckcheck-ok="${escapeHtml(id)}">That's my deck</button>` : ""}
+      <button type="button" class="swiss-deckcheck-btn is-change" data-deckcheck-edit="${escapeHtml(id)}">${
+        empty ? "Add my deck" : asking ? "Change it" : "Change my deck"}</button>
     </div>
   </div>`;
 }
@@ -5795,6 +5887,18 @@ function renderSwissRegisteringMarkup(state) {
           deckStatus = "ok";
           deckBadge = `<span class="swiss-reg-deck-badge">Deck ✓</span>`;
         }
+        // A legal deck is not necessarily the deck they brought. The
+        // registered one is a snapshot from whenever they signed up, so
+        // "Deck ✓" and "they confirmed it today" are different facts and
+        // only the second one answers the judge's question.
+        //
+        // Shown only where it can be acted on: an entry with no owner (a
+        // walk-in the host typed in) has no account to answer from, and a
+        // deck-less or incomplete entry has nothing to confirm.
+        const askable = deckStatus === "ok" && registrantCanConfirmDeck(r);
+        const deckOkBadge = askable && !registrantDeckConfirmed(r)
+          ? `<span class="swiss-reg-deck-badge swiss-reg-deck-badge-unconfirmed" title="Hasn't confirmed this is the deck they're playing today — worth asking at Bey Check">Unconfirmed</span>`
+          : "";
         regCounts[deckStatus]++;
         regCounts[r.paid ? "paid" : "unpaid"]++;
         // Hosts and co-hosts can tap any registrant's name to edit it.
@@ -5825,7 +5929,7 @@ function renderSwissRegisteringMarkup(state) {
           ${avatarEl}
           <div class="swiss-reg-body">
             ${nameEl}
-            <span class="swiss-reg-badges">${deckBadge}${paidEl}</span>
+            <span class="swiss-reg-badges">${deckBadge}${deckOkBadge}${paidEl}</span>
           </div>
           ${removeBtn}
         </li>`;
@@ -6130,24 +6234,8 @@ function bindSwissRegisteringHandlers(view, state) {
     });
   });
   // "Change my deck", from the Your Matches panel, mid-tournament.
-  view.querySelectorAll("[data-change-deck]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const id = btn.dataset.changeDeck;
-      const st = loadSwiss();
-      const reg = (st.registrants || {})[id];
-      if (!reg) return;
-      // The same deck picker as registration, with everything that is not the
-      // deck closed off: the name is locked, and the submit goes down the
-      // deck-only path rather than rewriting the whole entry.
-      showRegistrationPopup(
-        { editCode: swissEditCode, viewCode: swissViewCode,
-          name: st.tournamentName || "", mode: st.mode || "swiss" },
-        { editRegistrantId: id, initialName: reg.name || "",
-          initialDeck: normalizeBeyCheckDeck(reg.deck),
-          lockName: true, allowEmptyDeck: false, deckOnly: true }
-      );
-    });
-  });
+  bindDeckChangeButtons(view);
+  bindComboTileZoom(view);
 
   view.querySelectorAll(".swiss-reg-name-edit").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -6578,48 +6666,15 @@ document.addEventListener("click", (e) => {
   } catch (e2) { /* non-fatal */ }
 });
 
-// Full combo name for one deck slot — every part joined with " · "
-// (e.g. "Meteor Dragoon · 3-60 · Low Flat").
-function comboFullName(slot) {
-  const mode = (slot && BEY_CHECK_MODES.includes(slot.mode)) ? slot.mode : "standard";
-  const parts = (slot && slot.parts) || {};
-  return (BEY_CHECK_FIELDS[mode] || [])
-    .map(f => parts[f])
-    .filter(v => v && v !== NO_RATCHET)
-    .join(" · ");
-}
-
-// One small thumbnail for a slot — the lead blade (or lock chip) image.
-function comboLeadImg(slot) {
-  const parts = (slot && slot.parts) || {};
-  for (const f of ["blade", "mainBlade", "metalBlade", "lockChip"]) {
-    if (parts[f]) {
-      const src = beyCheckPartImg(f, parts[f]);
-      if (src) return src;
-    }
-  }
-  return null;
-}
-
 // Render a registered deck compactly: one line per combo — a small thumbnail
 // plus the full combo name.
 function renderDeckCombos(deck) {
-  if (!Array.isArray(deck)) return "";
-  const combos = deck
-    .map((slot) => {
-      if (isBeyCheckSlotEmpty(slot)) return "";
-      const src = comboLeadImg(slot);
-      const img = src
-        ? `<img src="${src}" class="my-recap-combo-img" alt="" onerror="this.style.visibility='hidden'">`
-        : `<span class="my-recap-combo-img"></span>`;
-      return `<div class="my-recap-combo">
-        ${img}
-        <span class="my-recap-combo-name">${escapeHtml(comboFullName(slot))}</span>
-      </div>`;
-    })
-    .filter(Boolean)
-    .join("");
-  return `<div class="my-recap-combos">${combos}</div>`;
+  // One way of showing a deck, shared with the registration deck-check
+  // banner: every part of every slot, pictured, through the renderer Bey
+  // Check uses. This used to draw the lead part and spell the rest out as
+  // text, which is the information without the recognition — a player
+  // knows their deck by looking at it.
+  return deckSummaryThumbsHtml(deck, true);
 }
 
 // Chronological sort weight for the recap: group/swiss rounds first (by round
@@ -6674,18 +6729,21 @@ function deckSummaryText(deck) {
 // judge will check this deck against what is in your hand at that screen,
 // so the two should look the same \u2014 and it already handles the CX
 // combined tile, the per-mode field list and the NO_RATCHET sentinel.
-function deckSummaryThumbsHtml(deck) {
+function deckSummaryThumbsHtml(deck, compact) {
   if (!Array.isArray(deck) || typeof renderBeyCheckSlotParts !== "function") return "";
   const slots = deck
     .map((slot, i) => ({ slot, i }))
     .filter(x => x.slot && !(typeof isBeyCheckSlotEmpty === "function" && isBeyCheckSlotEmpty(x.slot)));
   if (!slots.length) return "";
   const rows = slots.map(({ slot, i }) => `
-    <div class="swiss-deckcheck-slot">
-      <span class="swiss-deckcheck-slot-n">${i + 1}</span>
+    <div class="combo-slot-row">
+      <span class="combo-slot-n">${i + 1}</span>
       <div class="bey-check-slot-parts">${renderBeyCheckSlotParts(slot)}</div>
     </div>`).join("");
-  return `<div class="swiss-deckcheck-slots">${rows}</div>`;
+  // Compact where the deck is standing context rather than the thing being
+  // asked about: the banner asks a question once and wants to be looked
+  // at, the recap sits there all tournament with results underneath it.
+  return `<div class="combo-slot-list${compact ? " is-compact" : ""}">${rows}</div>`;
 }
 
 // When a match the signed-in player (or a device-owned registrant) is in
@@ -6845,6 +6903,112 @@ function tryConstructorNotification(title, opts) {
   }
 }
 
+// The deck picker for one registrant, with everything that is not the deck
+// closed off: the name is locked and the submit goes down the deck-only
+// path rather than rewriting the whole entry. Shared by the recap panel's
+// button and the match-start toast.
+// Tap a part in a deck list to see it full size.
+//
+// Scoped to .combo-slot-row on purpose. The same tiles are drawn inside
+// the Bey Check slot popup, where the slot is a button and tapping it
+// opens the combo builder — zooming there would steal that tap.
+//
+// A combined CX tile opens the carousel rather than the composite: there
+// are three or four parts fused into that thumbnail, and the point of
+// looking closely is to tell them apart.
+function bindComboTileZoom(view) {
+  if (!view || !view.addEventListener) return;
+  if (view.dataset && view.dataset.comboZoomBound === "1") return;
+  if (view.dataset) view.dataset.comboZoomBound = "1";
+  view.addEventListener("click", (e) => {
+    const t = e.target;
+    if (!t || !t.closest) return;
+    const row = t.closest(".combo-slot-row");
+    if (!row || !view.contains(row)) return;
+
+    const combined = t.closest(".result-part-combined");
+    if (combined) {
+      // DOM order is back-to-front so the layers stack correctly; read it
+      // the other way so the carousel runs lock chip first, the way the
+      // combo is named.
+      const parts = Array.prototype.slice.call(combined.querySelectorAll("img"))
+        .reverse()
+        .map(im => ({ src: im.getAttribute("src") || "", name: im.dataset.partName || im.alt || "" }))
+        .filter(x => x.src);
+      if (parts.length && typeof window.openCombinedImagePopup === "function") {
+        e.stopPropagation();
+        window.openCombinedImagePopup(parts);
+      }
+      return;
+    }
+
+    const tile = t.closest(".bey-check-part");
+    const img = tile && tile.querySelector("img");
+    if (!img || !img.getAttribute("src")) return;
+    if (typeof window.openLibraryImagePopup !== "function") return;
+    e.stopPropagation();
+    const name = img.getAttribute("alt")
+      || (tile.querySelector(".bey-check-part-name") || {}).textContent
+      || "";
+    window.openLibraryImagePopup(img.getAttribute("src"), String(name).trim());
+  });
+}
+
+// "Change my deck", wherever it turns up.
+//
+// Guarded per button rather than per view: the running view binds on
+// every render, and a second listener on the same button would open two
+// popups.
+function bindDeckChangeButtons(view) {
+  if (!view || !view.querySelectorAll) return;
+  view.querySelectorAll("[data-change-deck]").forEach(btn => {
+    if (btn.dataset.deckChangeBound === "1") return;
+    btn.dataset.deckChangeBound = "1";
+    btn.addEventListener("click", () => openDeckChangeFor(btn.dataset.changeDeck));
+  });
+}
+
+function openDeckChangeFor(id) {
+  if (!id) return;
+  const st = loadSwiss();
+  const reg = (st.registrants || {})[id];
+  if (!reg) return;
+  showRegistrationPopup(
+    { editCode: swissEditCode, viewCode: swissViewCode,
+      name: st.tournamentName || "", mode: st.mode || "swiss" },
+    { editRegistrantId: id, initialName: reg.name || "",
+      initialDeck: normalizeBeyCheckDeck(reg.deck),
+      lockName: true, allowEmptyDeck: false, deckOnly: true }
+  );
+}
+
+// The deck question, asked inside the match-start toast.
+//
+// Only for a player who has not already answered it, and only while they
+// can still act: an unanswered question with no answer available is just
+// noise. Falls back to the old advice line when there is nothing to
+// confirm \u2014 a guest with no account, or a deck-less entry.
+function deckCheckToastHtml() {
+  const ADVICE = `<div class="match-toast-deckhint">Playing a different deck? `
+    + `Tell the judge \u2014 they can change it at Bey Check.</div>`;
+  if (!swissEditCode) return ADVICE;
+  const state = loadSwiss();
+  const id = myOwnRegistrantId(state, swissEditCode);
+  if (!id) return ADVICE;
+  if (deckConfirmed(swissEditCode, id, state)) return ADVICE;
+  const reg = (state.registrants || {})[id];
+  const summary = deckSummaryText(normalizeBeyCheckDeck(reg && reg.deck));
+  if (!summary) return ADVICE;
+  return `<div class="match-toast-deckask" data-deckask="${escapeHtml(id)}">
+      <span class="match-toast-deckask-q">Still on this deck?</span>
+      <span class="match-toast-deckask-deck">${escapeHtml(summary)}</span>
+      <span class="match-toast-deckask-btns">
+        <button type="button" class="match-toast-deckask-btn is-ok" data-deckask-ok="${escapeHtml(id)}">Yes</button>
+        <button type="button" class="match-toast-deckask-btn is-change" data-deckask-edit="${escapeHtml(id)}">Change it</button>
+      </span>
+    </div>`;
+}
+
 function showMatchStartToast({ a, b, where, isMine }) {
   const host = ensureToastContainer();
   const card = document.createElement("div");
@@ -6858,7 +7022,7 @@ function showMatchStartToast({ a, b, where, isMine }) {
     </div>
     <div class="match-toast-players">${escapeHtml(a)} <span class="match-toast-vs">vs</span> ${escapeHtml(b)}</div>
     ${where ? `<div class="match-toast-where">${escapeHtml(where)}</div>` : ""}
-    ${isMine ? `<div class="match-toast-deckhint">Playing a different deck? Tell the judge — they can change it at Bey Check.</div>` : ""}
+    ${isMine ? deckCheckToastHtml() : ""}
     ${showEnable ? `<button type="button" class="match-toast-enable">Turn on alerts</button>` : ""}
   `;
   host.appendChild(card);
@@ -6868,6 +7032,27 @@ function showMatchStartToast({ a, b, where, isMine }) {
     setTimeout(() => card.remove(), 220);
   };
   card.querySelector(".match-toast-close").addEventListener("click", dismiss);
+
+  // Answering here is the same answer as the registration banner's, so it
+  // goes to the same place and the banner stops asking too.
+  const askOk = card.querySelector("[data-deckask-ok]");
+  if (askOk) {
+    askOk.addEventListener("click", (e) => {
+      e.stopPropagation();
+      markDeckConfirmed(swissEditCode, askOk.dataset.deckaskOk);
+      dismiss();
+      renderSwiss();
+    });
+  }
+  const askEdit = card.querySelector("[data-deckask-edit]");
+  if (askEdit) {
+    askEdit.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = askEdit.dataset.deckaskEdit;
+      dismiss();
+      openDeckChangeFor(id);
+    });
+  }
   // "Turn on alerts" — request Notification permission. Stop the click
   // from bubbling so it doesn't also dismiss the toast.
   const enableBtn = card.querySelector(".match-toast-enable");
@@ -8984,15 +9169,23 @@ function beyCheckPartImg(field, name) {
   return partImgPath(folder, name, modeIdx);
 }
 
-function renderBeyCheckSlotParts(slot) {
+function renderBeyCheckSlotParts(slot, flat) {
   const mode = (slot && BEY_CHECK_MODES.includes(slot.mode)) ? slot.mode : "standard";
   const parts = (slot && slot.parts) || {};
 
   // CX / CX Expand: render the lock chip + blade(s) + assist blade as one
   // combined thumbnail (matches the calculator / deck / history view).
+  //
+  // `flat` turns that off, for the lists that exist to be checked against
+  // the beys on the table. Two reasons. A lock chip fused into a blade
+  // silhouette is harder to match against the part in your hand than the
+  // chip on its own; and the combined tile is a stack of absolutely
+  // positioned layers at fixed pixel sizes, so it cannot follow the
+  // compact size the way a plain tile does — beside 40px neighbours it
+  // stayed 79x60 and broke the row.
   let combinedHtml = "";
   let usedKeys = new Set();
-  if (typeof combinedBladeTileHTML === "function") {
+  if (!flat && typeof combinedBladeTileHTML === "function") {
     const resolvePart = (key, name) => ({
       src: beyCheckPartImg(key, name),
       codename: typeof partRecordCodename === "function"
@@ -11335,6 +11528,9 @@ function showTournamentResultsFromHistory(code) {
     hydrateTournamentAvatars(body);
     bindTournamentProfileNames(body);
     hydrateResultsBanners(body);
+    // The recap inside these results carries the same deck tiles as the
+    // live view, and they open the same popup.
+    bindComboTileZoom(body);
   };
   const cached = findCachedTournamentByCode(code);
   if (!firebaseReady()) {
@@ -13095,116 +13291,6 @@ function joinTournamentAsParticipant(room) {
   hostingTab?.click();
 }
 
-// Tester-only deck builder — produces a 3-slot deck guaranteed to satisfy
-// the chosen achievement's creditOnWin condition. Bound to the Auto-build
-// button in the Register popup so a tester can quickly verify each
-// achievement without hand-rolling parts. Each branch returns hard-coded
-// part names sourced from data.js; if a name doesn't match the local DATA
-// (e.g. data.js was updated mid-development) the slot's part field will
-// be empty and the user can paste a corrected deck.
-function buildTestDeckForAchievement(id) {
-  // Helper — a standard (BX) slot.
-  const std = (blade, ratchet, bit) => ({
-    mode: "standard",
-    parts: { blade, ratchet, bit }
-  });
-  switch (id) {
-    case "dragonTamer":
-      // Needs a Dran / Drake / Dragoon / Wyvern / Bahamut / Ragna part
-      // anywhere in the deck — any slot works.
-      return [
-        std("Dran Sword", "4-50", "Flat"),
-        std("Phoenix Wing", "4-55", "Free Flat"),
-        std("Knight Lance", "9-65", "Low Flat")
-      ];
-    case "dragonSlayer":
-      // Your deck needs a Knight part. Opponent's deck must have a
-      // dragon name — make sure your test opponent's deck does.
-      return [
-        std("Knight Shield", "4-50", "Flat"),
-        std("Knight Lance", "4-55", "Free Flat"),
-        std("Dran Sword", "9-65", "Low Flat")
-      ];
-    case "lonewolf":
-      // Exactly one Wolf-named part, on a slot whose combo type is
-      // different from the other two. Silver Wolf (15/30/65) + 1-50
-      // (18/9/3) + Low Orb (5/25/55) totals 38/64/123 — STA hits 100+,
-      // so slot 1 classifies as Stamina. Slot 2 = Attack (Dran Sword
-      // pushes ATK ≥ 100). Slot 3 = Balance (Knight Lance + M-85 +
-      // Free Flat totals 73/94/40 — no single stat hits 100). Either
-      // way, neither slot 2 nor slot 3 is Stamina, so the wolf slot's
-      // type is unique across the deck.
-      return [
-        std("Silver Wolf", "1-50", "Low Orb"),
-        std("Dran Sword", "4-50", "Flat"),
-        std("Knight Lance", "M-85", "Free Flat")
-      ];
-    case "rushHour":
-      // Clock Mirage (blade) + any Rush-named bit in the SAME slot.
-      // Clock Mirage needs a ratchet ending in 5 — 4-55 works.
-      return [
-        std("Clock Mirage", "4-55", "Rush"),
-        std("Dran Sword", "4-50", "Flat"),
-        std("Phoenix Wing", "9-65", "Low Flat")
-      ];
-    case "kingOfJungle":
-      // Slot 1: Leon. Slots 2 & 3: each carry a Rhino / Fox / Wolf /
-      // Viper / Tiger / Bear / Goat part.
-      return [
-        std("Leon Claw", "4-50", "Flat"),
-        std("Rhino Horn", "4-55", "Free Flat"),
-        std("Viper Tail", "9-65", "Low Flat")
-      ];
-    case "sharknado":
-      // Shark Edge on a slot whose total stays Balance (no stat ≥ 100).
-      // Shark Edge (60/25/15) + 1-50 (18/9/3) + Low Orb (5/25/55) =
-      // 83/59/73 — all under 100 → Balance.
-      return [
-        std("Shark Edge", "1-50", "Low Orb"),
-        std("Dran Sword", "4-50", "Flat"),
-        std("Phoenix Wing", "9-65", "Low Flat")
-      ];
-    case "sorcererSupreme":
-      // Every slot must contain a Wizard part. Wizard Arrow and Wizard
-      // Rod are blades; the 3rd slot uses CX mode with the "Wizard"
-      // lockChip so it also has a Wizard part.
-      return [
-        std("Wizard Arrow", "4-50", "Flat"),
-        std("Wizard Rod", "4-55", "Free Flat"),
-        {
-          mode: "cx",
-          parts: {
-            lockChip: "Wizard",
-            mainBlade: "Blast",
-            assistBlade: "Heavy",
-            ratchet: "1-50",
-            bit: "Low Orb"
-          }
-        }
-      ];
-    case "paleonerd":
-      // Every slot must carry a Tyranno / Tricera / Ptera / Mammoth /
-      // Brachio part. Three different prehistoric blades fill it cleanly.
-      return [
-        std("Tyranno Beat", "4-50", "Flat"),
-        std("Tricera Press", "4-55", "Free Flat"),
-        std("Mammoth Tusk", "9-65", "Low Flat")
-      ];
-    case "kingOfAllTypes":
-      // At least one slot must have Bullet Griffon AND be tuned out of
-      // Balance. BG's blade is 45/45/40; pairing it with Quake (55/15/5)
-      // pushes the slot to 100/60/45 — ATK hits 100 → Attack type.
-      // BG's built-in ratchet means the ratchet field uses the shared
-      // NO_RATCHET sentinel so the slot still passes deck validation.
-      return [
-        { mode: "standard", parts: { blade: "Bullet Griffon", ratchet: NO_RATCHET, bit: "Quake" } },
-        std("Dran Sword", "4-50", "Flat"),
-        std("Phoenix Wing", "9-65", "Low Flat")
-      ];
-  }
-  return null;
-}
-
 function showRegistrationPopup(room, options = {}) {
   const popup = document.getElementById("register-popup");
   if (!popup) return;
@@ -13214,8 +13300,6 @@ function showRegistrationPopup(room, options = {}) {
   const status = popup.querySelector("#register-status");
   const submitBtn = popup.querySelector("#register-submit");
   const cancelBtn = popup.querySelector("#register-cancel");
-  const pasteBtn = popup.querySelector("#register-paste");
-  const autoBuildBtn = popup.querySelector("#register-autobuild");
   const selfRegister = !!options.selfRegister;
   const editRegistrantId = options.editRegistrantId || null;
   // Edit mode is implicitly self-managed too (writes via swissRoomRef,
@@ -13253,7 +13337,7 @@ function showRegistrationPopup(room, options = {}) {
   if (deckHint) {
     deckHint.textContent = allowEmptyDeck
       ? "Deck is optional for guests — you can skip it and leave the slots empty. To add combos, tap a slot or paste a deck from the Deck tab."
-      : "Deck is optional — you can register with the slots empty and the judge fills one in at your first match. Register a full 3-combo deck instead and you earn DOUBLE ranking points. Tap a slot to build it, or paste one from the Deck tab.";
+      : "Deck is optional — you can register with the slots empty and the judge fills one in at your first match. Register a full 3-combo deck instead and you earn DOUBLE ranking points. Tap a slot to build it, or drag a slot by its handle to reorder.";
   }
   // `lockName` makes the name field read-only (used by the "Register myself"
   // flow so the host can't impersonate someone else from their own device).
@@ -13340,79 +13424,9 @@ function showRegistrationPopup(room, options = {}) {
     popup.classList.add("hidden");
     submitBtn.onclick = null;
     cancelBtn.onclick = null;
-    if (pasteBtn) pasteBtn.onclick = null;
-    if (autoBuildBtn) autoBuildBtn.onclick = null;
     if (nameInput) nameInput.onkeydown = null;
   };
   cancelBtn.onclick = close;
-
-  // Tester-only Auto-build button. Hidden by default; revealed only for
-  // accounts tagged "Tester" so a tester can quickly drop in a deck that
-  // satisfies a specific achievement and verify the counter increments.
-  if (autoBuildBtn) {
-    const showAuto = typeof window.isTester === "function" && window.isTester();
-    autoBuildBtn.classList.toggle("hidden", !showAuto);
-    if (showAuto) {
-      autoBuildBtn.onclick = () => {
-        const defs = (window.ACHIEVEMENTS || []);
-        if (!defs.length) {
-          setStatus("Achievements module not loaded — can't auto-build.", "err");
-          return;
-        }
-        // Number-picker prompt. Cheap UX for a dev tool — no separate popup
-        // needed.
-        const lines = defs.map((d, i) => `${i + 1}. ${d.title}`).join("\n");
-        const raw = window.prompt(
-          "Auto-build a test deck for which achievement?\n\n" + lines + "\n\nEnter a number 1-" + defs.length + ":",
-          "1"
-        );
-        if (raw == null) return; // cancelled
-        const idx = parseInt(String(raw).trim(), 10) - 1;
-        if (!(idx >= 0 && idx < defs.length)) {
-          setStatus("Invalid selection — pick a number from the list.", "err");
-          return;
-        }
-        const built = buildTestDeckForAchievement(defs[idx].id);
-        if (!built) {
-          setStatus("No builder for that achievement.", "err");
-          return;
-        }
-        deck = normalizeBeyCheckDeck(built);
-        renderSlots();
-        setStatus(`Built test deck for "${defs[idx].title}".`, "ok");
-      };
-    }
-  }
-
-  // Paste from Deck tab. Reads the JSON payload that the Deck tab's Copy
-  // button writes to the clipboard, validates the wrapper, then drops the
-  // 3-slot deck straight into the form (the user can still tweak slots
-  // before submitting).
-  if (pasteBtn) {
-    pasteBtn.onclick = () => {
-      if (!navigator.clipboard || !navigator.clipboard.readText) {
-        setStatus("Clipboard read isn't available in this browser.", "err");
-        return;
-      }
-      navigator.clipboard.readText().then(text => {
-        let parsed;
-        try { parsed = JSON.parse(text); } catch (e) { parsed = null; }
-        if (!parsed || parsed.type !== "x-optimizer-deck" || !Array.isArray(parsed.deck)) {
-          setStatus("Clipboard doesn't contain a copied deck. Hit Copy in the Deck tab first.", "err");
-          return;
-        }
-        // normalizeBeyCheckDeck filters parts to the slot's mode + caps to 3
-        // slots, so anything weird in the payload gets sanitised before we
-        // render it.
-        deck = normalizeBeyCheckDeck(parsed.deck);
-        renderSlots();
-        const label = parsed.name ? ` "${parsed.name}"` : "";
-        setStatus(`Pasted deck${label} — review before registering.`, "ok");
-      }).catch(() => {
-        setStatus("Couldn't read the clipboard. Did you allow the permission?", "err");
-      });
-    };
-  }
 
   const submit = () => {
     const name = (nameInput?.value || "").trim();

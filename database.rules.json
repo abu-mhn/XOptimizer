@@ -165,6 +165,10 @@
             "paid": {
               ".validate": "newData.isBoolean()"
             },
+            "deckConfirmed": {
+              ".write": "auth != null && root.child('swissRooms').child($code).child('registrants').child($regId).child('createdBy').val() === auth.uid",
+              ".validate": "newData.isString() && newData.val().length <= 32"
+            },
             "deckChangedAt": {
               ".write": "auth != null && root.child('swissRooms').child($code).child('registrants').child($regId).child('createdBy').val() === auth.uid",
               ".validate": "newData.isString() && newData.val().length <= 32"
@@ -472,10 +476,12 @@
         "$uid": {
           ".write": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('tags').child('Judge').val() === true)",
           "username":  { ".validate": "newData.isString() && newData.val().length <= 30" },
-          "isJudge":   { ".validate": "newData.isBoolean() && (newData.val() === false || root.child('users').child($uid).child('tags').child('Judge').val() === true)" },
+          "isJudge":   { ".validate": "newData.isBoolean() && (newData.val() === false || root.child('users').child($uid).child('tags').child('Judge').val() === true || root.child('users').child($uid).child('tags').child('Head Judge').val() === true)" },
           "updatedAt": { ".validate": "newData.isString() && newData.val().length <= 32" },
+          "stake": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000" },
           "points": {
-            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000 && (root.child('users').child(auth.uid).child('tags').child('Judge').val() === true || (auth.uid === $uid && (!data.exists() ? newData.val() === 0 : newData.val() <= data.val())))"
+            ".write": "auth != null",
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000"
           },
           "cards": {
             "$cardId": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 9999" }
@@ -486,7 +492,7 @@
       "challenges": {
         ".read": true,
         "$cid": {
-          ".write": "auth != null && (!data.exists() ? newData.child('challengerUid').val() === auth.uid : (data.child('challengerUid').val() === auth.uid || data.child('opponentUid').val() === auth.uid || data.child('judgeUid').val() === auth.uid))",
+          ".write": "auth != null && (!data.exists() ? (newData.child('challengerUid').val() === auth.uid || newData.child('opponentUid').val() === auth.uid) : (data.child('challengerUid').val() === auth.uid || data.child('opponentUid').val() === auth.uid || data.child('judgeUid').val() === auth.uid))",
           "challengerUid":  { ".validate": "newData.isString() && newData.val().length <= 128" },
           "challengerName": { ".validate": "newData.isString() && newData.val().length <= 30" },
           "opponentUid":    { ".validate": "newData.isString() && newData.val().length <= 128" },
@@ -495,11 +501,15 @@
           "judgeName":      { ".validate": "newData.isString() && newData.val().length <= 30" },
           "wager":          { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 1000000" },
           "status":         { ".validate": "newData.isString() && (newData.val() === 'pending' || newData.val() === 'accepted' || newData.val() === 'declined' || newData.val() === 'resolved' || newData.val() === 'cancelled')" },
+          "forfeitUid": { ".validate": "newData.isString() && newData.val().length <= 64" },
           "winnerUid":      { ".validate": "newData.isString() && newData.val().length <= 128" },
           "createdAt":      { ".validate": "newData.isString() && newData.val().length <= 32" },
           "resolvedAt":     { ".validate": "newData.isString() && newData.val().length <= 32" },
           "cards": {
             "$puid": { "$cardId": { ".validate": "newData.isBoolean() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 3)" } }
+          },
+          "ready": {
+            "$puid": { ".validate": "$puid === auth.uid && newData.isBoolean()" }
           },
           "$other":         { ".validate": false }
         }
