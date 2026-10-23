@@ -835,7 +835,12 @@ function tournamentFormatLabel(mode, pairing, shortElim, topN) {
   const base = pairing === "round-robin" ? "Round Robin" : "Swiss";
   if (mode === "swiss-only") return base;
   const n = (typeof topN === "number" && topN >= 2) ? topN : 8;
-  return `${base} + Top ${n}`;
+  // "Top 8" read as either "eight advance" or "eight left after a round
+  // is played". Naming the round it cuts to says one thing only, in the
+  // same words the size picker uses. A size that fills no round has no
+  // name, so it falls back to the count it actually is.
+  const round = knockoutRoundName(n);
+  return `${base} + ${round || n + " advance"}`;
 }
 
 // Format chips for the RUNNING view, so everyone can still see which format the
@@ -3047,13 +3052,14 @@ function swissBracketIsRoundIndexed(state) {
 
 // Wrapper around the single-elim renderer for a Swiss+TopN knockout. Just
 // swaps the section header so the "Single Elimination — N-slot bracket"
-// title reads "Knockout — Top N" instead.
+// title names the round the knockout opens on instead.
 function renderSwissTopNBracket(state) {
   const html = renderSingleElimBracket(state);
   const n = state.topN || state.bracketSize || 8;
+  const round = knockoutRoundName(n);
   return html.replace(
     /<span class="swiss-bracket-title">[^<]*<\/span>/,
-    `<span class="swiss-bracket-title">Knockout — Top ${n}</span>`
+    `<span class="swiss-bracket-title">Knockout — ${round || n + " players"}</span>`
   );
 }
 
@@ -10736,6 +10742,19 @@ function showSwissGroupsPopup(onPick, isRoundRobin) {
 // uses. Dynamically built so it works on every per-tab index.html without
 // adding new HTML.
 const TOPN_PRESETS = [2, 4, 8, 16, 32];
+
+// The round a knockout of this size opens with.
+//
+// Only for sizes that fill a round exactly — a bracket of 12 does not
+// open on a "Round of 12", it opens on a round of 16 with four byes,
+// and naming it after the entrant count would be wrong.
+function knockoutRoundName(n) {
+  if (n === 2) return "Final";
+  if (n === 4) return "Semi-finals";
+  if (n === 8) return "Quarter-finals";
+  const whole = n >= 2 && (n & (n - 1)) === 0;
+  return whole ? "Round of " + n : "";
+}
 function showTopNPickerPopup(onPick, defaultN) {
   defaultN = Number.isFinite(defaultN) && defaultN >= 2 ? defaultN : 8;
   document.getElementById("topn-picker-popup")?.remove();
@@ -10743,15 +10762,19 @@ function showTopNPickerPopup(onPick, defaultN) {
   overlay.id = "topn-picker-popup";
   overlay.className = "popup-overlay";
   const presetBtns = TOPN_PRESETS.map(n =>
-    `<button type="button" class="btn topn-preset" data-n="${n}">Top ${n}</button>`
+    `<button type="button" class="btn topn-preset topn-size" data-n="${n}">` +
+      `<span class="topn-size-n">${n}</span>` +
+      `<span class="topn-size-round">${knockoutRoundName(n)}</span>` +
+    `</button>`
   ).join("");
   overlay.innerHTML = `
     <div class="popup-card">
       <h2 class="popup-title">Knockout Bracket Size</h2>
       <p class="popup-text">How many players advance from the group stage into the knockout?</p>
       <div class="popup-actions" style="flex-wrap:wrap; gap:6px; margin-bottom:8px;">${presetBtns}</div>
-      <label class="popup-text" style="display:block; margin-top:6px;">Or pick a custom size (2–64):</label>
+      <label class="popup-text" style="display:block; margin-top:6px;">Or type how many advance (2–64):</label>
       <input type="number" id="topn-custom" class="account-bio" min="2" max="64" step="1" value="${defaultN}" style="width:100%; padding:8px 10px;">
+      <p class="popup-text topn-size-hint" id="topn-hint"></p>
       <div class="popup-actions">
         <button type="button" id="topn-confirm" class="btn">Confirm</button>
         <button type="button" id="topn-cancel" class="btn popup-cancel">Cancel</button>
@@ -10761,6 +10784,20 @@ function showTopNPickerPopup(onPick, defaultN) {
   document.body.appendChild(overlay);
 
   const input = overlay.querySelector("#topn-custom");
+  const hint = overlay.querySelector("#topn-hint");
+  const paintHint = () => {
+    if (!hint) return;
+    const v = parseInt(input.value, 10);
+    if (!Number.isFinite(v) || v < 2 || v > 64) { hint.textContent = ""; return; }
+    const round = knockoutRoundName(v);
+    let pad = 2;
+    while (pad < v) pad *= 2;
+    hint.textContent = round
+      ? `${v} players advance — the knockout starts at the ${round}.`
+      : `${v} players advance. That doesn't fill a round, so the bracket runs at ${pad} with ${pad - v} bye${pad - v === 1 ? "" : "s"}.`;
+  };
+  input.addEventListener("input", paintHint);
+  paintHint();
   const close = () => overlay.remove();
   const finish = (n) => {
     close();

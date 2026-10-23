@@ -1028,6 +1028,33 @@ select {
    BUTTONS
 ======================= */
 
+/* Knockout Bracket Size presets. "Top 8" never said whether eight
+   advance or eight are left, so the button leads with the count the
+   heading asks for and names the round underneath. */
+.topn-size {
+    flex-direction: column;
+    gap: 1px;
+    padding: 8px 10px;
+    line-height: 1.1;
+}
+.topn-size-n {
+    font-size: 1.1rem;
+    font-weight: 800;
+}
+.topn-size-round {
+    font-size: 0.62rem;
+    font-weight: 600;
+    opacity: 0.85;
+    white-space: nowrap;
+}
+/* The live reading of the custom field, in the popup's quieter voice. */
+.topn-size-hint {
+    margin-top: 4px;
+    font-size: 0.85em;
+    opacity: 0.7;
+    min-height: 1.2em;
+}
+
 .btn {
     display: flex;
     align-items: center;
