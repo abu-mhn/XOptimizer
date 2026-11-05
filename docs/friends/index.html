@@ -41,7 +41,7 @@
   <meta name="theme-color" content="#0a4797">
 
   <title>Friends — X Optimizer</title>
-  <link rel="stylesheet" href="style.css?v=f5560cd4">
+  <link rel="stylesheet" href="style.css?v=f9d15ea1">
 </head>
 
 <body>
@@ -536,11 +536,6 @@
                  onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x1F4CB;');">
             <span class="btn-label">Paste</span>
           </button>
-          <button type="button" id="deck-autobuild" class="btn btn-autobuild" aria-label="Generate a deck for an achievement" title="Generate a deck that satisfies an achievement's win condition">
-            <img src="assets/icons/dice.png" alt="Auto"
-                 onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','&#x1F3B2;');">
-            <span class="btn-label">Auto</span>
-          </button>
         </div>
         <div id="deck-list"></div>
       </fieldset>
@@ -650,15 +645,7 @@
               <div class="setting-dropdown-option hidden" data-value="gold">Gold</div>
               <div class="setting-dropdown-option hidden" data-value="silver">Silver</div>
               <div class="setting-dropdown-option hidden" data-value="bronze">Bronze</div>
-              <div class="setting-dropdown-option hidden" data-value="dragontamer">Dragon Tamer</div>
-              <div class="setting-dropdown-option hidden" data-value="dragonslayer">Dragon Slayer</div>
-              <div class="setting-dropdown-option hidden" data-value="lonewolf">Lone Wolf</div>
-              <div class="setting-dropdown-option hidden" data-value="rushhour">Rush Hour</div>
-              <div class="setting-dropdown-option hidden" data-value="kingofjungle">King of The Jungle</div>
-              <div class="setting-dropdown-option hidden" data-value="sharknado">Sharknado</div>
               <div class="setting-dropdown-option hidden" data-value="sorcerersupreme">Sorcerer Supreme</div>
-              <div class="setting-dropdown-option hidden" data-value="paleonerd">Paleonerd</div>
-            <div class="setting-dropdown-option hidden" data-value="kingofalltypes">King of All Types</div>
             </div>
           </div>
         </div>
@@ -788,18 +775,6 @@
       <div class="popup-actions">
         <button type="button" id="tournament-cohost-code-submit" class="btn">Join</button>
         <button type="button" id="tournament-cohost-code-cancel" class="btn popup-cancel">Cancel</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ================= ACHIEVEMENT AUTO-BUILD POPUP ================= -->
-  <div id="deck-autobuild-popup" class="popup-overlay hidden">
-    <div class="popup-card">
-      <h2 class="popup-title">Generate Deck for Achievement</h2>
-      <p class="popup-text">Pick an achievement and we'll fill the active deck with a 3-slot combo that satisfies its win condition. Useful for chasing a specific badge.</p>
-      <div id="deck-autobuild-list" class="deck-autobuild-list"></div>
-      <div class="popup-actions">
-        <button type="button" id="deck-autobuild-cancel" class="btn popup-cancel"><img src="assets/icons/exit-button.png" alt="" onerror="this.style.display='none'"><span class="btn-label">Cancel</span></button>
       </div>
     </div>
   </div>
@@ -1282,21 +1257,21 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
   <script src="firebase-config.js?v=c078736e"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="data.js?v=acfac07e"></script>
-  <script src="js/core.js?v=07219663"></script>
+  <script src="data.js?v=2f570a65"></script>
+  <script src="js/core.js?v=ed1f649a"></script>
   <script src="js/profile-cache.js?v=f342d422"></script>
-  <script src="js/auth.js?v=fe56e8e6"></script>
-  <script src="js/achievements.js?v=9f8c35b9"></script>
-  <script src="js/scoreboard.js?v=eb78d12e"></script>
-  <script src="calculator/calculator.js?v=ca8084a6"></script>
-  <script src="deck/deck.js?v=c016d9f3"></script>
-  <script src="library/library.js?v=255e4e57"></script>
-  <script src="tournament/tournament.js?v=a0fb4ed1"></script>
+  <script src="js/auth.js?v=92ecf7bf"></script>
+  <script src="js/achievements.js?v=e420249d"></script>
+  <script src="js/scoreboard.js?v=8ef6e9bb"></script>
+  <script src="calculator/calculator.js?v=4bf0d0a4"></script>
+  <script src="deck/deck.js?v=248a3ddb"></script>
+  <script src="library/library.js?v=8a7c6981"></script>
+  <script src="tournament/tournament.js?v=3769f490"></script>
   <script src="history/history.js?v=ab309ef3"></script>
   <script src="reel/reel.js?v=01742c97"></script>
   <script type="module" src="battlepass/battlepass-tab.js?v=2d8a341c"></script>
-  <script src="dashboard/dashboard.js?v=76679be4"></script>
-  <script src="battleroyale/battleroyale.js?v=036a9666"></script>
+  <script src="dashboard/dashboard.js?v=490e0077"></script>
+  <script src="battleroyale/battleroyale.js?v=3c022707"></script>
   <script src="friends/friends.js?v=3f84afb9"></script>
   <script src="app.js?v=9aefb7fd"></script>
 </body>

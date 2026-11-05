@@ -1795,7 +1795,7 @@ function initSettingDropdown(id, storageKey, defaultVal, onChange) {
 
 // Theme setting — exposed so auth.js can apply the Revox-Admin default.
 window.themeSetting = initSettingDropdown("setting-theme", "theme", "dark", (val) => {
-  document.body.classList.remove("light-mode", "space-mode", "tropical-mode", "stormy-mode", "mono-mode", "love-mode", "forest-mode", "revox-mode", "gold-mode", "silver-mode", "bronze-mode", "dragontamer-mode", "dragonslayer-mode", "lonewolf-mode", "rushhour-mode", "kingofjungle-mode", "sharknado-mode", "sorcerersupreme-mode", "paleonerd-mode", "kingofalltypes-mode");
+  document.body.classList.remove("light-mode", "space-mode", "tropical-mode", "stormy-mode", "mono-mode", "love-mode", "forest-mode", "revox-mode", "gold-mode", "silver-mode", "bronze-mode", "sorcerersupreme-mode");
   if (val === "light") document.body.classList.add("light-mode");
   if (val === "space") document.body.classList.add("space-mode");
   if (val === "tropical") document.body.classList.add("tropical-mode");
@@ -1808,17 +1808,9 @@ window.themeSetting = initSettingDropdown("setting-theme", "theme", "dark", (val
   if (val === "gold") document.body.classList.add("gold-mode");
   if (val === "silver") document.body.classList.add("silver-mode");
   if (val === "bronze") document.body.classList.add("bronze-mode");
-  // Achievement themes (unlocked by Dragon Tamer / Dragon Slayer / Lonewolf
-  // titles awarded at 100 wins). Dark-based, like the medal themes.
-  if (val === "dragontamer") document.body.classList.add("dragontamer-mode");
-  if (val === "dragonslayer") document.body.classList.add("dragonslayer-mode");
-  if (val === "lonewolf") document.body.classList.add("lonewolf-mode");
-  if (val === "rushhour") document.body.classList.add("rushhour-mode");
-  if (val === "kingofjungle") document.body.classList.add("kingofjungle-mode");
-  if (val === "sharknado") document.body.classList.add("sharknado-mode");
+  // Achievement theme (unlocked by the Sorcerer Supreme title, awarded at
+  // 100 wins). Dark-based, like the medal themes.
   if (val === "sorcerersupreme") document.body.classList.add("sorcerersupreme-mode");
-  if (val === "paleonerd") document.body.classList.add("paleonerd-mode");
-  if (val === "kingofalltypes") document.body.classList.add("kingofalltypes-mode");
   // (The previous per-theme src swap between XOptimizerLight.webp /
   // XOptimizerDark.webp is gone — #app-title-logo is now a CSS-masked
   // span that takes currentColor, so the wordmark follows the active
@@ -1835,15 +1827,7 @@ window.themeSetting = initSettingDropdown("setting-theme", "theme", "dark", (val
     : val === "gold" ? "#1a1408"
     : val === "silver" ? "#14171a"
     : val === "bronze" ? "#1a1109"
-    : val === "dragontamer" ? "#1a0d0d"
-    : val === "dragonslayer" ? "#0e1320"
-    : val === "lonewolf" ? "#0c1014"
-    : val === "rushhour" ? "#1a1206"
-    : val === "kingofjungle" ? "#1a1404"
-    : val === "sharknado" ? "#081420"
-    : val === "sorcerersupreme" ? "#160a24"
-    : val === "paleonerd" ? "#1a1208"
-    : val === "kingofalltypes" ? "#0e1320"
+    : val === "sorcerersupreme" ? "#111214"
     : "#0a4797";
   document.querySelectorAll('img.footer-logo').forEach(img => {
     img.src = (val === "light" || val === "tropical" || val === "love" || val === "forest") ? "assets/icons/revoxNameLight.webp" : "assets/icons/revoxName.webp";

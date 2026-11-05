@@ -13,20 +13,11 @@
   const hintEl = document.getElementById("achievement-signin-hint");
   if (!listEl) return;
 
-  // Achievement icons — dragon-themed entries use the fantasy mascot, the
-  // wolf-themed entry uses the dog asset. Rendered as CSS-masked spans so
-  // the icon silhouette adopts the current theme's text color (no fixed
-  // black / white that disappears on a matching background).
+  // Achievement icons, rendered as CSS-masked spans so the silhouette
+  // adopts the current theme's text color (no fixed black / white that
+  // disappears on a matching background).
   const ICONS = {
-    dragonTamer: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/fantasy.png\')"></span>',
-    dragonSlayer: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/knight.png\')"></span>',
-    lonewolf: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/dog.png\')"></span>',
-    rushHour: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/fast-time.png\')"></span>',
-    kingOfJungle: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/animal.png\')"></span>',
-    sharknado: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/shark.png\')"></span>',
-    sorcererSupreme: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/wizard.png\')"></span>',
-    paleonerd: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/dinosaur.png\')"></span>',
-    kingOfAllTypes: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/griffon.png\')"></span>'
+    sorcererSupreme: '<span class="achievement-icon-mask" style="--ach-icon: url(\'assets/icons/wizard.png\')"></span>'
   };
 
   const defs = (window.ACHIEVEMENTS || []);

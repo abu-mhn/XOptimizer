@@ -2513,56 +2513,11 @@ body.light-mode    .developer-tag-desc,
 body.tropical-mode .developer-tag-desc,
 body.love-mode     .developer-tag-desc,
 body.forest-mode   .developer-tag-desc { color: #57606a; }
-
-/* Achievement tag badges — each one carries its theme's signature gradient
-   so a reader can recognise the unlocked theme at a glance. Borders are
-   nudged toward the gradient's start-color. Sharknado uses dark text
-   because its end-color is a bright yellow that white sits poorly on (the
-   Sharknado theme's btn rule already makes the same swap). */
-.account-tag.account-tag-dragontamer {
-    background: linear-gradient(135deg, #c44a2a, #e87038);
-    color: #fff;
-    border-color: #4d2218;
-}
-.account-tag.account-tag-dragonslayer {
-    background: linear-gradient(135deg, #5a7aa6, #8aa6c8);
-    color: #fff;
-    border-color: #2a3a55;
-}
-.account-tag.account-tag-lonewolf {
-    background: linear-gradient(135deg, #4a6470, #7a96a4);
-    color: #fff;
-    border-color: #28323a;
-}
-.account-tag.account-tag-rushhour {
-    background: linear-gradient(135deg, #d04030, #f08020);
-    color: #fff;
-    border-color: #5c3a14;
-}
-.account-tag.account-tag-kingofjungle {
-    background: linear-gradient(135deg, #c8962a, #4a7a3a);
-    color: #fff;
-    border-color: #5a4418;
-}
-.account-tag.account-tag-sharknado {
-    background: linear-gradient(135deg, #2a5a8c, #f0d020);
-    color: #0a1a28;
-    border-color: #1f3a5a;
-}
+/* Achievement tag badge — carries its theme's signature gradient. */
 .account-tag.account-tag-sorcerersupreme {
-    background: linear-gradient(135deg, #6a3aa4, #e0b440);
-    color: #fff;
-    border-color: #3a205a;
-}
-.account-tag.account-tag-paleonerd {
-    background: linear-gradient(135deg, #a07028, #4a7a3a);
-    color: #fff;
-    border-color: #5a3f1a;
-}
-.account-tag.account-tag-kingofalltypes {
-    background: linear-gradient(135deg, #4a6aa8, #c0c8d4);
-    color: #fff;
-    border-color: #2e3a4f;
+    background: linear-gradient(135deg, #d9dde3, #f5c400);
+    color: #1a1400;
+    border-color: #8a7a40;
 }
 
 /* Database panel — node tabs + refresh + scrollable monospace-ish table. */
@@ -6246,110 +6201,6 @@ body.forest-mode   .deck-slot-graph-toggle:hover {
     filter: brightness(0) invert(1);
 }
 
-/* Auto-build button — generates a 3-slot deck that satisfies a chosen
-   achievement's win condition. Teal so it sits visually apart from the
-   other toolbar actions. */
-.btn-autobuild {
-    background: #1f9aa8;
-    flex: 0 0 auto;
-}
-.btn-autobuild:hover {
-    background: #25b3c3;
-}
-.btn-autobuild img {
-    width: 16px;
-    height: 16px;
-    object-fit: contain;
-    filter: brightness(0) invert(1);
-}
-body.light-mode .btn-autobuild,
-body.tropical-mode .btn-autobuild,
-body.love-mode .btn-autobuild,
-body.forest-mode .btn-autobuild {
-    background: #5ec5d1;
-    color: #1f2328;
-}
-body.light-mode .btn-autobuild:hover,
-body.tropical-mode .btn-autobuild:hover,
-body.love-mode .btn-autobuild:hover,
-body.forest-mode .btn-autobuild:hover {
-    background: #44b4c1;
-}
-
-/* Achievement picker — vertical list of buttons inside the auto-build
-   popup. Each row shows the achievement title; clicking it builds the
-   matching test deck and dismisses the popup. */
-.deck-autobuild-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin: 12px 0;
-    max-height: 60vh;
-    overflow-y: auto;
-    scrollbar-width: none;
-}
-.deck-autobuild-list::-webkit-scrollbar {
-    display: none;
-}
-#deck-autobuild-cancel {
-    gap: 6px;
-}
-#deck-autobuild-cancel img {
-    filter: brightness(0) invert(1);
-}
-body.light-mode    #deck-autobuild-cancel img,
-body.tropical-mode #deck-autobuild-cancel img,
-body.love-mode     #deck-autobuild-cancel img,
-body.forest-mode   #deck-autobuild-cancel img,
-body.mono-mode     #deck-autobuild-cancel img {
-    filter: brightness(0);
-}
-.deck-autobuild-item {
-    appearance: none;
-    border: 1px solid #30363d;
-    background: #161b22;
-    color: inherit;
-    padding: 10px 12px;
-    border-radius: 8px;
-    text-align: left;
-    cursor: pointer;
-    font: inherit;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    transition: background 0.12s ease, border-color 0.12s ease;
-}
-.deck-autobuild-item:hover {
-    background: #1f262e;
-    border-color: #4a5566;
-}
-.deck-autobuild-item-title {
-    font-weight: 700;
-    font-size: 0.95rem;
-}
-.deck-autobuild-item-desc {
-    font-size: 0.8rem;
-    line-height: 1.35;
-    color: #8b949e;
-}
-body.light-mode    .deck-autobuild-item,
-body.tropical-mode .deck-autobuild-item,
-body.love-mode     .deck-autobuild-item,
-body.forest-mode   .deck-autobuild-item {
-    background: #ffffff;
-    border-color: #d1d9e0;
-}
-body.light-mode    .deck-autobuild-item:hover,
-body.tropical-mode .deck-autobuild-item:hover,
-body.love-mode     .deck-autobuild-item:hover,
-body.forest-mode   .deck-autobuild-item:hover {
-    background: #f6f8fa;
-}
-body.light-mode    .deck-autobuild-item-desc,
-body.tropical-mode .deck-autobuild-item-desc,
-body.love-mode     .deck-autobuild-item-desc,
-body.forest-mode   .deck-autobuild-item-desc { color: #57606a; }
-
 .btn-paste {
     background: #6e40c9;
     flex: 0 0 auto;
@@ -7246,6 +7097,27 @@ body.forest-mode .sb-rps-reel {
     font-size: 0.86rem;
     line-height: 1.4;
     color: #8b949e;
+}
+/* The three throws a player picks from. Always one row: they are short and
+   reading them as a set is the point. */
+.sb-rps-pick {
+    grid-template-columns: repeat(3, 1fr);
+}
+.sb-rps-pick .sb-swapmode-btn {
+    align-items: center;
+    gap: 6px;
+    padding: 12px 6px;
+}
+.sb-rps-pick .sb-rps-ico {
+    width: 40px;
+    height: 40px;
+    color: inherit;
+}
+.sb-rps-pick .sb-rps-pick-name {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: inherit;
+    text-transform: capitalize;
 }
 .sb-rps-result.is-win { color: #3fb950; }
 .sb-rps-result.is-lose { color: #f85149; }
@@ -14204,7 +14076,6 @@ body.bronze-mode .revox-row-btn:hover { background: rgba(198, 128, 68, 0.3); bor
 #past-tournaments-refresh,
 #swiss-rooms-tutorial,
 #register-paste,
-#register-autobuild,
 #register-submit,
 #register-cancel,
 #account-save-btn,
@@ -14222,7 +14093,6 @@ body.bronze-mode .revox-row-btn:hover { background: rgba(198, 128, 68, 0.3); bor
 }
 
 #register-paste img,
-#register-autobuild img,
 #register-submit img,
 #register-cancel img,
 #account-save-btn img,
@@ -19920,279 +19790,19 @@ body.bronze-mode .result-part-name {
 body.bronze-mode .swiss-reg-format-editable { border-color: #c68044; }
 
 /* =============================================================
-   ACHIEVEMENT THEMES — unlocked by Dragon Tamer / Dragon Slayer /
-   Lonewolf titles (100 wins on the matching condition). All three
-   are dark-based variants with a distinct accent palette. Kept
-   intentionally light on overrides so they sit on top of the
-   default Dark theme without touching every component.
+   ACHIEVEMENT THEME — Sorcerer Supreme, unlocked by 100 tournament
+   wins with Wizard Rod in the deck. Coloured after the blade itself:
+   chrome silver, translucent yellow / amber, and its near-black core,
+   with an animated wizard background.
    ============================================================= */
-
-/* --- Dragon Tamer: warm reds + ember gold (fire / tamed dragon). --- */
-body.dragontamer-mode {
-    background: #1a0d0d;
-    background-image:
-        radial-gradient(ellipse 60% 40% at 20% 15%, rgba(190, 80, 50, 0.22) 0%, transparent 70%),
-        radial-gradient(ellipse 50% 35% at 80% 30%, rgba(220, 140, 60, 0.18) 0%, transparent 70%),
-        radial-gradient(ellipse 70% 45% at 50% 90%, rgba(140, 50, 35, 0.2) 0%, transparent 70%);
-    background-attachment: fixed;
-    color: #f5d6c2;
-}
-body.dragontamer-mode .mode-tabs,
-body.dragontamer-mode .sub-tabs,
-body.dragontamer-mode .library-sub-tabs,
-body.dragontamer-mode .history-sub-tabs,
-body.dragontamer-mode .tournament-sub-tabs ,
-body.dragontamer-mode .br-sub-tabs,
-body.dragontamer-mode .tab-more-menu {
-    background: rgba(40, 18, 14, 0.85);
-    border-bottom-color: #4d2218;
-}
-body.dragontamer-mode .tab,
-body.dragontamer-mode .sub-tab {
-    color: #f0c8b0;
-}
-body.dragontamer-mode .tab.active,
-body.dragontamer-mode .sub-tab.active {
-    background: linear-gradient(135deg, #c44a2a, #e87038);
-    color: #fff;
-}
-body.dragontamer-mode fieldset,
-body.dragontamer-mode .popup-card,
-body.dragontamer-mode .side-profile-inner,
-body.dragontamer-mode .side-profile-photo {
-    background: #2a1612;
-    border-color: #4d2218;
-}
-body.dragontamer-mode .btn {
-    background: linear-gradient(135deg, #c44a2a, #e87038);
-    color: #fff;
-    border-color: #4d2218;
-}
-
-/* --- Dragon Slayer: cool steel blue + silver (knight / forged blade). --- */
-body.dragonslayer-mode {
-    background: #0e1320;
-    background-image:
-        radial-gradient(ellipse 60% 40% at 20% 15%, rgba(80, 110, 180, 0.22) 0%, transparent 70%),
-        radial-gradient(ellipse 50% 35% at 80% 30%, rgba(140, 160, 200, 0.18) 0%, transparent 70%),
-        radial-gradient(ellipse 70% 45% at 50% 90%, rgba(60, 90, 140, 0.2) 0%, transparent 70%);
-    background-attachment: fixed;
-    color: #d8e0ee;
-}
-body.dragonslayer-mode .mode-tabs,
-body.dragonslayer-mode .sub-tabs,
-body.dragonslayer-mode .library-sub-tabs,
-body.dragonslayer-mode .history-sub-tabs,
-body.dragonslayer-mode .tournament-sub-tabs ,
-body.dragonslayer-mode .br-sub-tabs,
-body.dragonslayer-mode .tab-more-menu {
-    background: rgba(16, 22, 38, 0.85);
-    border-bottom-color: #2a3a55;
-}
-body.dragonslayer-mode .tab,
-body.dragonslayer-mode .sub-tab {
-    color: #b8c5d8;
-}
-body.dragonslayer-mode .tab.active,
-body.dragonslayer-mode .sub-tab.active {
-    background: linear-gradient(135deg, #5a7aa6, #8aa6c8);
-    color: #fff;
-}
-body.dragonslayer-mode fieldset,
-body.dragonslayer-mode .popup-card,
-body.dragonslayer-mode .side-profile-inner,
-body.dragonslayer-mode .side-profile-photo {
-    background: #1a2238;
-    border-color: #2a3a55;
-}
-body.dragonslayer-mode .btn {
-    background: linear-gradient(135deg, #5a7aa6, #8aa6c8);
-    color: #fff;
-    border-color: #2a3a55;
-}
-
-/* --- Lonewolf: deep slate + moon teal (night, solitude). --- */
-body.lonewolf-mode {
-    background: #0c1014;
-    background-image:
-        radial-gradient(ellipse 60% 40% at 20% 15%, rgba(70, 95, 110, 0.22) 0%, transparent 70%),
-        radial-gradient(ellipse 50% 35% at 80% 30%, rgba(120, 140, 150, 0.15) 0%, transparent 70%),
-        radial-gradient(ellipse 70% 45% at 50% 90%, rgba(50, 70, 85, 0.2) 0%, transparent 70%);
-    background-attachment: fixed;
-    color: #c8d2d8;
-}
-body.lonewolf-mode .mode-tabs,
-body.lonewolf-mode .sub-tabs,
-body.lonewolf-mode .library-sub-tabs,
-body.lonewolf-mode .history-sub-tabs,
-body.lonewolf-mode .tournament-sub-tabs ,
-body.lonewolf-mode .br-sub-tabs,
-body.lonewolf-mode .tab-more-menu {
-    background: rgba(16, 20, 26, 0.85);
-    border-bottom-color: #28323a;
-}
-body.lonewolf-mode .tab,
-body.lonewolf-mode .sub-tab {
-    color: #a8b4be;
-}
-body.lonewolf-mode .tab.active,
-body.lonewolf-mode .sub-tab.active {
-    background: linear-gradient(135deg, #4a6470, #7a96a4);
-    color: #fff;
-}
-body.lonewolf-mode fieldset,
-body.lonewolf-mode .popup-card,
-body.lonewolf-mode .side-profile-inner,
-body.lonewolf-mode .side-profile-photo {
-    background: #18222a;
-    border-color: #28323a;
-}
-body.lonewolf-mode .btn {
-    background: linear-gradient(135deg, #4a6470, #7a96a4);
-    color: #fff;
-    border-color: #28323a;
-}
-
-/* --- Rush Hour: deep amber + traffic-light red on a near-black canvas
-       (Clock Mirage + any Rush part — speed, urgency, motion blur). --- */
-body.rushhour-mode {
-    background: #1a1206;
-    background-image:
-        radial-gradient(ellipse 60% 40% at 20% 15%, rgba(230, 150, 30, 0.22) 0%, transparent 70%),
-        radial-gradient(ellipse 50% 35% at 80% 30%, rgba(220, 60, 50, 0.18) 0%, transparent 70%),
-        radial-gradient(ellipse 70% 45% at 50% 90%, rgba(180, 110, 20, 0.2) 0%, transparent 70%);
-    background-attachment: fixed;
-    color: #f6e0b8;
-}
-body.rushhour-mode .mode-tabs,
-body.rushhour-mode .sub-tabs,
-body.rushhour-mode .library-sub-tabs,
-body.rushhour-mode .history-sub-tabs,
-body.rushhour-mode .tournament-sub-tabs ,
-body.rushhour-mode .br-sub-tabs,
-body.rushhour-mode .tab-more-menu {
-    background: rgba(34, 24, 12, 0.85);
-    border-bottom-color: #5c3a14;
-}
-body.rushhour-mode .tab,
-body.rushhour-mode .sub-tab {
-    color: #f0c878;
-}
-body.rushhour-mode .tab.active,
-body.rushhour-mode .sub-tab.active {
-    background: linear-gradient(135deg, #d04030, #f08020);
-    color: #fff;
-}
-body.rushhour-mode fieldset,
-body.rushhour-mode .popup-card,
-body.rushhour-mode .side-profile-inner,
-body.rushhour-mode .side-profile-photo {
-    background: #2a1d0c;
-    border-color: #5c3a14;
-}
-body.rushhour-mode .btn {
-    background: linear-gradient(135deg, #d04030, #f08020);
-    color: #fff;
-    border-color: #5c3a14;
-}
-
-/* --- King of Jungle: savanna gold + deep jungle green (Leon parts —
-       lion, regal, sunlit savanna at the edge of the rainforest). --- */
-body.kingofjungle-mode {
-    background: #1a1404;
-    background-image:
-        radial-gradient(ellipse 60% 40% at 20% 15%, rgba(210, 170, 60, 0.22) 0%, transparent 70%),
-        radial-gradient(ellipse 50% 35% at 80% 30%, rgba(80, 130, 60, 0.18) 0%, transparent 70%),
-        radial-gradient(ellipse 70% 45% at 50% 90%, rgba(180, 130, 40, 0.2) 0%, transparent 70%);
-    background-attachment: fixed;
-    color: #f0dd9c;
-}
-body.kingofjungle-mode .mode-tabs,
-body.kingofjungle-mode .sub-tabs,
-body.kingofjungle-mode .library-sub-tabs,
-body.kingofjungle-mode .history-sub-tabs,
-body.kingofjungle-mode .tournament-sub-tabs ,
-body.kingofjungle-mode .br-sub-tabs,
-body.kingofjungle-mode .tab-more-menu {
-    background: rgba(32, 24, 8, 0.85);
-    border-bottom-color: #5a4418;
-}
-body.kingofjungle-mode .tab,
-body.kingofjungle-mode .sub-tab {
-    color: #e6c870;
-}
-body.kingofjungle-mode .tab.active,
-body.kingofjungle-mode .sub-tab.active {
-    background: linear-gradient(135deg, #c8962a, #4a7a3a);
-    color: #fff;
-}
-body.kingofjungle-mode fieldset,
-body.kingofjungle-mode .popup-card,
-body.kingofjungle-mode .side-profile-inner,
-body.kingofjungle-mode .side-profile-photo {
-    background: #28200c;
-    border-color: #5a4418;
-}
-body.kingofjungle-mode .btn {
-    background: linear-gradient(135deg, #c8962a, #4a7a3a);
-    color: #fff;
-    border-color: #5a4418;
-}
-
-/* --- Sharknado: deep ocean blue + storm gray, with lightning-yellow
-       accents. Shark Edge / Shark Scale + balanced combo → ocean tempest. */
-body.sharknado-mode {
-    background: #081420;
-    background-image:
-        radial-gradient(ellipse 60% 40% at 20% 15%, rgba(60, 100, 160, 0.22) 0%, transparent 70%),
-        radial-gradient(ellipse 50% 35% at 80% 30%, rgba(120, 140, 160, 0.18) 0%, transparent 70%),
-        radial-gradient(ellipse 70% 45% at 50% 90%, rgba(40, 70, 120, 0.2) 0%, transparent 70%);
-    background-attachment: fixed;
-    color: #c8dceb;
-}
-body.sharknado-mode .mode-tabs,
-body.sharknado-mode .sub-tabs,
-body.sharknado-mode .library-sub-tabs,
-body.sharknado-mode .history-sub-tabs,
-body.sharknado-mode .tournament-sub-tabs ,
-body.sharknado-mode .br-sub-tabs,
-body.sharknado-mode .tab-more-menu {
-    background: rgba(10, 22, 36, 0.85);
-    border-bottom-color: #1f3a5a;
-}
-body.sharknado-mode .tab,
-body.sharknado-mode .sub-tab {
-    color: #a8c0d4;
-}
-body.sharknado-mode .tab.active,
-body.sharknado-mode .sub-tab.active {
-    background: linear-gradient(135deg, #2a5a8c, #f0d020);
-    color: #fff;
-}
-body.sharknado-mode fieldset,
-body.sharknado-mode .popup-card,
-body.sharknado-mode .side-profile-inner,
-body.sharknado-mode .side-profile-photo {
-    background: #122236;
-    border-color: #1f3a5a;
-}
-body.sharknado-mode .btn {
-    background: linear-gradient(135deg, #2a5a8c, #f0d020);
-    color: #0a1a28;
-    border-color: #1f3a5a;
-}
-
-/* --- Sorcerer Supreme: mystical violet + arcane gold (Wizard slot
-       carried by two Attack-type combos → robe + spellbook + flanking
-       attackers). Dark-based, deep purple canvas with gold accents. --- */
 body.sorcerersupreme-mode {
-    background: #160a24;
+    background: #111214;
     background-image:
-        radial-gradient(ellipse 60% 40% at 20% 15%, rgba(140, 80, 200, 0.22) 0%, transparent 70%),
-        radial-gradient(ellipse 50% 35% at 80% 30%, rgba(220, 180, 70, 0.18) 0%, transparent 70%),
-        radial-gradient(ellipse 70% 45% at 50% 90%, rgba(90, 50, 140, 0.2) 0%, transparent 70%);
+        radial-gradient(ellipse 60% 40% at 20% 15%, rgba(245, 196, 0, 0.16) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 35% at 80% 30%, rgba(200, 206, 214, 0.1) 0%, transparent 70%),
+        radial-gradient(ellipse 70% 45% at 50% 90%, rgba(240, 140, 20, 0.14) 0%, transparent 70%);
     background-attachment: fixed;
-    color: #e6d8f4;
+    color: #eceef1;
 }
 body.sorcerersupreme-mode .mode-tabs,
 body.sorcerersupreme-mode .sub-tabs,
@@ -20201,134 +19811,276 @@ body.sorcerersupreme-mode .history-sub-tabs,
 body.sorcerersupreme-mode .tournament-sub-tabs ,
 body.sorcerersupreme-mode .br-sub-tabs,
 body.sorcerersupreme-mode .tab-more-menu {
-    background: rgba(26, 12, 40, 0.85);
-    border-bottom-color: #3a205a;
+    background: rgba(24, 25, 28, 0.88);
+    border-bottom-color: #3a3c42;
 }
 body.sorcerersupreme-mode .tab,
 body.sorcerersupreme-mode .sub-tab {
-    color: #c8a8e8;
+    color: #b8bec7;
 }
 body.sorcerersupreme-mode .tab.active,
 body.sorcerersupreme-mode .sub-tab.active {
-    background: linear-gradient(135deg, #6a3aa4, #e0b440);
-    color: #fff;
+    background: linear-gradient(135deg, #ffd21f, #f0a000);
+    color: #1a1400;
 }
 body.sorcerersupreme-mode fieldset,
 body.sorcerersupreme-mode .popup-card,
 body.sorcerersupreme-mode .side-profile-inner,
 body.sorcerersupreme-mode .side-profile-photo {
-    background: #221038;
-    border-color: #3a205a;
+    background: #1c1d21;
+    border-color: #3a3c42;
 }
 body.sorcerersupreme-mode .btn {
-    background: linear-gradient(135deg, #6a3aa4, #e0b440);
-    color: #fff;
-    border-color: #3a205a;
+    background: linear-gradient(135deg, #ffd21f, #f0a000);
+    color: #1a1400;
+    border-color: #a87400;
 }
 
-/* --- Paleonerd: amber fossil + Jurassic jungle green on a deep earth
-       canvas (a full Tyranno / Tricera / Ptera / Mammoth / Brachio
-       deck — prehistoric, dusty, alive). Dark-based for legibility. --- */
-body.paleonerd-mode {
-    background: #1a1208;
-    background-image:
-        radial-gradient(ellipse 60% 40% at 20% 15%, rgba(190, 140, 60, 0.22) 0%, transparent 70%),
-        radial-gradient(ellipse 50% 35% at 80% 30%, rgba(80, 130, 70, 0.18) 0%, transparent 70%),
-        radial-gradient(ellipse 70% 45% at 50% 90%, rgba(160, 110, 50, 0.2) 0%, transparent 70%);
-    background-attachment: fixed;
-    color: #f0e0c0;
+/* Scoreboard — the blade laid out across the board: side A takes the
+   chrome rim, side B the yellow core, the divider the near-black centre.
+   Covers the pre-start Ready gate and the switch-positions popup too,
+   since both open on top of the board. */
+body.sorcerersupreme-mode .scoreboard-overlay,
+body.sorcerersupreme-mode .scoreboard-divider,
+body.sorcerersupreme-mode .sb-divider {
+    background: #111214;
 }
-body.paleonerd-mode .mode-tabs,
-body.paleonerd-mode .sub-tabs,
-body.paleonerd-mode .library-sub-tabs,
-body.paleonerd-mode .history-sub-tabs,
-body.paleonerd-mode .tournament-sub-tabs ,
-body.paleonerd-mode .br-sub-tabs,
-body.paleonerd-mode .tab-more-menu {
-    background: rgba(28, 20, 10, 0.85);
-    border-bottom-color: #5a3f1a;
+body.sorcerersupreme-mode .scoreboard-left,
+body.sorcerersupreme-mode .sb-ready-a {
+    background: rgba(200, 206, 214, 0.12);
 }
-body.paleonerd-mode .tab,
-body.paleonerd-mode .sub-tab {
-    color: #d8b878;
+body.sorcerersupreme-mode .scoreboard-right,
+body.sorcerersupreme-mode .sb-ready-b {
+    background: rgba(245, 196, 0, 0.14);
 }
-body.paleonerd-mode .tab.active,
-body.paleonerd-mode .sub-tab.active {
-    background: linear-gradient(135deg, #a07028, #4a7a3a);
-    color: #fff;
+body.sorcerersupreme-mode .sb-ready-a.is-ready,
+body.sorcerersupreme-mode .sb-ready-b.is-ready {
+    background: rgba(245, 196, 0, 0.24);
 }
-body.paleonerd-mode fieldset,
-body.paleonerd-mode .popup-card,
-body.paleonerd-mode .side-profile-inner,
-body.paleonerd-mode .side-profile-photo {
-    background: #261a0a;
-    border-color: #5a3f1a;
+body.sorcerersupreme-mode .scoreboard-score { color: #fff; }
+body.sorcerersupreme-mode .scoreboard-player-label,
+body.sorcerersupreme-mode .sb-ready-name { color: #c9ced6; }
+body.sorcerersupreme-mode .scoreboard-round { color: #ffd21f; }
+body.sorcerersupreme-mode .scoreboard-bey,
+body.sorcerersupreme-mode .scoreboard-vs { color: #8a9099; }
+body.sorcerersupreme-mode .scoreboard-bey { background: #1c1d21; }
+body.sorcerersupreme-mode .sb-btn,
+body.sorcerersupreme-mode .scoreboard-reset,
+body.sorcerersupreme-mode .sb-swap,
+body.sorcerersupreme-mode .sb-skip,
+body.sorcerersupreme-mode .sb-ready-btn:not(.is-ready) {
+    background: #1c1d21;
+    border-color: #3a3c42;
+    color: #eceef1;
 }
-body.paleonerd-mode .btn {
-    background: linear-gradient(135deg, #a07028, #4a7a3a);
-    color: #fff;
-    border-color: #5a3f1a;
+body.sorcerersupreme-mode .sb-btn:active,
+body.sorcerersupreme-mode .sb-btn:hover,
+body.sorcerersupreme-mode .scoreboard-reset:hover,
+body.sorcerersupreme-mode .sb-swap:hover,
+body.sorcerersupreme-mode .sb-skip:hover,
+body.sorcerersupreme-mode .sb-ready-btn:hover:not(.is-ready) {
+    background: rgba(245, 196, 0, 0.18);
+    border-color: #f5c400;
+}
+body.sorcerersupreme-mode .sb-ready-btn.is-ready {
+    background: linear-gradient(135deg, #ffd21f, #f0a000);
+    border-color: #a87400;
+    color: #1a1400;
+}
+body.sorcerersupreme-mode .sb-swapmode-card {
+    background: #1c1d21;
+    border-color: #3a3c42;
+}
+body.sorcerersupreme-mode .sb-swapmode-title { color: #eceef1; }
+body.sorcerersupreme-mode .sb-swapmode-btn,
+body.sorcerersupreme-mode .sb-rps-reel {
+    background: #111214;
+    border-color: #3a3c42;
+    color: #eceef1;
+}
+body.sorcerersupreme-mode .sb-swapmode-btn:hover { border-color: #f5c400; background: #1c1d21; }
+body.sorcerersupreme-mode .sb-swapmode-cancel { border-color: #3a3c42; color: #b8bec7; }
+body.sorcerersupreme-mode .sb-swapmode-cancel:hover { border-color: #f5c400; color: #eceef1; }
+
+/* Wizard duel — one wizard per side, facing each other across the divider
+   (built by scoreboard.js). Scoring makes your wizard blast the other one,
+   who falls flat and climbs back up. The layer exists on every theme and
+   is only shown on this one. It sits under the Ready gate (z-index 5) and
+   never takes a tap. */
+.sb-duel { display: none; }
+body.sorcerersupreme-mode .sb-duel {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+/* Same fade as the board while the Ready gate is up. */
+body.sorcerersupreme-mode .scoreboard-overlay.sb-prestarting .sb-duel { opacity: 0; }
+/* Close to the divider, clear of the score digits and the finish buttons. */
+.sb-duel-wiz {
+    position: absolute;
+    bottom: 3%;
+    height: min(30vh, 170px);
+    aspect-ratio: 200 / 320;
+    transform: translateX(-50%);
+}
+.sb-duel-wiz[data-duel-side="a"] { left: 38%; color: #c9ced6; }
+/* Mirrored to face left. The flip is on the wrapper so the body's own
+   animations still read as "forward" and "backward" for both wizards. */
+.sb-duel-wiz[data-duel-side="b"] { left: 62%; color: #f5c400; transform: translateX(-50%) scaleX(-1); }
+.sb-duel-body {
+    width: 100%;
+    height: 100%;
+    transform-origin: 35% 100%;
+}
+.sb-duel-body svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.sb-duel-robe { fill: currentColor; fill-opacity: 0.85; }
+.sb-duel-staff { stroke: #8a9099; stroke-width: 5; stroke-linecap: round; }
+.sb-duel-orb {
+    fill: #ffd21f;
+    transform-box: fill-box;
+    transform-origin: center;
+    filter: drop-shadow(0 0 4px rgba(255, 210, 31, 0.8));
 }
 
-/* --- King of All Types: platinum silver + royal blue (Bullet Griffon's
-       chromed shell, tuned out of its default Balance configuration into
-       Attack / Defense / Stamina — the "king" who masters every type). --- */
-body.kingofalltypes-mode {
-    background: #0e1320;
-    background-image:
-        radial-gradient(ellipse 60% 40% at 20% 15%, rgba(180, 195, 210, 0.22) 0%, transparent 70%),
-        radial-gradient(ellipse 50% 35% at 80% 30%, rgba(74, 106, 168, 0.2) 0%, transparent 70%),
-        radial-gradient(ellipse 70% 45% at 50% 90%, rgba(140, 160, 180, 0.18) 0%, transparent 70%);
-    background-attachment: fixed;
-    color: #d8dee8;
+/* Cast: lean back, then thrust the staff forward as the orb flares. */
+.sb-duel-wiz.is-casting .sb-duel-body { animation: sbDuelCast 0.5s ease-out; }
+.sb-duel-wiz.is-casting .sb-duel-orb  { animation: sbDuelOrb 0.5s ease-out; }
+@keyframes sbDuelCast {
+    0%   { transform: none; }
+    35%  { transform: translateX(-4px) rotate(-7deg); }
+    55%  { transform: translateX(7px) rotate(5deg); }
+    100% { transform: none; }
 }
-body.kingofalltypes-mode .mode-tabs,
-body.kingofalltypes-mode .sub-tabs,
-body.kingofalltypes-mode .library-sub-tabs,
-body.kingofalltypes-mode .history-sub-tabs,
-body.kingofalltypes-mode .tournament-sub-tabs ,
-body.kingofalltypes-mode .br-sub-tabs,
-body.kingofalltypes-mode .tab-more-menu {
-    background: rgba(16, 22, 38, 0.85);
-    border-bottom-color: #2e3a4f;
-}
-body.kingofalltypes-mode .tab,
-body.kingofalltypes-mode .sub-tab {
-    color: #b8c2d0;
-}
-body.kingofalltypes-mode .tab.active,
-body.kingofalltypes-mode .sub-tab.active {
-    background: linear-gradient(135deg, #4a6aa8, #c0c8d4);
-    color: #fff;
-}
-body.kingofalltypes-mode fieldset,
-body.kingofalltypes-mode .popup-card,
-body.kingofalltypes-mode .side-profile-inner,
-body.kingofalltypes-mode .side-profile-photo {
-    background: #1a2236;
-    border-color: #2e3a4f;
-}
-body.kingofalltypes-mode .btn {
-    background: linear-gradient(135deg, #4a6aa8, #c0c8d4);
-    color: #fff;
-    border-color: #2e3a4f;
+@keyframes sbDuelOrb {
+    0%, 100% { transform: scale(1); }
+    40%      { transform: scale(1.9); }
 }
 
-/* Random / "I'm Feeling Lucky" dice icon — force white on every
-   achievement theme so it doesn't sit dark against the saturated
-   gradient backgrounds those themes apply to .btn. Matches the
-   per-theme filter already used by space / revox / tropical /
-   stormy / love / forest / gold / silver / bronze. */
-body.dragontamer-mode    .btn-lucky img,
-body.dragonslayer-mode   .btn-lucky img,
-body.lonewolf-mode       .btn-lucky img,
-body.rushhour-mode       .btn-lucky img,
-body.kingofjungle-mode   .btn-lucky img,
-body.sharknado-mode      .btn-lucky img,
-body.sorcerersupreme-mode .btn-lucky img,
-body.paleonerd-mode      .btn-lucky img,
-body.kingofalltypes-mode .btn-lucky img {
-    filter: brightness(0) invert(1);
+/* Hit: knocked back, falls flat, lies there, climbs back up. Falling
+   "backward" is a counter-clockwise turn for a wizard facing right, and
+   the mirrored one inherits the flip, so both fall away from the blast. */
+.sb-duel-wiz.is-hit .sb-duel-body { animation: sbDuelFall 1.3s ease-in-out; }
+/* No brightness flash on impact — the blast's burst already marks it, and
+   an animated filter here darkened the whole board while it ran. */
+@keyframes sbDuelFall {
+    0%   { transform: none; }
+    10%  { transform: translateX(-10px) rotate(-14deg); }
+    28%  { transform: translateX(-14px) rotate(-84deg); }
+    34%  { transform: translateX(-14px) rotate(-78deg); }
+    40%  { transform: translateX(-14px) rotate(-84deg); }
+    62%  { transform: translateX(-14px) rotate(-84deg); }
+    82%  { transform: translateX(-4px) rotate(-8deg); }
+    91%  { transform: rotate(4deg); }
+    100% { transform: none; }
+}
+
+/* The blast: a glowing bolt from the caster's orb to the target, ending
+   in a burst on impact. Path set by scoreboard.js as percentages of the
+   duel layer (--x0 … --y1), animated through left / top so it scales with
+   the board — translate() percentages would be of the bolt itself. */
+.sb-duel-blast {
+    position: absolute;
+    left: var(--x0, 0);
+    top: var(--y0, 0);
+    width: 22px;
+    height: 22px;
+    margin: -11px 0 0 -11px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #fff 0 25%, #ffd21f 45%, rgba(240, 160, 0, 0) 72%);
+    box-shadow: 0 0 18px 6px rgba(255, 210, 31, 0.65);
+    opacity: 0;
+}
+.sb-duel-blast.is-flying { animation: sbDuelBlast 0.6s ease-in forwards; }
+@keyframes sbDuelBlast {
+    0%   { opacity: 1; left: var(--x0); top: var(--y0); transform: scale(0.5); }
+    53%  { opacity: 1; left: var(--x1); top: var(--y1); transform: scale(1.1); }
+    100% { opacity: 0; left: var(--x1); top: var(--y1); transform: scale(3.2); }
+}
+
+/* Wizard background: magic motes drifting up behind the page, and a
+   wizard on a glowing circle in the corner. Both layers are fixed and sit
+   at z-index -1 — body is not positioned, so they paint above the canvas
+   background and below every in-flow element. Motion is transform and
+   opacity only, so it stays on the compositor instead of repainting the
+   whole viewport each frame. */
+body.sorcerersupreme-mode::before,
+body.sorcerersupreme-mode::after {
+    content: "";
+    position: fixed;
+    z-index: -1;
+    pointer-events: none;
+}
+/* The motes layer is two viewports tall and slides up by one. Tile heights
+   (20vh, 25vh) both divide 100vh, so the loop has no visible seam. */
+body.sorcerersupreme-mode::before {
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 200vh;
+    background:
+        radial-gradient(circle at 20% 30%, rgba(245, 196, 0, 0.6) 0 1.5px, transparent 2.5px) 0 0 / 180px 20vh,
+        radial-gradient(circle at 70% 75%, rgba(200, 206, 214, 0.55) 0 1px, transparent 2px) 0 0 / 180px 20vh,
+        radial-gradient(circle at 45% 15%, rgba(255, 255, 255, 0.4) 0 1.2px, transparent 2.2px) 0 0 / 260px 25vh,
+        radial-gradient(circle at 85% 55%, rgba(240, 140, 20, 0.45) 0 1px, transparent 2px) 0 0 / 260px 25vh;
+    animation:
+        sorcerer-motes 60s linear infinite,
+        sorcerer-twinkle 3.5s ease-in-out infinite alternate;
+}
+body.sorcerersupreme-mode::after {
+    right: 2vw;
+    bottom: 0;
+    width: min(38vw, 300px);
+    aspect-ratio: 200 / 320;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 320'%3E%3Cellipse cx='100' cy='300' rx='90' ry='16' fill='none' stroke='%23f5c400' stroke-opacity='.45' stroke-width='2'/%3E%3Cellipse cx='100' cy='300' rx='68' ry='11' fill='none' stroke='%23f5c400' stroke-opacity='.3' stroke-width='1.5' stroke-dasharray='4 6'/%3E%3Cg fill='%23c9ced6' fill-opacity='.32'%3E%3Cpath d='M72 118 Q60 200 42 282 Q100 296 158 282 Q140 200 128 118 Z'/%3E%3Cpath d='M120 140 Q150 148 160 170 L150 178 Q138 160 116 158 Z'/%3E%3Cpath d='M84 112 Q100 192 116 112 Z'/%3E%3Cellipse cx='100' cy='112' rx='42' ry='8'/%3E%3Cpath d='M66 112 Q86 70 98 34 Q104 18 124 10 Q110 30 112 52 Q120 84 134 112 Z'/%3E%3C/g%3E%3Cpath d='M163 66 L150 292' stroke='%23c9ced6' stroke-opacity='.4' stroke-width='5' stroke-linecap='round'/%3E%3Ccircle cx='164' cy='56' r='20' fill='%23f5c400' fill-opacity='.16'/%3E%3Ccircle cx='164' cy='56' r='9' fill='%23f5c400' fill-opacity='.6'/%3E%3Cg fill='%23f5c400' fill-opacity='.55'%3E%3Cpath d='M101 68 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2 Z'/%3E%3Cpath d='M112 92 l1.5 3.5 3.5 1.5 -3.5 1.5 -1.5 3.5 -1.5 -3.5 -3.5 -1.5 3.5 -1.5 Z'/%3E%3Cpath d='M88 96 l1 2.5 2.5 1 -2.5 1 -1 2.5 -1 -2.5 -2.5 -1 2.5 -1 Z'/%3E%3C/g%3E%3C/svg%3E") center bottom / contain no-repeat;
+    animation: sorcerer-float 5s ease-in-out infinite alternate;
+}
+@keyframes sorcerer-motes {
+    from { transform: translateY(0); }
+    to   { transform: translateY(-100vh); }
+}
+@keyframes sorcerer-twinkle {
+    from { opacity: 0.55; }
+    to   { opacity: 1; }
+}
+@keyframes sorcerer-float {
+    from { transform: translateY(0); }
+    to   { transform: translateY(-12px); }
+}
+@media (prefers-reduced-motion: reduce) {
+    body.sorcerersupreme-mode::before,
+    body.sorcerersupreme-mode::after { animation: none; }
+}
+
+/* The page-specific tab rows (Tournament / Battle Royale / Library /
+   History / Buzz Bey) are separate classes from .sub-tab, so they kept the
+   default blue active state. Yellow here, like every other active tab. */
+body.sorcerersupreme-mode .tournament-sub-tab.active,
+body.sorcerersupreme-mode .br-sub-tab.active,
+body.sorcerersupreme-mode .library-sub-tab.active,
+body.sorcerersupreme-mode .history-sub-tab.active,
+body.sorcerersupreme-mode .reel-sub-tab.active {
+    background: linear-gradient(135deg, #ffd21f, #f0a000);
+    border-color: #a87400;
+    color: #1a1400;
+}
+
+/* Icons are forced white across the app, which washes out on this theme's
+   yellow buttons and active tabs — draw them black to match the text.
+   !important because the white rules come in every specificity, down to
+   ids (#register-paste img) and `.swiss-toolbar .btn.swiss-share-btn img`;
+   chasing each one would break again with the next button added. Icons on
+   the dark surfaces (inactive tabs) stay white, or they would disappear. */
+body.sorcerersupreme-mode .btn img,
+body.sorcerersupreme-mode .sub-tab.active img,
+body.sorcerersupreme-mode .tournament-sub-tab.active img,
+body.sorcerersupreme-mode .br-sub-tab.active img,
+body.sorcerersupreme-mode .library-sub-tab.active img,
+body.sorcerersupreme-mode .history-sub-tab.active img,
+body.sorcerersupreme-mode .reel-sub-tab.active img {
+    filter: brightness(0) !important;
 }
 
 /* =======================

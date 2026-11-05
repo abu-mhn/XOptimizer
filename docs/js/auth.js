@@ -1536,21 +1536,12 @@
     initSideProfile();
   }
 
-  // Achievement themes — Dragon Tamer / Dragon Slayer / Lonewolf. Each is
-  // gated on the matching achievement tag (awarded at 100 wins, see
-  // tournament.js + js/achievements.js). The theme-menu entry is shown
-  // only while the tag is held; if the account loses the tag and a
-  // restricted achievement theme is active, it falls back to Dark.
+  // Achievement theme — Sorcerer Supreme, gated on the matching achievement
+  // tag (awarded at 100 wins, see tournament.js + js/achievements.js). The
+  // theme-menu entry is shown only while the tag is held; if the account
+  // loses the tag while the theme is active, it falls back to Dark.
   const ACHIEVEMENT_THEME_TAGS = {
-    dragontamer: "Dragon Tamer",
-    dragonslayer: "Dragon Slayer",
-    lonewolf: "Lone Wolf",
-    rushhour: "Rush Hour",
-    kingofjungle: "King of The Jungle",
-    sharknado: "Sharknado",
-    sorcerersupreme: "Sorcerer Supreme",
-    paleonerd: "Paleonerd",
-    kingofalltypes: "King of All Types"
+    sorcerersupreme: "Sorcerer Supreme"
   };
   // Becomes true after Firebase reports the first auth state — lets the
   // achievement gate tell a confirmed "signed out" from "auth not resolved
@@ -2102,7 +2093,7 @@
     // Keys are UIDs. Each cell shows the nested {count, awarded, ...} object
     // for that achievement (the generic renderer summarizes it as
     // "{4} count, awarded, awardedAt, updatedAt").
-    achievements:    ["dragonTamer", "dragonSlayer", "lonewolf", "rushHour", "kingOfJungle", "sharknado", "sorcererSupreme"],
+    achievements:    ["sorcererSupreme"],
     judges:          [],  // value is a plain string
     // Keys are UIDs; the value is the member's display name. `judges` is
     // still keyed by usernameKey — see PUBLIC_INDEX_KEY_MODES.

@@ -8978,16 +8978,8 @@ function getPiePaletteForTheme() {
   if (cls.contains("silver-mode"))   return { type: "hue", hueStart: 200, hueRange: 50,  sat: 20, light: 65 };
   if (cls.contains("bronze-mode"))   return { type: "hue", hueStart: 10,  hueRange: 40,  sat: 60, light: 50 };
   if (cls.contains("revox-mode"))    return { type: "hue", hueStart: 350, hueRange: 60,  sat: 70, light: 55 };
-  // Achievement themes — narrow hue bands tinted to each theme's accent.
-  if (cls.contains("dragontamer-mode"))    return { type: "hue", hueStart: 350, hueRange: 50,  sat: 65, light: 54 };
-  if (cls.contains("dragonslayer-mode"))   return { type: "hue", hueStart: 205, hueRange: 70,  sat: 60, light: 58 };
-  if (cls.contains("lonewolf-mode"))       return { type: "hue", hueStart: 200, hueRange: 50,  sat: 25, light: 62 };
-  if (cls.contains("rushhour-mode"))       return { type: "hue", hueStart: 25,  hueRange: 55,  sat: 72, light: 55 };
-  if (cls.contains("kingofjungle-mode"))   return { type: "hue", hueStart: 80,  hueRange: 70,  sat: 55, light: 48 };
-  if (cls.contains("sharknado-mode"))      return { type: "hue", hueStart: 180, hueRange: 60,  sat: 60, light: 55 };
-  if (cls.contains("sorcerersupreme-mode"))return { type: "hue", hueStart: 270, hueRange: 70,  sat: 62, light: 60 };
-  if (cls.contains("paleonerd-mode"))      return { type: "hue", hueStart: 35,  hueRange: 55,  sat: 55, light: 52 };
-  if (cls.contains("kingofalltypes-mode")) return { type: "hue", hueStart: 205, hueRange: 90,  sat: 60, light: 58 };
+  // Achievement theme — a yellow-to-amber band matching its accent.
+  if (cls.contains("sorcerersupreme-mode")) return { type: "hue", hueStart: 25,  hueRange: 35,  sat: 85, light: 55 };
   // Default (Dark) theme — a blue-centered band matching the dark theme's accent
   // (cyan → blue → violet), still wide enough to tell slices apart.
   return                                    { type: "hue", hueStart: 190, hueRange: 140, sat: 62, light: 58 };
@@ -9008,16 +9000,8 @@ function getPieStrokeForTheme() {
   if (cls.contains("silver-mode"))   return "#2e343c";
   if (cls.contains("bronze-mode"))   return "#3a2818";
   if (cls.contains("revox-mode"))    return "#2a1010";
-  // Achievement themes — match each theme's deep card-bg tone.
-  if (cls.contains("dragontamer-mode"))    return "#1a0d0d";
-  if (cls.contains("dragonslayer-mode"))   return "#0e1320";
-  if (cls.contains("lonewolf-mode"))       return "#0c1014";
-  if (cls.contains("rushhour-mode"))       return "#1a1206";
-  if (cls.contains("kingofjungle-mode"))   return "#1a1404";
-  if (cls.contains("sharknado-mode"))      return "#081420";
-  if (cls.contains("sorcerersupreme-mode"))return "#160a24";
-  if (cls.contains("paleonerd-mode"))      return "#1a1208";
-  if (cls.contains("kingofalltypes-mode")) return "#0e1320";
+  // Achievement theme — matches its deep card-bg tone.
+  if (cls.contains("sorcerersupreme-mode")) return "#111214";
   return "#0d1117";
 }
 

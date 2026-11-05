@@ -451,6 +451,12 @@ let scoreboardSaveCallback = null;
     });
   }
 
+  function nameOf(labelEl) {
+    if (!labelEl) return "";
+    const span = labelEl.querySelector(".scoreboard-player-name");
+    return ((span ? span.textContent : labelEl.textContent) || "").trim();
+  }
+
   // Mirror the board's player names onto the gate, so each Ready button says
   // who it belongs to. Reads the rendered labels rather than taking the names
   // again, which keeps it correct after a side swap.
@@ -461,11 +467,6 @@ let scoreboardSaveCallback = null;
     // standalone board that never happens, so reading only the span found
     // nothing, fell back to the hard-coded "A" / "B", and a swap looked like
     // it did nothing even though the labels underneath had swapped.
-    const nameOf = (labelEl) => {
-      if (!labelEl) return "";
-      const span = labelEl.querySelector(".scoreboard-player-name");
-      return ((span ? span.textContent : labelEl.textContent) || "").trim();
-    };
     if (readyNameA) readyNameA.textContent = nameOf(labelA) || "A";
     if (readyNameB) readyNameB.textContent = nameOf(labelB) || "B";
   }
@@ -617,9 +618,122 @@ let scoreboardSaveCallback = null;
       // A finish ends that bey, so hand straight back to the Ready gate for
       // the next one: both sides confirm, the countdown runs, the board comes
       // back. The SCORE is kept — only the launch repeats.
-      armPrestart();
+      //
+      // On the Sorcerer Supreme theme the scorer's wizard blasts the other
+      // one first. The gate would fade the board out mid-blast, so it waits
+      // for the duel to finish. Parked in prestartTimers, so a Reset or any
+      // other re-arm in the meantime cancels it instead of arming twice.
+      const duelMs = after > before ? playWizardDuel(side) : 0;
+      if (duelMs && prestartEnabled && !prestartSkipped) {
+        clearPrestartTimers();
+        prestartTimers.push(setTimeout(armPrestart, duelMs));
+      } else {
+        armPrestart();
+      }
     });
   });
+
+  // ===== Wizard duel (Sorcerer Supreme theme) =====
+  //
+  // One wizard per side, facing each other across the divider. When a side
+  // scores, its wizard casts, a blast crosses the board, and the other
+  // wizard is knocked flat and climbs back up. Built on first use and hidden
+  // by CSS on every other theme, so nothing changes for anyone else.
+  //
+  // The wizards belong to the board's LEFT and RIGHT, not to players: the
+  // buttons stay put when sides are swapped, and so do the wizards.
+  const DUEL_CAST_MS = 220;   // cast wind-up before the blast leaves the staff
+  const DUEL_FLY_MS = 320;    // blast in flight
+  const DUEL_FALL_MS = 1300;  // knocked down, lying there, back up
+  let duelEl = null;
+  let duelTimers = [];
+
+  const DUEL_WIZARD_SVG =
+    '<svg viewBox="0 0 200 320" aria-hidden="true">' +
+      '<g class="sb-duel-robe">' +
+        '<path d="M72 118 Q60 200 42 282 Q100 296 158 282 Q140 200 128 118 Z"/>' +
+        '<path d="M120 140 Q150 148 160 170 L150 178 Q138 160 116 158 Z"/>' +
+        '<path d="M84 112 Q100 192 116 112 Z"/>' +
+        '<ellipse cx="100" cy="112" rx="42" ry="8"/>' +
+        '<path d="M66 112 Q86 70 98 34 Q104 18 124 10 Q110 30 112 52 Q120 84 134 112 Z"/>' +
+      '</g>' +
+      '<path class="sb-duel-staff" d="M163 66 L150 292"/>' +
+      '<circle class="sb-duel-orb" cx="164" cy="56" r="10"/>' +
+    '</svg>';
+
+  function ensureDuel() {
+    if (duelEl) return duelEl;
+    duelEl = document.createElement("div");
+    duelEl.className = "sb-duel";
+    duelEl.setAttribute("aria-hidden", "true");
+    duelEl.innerHTML =
+      '<div class="sb-duel-wiz" data-duel-side="a"><div class="sb-duel-body">' + DUEL_WIZARD_SVG + '</div></div>' +
+      '<div class="sb-duel-wiz" data-duel-side="b"><div class="sb-duel-body">' + DUEL_WIZARD_SVG + '</div></div>' +
+      '<span class="sb-duel-blast"></span>';
+    overlay.appendChild(duelEl);
+    return duelEl;
+  }
+  // Built up front so both wizards are already standing before the first
+  // point; CSS keeps the layer hidden on every other theme.
+  ensureDuel();
+
+  // Drop a class and add it back around a forced reflow, so an animation
+  // that is already running starts over instead of being ignored.
+  function restartClass(el, cls) {
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
+  }
+
+  // Plays the duel for a point scored by `side`. Returns how long it runs
+  // in ms, or 0 when it does not play (another theme, or reduced motion —
+  // a wizard hurled across the screen is exactly what that setting is for).
+  function playWizardDuel(side) {
+    if (!document.body.classList.contains("sorcerersupreme-mode")) return 0;
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return 0;
+    const root = ensureDuel();
+    const attacker = root.querySelector('[data-duel-side="' + side + '"]');
+    const target = root.querySelector('[data-duel-side="' + (side === "a" ? "b" : "a") + '"]');
+    const blast = root.querySelector(".sb-duel-blast");
+
+    // A second point mid-duel starts a fresh one rather than queueing.
+    duelTimers.forEach(t => clearTimeout(t));
+    duelTimers = [];
+    root.querySelectorAll(".sb-duel-wiz").forEach(w => w.classList.remove("is-casting", "is-hit"));
+    blast.classList.remove("is-flying");
+
+    // Flight path: attacker's staff orb to the middle of the target, in the
+    // duel layer's own coordinates. Taken from layout (offset*) rather than
+    // getBoundingClientRect, which includes transforms — while the board is
+    // still easing in, or a wizard is mid-animation, the measured rects are
+    // somewhere else and the bolt flew off at an angle. The orb sits at
+    // (164, 56) in the 200 x 320 drawing; the right wizard is mirrored.
+    //
+    // Stored as percentages of the layer, not px, so the path still lands
+    // if the board resizes mid-flight (a phone rotating, the bar showing).
+    const W = root.offsetWidth || 1, H = root.offsetHeight || 1;
+    const geo = (w) => {
+      const width = w.offsetWidth, height = w.offsetHeight;
+      return { left: w.offsetLeft - width / 2, top: w.offsetTop, width, height }; // undo translateX(-50%)
+    };
+    const a = geo(attacker), t = geo(target);
+    const orbX = side === "a" ? a.left + a.width * (164 / 200) : a.left + a.width * (1 - 164 / 200);
+    const pct = (v, of) => (v / of * 100).toFixed(2) + "%";
+    blast.style.setProperty("--x0", pct(orbX, W));
+    blast.style.setProperty("--y0", pct(a.top + a.height * (56 / 320), H));
+    blast.style.setProperty("--x1", pct(t.left + t.width / 2, W));
+    blast.style.setProperty("--y1", pct(t.top + t.height * 0.45, H));
+
+    restartClass(attacker, "is-casting");
+    duelTimers.push(setTimeout(() => restartClass(blast, "is-flying"), DUEL_CAST_MS));
+    duelTimers.push(setTimeout(() => restartClass(target, "is-hit"), DUEL_CAST_MS + DUEL_FLY_MS));
+    duelTimers.push(setTimeout(() => {
+      attacker.classList.remove("is-casting");
+      target.classList.remove("is-hit");
+      blast.classList.remove("is-flying");
+    }, DUEL_CAST_MS + DUEL_FLY_MS + DUEL_FALL_MS));
+    return DUEL_CAST_MS + DUEL_FLY_MS + DUEL_FALL_MS;
+  }
 
   // Back to 0-0, 1st Round, 1st Bey, with nothing left to undo. Scores only —
   // `resetMatch` below pairs it with the gate.
@@ -699,38 +813,10 @@ let scoreboardSaveCallback = null;
     return RPS_BEATS[mine] === theirs ? "win" : "lose";
   }
 
-  // A draw is re-thrown, because that is what rock-paper-scissors is.
-  // Counting a draw as "stay" would hand the challenger a 1-in-3 chance of
-  // moving and nobody could explain why their odds were that bad.
-  // Returns every round played, so the animation can show the draws too.
-  function rpsPlay(rand) {
-    const r = typeof rand === "function" ? rand : Math.random;
-    const pick = () => RPS_THROWS[Math.min(RPS_THROWS.length - 1,
-      Math.max(0, Math.floor(r() * RPS_THROWS.length)))];
-    const rounds = [];
-    for (let i = 0; i < 20; i++) {
-      const mine = pick(), theirs = pick();
-      const out = rpsOutcome(mine, theirs);
-      rounds.push({ mine, theirs, out });
-      if (out !== "draw") return { rounds, result: out };
-    }
-    // Twenty draws means the generator is broken, not that the players are
-    // evenly matched. Decide it with one more throw rather than looping —
-    // and decide it evenly, because a fixed answer here would be a bias
-    // that only ever shows up when something else has already gone wrong.
-    const mine = pick();
-    const theirs = r() < 0.5 ? RPS_BEATS[mine]
-      : Object.keys(RPS_BEATS).find(k => RPS_BEATS[k] === mine);
-    const out = rpsOutcome(mine, theirs);
-    rounds.push({ mine, theirs, out });
-    return { rounds, result: out };
-  }
-
   function sbSideName(side) {
-    const el = side === "a" ? labelA : labelB;
-    const n = el && el.querySelector(".scoreboard-player-name");
-    const t = (n && n.textContent || "").trim();
-    return t || (side === "a" ? "A" : "B");
+    // Through nameOf, so the bare-text labels of the standalone board are
+    // read too — otherwise a swapped B-vs-A board still came out "A" / "B".
+    return nameOf(side === "a" ? labelA : labelB) || (side === "a" ? "A" : "B");
   }
 
   function rpsIcon(throwName) {
@@ -816,36 +902,76 @@ let scoreboardSaveCallback = null;
       ["a", "b"].forEach(side => {
         const b = card.querySelector('[data-who="' + side + '"]');
         b.textContent = sbSideName(side);
-        b.onclick = () => step3(side);
+        b.onclick = () => pickStep(side, null, 0);
       });
       card.querySelector(".sb-swapmode-cancel").onclick = step1;
     };
 
-    // The slot machine. Both reels cycle, then land on the decided throws.
-    // The OUTCOME is settled before the animation starts — the spin is a
-    // reveal, not the draw itself, so a closed board or a dropped frame
-    // cannot change who won.
-    const step3 = (challenger) => {
+    // The players throw for real, one after the other on the same device:
+    // the challenger picks first, then the board is handed to the other
+    // player. The first pick is never shown on the second player's screen,
+    // so passing the phone across does not give it away.
+    //
+    // `mine` is null while the challenger is picking, and holds their throw
+    // while the other player picks. `draws` is carried across re-throws so
+    // the result line can say how many there were.
+    const pickStep = (challenger, mine, draws) => {
       const other = challenger === "a" ? "b" : "a";
-      const play = rpsPlay();
-      const final = play.rounds[play.rounds.length - 1];
+      const picker = mine ? other : challenger;
+      card.innerHTML =
+        '<h3 class="sb-swapmode-title">' + escapeSb(sbSideName(picker)) + ', choose</h3>' +
+        '<p class="sb-rps-result">' + (mine
+          ? "Your opponent has picked. Your turn."
+          : (draws ? "Draw — throw again. " : "") + "Keep it hidden from " +
+            escapeSb(sbSideName(other)) + ".") + '</p>' +
+        '<div class="sb-swapmode-opts sb-rps-pick">' +
+          RPS_THROWS.map(t =>
+            '<button type="button" class="sb-swapmode-btn" data-throw-pick="' + t + '">' +
+              '<span class="sb-rps-ico" role="img" aria-label="' + t + '"></span>' +
+              '<span class="sb-rps-pick-name">' + t + '</span></button>').join("") +
+        '</div>' +
+        '<button type="button" class="sb-swapmode-cancel">Back</button>';
+      card.querySelectorAll("[data-throw-pick]").forEach(btn => {
+        const t = btn.dataset.throwPick;
+        const ico = btn.querySelector(".sb-rps-ico");
+        setRpsThrow(ico, t);
+        // Without the icons the word under the button already names it.
+        preloadRpsIcons().then(ok => { if (ok) ico.classList.add("is-ready"); });
+        btn.onclick = () => {
+          if (!mine) pickStep(challenger, t, draws);
+          else reveal(challenger, mine, t, draws);
+        };
+      });
+      card.querySelector(".sb-swapmode-cancel").onclick = mine
+        ? () => pickStep(challenger, null, draws)
+        : step2;
+    };
+
+    // The slot machine. Both reels cycle, then land on the two throws the
+    // players picked. The outcome is already settled by their picks — the
+    // spin is only the reveal.
+    const reveal = (challenger, mineThrow, theirsThrow, draws) => {
+      const other = challenger === "a" ? "b" : "a";
+      const result = rpsOutcome(mineThrow, theirsThrow);
+      const final = { mine: mineThrow, theirs: theirsThrow };
+      // Reels sit in the board's own order — side A on the left, B on the
+      // right — whoever asked to move, so the card matches the table.
+      const reelSide = (reel, side) =>
+        '<div class="sb-rps-side"><span class="sb-rps-name">' + escapeSb(sbSideName(side)) + '</span>' +
+          '<div class="sb-rps-reel" data-reel="' + reel + '">' +
+            '<span class="sb-rps-ico" role="img"></span></div></div>';
+      const mineSide = reelSide("mine", challenger);
+      const theirsSide = reelSide("theirs", other);
       card.innerHTML =
         '<h3 class="sb-swapmode-title">' + escapeSb(sbSideName(challenger)) +
           ' wants to switch</h3>' +
         '<div class="sb-rps">' +
-          '<div class="sb-rps-side"><span class="sb-rps-name"></span>' +
-            '<div class="sb-rps-reel" data-reel="mine">' +
-              '<span class="sb-rps-ico" role="img"></span></div></div>' +
+          (challenger === "a" ? mineSide : theirsSide) +
           '<span class="sb-rps-vs">VS</span>' +
-          '<div class="sb-rps-side"><span class="sb-rps-name"></span>' +
-            '<div class="sb-rps-reel" data-reel="theirs">' +
-              '<span class="sb-rps-ico" role="img"></span></div></div>' +
+          (challenger === "a" ? theirsSide : mineSide) +
         '</div>' +
         '<p class="sb-rps-result" aria-live="polite">Rock, paper, scissors…</p>' +
         '<button type="button" class="sb-swapmode-cancel hidden">Close</button>';
-      const names = card.querySelectorAll(".sb-rps-name");
-      names[0].textContent = sbSideName(challenger);
-      names[1].textContent = sbSideName(other);
       const mineImg = card.querySelector('[data-reel="mine"] .sb-rps-ico');
       const theirsImg = card.querySelector('[data-reel="theirs"] .sb-rps-ico');
       const resultEl = card.querySelector(".sb-rps-result");
@@ -897,15 +1023,23 @@ let scoreboardSaveCallback = null;
           // Named for a screen reader, which cannot see a masked background.
           mineImg.setAttribute("aria-label", final.mine);
           theirsImg.setAttribute("aria-label", final.theirs);
-          const won = play.result === "win";
-          const draws = play.rounds.length - 1;
+          doneBtn.classList.remove("hidden");
+          // A draw is re-thrown, because that is what rock-paper-scissors
+          // is. Counting it as "stay" would quietly favour the player who
+          // did not ask to move.
+          if (result === "draw") {
+            resultEl.textContent = "Draw — throw again.";
+            doneBtn.textContent = "Throw again";
+            doneBtn.onclick = () => pickStep(challenger, null, draws + 1);
+            return;
+          }
+          const won = result === "win";
           resultEl.textContent = (draws ? draws + (draws === 1 ? " draw, then " : " draws, then ") : "")
             + (won
               ? sbSideName(challenger) + " wins — switching."
               : sbSideName(challenger) + " loses — positions stay.");
           resultEl.classList.add(won ? "is-win" : "is-lose");
           card.classList.add("is-done");
-          doneBtn.classList.remove("hidden");
           doneBtn.textContent = "Close";
           // Swapped only when they close, so the board does not move under
           // the result they are still reading.
